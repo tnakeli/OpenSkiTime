@@ -21,11 +21,6 @@
         <Button Content="+ Add"
                 Command="{Binding AddCompetitorCommand}"
                 Padding="10,4" />
-        <Button Content="💾 Save"
-                Classes="accent"
-                Command="{Binding SaveCommand}"
-                Padding="10,4"
-                ToolTip.Tip="Save changes (Ctrl+S)" />
         <Button Content="Discard All"
                 Command="{Binding DiscardAllCommand}"
                 Padding="10,4" />

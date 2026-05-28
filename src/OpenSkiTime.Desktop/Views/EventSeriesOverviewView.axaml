@@ -36,68 +36,66 @@
       </DockPanel>
     </Border>
 
-    <!-- Detail (right) — DockPanel so TabControl fills remaining space -->
-    <DockPanel Grid.Column="1" LastChildFill="True">
+    <!-- Detail (right) — Grid rows: fixed form at top, tabs fill rest -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,*">
 
-      <!-- Top: series form + buttons + validation (fixed height, scrollable) -->
-      <ScrollViewer DockPanel.Dock="Top" MaxHeight="380" Padding="24,16,24,0">
-        <StackPanel Spacing="12">
+      <!-- Row 0: series form, always fully visible -->
+      <StackPanel Grid.Row="0" Spacing="10" Margin="24,16,24,8">
 
-          <TextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding Name}" />
+        <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding Name}" />
 
-          <Border Background="White" Padding="16" CornerRadius="6"
-                  BorderBrush="#e5e7eb" BorderThickness="1">
-            <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-              <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" VerticalAlignment="Center" />
-              <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding Name}" />
+        <Border Background="White" Padding="12" CornerRadius="6"
+                BorderBrush="#e5e7eb" BorderThickness="1">
+          <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" VerticalAlignment="Center" />
+            <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding Name}" />
 
-              <TextBlock Grid.Row="1" Grid.Column="0" Text="Location" VerticalAlignment="Center" />
-              <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding Location}" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Location" VerticalAlignment="Center" />
+            <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding Location}" />
 
-              <TextBlock Grid.Row="2" Grid.Column="0" Text="Organizer" VerticalAlignment="Center" />
-              <TextBox  Grid.Row="2" Grid.Column="1" Text="{Binding Organizer}" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Organizer" VerticalAlignment="Center" />
+            <TextBox  Grid.Row="2" Grid.Column="1" Text="{Binding Organizer}" />
 
-              <TextBlock Grid.Row="3" Grid.Column="0" Text="Start date" VerticalAlignment="Center" />
-              <DatePicker Grid.Row="3" Grid.Column="1"
-                          SelectedDate="{Binding StartDate, Converter={StaticResource DateOnlyToDateTimeOffsetConverter}}" />
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="Start date" VerticalAlignment="Center" />
+            <DatePicker Grid.Row="3" Grid.Column="1"
+                        SelectedDate="{Binding StartDate, Converter={StaticResource DateOnlyToDateTimeOffsetConverter}}" />
 
-              <TextBlock Grid.Row="4" Grid.Column="0" Text="End date" VerticalAlignment="Center" />
-              <DatePicker Grid.Row="4" Grid.Column="1"
-                          SelectedDate="{Binding EndDate, Converter={StaticResource DateOnlyToDateTimeOffsetConverter}}" />
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="End date" VerticalAlignment="Center" />
+            <DatePicker Grid.Row="4" Grid.Column="1"
+                        SelectedDate="{Binding EndDate, Converter={StaticResource DateOnlyToDateTimeOffsetConverter}}" />
 
-              <TextBlock Grid.Row="5" Grid.Column="0" Text="Nation (3-letter)" VerticalAlignment="Center" />
-              <TextBox  Grid.Row="5" Grid.Column="1" Text="{Binding Nation}" MaxLength="3" />
+            <TextBlock Grid.Row="5" Grid.Column="0" Text="Nation (3-letter)" VerticalAlignment="Center" />
+            <TextBox  Grid.Row="5" Grid.Column="1" Text="{Binding Nation}" MaxLength="3" />
 
-              <TextBlock Grid.Row="6" Grid.Column="0" Text="Season" VerticalAlignment="Center" />
-              <TextBox  Grid.Row="6" Grid.Column="1" Text="{Binding Season}" Watermark="e.g. 2025/26" />
-            </Grid>
-          </Border>
+            <TextBlock Grid.Row="6" Grid.Column="0" Text="Season" VerticalAlignment="Center" />
+            <TextBox  Grid.Row="6" Grid.Column="1" Text="{Binding Season}" Watermark="e.g. 2025/26" />
+          </Grid>
+        </Border>
 
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Save Event Series"
-                    Classes="accent"
-                    Command="{Binding SaveSeriesCommand}" />
-            <Button Content="Delete Event Series"
-                    Command="{Binding DeleteSeriesCommand}" />
-            <TextBlock Text="{Binding StatusMessage}"
-                       VerticalAlignment="Center"
-                       Foreground="#6b7280"
-                       Margin="12,0,0,0" />
-          </StackPanel>
-
-          <Border IsVisible="{Binding ValidationSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                  Background="#fef3c7" Padding="10,6" CornerRadius="4"
-                  BorderBrush="#fbbf24" BorderThickness="1">
-            <TextBlock Text="{Binding ValidationSummaryText}"
-                       Foreground="#92400e"
-                       TextWrapping="Wrap" />
-          </Border>
-
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Save Event Series"
+                  Classes="accent"
+                  Command="{Binding SaveSeriesCommand}" />
+          <Button Content="Delete Event Series"
+                  Command="{Binding DeleteSeriesCommand}" />
+          <TextBlock Text="{Binding StatusMessage}"
+                     VerticalAlignment="Center"
+                     Foreground="#6b7280"
+                     Margin="12,0,0,0" />
         </StackPanel>
-      </ScrollViewer>
 
-      <!-- Bottom: tabs fill the rest of the window -->
-      <TabControl Margin="12,8,12,8">
+        <Border IsVisible="{Binding ValidationSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                Background="#fef3c7" Padding="10,6" CornerRadius="4"
+                BorderBrush="#fbbf24" BorderThickness="1">
+          <TextBlock Text="{Binding ValidationSummaryText}"
+                     Foreground="#92400e"
+                     TextWrapping="Wrap" />
+        </Border>
+
+      </StackPanel>
+
+      <!-- Row 1: tabs fill the rest of the window -->
+      <TabControl Grid.Row="1" Margin="12,0,12,8">
         <TabItem Header="Competitions">
           <Border Background="White" Padding="8" CornerRadius="6"
                   BorderBrush="#e5e7eb" BorderThickness="1">
@@ -150,7 +148,7 @@
         </TabItem>
       </TabControl>
 
-    </DockPanel>
+    </Grid>
 
   </Grid>
 </UserControl>
