@@ -6,11 +6,6 @@
              x:Class="OpenSkiTime.Desktop.Views.CompetitorGridView"
              x:DataType="vm:CompetitorGridViewModel">
 
-  <UserControl.KeyBindings>
-    <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}" />
-    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
-  </UserControl.KeyBindings>
-
   <UserControl.Resources>
     <conv:RowStateToBackgroundConverter x:Key="RowStateBg" />
   </UserControl.Resources>
@@ -26,16 +21,23 @@
         <Button Content="+ Add"
                 Command="{Binding AddCompetitorCommand}"
                 Padding="10,4" />
-        <Button Content="Save"
+        <Button Content="💾 Save"
                 Classes="accent"
                 Command="{Binding SaveCommand}"
-                Padding="10,4" />
+                Padding="10,4"
+                ToolTip.Tip="Save changes (Ctrl+S)" />
         <Button Content="Discard All"
                 Command="{Binding DiscardAllCommand}"
                 Padding="10,4" />
-        <Button Content="Copy"
+        <Separator Width="1" Background="#d1d5db" Margin="4,0" />
+        <Button Content="📋 Paste from clipboard"
+                Command="{Binding PasteCommand}"
+                Padding="10,4"
+                ToolTip.Tip="Paste TSV data from clipboard (Ctrl+V)" />
+        <Button Content="📄 Copy selected"
                 Command="{Binding CopySelectedRowsCommand}"
-                Padding="10,4" />
+                Padding="10,4"
+                ToolTip.Tip="Copy selected rows as TSV (Ctrl+C)" />
         <Button Content="Refresh"
                 Command="{Binding RefreshGridCommand}"
                 Padding="10,4" />
