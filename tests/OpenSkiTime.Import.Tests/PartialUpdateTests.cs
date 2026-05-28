@@ -13,7 +13,7 @@ public class PartialUpdateTests
                 new CompetitionRef(Competition1Id, "3.1 SL", new DateOnly(2026, 1, 10)),
                 new CompetitionRef(Competition2Id, "4.1 GS", new DateOnly(2026, 1, 11)),
             ],
-            [new CompetitorRef(CompetitorId, "1234567", "SMITH", "John", 2005, null, null)],
+            [new CompetitorRef(CompetitorId, "1234567", "SMITH", "John", 2005, null, null, null)],
             [
                 new ParticipationRef(CompetitorId, Competition1Id, true),
                 new ParticipationRef(CompetitorId, Competition2Id, false),

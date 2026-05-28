@@ -32,6 +32,9 @@ public enum ImportField
     /// <summary>Club / team name.</summary>
     ClubName,
 
+    /// <summary>Gender / sex (e.g. Men, Women, M, F).</summary>
+    Gender,
+
     /// <summary>Bib / start number (positive integer).</summary>
     BibNumber,
 

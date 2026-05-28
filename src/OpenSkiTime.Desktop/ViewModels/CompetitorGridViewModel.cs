@@ -517,6 +517,16 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
 
             switch (fc.FieldName)
             {
+                case "LastName":   existing.LastName   = fc.NewValue; break;
+                case "FirstName":  existing.FirstName  = fc.NewValue; break;
+                case "YearOfBirth":
+                    if (int.TryParse(fc.NewValue, out var newYob))
+                    {
+                        existing.YearOfBirth = newYob;
+                    }
+
+                    break;
+                case "Gender":     existing.Gender     = fc.NewValue; break;
                 case "FisCode":    existing.FisCode    = fc.NewValue; break;
                 case "NationCode": existing.NationCode = fc.NewValue; break;
                 case "ClubName":   existing.ClubName   = fc.NewValue; break;
