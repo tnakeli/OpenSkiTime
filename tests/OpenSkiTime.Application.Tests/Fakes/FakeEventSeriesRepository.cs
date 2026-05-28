@@ -7,6 +7,10 @@ internal sealed class FakeEventSeriesRepository : IEventSeriesRepository
 {
     private readonly Dictionary<Guid, EventSeries> _store = [];
 
+    public FakeEventSeriesRepository() { }
+
+    public FakeEventSeriesRepository(EventSeries seed) => _store[seed.Id] = seed;
+
     public Task<IReadOnlyList<EventSeriesSummary>> ListAsync(CancellationToken ct = default)
     {
         IReadOnlyList<EventSeriesSummary> result = _store.Values

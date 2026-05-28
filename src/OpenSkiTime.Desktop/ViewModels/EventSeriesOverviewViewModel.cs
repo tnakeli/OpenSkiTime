@@ -23,6 +23,7 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
     private readonly UpdateEventSeriesUseCase _updateUseCase;
     private readonly DeleteEventSeriesUseCase _deleteUseCase;
     private readonly RemoveCompetitionUseCase _removeCompetitionUseCase;
+    private readonly EventSeriesValidationSummaryService _validationSummary;
     private readonly IDialogService _dialogs;
 
     public EventSeriesOverviewViewModel(
@@ -31,6 +32,7 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
         UpdateEventSeriesUseCase updateUseCase,
         DeleteEventSeriesUseCase deleteUseCase,
         RemoveCompetitionUseCase removeCompetitionUseCase,
+        EventSeriesValidationSummaryService validationSummary,
         IDialogService dialogs)
     {
         _repository = repository;
@@ -38,6 +40,7 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
         _updateUseCase = updateUseCase;
         _deleteUseCase = deleteUseCase;
         _removeCompetitionUseCase = removeCompetitionUseCase;
+        _validationSummary = validationSummary;
         _dialogs = dialogs;
     }
 
@@ -83,6 +86,9 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
     [ObservableProperty]
     private string? _statusMessage;
 
+    [ObservableProperty]
+    private string _validationSummaryText = string.Empty;
+
     /// <summary>Raised when the user clicks "+ New Competition" or edits an existing one.</summary>
     public event EventHandler<CompetitionEditorRequestedEventArgs>? CompetitionEditorRequested;
 
@@ -99,6 +105,30 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
     {
         var series = await _repository.GetByIdAsync(id, ct).ConfigureAwait(true);
         BindToSeries(series);
+        await RefreshValidationSummaryAsync(id, ct).ConfigureAwait(true);
+    }
+
+    private async Task RefreshValidationSummaryAsync(Guid id, CancellationToken ct)
+    {
+        var summary = await _validationSummary.GetAsync(id, ct).ConfigureAwait(true);
+        if (summary is null)
+        {
+            ValidationSummaryText = string.Empty;
+            return;
+        }
+
+        var parts = new List<string>();
+        if (summary.CompetitorsWithMissingData > 0)
+        {
+            parts.Add($"{summary.CompetitorsWithMissingData} competitor(s) with missing required data");
+        }
+        foreach (var c in summary.CompetitionsWithMissingData)
+        {
+            parts.Add(c);
+        }
+        ValidationSummaryText = parts.Count == 0
+            ? string.Empty
+            : "⚠ " + string.Join(" · ", parts);
     }
 
     private void BindToSeries(EventSeries? series)
