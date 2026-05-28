@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>OpenSkiTime.Application</RootNamespace>
+    <AssemblyName>OpenSkiTime.Application</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenSkiTime.Domain\OpenSkiTime.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
