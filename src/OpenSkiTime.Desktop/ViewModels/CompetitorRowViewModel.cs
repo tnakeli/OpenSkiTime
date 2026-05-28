@@ -77,6 +77,11 @@ public sealed partial class CompetitorRowViewModel : ObservableObject
 
     public List<ChangeLogEntry> PendingChanges { get; } = [];
 
+    /// <summary>Fields changed by a paste operation (highlights individual cells).</summary>
+    public HashSet<string> ModifiedFields { get; } = [];
+
+    public bool IsFieldModified(string fieldName) => ModifiedFields.Contains(fieldName);
+
     /// <summary>One cell per competition in the event series, ordered by date.</summary>
     public ObservableCollection<ParticipationCellViewModel> Participations { get; } = [];
 
@@ -89,6 +94,7 @@ public sealed partial class CompetitorRowViewModel : ObservableObject
         _originalNationCode = NationCode;
         _originalClubName = ClubName;
         _originalFisCode = FisCode;
+        ModifiedFields.Clear();
     }
 
     internal void RestoreOriginals()

@@ -507,8 +507,33 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
             changedCount++;
         }
 
+        foreach (var fc in pr.Diff.FieldChanges)
+        {
+            var existing = Competitors.FirstOrDefault(r => r.Id == fc.CompetitorId);
+            if (existing is null)
+            {
+                continue;
+            }
+
+            switch (fc.FieldName)
+            {
+                case "FisCode":    existing.FisCode    = fc.NewValue; break;
+                case "NationCode": existing.NationCode = fc.NewValue; break;
+                case "ClubName":   existing.ClubName   = fc.NewValue; break;
+            }
+
+            existing.ModifiedFields.Add(fc.FieldName);
+
+            if (existing.RowState == RowState.Unchanged)
+            {
+                existing.RowState = RowState.Edited;
+            }
+
+            changedCount++;
+        }
+
         HasActivePasteSession = true;
-        StatusMessage = $"Paste preview: {newCount} new, {changedCount} participation change(s). Apply or discard.";
+        StatusMessage = $"Paste preview: {newCount} new, {changedCount} change(s). Apply or discard.";
     }
 
     [RelayCommand]
@@ -520,6 +545,8 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
         }
 
         var pasteRows = Competitors.Where(r => r.RowState == RowState.PasteHighlighted).ToList();
+        var editedRows = Competitors.Where(r => r.RowState == RowState.Edited && r.ModifiedFields.Count > 0).ToList();
+        var errors = new List<string>();
 
         foreach (var row in pasteRows)
         {
@@ -537,18 +564,43 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
 
             if (!result.Succeeded)
             {
-                await _dialogs.ShowErrorAsync("Import error", result.ErrorMessage ?? "Unknown error");
-                return;
+                errors.Add($"Add {row.LastName}: {result.ErrorMessage}");
             }
         }
 
+        foreach (var row in editedRows)
+        {
+            var result = await _editCompetitor.ExecuteAsync(new EditCompetitorRequest
+            {
+                EventSeriesId = _seriesId,
+                CompetitorId = row.Id,
+                LastName = row.LastName.ToUpperInvariant(),
+                FirstName = row.FirstName,
+                YearOfBirth = row.YearOfBirth,
+                Gender = string.IsNullOrWhiteSpace(row.Gender) ? null : Enum.TryParse<OpenSkiTime.Domain.Common.Gender>(row.Gender, out var g) ? g : null,
+                NationCode = string.IsNullOrWhiteSpace(row.NationCode) ? null : row.NationCode,
+                ClubName = string.IsNullOrWhiteSpace(row.ClubName) ? null : row.ClubName,
+                FisCode = string.IsNullOrWhiteSpace(row.FisCode) ? null : row.FisCode,
+            });
+
+            if (!result.Succeeded)
+            {
+                errors.Add($"Update {row.LastName}: {result.ErrorMessage}");
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            await _dialogs.ShowErrorAsync("Import errors", string.Join("\n", errors));
+            return;
+        }
 
         _pasteSession.Complete();
         _pasteSession = null;
         HasActivePasteSession = false;
         PasteWarningMessage = null;
         await RefreshAsync();
-        StatusMessage = $"Import applied — {pasteRows.Count} competitor(s) added.";
+        StatusMessage = $"Import applied — {pasteRows.Count} new, {editedRows.Count} updated.";
     }
 
     [RelayCommand]
