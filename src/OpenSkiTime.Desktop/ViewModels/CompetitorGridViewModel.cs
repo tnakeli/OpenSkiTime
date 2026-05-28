@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.Application.Abstractions;
 using OpenSkiTime.Application.Competitors;
+using OpenSkiTime.Application.Participations;
 using OpenSkiTime.Desktop.Models;
 using OpenSkiTime.Desktop.Services;
 using OpenSkiTime.Import;
@@ -28,6 +29,7 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     private readonly AddCompetitorUseCase _addCompetitor;
     private readonly EditCompetitorUseCase _editCompetitor;
     private readonly RemoveCompetitorUseCase _removeCompetitor;
+    private readonly SetParticipationUseCase _setParticipation;
     private readonly IDialogService _dialogs;
     private readonly IClipboardService _clipboard;
     private readonly ImportPreviewService _preview;
@@ -41,6 +43,7 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
         AddCompetitorUseCase addCompetitor,
         EditCompetitorUseCase editCompetitor,
         RemoveCompetitorUseCase removeCompetitor,
+        SetParticipationUseCase setParticipation,
         IDialogService dialogs,
         IClipboardService clipboard,
         ImportPreviewService preview,
@@ -50,6 +53,7 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
         _addCompetitor = addCompetitor;
         _editCompetitor = editCompetitor;
         _removeCompetitor = removeCompetitor;
+        _setParticipation = setParticipation;
         _dialogs = dialogs;
         _clipboard = clipboard;
         _preview = preview;
@@ -145,20 +149,131 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
             return;
         }
 
-        var before = row.GetOriginalFieldValue(e.PropertyName!);
-        var after = row.GetFieldValue(e.PropertyName!);
+        if (row.RowState == RowState.Unchanged)
+        {
+            row.RowState = RowState.Edited;
+        }
+    }
 
-        if (before == after)
+    /// <summary>
+    /// Called from code-behind on CellEditEnded — records the change log entry
+    /// and auto-saves the row to the database.
+    /// </summary>
+    public async Task OnCellEditCommittedAsync(CompetitorRowViewModel row, string fieldName)
+    {
+        if (row.RowState == RowState.Deleted)
         {
             return;
         }
 
-        row.RowState = RowState.Edited;
-        AppendToLog(new ChangeLogEntry(
-            Guid.NewGuid(), DateTime.UtcNow, ChangeOp.Edit,
-            row.Id, e.PropertyName,
-            before, after,
-            $"{row.LastName} {row.FirstName} — {e.PropertyName} edited {before}→{after}"));
+        var before = row.GetOriginalFieldValue(fieldName);
+        var after = row.GetFieldValue(fieldName);
+
+        if (before != after)
+        {
+            AppendToLog(new ChangeLogEntry(
+                Guid.NewGuid(), DateTime.UtcNow, ChangeOp.Edit,
+                row.Id, fieldName,
+                before, after,
+                $"{row.LastName} {row.FirstName} — {fieldName} {before}→{after}"));
+        }
+
+        await AutoSaveRowAsync(row);
+    }
+
+    /// <summary>Saves a single row immediately (used for auto-save on cell exit).</summary>
+    public async Task AutoSaveRowAsync(CompetitorRowViewModel row)
+    {
+        if (row.RowState == RowState.Unchanged || row.RowState == RowState.Deleted
+            || row.RowState == RowState.PasteHighlighted)
+        {
+            return;
+        }
+
+        if (row.RowState == RowState.Added)
+        {
+            if (string.IsNullOrWhiteSpace(row.LastName))
+            {
+                return;
+            }
+
+            var result = await _addCompetitor.ExecuteAsync(new AddCompetitorRequest
+            {
+                EventSeriesId = _seriesId,
+                LastName = row.LastName.ToUpperInvariant(),
+                FirstName = row.FirstName,
+                YearOfBirth = row.YearOfBirth,
+                Gender = string.IsNullOrWhiteSpace(row.Gender) ? null : Enum.TryParse<OpenSkiTime.Domain.Common.Gender>(row.Gender, out var ag) ? ag : null,
+                NationCode = string.IsNullOrWhiteSpace(row.NationCode) ? null : row.NationCode,
+                ClubName = string.IsNullOrWhiteSpace(row.ClubName) ? null : row.ClubName,
+                FisCode = string.IsNullOrWhiteSpace(row.FisCode) ? null : row.FisCode,
+            });
+
+            if (result.Succeeded)
+            {
+                StatusMessage = $"Saved {row.LastName}";
+                await RefreshAsync();
+            }
+            else
+            {
+                StatusMessage = $"Error: {result.ErrorMessage}";
+            }
+
+            return;
+        }
+
+        if (row.RowState == RowState.Edited)
+        {
+            var result = await _editCompetitor.ExecuteAsync(new EditCompetitorRequest
+            {
+                EventSeriesId = _seriesId,
+                CompetitorId = row.Id,
+                LastName = row.LastName.ToUpperInvariant(),
+                FirstName = row.FirstName,
+                YearOfBirth = row.YearOfBirth,
+                Gender = string.IsNullOrWhiteSpace(row.Gender) ? null : Enum.TryParse<OpenSkiTime.Domain.Common.Gender>(row.Gender, out var g) ? g : null,
+                NationCode = string.IsNullOrWhiteSpace(row.NationCode) ? null : row.NationCode,
+                ClubName = string.IsNullOrWhiteSpace(row.ClubName) ? null : row.ClubName,
+                FisCode = string.IsNullOrWhiteSpace(row.FisCode) ? null : row.FisCode,
+            });
+
+            if (result.Succeeded)
+            {
+                row.RowState = RowState.Unchanged;
+                row.SnapshotOriginals();
+                StatusMessage = $"Saved {row.LastName}";
+            }
+            else
+            {
+                StatusMessage = $"Error: {result.ErrorMessage}";
+            }
+        }
+    }
+
+    /// <summary>Save participation for one cell immediately.</summary>
+    public async Task SaveParticipationAsync(CompetitorRowViewModel row, ParticipationCellViewModel cell)
+    {
+        if (row.RowState == RowState.Added || row.RowState == RowState.Deleted)
+        {
+            return;
+        }
+
+        var result = await _setParticipation.ExecuteAsync(new SetParticipationRequest
+        {
+            EventSeriesId = _seriesId,
+            CompetitorId = row.Id,
+            CompetitionId = cell.CompetitionId,
+            IsParticipating = cell.IsParticipating,
+        });
+
+        if (!result.Succeeded)
+        {
+            StatusMessage = $"Error saving participation: {result.ErrorMessage}";
+        }
+        else
+        {
+            StatusMessage = $"Participation saved for {row.LastName}";
+        }
     }
 
     private void AppendToLog(ChangeLogEntry entry)

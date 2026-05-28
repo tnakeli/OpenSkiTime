@@ -11,6 +11,17 @@ namespace OpenSkiTime.Desktop.Views;
 
 public partial class CompetitorGridView : UserControl
 {
+    private static readonly string[] s_textFields =
+    [
+        nameof(CompetitorRowViewModel.FisCode),
+        nameof(CompetitorRowViewModel.LastName),
+        nameof(CompetitorRowViewModel.FirstName),
+        nameof(CompetitorRowViewModel.YearOfBirth),
+        nameof(CompetitorRowViewModel.Gender),
+        nameof(CompetitorRowViewModel.NationCode),
+        nameof(CompetitorRowViewModel.ClubName),
+    ];
+
     private CompetitorGridViewModel? _vm;
 
     public CompetitorGridView()
@@ -49,53 +60,26 @@ public partial class CompetitorGridView : UserControl
             return;
         }
 
+        grid.CellEditEnded -= OnCellEditEnded;
         grid.Columns.Clear();
 
-        // FIS Code
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = "FIS Code",
-            Binding = new Binding(nameof(CompetitorRowViewModel.FisCode)),
-            Width = new DataGridLength(90),
-        });
+        grid.Columns.Add(new DataGridTextColumn { Header = "FIS Code",   Binding = new Binding(nameof(CompetitorRowViewModel.FisCode)),      Width = new DataGridLength(100) });
+        grid.Columns.Add(new DataGridTextColumn { Header = "Last Name",  Binding = new Binding(nameof(CompetitorRowViewModel.LastName)),     Width = new DataGridLength(150) });
+        grid.Columns.Add(new DataGridTextColumn { Header = "First Name", Binding = new Binding(nameof(CompetitorRowViewModel.FirstName)),    Width = new DataGridLength(130) });
+        grid.Columns.Add(new DataGridTextColumn { Header = "YOB",        Binding = new Binding(nameof(CompetitorRowViewModel.YearOfBirth)),  Width = new DataGridLength(60) });
 
-        // Last Name
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = "Last Name",
-            Binding = new Binding(nameof(CompetitorRowViewModel.LastName)),
-            Width = new DataGridLength(150),
-        });
-
-        // First Name
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = "First Name",
-            Binding = new Binding(nameof(CompetitorRowViewModel.FirstName)),
-            Width = new DataGridLength(130),
-        });
-
-        // YOB
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = "YOB",
-            Binding = new Binding(nameof(CompetitorRowViewModel.YearOfBirth)),
-            Width = new DataGridLength(55),
-        });
-
-        // Gender (AutoCompleteBox in edit mode)
         grid.Columns.Add(new DataGridTemplateColumn
         {
             Header = "Gender",
             Width = new DataGridLength(90),
-            CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _) =>
+            CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((_, _2) =>
                 new TextBlock
                 {
                     [!TextBlock.TextProperty] = new Binding(nameof(CompetitorRowViewModel.Gender)),
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Avalonia.Thickness(8, 0),
                 }),
-            CellEditingTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _) =>
+            CellEditingTemplate = new FuncDataTemplate<CompetitorRowViewModel>((_, _2) =>
             {
                 var acb = new AutoCompleteBox
                 {
@@ -103,67 +87,39 @@ public partial class CompetitorGridView : UserControl
                     FilterMode = AutoCompleteFilterMode.None,
                     ItemsSource = CompetitorRowViewModel.GenderOptions,
                 };
-                acb.Bind(AutoCompleteBox.TextProperty, new Binding(nameof(CompetitorRowViewModel.Gender))
-                {
-                    Mode = BindingMode.TwoWay,
-                });
+                acb.Bind(AutoCompleteBox.TextProperty, new Binding(nameof(CompetitorRowViewModel.Gender)) { Mode = BindingMode.TwoWay });
                 return acb;
             }),
         });
 
-        // Nation
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = "Nation",
-            Binding = new Binding(nameof(CompetitorRowViewModel.NationCode)),
-            Width = new DataGridLength(60),
-        });
+        grid.Columns.Add(new DataGridTextColumn { Header = "Nation", Binding = new Binding(nameof(CompetitorRowViewModel.NationCode)), Width = new DataGridLength(60) });
+        grid.Columns.Add(new DataGridTextColumn { Header = "Club",   Binding = new Binding(nameof(CompetitorRowViewModel.ClubName)),   Width = new DataGridLength(150) });
 
-        // Club
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = "Club",
-            Binding = new Binding(nameof(CompetitorRowViewModel.ClubName)),
-            Width = new DataGridLength(150),
-        });
-
-        // Dynamic competition columns (checkboxes)
         if (_vm is not null)
         {
             for (int i = 0; i < _vm.CompetitionColumns.Count; i++)
             {
                 var idx = i;
-                var col = _vm.CompetitionColumns[idx];
+                var compCol = _vm.CompetitionColumns[idx];
                 grid.Columns.Add(new DataGridTemplateColumn
                 {
-                    Header = col.ShortLabel,
-                    Width = new DataGridLength(70),
-                    IsReadOnly = false,
-                    CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _) =>
-                    {
-                        var cb = new CheckBox
-                        {
-                            HorizontalAlignment = HorizontalAlignment.Center,
-                            IsHitTestVisible = false,
-                        };
-                        if (row is not null && idx < row.Participations.Count)
-                        {
-                            cb.Bind(CheckBox.IsCheckedProperty,
-                                new Binding($"Participations[{idx}].IsParticipating"));
-                        }
-
-                        return cb;
-                    }),
-                    CellEditingTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _) =>
+                    Header = compCol.ShortLabel,
+                    Width = new DataGridLength(65),
+                    IsReadOnly = true,
+                    CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _2) =>
                     {
                         var cb = new CheckBox { HorizontalAlignment = HorizontalAlignment.Center };
                         if (row is not null && idx < row.Participations.Count)
                         {
                             cb.Bind(CheckBox.IsCheckedProperty,
-                                new Binding($"Participations[{idx}].IsParticipating")
+                                new Binding($"Participations[{idx}].IsParticipating") { Mode = BindingMode.TwoWay });
+                            cb.IsCheckedChanged += (s, _) =>
+                            {
+                                if (_vm is not null && row is not null && idx < row.Participations.Count)
                                 {
-                                    Mode = BindingMode.TwoWay,
-                                });
+                                    _ = _vm.SaveParticipationAsync(row, row.Participations[idx]);
+                                }
+                            };
                         }
 
                         return cb;
@@ -172,20 +128,14 @@ public partial class CompetitorGridView : UserControl
             }
         }
 
-        // Delete button (last, read-only)
         grid.Columns.Add(new DataGridTemplateColumn
         {
             Header = string.Empty,
             Width = new DataGridLength(70),
             IsReadOnly = true,
-            CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _) =>
+            CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _2) =>
             {
-                var btn = new Button
-                {
-                    Content = "Delete",
-                    FontSize = 11,
-                    Padding = new Avalonia.Thickness(6, 2),
-                };
+                var btn = new Button { Content = "Delete", FontSize = 11, Padding = new Avalonia.Thickness(6, 2) };
                 if (_vm is not null)
                 {
                     btn.Command = _vm.DeleteCompetitorCommand;
@@ -195,6 +145,34 @@ public partial class CompetitorGridView : UserControl
                 return btn;
             }),
         });
+
+        grid.CellEditEnded += OnCellEditEnded;
+    }
+
+    private void OnCellEditEnded(object? sender, DataGridCellEditEndedEventArgs e)
+    {
+        if (_vm is null)
+        {
+            return;
+        }
+
+        if (e.EditAction != DataGridEditAction.Commit)
+        {
+            return;
+        }
+
+        if (e.Row.DataContext is not CompetitorRowViewModel row)
+        {
+            return;
+        }
+
+        var colIdx = e.Column.DisplayIndex;
+        string? fieldName = colIdx < s_textFields.Length ? s_textFields[colIdx] : null;
+
+        if (fieldName is not null)
+        {
+            _ = _vm.OnCellEditCommittedAsync(row, fieldName);
+        }
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -209,15 +187,6 @@ public partial class CompetitorGridView : UserControl
             if (vm.PasteCommand.CanExecute(null))
             {
                 vm.PasteCommand.Execute(null);
-            }
-
-            e.Handled = true;
-        }
-        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.S)
-        {
-            if (vm.SaveCommand.CanExecute(null))
-            {
-                vm.SaveCommand.Execute(null);
             }
 
             e.Handled = true;
