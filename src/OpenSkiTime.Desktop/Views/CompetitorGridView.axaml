@@ -106,7 +106,7 @@
                 <Button Content="Restore"
                         FontSize="11"
                         Padding="6,2"
-                        Command="{Binding $parent[ListBox].((vm:CompetitorGridViewModel)DataContext).RestoreEntryAsyncCommand}"
+                        Command="{Binding $parent[ListBox].((vm:CompetitorGridViewModel)DataContext).RestoreEntryCommand}"
                         CommandParameter="{Binding}" />
               </StackPanel>
             </DataTemplate>
