@@ -95,9 +95,8 @@ internal static class Program
         // letting the DI container resolve a CompetitionEditor per-edit
         // keeps things uniform.
         services.AddScoped<EventSeriesOverviewViewModel>();
+        services.AddScoped<CompetitorGridViewModel>();
         services.AddTransient<CompetitionEditorViewModel>();
-        services.AddTransient<ImportViewModel>();
-        services.AddTransient<CompetitorGridViewModel>();
         services.AddScoped<ShellViewModel>();
 
         return services.BuildServiceProvider();

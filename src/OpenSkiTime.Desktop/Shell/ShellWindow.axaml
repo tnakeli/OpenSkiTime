@@ -30,17 +30,6 @@
                    FontSize="12"
                    TextWrapping="Wrap" />
 
-        <Separator Margin="0,16,0,8" Background="#374151" />
-
-        <TextBlock Text="IMPORT"
-                   Foreground="#9ca3af"
-                   FontSize="11" FontWeight="SemiBold"
-                   Margin="0,0,0,4" />
-        <Button Content="Import competitors…"
-                Command="{Binding NavigateToImportCommand}"
-                HorizontalAlignment="Stretch"
-                Background="#374151" Foreground="White"
-                Padding="10,6" />
       </StackPanel>
     </Border>
 
