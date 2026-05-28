@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="OpenSkiTime.Desktop.Shell.ShellWindow"
+        Title="Open Ski Time"
+        Width="1280" Height="800"
+        MinWidth="960" MinHeight="600">
+
+  <Grid ColumnDefinitions="240,*">
+
+    <!-- Left navigation -->
+    <Border Grid.Column="0" Background="#1f2937" Padding="16">
+      <StackPanel Spacing="12">
+        <TextBlock Text="Open Ski Time"
+                   Foreground="White"
+                   FontSize="20" FontWeight="SemiBold" />
+        <TextBlock Text="Race office"
+                   Foreground="#9ca3af"
+                   FontSize="12" />
+
+        <Separator Margin="0,8,0,8" Background="#374151" />
+
+        <TextBlock Text="Event Series" Foreground="#d1d5db" FontWeight="SemiBold" />
+        <TextBlock Text="(populated in Phase 3)" Foreground="#6b7280" FontSize="12" />
+
+        <TextBlock Text="Competitors" Foreground="#d1d5db" FontWeight="SemiBold" Margin="0,16,0,0" />
+        <TextBlock Text="(populated in Phase 4)" Foreground="#6b7280" FontSize="12" />
+      </StackPanel>
+    </Border>
+
+    <!-- Main content -->
+    <Border Grid.Column="1" Background="#f9fafb" Padding="32">
+      <StackPanel Spacing="16" VerticalAlignment="Center" HorizontalAlignment="Center">
+        <TextBlock Text="Welcome to Open Ski Time"
+                   FontSize="28" FontWeight="SemiBold" Foreground="#111827" />
+        <TextBlock Text="Phase 2 foundation build. Feature surface arrives in Phase 3."
+                   FontSize="14" Foreground="#4b5563" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>
