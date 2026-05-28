@@ -60,6 +60,9 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     public ObservableCollection<ChangeLogEntry> ChangeLog { get; } = [];
     public ObservableCollection<object> SelectedItems { get; } = [];
 
+    /// <summary>Ordered list of competitions — drives dynamic DataGrid columns.</summary>
+    public ObservableCollection<(Guid Id, string ShortLabel)> CompetitionColumns { get; } = [];
+
     [ObservableProperty] private string _filterText = string.Empty;
     [ObservableProperty] private CompetitorViewMode _viewMode = CompetitorViewMode.Flat;
     [ObservableProperty] private string _statusMessage = string.Empty;
@@ -88,10 +91,23 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
         HasActivePasteSession = false;
         _pasteSession = null;
 
+        CompetitionColumns.Clear();
+        var competitions = series.Competitions.OrderBy(c => c.Date).ToList();
+        foreach (var comp in competitions)
+        {
+            CompetitionColumns.Add((comp.Id, comp.ShortLabel));
+        }
+
         foreach (var c in series.Competitors.OrderBy(c => c.LastName.Value).ThenBy(c => c.FirstName))
         {
             var row = new CompetitorRowViewModel(c);
             row.PropertyChanged += OnRowPropertyChanged;
+            foreach (var comp in competitions)
+            {
+                bool participating = c.Participations.Any(p => p.CompetitionId == comp.Id && p.IsParticipating);
+                row.Participations.Add(new ParticipationCellViewModel(comp.Id, comp.ShortLabel, participating));
+            }
+
             Competitors.Add(row);
         }
 
@@ -321,6 +337,9 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
 
         _pasteSession = new ImportPasteSession(pr.SnapshotVersion);
 
+        int newCount = 0;
+        int changedCount = 0;
+
         foreach (var nc in pr.Diff.NewCompetitors)
         {
             var row = new CompetitorRowViewModel
@@ -333,12 +352,41 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
                 FisCode = nc.FisCode ?? string.Empty,
                 RowState = RowState.PasteHighlighted,
             };
+            foreach (var col in CompetitionColumns)
+            {
+                bool participating = nc.ParticipatingIn.Contains(col.ShortLabel, StringComparer.OrdinalIgnoreCase);
+                row.Participations.Add(new ParticipationCellViewModel(col.Id, col.ShortLabel, participating));
+            }
+
             row.PropertyChanged += OnRowPropertyChanged;
             Competitors.Insert(0, row);
+            newCount++;
+        }
+
+        foreach (var pd in pr.Diff.Participations)
+        {
+            var existing = Competitors.FirstOrDefault(r => r.Id == pd.CompetitorId);
+            if (existing is null)
+            {
+                continue;
+            }
+
+            var cell = existing.Participations.FirstOrDefault(p => p.CompetitionId == pd.CompetitionId);
+            if (cell is not null)
+            {
+                cell.IsParticipating = pd.IsParticipating;
+            }
+
+            if (existing.RowState == RowState.Unchanged)
+            {
+                existing.RowState = RowState.Edited;
+            }
+
+            changedCount++;
         }
 
         HasActivePasteSession = true;
-        StatusMessage = $"Paste preview: {pr.Diff.NewCompetitors.Count} new competitor(s). Apply or discard.";
+        StatusMessage = $"Paste preview: {newCount} new, {changedCount} participation change(s). Apply or discard.";
     }
 
     [RelayCommand]

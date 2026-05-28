@@ -131,42 +131,6 @@
                   Value="{Binding RowState, Converter={StaticResource RowStateBg}}" />
         </Style>
       </DataGrid.Styles>
-      <DataGrid.Columns>
-        <DataGridTextColumn Header="FIS Code"   Binding="{Binding FisCode}"      Width="90" />
-        <DataGridTextColumn Header="Last Name"  Binding="{Binding LastName}"     Width="150" />
-        <DataGridTextColumn Header="First Name" Binding="{Binding FirstName}"    Width="130" />
-        <DataGridTextColumn Header="YOB"        Binding="{Binding YearOfBirth}"  Width="55" />
-        <DataGridTemplateColumn Header="Gender" Width="100">
-          <DataGridTemplateColumn.CellTemplate>
-            <DataTemplate x:DataType="vm:CompetitorRowViewModel">
-              <TextBlock Text="{Binding Gender}"
-                         VerticalAlignment="Center"
-                         Margin="8,0" />
-            </DataTemplate>
-          </DataGridTemplateColumn.CellTemplate>
-          <DataGridTemplateColumn.CellEditingTemplate>
-            <DataTemplate x:DataType="vm:CompetitorRowViewModel">
-              <AutoCompleteBox Text="{Binding Gender}"
-                               MinimumPrefixLength="0"
-                               FilterMode="None"
-                               ItemsSource="{x:Static vm:CompetitorRowViewModel.GenderOptions}" />
-            </DataTemplate>
-          </DataGridTemplateColumn.CellEditingTemplate>
-        </DataGridTemplateColumn>
-        <DataGridTextColumn Header="Nation"     Binding="{Binding NationCode}"   Width="65" />
-        <DataGridTextColumn Header="Club"       Binding="{Binding ClubName}"     Width="160" />
-        <DataGridTemplateColumn Header="" Width="70" IsReadOnly="True">
-          <DataGridTemplateColumn.CellTemplate>
-            <DataTemplate x:DataType="vm:CompetitorRowViewModel">
-              <Button Content="Delete"
-                      FontSize="11"
-                      Padding="6,2"
-                      Command="{Binding $parent[DataGrid].((vm:CompetitorGridViewModel)DataContext).DeleteCompetitorCommand}"
-                      CommandParameter="{Binding}" />
-            </DataTemplate>
-          </DataGridTemplateColumn.CellTemplate>
-        </DataGridTemplateColumn>
-      </DataGrid.Columns>
     </DataGrid>
 
   </DockPanel>

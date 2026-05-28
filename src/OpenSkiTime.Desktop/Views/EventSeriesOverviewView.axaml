@@ -40,7 +40,7 @@
     <DockPanel Grid.Column="1" LastChildFill="True">
 
       <!-- Top: series form + buttons + validation (fixed height, scrollable) -->
-      <ScrollViewer DockPanel.Dock="Top" MaxHeight="320" Padding="24,16,24,0">
+      <ScrollViewer DockPanel.Dock="Top" MaxHeight="380" Padding="24,16,24,0">
         <StackPanel Spacing="12">
 
           <TextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding Name}" />

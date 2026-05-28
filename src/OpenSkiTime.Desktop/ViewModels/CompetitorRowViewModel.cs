@@ -1,8 +1,26 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using OpenSkiTime.Desktop.Models;
 
 namespace OpenSkiTime.Desktop.ViewModels;
+
+/// <summary>
+/// Observable participation cell for a single competition column.
+/// </summary>
+public sealed partial class ParticipationCellViewModel : ObservableObject
+{
+    public Guid CompetitionId { get; }
+    public string ShortLabel { get; }
+    [ObservableProperty] private bool _isParticipating;
+
+    public ParticipationCellViewModel(Guid competitionId, string shortLabel, bool isParticipating)
+    {
+        CompetitionId = competitionId;
+        ShortLabel = shortLabel;
+        _isParticipating = isParticipating;
+    }
+}
 
 /// <summary>
 /// Observable row VM for a single competitor in the competitor grid.
@@ -58,6 +76,9 @@ public sealed partial class CompetitorRowViewModel : ObservableObject
     [ObservableProperty] private bool _isEditing;
 
     public List<ChangeLogEntry> PendingChanges { get; } = [];
+
+    /// <summary>One cell per competition in the event series, ordered by date.</summary>
+    public ObservableCollection<ParticipationCellViewModel> Participations { get; } = [];
 
     internal void SnapshotOriginals()
     {
