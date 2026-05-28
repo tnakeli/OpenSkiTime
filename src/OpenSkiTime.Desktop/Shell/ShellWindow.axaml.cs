@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Markup.Xaml;
 
 namespace OpenSkiTime.Desktop.Shell;
 
@@ -6,6 +7,6 @@ public partial class ShellWindow : Window
 {
     public ShellWindow()
     {
-        InitializeComponent();
+        AvaloniaXamlLoader.Load(this);
     }
 }

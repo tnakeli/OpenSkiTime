@@ -3,7 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenSkiTime.Application.Abstractions;
+using OpenSkiTime.Application.Competitions;
+using OpenSkiTime.Application.Series;
 using OpenSkiTime.Desktop.Services;
+using OpenSkiTime.Desktop.ViewModels;
 using OpenSkiTime.Fis;
 using OpenSkiTime.Persistence;
 
@@ -61,9 +64,27 @@ internal static class Program
         // FIS placeholder: explicit single binding to the no-network impl.
         services.AddSingleton<IFisCompetitionUpdater, NotImplementedFisUpdater>();
 
+        // Application use cases (scoped — they depend on scoped DbContext-backed services).
+        services.AddScoped<CreateEventSeriesUseCase>();
+        services.AddScoped<UpdateEventSeriesUseCase>();
+        services.AddScoped<DeleteEventSeriesUseCase>();
+        services.AddScoped<ListEventSeriesUseCase>();
+        services.AddScoped<AddCompetitionUseCase>();
+        services.AddScoped<UpdateCompetitionUseCase>();
+        services.AddScoped<RemoveCompetitionUseCase>();
+
         // Desktop services
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IClipboardService, ClipboardService>();
+
+        // View models — scoped so each viewmodel resolution gets a fresh
+        // DbContext-backed unit-of-work where needed. The shell + overview
+        // are effectively singletons within the running app instance, but
+        // letting the DI container resolve a CompetitionEditor per-edit
+        // keeps things uniform.
+        services.AddScoped<EventSeriesOverviewViewModel>();
+        services.AddTransient<CompetitionEditorViewModel>();
+        services.AddScoped<ShellViewModel>();
 
         return services.BuildServiceProvider();
     }
