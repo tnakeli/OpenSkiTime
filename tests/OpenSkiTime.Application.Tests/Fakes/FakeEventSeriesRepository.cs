@@ -62,6 +62,8 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
 {
     public int SaveCount { get; private set; }
 
+    public void Reset() => SaveCount = 0;
+
     public Task<IAsyncDisposable> BeginTransactionAsync(CancellationToken ct = default)
         => Task.FromResult<IAsyncDisposable>(new NoopDisposable());
 

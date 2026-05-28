@@ -28,6 +28,9 @@ internal sealed class EventSeriesRepository : IEventSeriesRepository
     {
         return await _db.EventSeries
             .Include(e => e.Competitions)
+            .Include(e => e.Competitors)
+                .ThenInclude(c => c.Participations)
+            .Include(e => e.CategoryRules)
             .FirstOrDefaultAsync(e => e.Id == id, ct)
             .ConfigureAwait(false);
     }
@@ -57,6 +60,8 @@ internal sealed class EventSeriesRepository : IEventSeriesRepository
     {
         var series = await _db.EventSeries
             .Include(e => e.Competitions)
+            .Include(e => e.Competitors)
+                .ThenInclude(c => c.Participations)
             .AsNoTracking()
             .FirstOrDefaultAsync(e => e.Id == id, ct)
             .ConfigureAwait(false);
@@ -70,12 +75,21 @@ internal sealed class EventSeriesRepository : IEventSeriesRepository
             .Select(c => new CompetitionRef(c.Id, c.ShortLabel, c.Date))
             .ToList();
 
-        // Competitors and Participations are added in Phase 4 (US2).
+        var competitors = series.Competitors
+            .Select(c => new CompetitorRef(c.Id, c.FisCode ?? string.Empty,
+                c.LastName.Value, c.FirstName, c.YearOfBirth))
+            .ToList();
+
+        var participations = series.Competitors
+            .SelectMany(c => c.Participations
+                .Select(p => new ParticipationRef(p.CompetitorId, p.CompetitionId, p.IsParticipating)))
+            .ToList();
+
         return new EventSeriesSnapshot(
             series.Id,
             series.RowVersion,
             competitions,
-            Array.Empty<CompetitorRef>(),
-            Array.Empty<ParticipationRef>());
+            competitors,
+            participations);
     }
 }

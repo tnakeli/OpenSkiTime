@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenSkiTime.Application.Abstractions;
 using OpenSkiTime.Application.Competitions;
+using OpenSkiTime.Application.Competitors;
 using OpenSkiTime.Application.Series;
 using OpenSkiTime.Desktop.Services;
 using OpenSkiTime.Desktop.ViewModels;
@@ -72,6 +73,10 @@ internal static class Program
         services.AddScoped<AddCompetitionUseCase>();
         services.AddScoped<UpdateCompetitionUseCase>();
         services.AddScoped<RemoveCompetitionUseCase>();
+        services.AddScoped<AddCompetitorUseCase>();
+        services.AddScoped<RemoveCompetitorUseCase>();
+        services.AddScoped<AssignBibUseCase>();
+        services.AddScoped<ListCompetitorsUseCase>();
 
         // Desktop services
         services.AddSingleton<IDialogService, DialogService>();

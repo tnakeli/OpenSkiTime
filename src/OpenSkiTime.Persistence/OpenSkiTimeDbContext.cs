@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using OpenSkiTime.Domain.CategoryRules;
 using OpenSkiTime.Domain.Competitions;
+using OpenSkiTime.Domain.Competitors;
 using OpenSkiTime.Domain.Series;
 
 namespace OpenSkiTime.Persistence;
@@ -14,6 +16,12 @@ public class OpenSkiTimeDbContext : DbContext
     public DbSet<EventSeries> EventSeries => Set<EventSeries>();
 
     public DbSet<Competition> Competitions => Set<Competition>();
+
+    public DbSet<Competitor> Competitors => Set<Competitor>();
+
+    public DbSet<Domain.Participation.Participation> Participations => Set<Domain.Participation.Participation>();
+
+    public DbSet<CategoryRule> CategoryRules => Set<CategoryRule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,6 +72,20 @@ public class OpenSkiTimeDbContext : DbContext
                     break;
                 case Competition competition:
                     touched.Add(competition.EventSeriesId);
+                    break;
+                case Competitor competitor:
+                    touched.Add(competitor.EventSeriesId);
+                    break;
+                case Domain.Participation.Participation participation:
+                    // Need to resolve EventSeriesId via CompetitorId → EventSeriesId.
+                    var owner = ChangeTracker.Entries<Competitor>()
+                        .FirstOrDefault(e => e.Entity.Id == participation.CompetitorId)
+                        ?.Entity;
+                    if (owner is not null)
+                    {
+                        touched.Add(owner.EventSeriesId);
+                    }
+
                     break;
             }
         }
