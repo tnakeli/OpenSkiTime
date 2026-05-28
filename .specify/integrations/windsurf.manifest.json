@@ -1,0 +1,16 @@
+{
+  "integration": "windsurf",
+  "version": "0.8.17.dev0",
+  "installed_at": "2026-05-28T14:38:20.519271+00:00",
+  "files": {
+    ".windsurf/workflows/speckit.analyze.md": "56285817b93f55ae926eade0528673d25ffcf441e8109492323bfbe8941be8f7",
+    ".windsurf/workflows/speckit.checklist.md": "53ce35462c1df402780e730ea54150a30872e6e0d6d44a8bd38dd8b5d42900a9",
+    ".windsurf/workflows/speckit.clarify.md": "2e872177928e5a943a2496475b74dd47f5eef841ec378875c8a11494a0c25466",
+    ".windsurf/workflows/speckit.constitution.md": "58d35eb026f56bb7364d91b8b0382d5dd1249ded6c1449a2b69546693afb85f7",
+    ".windsurf/workflows/speckit.implement.md": "79a1a52e4667ef21ecee4c7ebd1ac47a191d890c602df6ee6a92b646c8c0fc8e",
+    ".windsurf/workflows/speckit.plan.md": "e65064e75f5eb7115d3922164c9b6ae6c99c55421181c07a554aaa2c29919682",
+    ".windsurf/workflows/speckit.specify.md": "3fb3ba3de7e4e061a1a6cb48a4159c209fb6c77ad12f0e30e8c3cffb6c2a53d7",
+    ".windsurf/workflows/speckit.tasks.md": "1f57a7294d78230f8585fe69e6b750fc9787e8d04f2a5160f839b563d1b0a588",
+    ".windsurf/workflows/speckit.taskstoissues.md": "12532e50c8f9aeb453a565aec6aa6f53abe53cf92926ca553b3d2c61b6b7b6e3"
+  }
+}
