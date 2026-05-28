@@ -21,9 +21,6 @@
         <Button Content="+ Add"
                 Command="{Binding AddCompetitorCommand}"
                 Padding="10,4" />
-        <Button Content="Discard All"
-                Command="{Binding DiscardAllCommand}"
-                Padding="10,4" />
         <Separator Width="1" Background="#d1d5db" Margin="4,0" />
         <Button Content="📋 Paste from clipboard"
                 Command="{Binding PasteCommand}"
@@ -84,12 +81,20 @@
             BorderBrush="#e5e7eb" BorderThickness="0,1,0,0"
             MaxHeight="180">
       <DockPanel>
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Change Log (session only)"
-                   FontWeight="SemiBold"
-                   FontSize="11"
-                   Foreground="#6b7280"
-                   Margin="12,6,0,4" />
+        <DockPanel DockPanel.Dock="Top" Margin="12,6,0,4">
+          <TextBlock Text="Change Log"
+                     FontWeight="SemiBold"
+                     FontSize="11"
+                     Foreground="#6b7280"
+                     VerticalAlignment="Center" />
+          <Button DockPanel.Dock="Right"
+                  Content="Commit Changes"
+                  Command="{Binding CommitChangeLogCommand}"
+                  FontSize="11"
+                  Padding="8,2"
+                  HorizontalAlignment="Right"
+                  ToolTip.Tip="Save all pending deletes and clear the log" />
+        </DockPanel>
         <ListBox ItemsSource="{Binding ChangeLog}"
                  MaxHeight="140">
           <ListBox.ItemTemplate>
@@ -101,7 +106,7 @@
                 <Button Content="Restore"
                         FontSize="11"
                         Padding="6,2"
-                        Command="{Binding $parent[ListBox].((vm:CompetitorGridViewModel)DataContext).RestoreEntryCommand}"
+                        Command="{Binding $parent[ListBox].((vm:CompetitorGridViewModel)DataContext).RestoreEntryAsyncCommand}"
                         CommandParameter="{Binding}" />
               </StackPanel>
             </DataTemplate>

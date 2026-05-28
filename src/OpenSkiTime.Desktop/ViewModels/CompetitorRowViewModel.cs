@@ -141,6 +141,21 @@ public sealed partial class CompetitorRowViewModel : ObservableObject
         PendingChanges.Clear();
     }
 
+    internal void SetFieldValue(string field, string? value)
+    {
+        var v = value ?? string.Empty;
+        switch (field)
+        {
+            case nameof(LastName):    LastName = v;    break;
+            case nameof(FirstName):   FirstName = v;   break;
+            case nameof(YearOfBirth): YearOfBirth = int.TryParse(v, out var y) ? y : YearOfBirth; break;
+            case nameof(Gender):      Gender = v;      break;
+            case nameof(NationCode):  NationCode = v;  break;
+            case nameof(ClubName):    ClubName = v;    break;
+            case nameof(FisCode):     FisCode = v;     break;
+        }
+    }
+
     internal string GetFieldValue(string field) => field switch
     {
         nameof(LastName) => LastName,
