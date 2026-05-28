@@ -22,7 +22,7 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     private const int ChangeLogCap = 200;
 
     private static readonly string[] s_copyHeaders =
-        ["Last Name", "First Name", "Year", "Gender", "Nation", "Club", "FIS Code"];
+        ["FIS Code", "Last Name", "First Name", "Year", "Gender", "Nation", "Club"];
 
     private readonly IEventSeriesRepository _repository;
     private readonly AddCompetitorUseCase _addCompetitor;
@@ -58,6 +58,7 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
 
     public ObservableCollection<CompetitorRowViewModel> Competitors { get; } = [];
     public ObservableCollection<ChangeLogEntry> ChangeLog { get; } = [];
+    public ObservableCollection<object> SelectedItems { get; } = [];
 
     [ObservableProperty] private string _filterText = string.Empty;
     [ObservableProperty] private CompetitorViewMode _viewMode = CompetitorViewMode.Flat;
@@ -398,10 +399,12 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task CopySelectedRowsAsync(IList<object>? selectedItems)
+    private async Task CopySelectedRowsAsync()
     {
-        if (selectedItems is null || selectedItems.Count == 0)
+        var rows = SelectedItems.OfType<CompetitorRowViewModel>().ToList();
+        if (rows.Count == 0)
         {
+            StatusMessage = "Select at least one row to copy.";
             return;
         }
 
@@ -412,17 +415,17 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
         var staticHeaders = s_copyHeaders.Concat(competitions.Select(c => c.ShortLabel));
         sb.AppendLine(string.Join("\t", staticHeaders));
 
-        foreach (var item in selectedItems.OfType<CompetitorRowViewModel>())
+        foreach (var item in rows)
         {
             var cells = new List<string>
             {
+                item.FisCode,
                 item.LastName.ToUpperInvariant(),
                 item.FirstName,
                 item.YearOfBirth.ToString(CultureInfo.InvariantCulture),
                 item.Gender,
                 item.NationCode,
                 item.ClubName,
-                item.FisCode,
             };
 
             if (series is not null)
@@ -439,6 +442,7 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
         }
 
         await _clipboard.SetTextAsync(sb.ToString());
+        StatusMessage = $"Copied {rows.Count} row(s) to clipboard.";
     }
 
     [RelayCommand]

@@ -40,6 +40,8 @@ public sealed partial class CompetitorRowViewModel : ObservableObject
         _rowState = RowState.Added;
     }
 
+    public static IReadOnlyList<string> GenderOptions { get; } = ["Men", "Women"];
+
     public Guid Id { get; }
 
     public string BibNumber { get; } = string.Empty;
