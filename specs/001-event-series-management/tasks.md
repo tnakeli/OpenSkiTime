@@ -167,25 +167,25 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 - [x] T060 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Competitors/CompetitorTests.cs` — `IsUsableForRaceEntry` matrix (FR-021), year-of-birth range, gender enum, club may be empty (FR-022)
 - [x] T061 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Participation/ParticipationTests.cs` — idempotent toggle, scoped to one Event Series
-- [ ] T062 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Categories/CategoryResolverTests.cs` — simple rule set produces expected category for `(year, gender)`
-- [ ] T063 [P] [US2] `tests/OpenSkiTime.Application.Tests/Competitors/EditCompetitorUseCaseTests.cs` — uppercase last name on edit (FR-023)
-- [ ] T064 [P] [US2] `tests/OpenSkiTime.Application.Tests/Competitors/CompetitorCodeUniqueWithinSeriesTests.cs`
+- [x] T062 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Categories/CategoryResolverTests.cs` — simple rule set produces expected category for `(year, gender)`
+- [x] T063 [P] [US2] `tests/OpenSkiTime.Application.Tests/Competitors/EditCompetitorUseCaseTests.cs` — uppercase last name on edit (FR-023)
+- [x] T064 [P] [US2] `tests/OpenSkiTime.Application.Tests/Competitors/CompetitorCodeUniqueWithinSeriesTests.cs`
 
 #### Importer
 
 - [x] T065 [P] [US2] `tests/OpenSkiTime.Import.Tests/Tsv/TsvTokenizerTests.cs` — tab/comma/CRLF/LF/quoted/whitespace
 - [x] T066 [P] [US2] `tests/OpenSkiTime.Import.Tests/Headers/HeaderMapperTests.cs` — case-insensitive, trimmed; recognizes the FR-051 set; `Last Name` + `First Name` together cause `Name` to be ignored
-- [ ] T067 [P] [US2] `tests/OpenSkiTime.Import.Tests/Names/SeparateLastFirstNameTests.cs` — uses Last/First directly, last name uppercased on import
-- [ ] T068 [P] [US2] `tests/OpenSkiTime.Import.Tests/Participation/ParticipationValueMatcherTests.cs` — accepts `Yes`, `YES`, `yes`, `Kyllä`, `KYLLÄ`, `kyllä`, `x`, `X`; rejects `1`, `true`, `kyllä!`, empty (FR-032)
-- [ ] T069 [P] [US2] `tests/OpenSkiTime.Import.Tests/Participation/ParticipationColumnHeaderTests.cs` — header `3.1 SL` mapped to the matching Competition `ShortLabel`; unknown labels go to `UnknownColumns`
+- [x] T067 [P] [US2] `tests/OpenSkiTime.Import.Tests/Names/SeparateLastFirstNameTests.cs` — uses Last/First directly, last name uppercased on import
+- [x] T068 [P] [US2] `tests/OpenSkiTime.Import.Tests/Participation/ParticipationValueMatcherTests.cs` — accepts `Yes`, `YES`, `yes`, `Kyllä`, `KYLLÄ`, `kyllä`, `x`, `X`; rejects `1`, `true`, `kyllä!`, empty (FR-032)
+- [x] T069 [P] [US2] `tests/OpenSkiTime.Import.Tests/Participation/ParticipationColumnHeaderTests.cs` — header `3.1 SL` mapped to the matching Competition `ShortLabel`; unknown labels go to `UnknownColumns`
 - [x] T070 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/DiffEngineTests.cs` — New/Updated/Unchanged/Error/Unknown buckets correct; match-by-Code preferred; fallback `(LastName, First, Year, Gender)` flagged `MatchedBy.NameYearGenderTuple`
-- [ ] T071 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/EmptyDoesNotOverwriteTests.cs` — default mode does not overwrite (FR-033, FR-052); `OverwriteWithEmpty=true` clears values (FR-053)
-- [ ] T072 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/PartialUpdateTests.cs` — only columns present in the source can be updated; absent columns never produce a `FieldDelta`
+- [x] T071 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/EmptyDoesNotOverwriteTests.cs` — default mode does not overwrite (FR-033, FR-052); `OverwriteWithEmpty=true` clears values (FR-053)
+- [x] T072 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/PartialUpdateTests.cs` — only columns present in the source can be updated; absent columns never produce a `FieldDelta`
 
 #### Persistence
 
-- [ ] T073 [P] [US2] `tests/OpenSkiTime.Persistence.Tests/CompetitorCodeUniqueIndexTests.cs` — DB raises constraint violation on duplicate `(EventSeriesId, Code)`
-- [ ] T074 [P] [US2] `tests/OpenSkiTime.Persistence.Tests/ImportApplyTransactionTests.cs` — failure mid-apply rolls back fully
+- [x] T073 [P] [US2] `tests/OpenSkiTime.Persistence.Tests/CompetitorCodeUniqueIndexTests.cs` — DB raises constraint violation on duplicate `(EventSeriesId, Code)`
+- [x] T074 [P] [US2] `tests/OpenSkiTime.Persistence.Tests/ImportApplyTransactionTests.cs` — failure mid-apply rolls back fully
 
 ### Implementation for User Story 2
 
@@ -198,16 +198,16 @@ Multi-project .NET solution per plan.md `Project Structure`:
 #### Application
 
 - [x] T078 [US2] Create `src/OpenSkiTime.Application/Competitors/AddCompetitorUseCase.cs` (depends on T075)
-- [ ] T079 [US2] Create `src/OpenSkiTime.Application/Competitors/EditCompetitorUseCase.cs` (FR-023 enforcement on edit)
-- [ ] T080 [US2] Create `src/OpenSkiTime.Application/Participation/SetParticipationUseCase.cs` (depends on T076)
-- [ ] T081 [US2] Create `src/OpenSkiTime.Application/Import/IImportPreviewService.cs`, `IImportApplyService.cs`, `ImportPreview`, `ImportOptions`, `CompetitorDraft`, `ParticipationDraft`, `FieldDelta`, `MatchedBy`, `NewOrUpdate`, `CompetitorField` per `contracts/importer.md`
+- [x] T079 [US2] Create `src/OpenSkiTime.Application/Competitors/EditCompetitorUseCase.cs` (FR-023 enforcement on edit)
+- [x] T080 [US2] Create `src/OpenSkiTime.Application/Participation/SetParticipationUseCase.cs` (depends on T076)
+- [x] T081 [US2] Create `src/OpenSkiTime.Application/Import/IImportPreviewService.cs`, `IImportApplyService.cs`, `ImportPreview`, `ImportOptions`, `CompetitorDraft`, `ParticipationDraft`, `FieldDelta`, `MatchedBy`, `NewOrUpdate`, `CompetitorField` per `contracts/importer.md`
 
 #### Importer module
 
 - [x] T082 [P] [US2] Create `src/OpenSkiTime.Import/Tsv/TsvTokenizer.cs` (handles tab + comma fallback, CRLF/LF, quoted cells, surrounding whitespace)
 - [x] T083 [P] [US2] Create `src/OpenSkiTime.Import/Headers/HeaderMapper.cs` mapping recognized headers (FR-051) + Competition `ShortLabel` to `MappedField`
 - [x] T084 [P] [US2] Create `src/OpenSkiTime.Import/Names/SeparateNameProjector.cs` — when `Last Name` + `First Name` headers present, project directly with uppercase last name
-- [ ] T085 [P] [US2] Create `src/OpenSkiTime.Import/Participation/ParticipationValueMatcher.cs` accepting `Yes`, `Kyllä`, `x` case-insensitively (FR-032)
+- [x] T085 [P] [US2] Create `src/OpenSkiTime.Import/Participation/ParticipationValueMatcher.cs` accepting `Yes`, `Kyllä`, `x` case-insensitively (FR-032)
 - [x] T086 [US2] Create `src/OpenSkiTime.Import/Preview/DiffEngine.cs` — match by Code first, fallback `(UpperLastName, FirstName, YearOfBirth, Gender)` flagged with `MatchedBy.NameYearGenderTuple`; produces `ImportPreview` per `contracts/importer.md`
 - [x] T087 [US2] Create `src/OpenSkiTime.Import/ImportPreviewService.cs` implementing `IImportPreviewService` (pure function: no DB writes, reads `EventSeriesSnapshot`)
 - [x] T088 [US2] Create `src/OpenSkiTime.Import/ImportApplyService.cs` implementing `IImportApplyService` — transactional via `IUnitOfWork`; default mode skips empty cells; `OverwriteWithEmpty` clears them; verifies `EventSeriesSnapshotVersion`
@@ -222,9 +222,9 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 #### UI
 
-- [ ] T094 [P] [US2] Create `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` (Items, ViewMode {Flat, ByCategory, ByClub, ByNation}, Filters, PasteCommand)
-- [ ] T095 [P] [US2] Create `src/OpenSkiTime.Desktop/Controls/CompetitorRowEditor.axaml` (uppercase last-name display via converter, debounced commit)
-- [ ] T096 [US2] Create `src/OpenSkiTime.Desktop/Views/CompetitorGridView.axaml(.cs)` — virtualized `DataGrid`, dynamic per-Competition participation columns (one per Competition `ShortLabel`), toolbar (paste / view-mode / filters)
+- [x] T094 [P] [US2] Create `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` (Items, ViewMode {Flat, ByCategory, ByClub, ByNation}, Filters, PasteCommand)
+- [x] T095 [P] [US2] Create `src/OpenSkiTime.Desktop/Controls/CompetitorRowEditor.axaml` (uppercase last-name display via converter, debounced commit)
+- [x] T096 [US2] Create `src/OpenSkiTime.Desktop/Views/CompetitorGridView.axaml(.cs)` — virtualized `DataGrid`, dynamic per-Competition participation columns (one per Competition `ShortLabel`), toolbar (paste / view-mode / filters)
 - [x] T097 [P] [US2] Create `src/OpenSkiTime.Desktop/ViewModels/ImportPreviewViewModel.cs` exposing tabs: New / Updated / Unchanged / Errors / UncertainNames / UnknownColumns; `OverwriteWithEmpty` toggle; Apply / Cancel
 - [x] T098 [US2] Create `src/OpenSkiTime.Desktop/Views/ImportPreviewView.axaml(.cs)` — modal/sheet style; row-level edit not yet (US3 adds it)
 - [x] T099 [US2] Wire paste workflow: `CompetitorGridViewModel.PasteCommand` → `IClipboardService.GetText` → `IImportPreviewService.BuildPreview` → open `ImportPreviewView` → on Apply call `IImportApplyService.Apply` → reload grid
@@ -242,13 +242,13 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 ### Tests for User Story 3 (write FIRST)
 
-- [ ] T101 [P] [US3] `tests/OpenSkiTime.Import.Tests/Names/CombinedNameParserTests.cs` — strategy from `research.md`: ALL-CAPS leading tokens become last-name tokens ("VAN DER POEL Jeroen" → last "VAN DER POEL", first "Jeroen"); otherwise last whitespace token = last name; deterministic
+- [x] T101 [P] [US3] `tests/OpenSkiTime.Import.Tests/Names/CombinedNameParserTests.cs` — strategy from `research.md`: ALL-CAPS leading tokens become last-name tokens ("VAN DER POEL Jeroen" → last "VAN DER POEL", first "Jeroen"); otherwise last whitespace token = last name; deterministic
 - [ ] T102 [P] [US3] `tests/OpenSkiTime.Import.Tests/Names/UncertainNameFlaggingTests.cs` — when only `Name` header present, EVERY row goes into `UncertainNames`, never directly into `New`/`Updated` (FR-055)
 - [ ] T103 [P] [US3] `tests/OpenSkiTime.Import.Tests/Preview/UncertainNameUserOverrideTests.cs` — when the user supplies a corrected `(LastName, FirstName)` split for an `UncertainNameRow`, Apply writes the corrected values, last name uppercased
 
 ### Implementation for User Story 3
 
-- [ ] T104 [US3] Create `src/OpenSkiTime.Import/Names/CombinedNameParser.cs` implementing the strategy from `research.md`
+- [x] T104 [US3] Create `src/OpenSkiTime.Import/Names/CombinedNameParser.cs` implementing the strategy from `research.md`
 - [ ] T105 [US3] Extend `src/OpenSkiTime.Import/Headers/HeaderMapper.cs` and `src/OpenSkiTime.Import/Preview/DiffEngine.cs` to route every parsed row to `ImportPreview.UncertainNames` (with disposition New | Update) when `Name` header is the only name source
 - [ ] T106 [US3] Extend `src/OpenSkiTime.Import/ImportApplyService.cs` to read user-edited `(LastName, FirstName)` from `UncertainNameRow` if provided; otherwise use the parser's best-effort split; uppercase last name unconditionally
 - [ ] T107 [US3] Extend `src/OpenSkiTime.Desktop/ViewModels/ImportPreviewViewModel.cs` and `src/OpenSkiTime.Desktop/Views/ImportPreviewView.axaml` to allow inline editing of `ProposedLastName` / `ProposedFirstName` on each `UncertainNameRow`
@@ -266,14 +266,14 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 ### Tests for User Story 4 (write FIRST)
 
-- [ ] T109 [P] [US4] `tests/OpenSkiTime.Application.Tests/Competitions/UpdateCompetitionUseCaseTests.cs` — full field round-trip; FIS-code rule revalidated on update
-- [ ] T110 [P] [US4] `tests/OpenSkiTime.Desktop.Tests/Fis/FisPlaceholderButtonTests.cs` (Avalonia.Headless) — registers a tracking `IHttpClientFactory` that throws on use; clicks the FIS button; asserts (a) inline notification text matches the configured `UserMessage`, (b) the throwing factory was never invoked
+- [x] T109 [P] [US4] `tests/OpenSkiTime.Application.Tests/Competitions/UpdateCompetitionUseCaseTests.cs` — full field round-trip; FIS-code rule revalidated on update
+- [x] T110 [P] [US4] `tests/OpenSkiTime.Desktop.Tests/Fis/FisPlaceholderButtonTests.cs` (Avalonia.Headless) — registers a tracking `IHttpClientFactory` that throws on use; clicks the FIS button; asserts (a) inline notification text matches the configured `UserMessage`, (b) the throwing factory was never invoked
 
 ### Implementation for User Story 4
 
-- [ ] T111 [US4] Extend `src/OpenSkiTime.Desktop/ViewModels/CompetitionEditorViewModel.cs` with `UpdateFromFisCommand` calling `IFisCompetitionUpdater.UpdateAsync` and surfacing the resulting `FisUpdateResult.NotImplemented.UserMessage` via `IDialogService` (or inline status banner)
-- [ ] T112 [US4] Extend `src/OpenSkiTime.Desktop/Views/CompetitionEditorView.axaml` adding the "Update from FIS API" button (subdued style + tooltip "Coming in a later release") wired to `UpdateFromFisCommand`
-- [ ] T113 [US4] Verify in `src/OpenSkiTime.Desktop/Program.cs` that `IFisCompetitionUpdater` resolves to `NotImplementedFisUpdater` only; reconfirm no `HttpClient` registration
+- [x] T111 [US4] Extend `src/OpenSkiTime.Desktop/ViewModels/CompetitionEditorViewModel.cs` with `UpdateFromFisCommand` calling `IFisCompetitionUpdater.UpdateAsync` and surfacing the resulting `FisUpdateResult.NotImplemented.UserMessage` via `IDialogService` (or inline status banner)
+- [x] T112 [US4] Extend `src/OpenSkiTime.Desktop/Views/CompetitionEditorView.axaml` adding the "Update from FIS API" button (subdued style + tooltip "Coming in a later release") wired to `UpdateFromFisCommand`
+- [x] T113 [US4] Verify in `src/OpenSkiTime.Desktop/Program.cs` that `IFisCompetitionUpdater` resolves to `NotImplementedFisUpdater` only; reconfirm no `HttpClient` registration
 
 **Checkpoint**: US4 demo-ready: editor saves all fields; FIS button shows the placeholder message and triggers zero network calls.
 
@@ -287,16 +287,16 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 ### Tests for User Story 5 (write FIRST)
 
-- [ ] T114 [P] [US5] `tests/OpenSkiTime.Application.Tests/EventSeries/EventSeriesValidationSummaryTests.cs` — counts and per-competition missing-data list (FR-070, FR-071)
-- [ ] T115 [P] [US5] `tests/OpenSkiTime.Application.Tests/Competitors/MissingRequiredDataFilterTests.cs` (FR-072)
+- [x] T114 [P] [US5] `tests/OpenSkiTime.Application.Tests/EventSeries/EventSeriesValidationSummaryTests.cs` — counts and per-competition missing-data list (FR-070, FR-071)
+- [x] T115 [P] [US5] `tests/OpenSkiTime.Application.Tests/Competitors/MissingRequiredDataFilterTests.cs` (FR-072)
 
 ### Implementation for User Story 5
 
-- [ ] T116 [US5] Create `src/OpenSkiTime.Application/EventSeries/EventSeriesValidationSummaryService.cs` (computes counts + missing-data list)
-- [ ] T117 [US5] Extend `src/OpenSkiTime.Domain/Competitors/Competitor.cs` with `IsUsableForRaceEntry` (FR-021) — likely already added in T075; ensure exposed
-- [ ] T118 [US5] Extend `src/OpenSkiTime.Desktop/ViewModels/EventSeriesOverviewViewModel.cs` to surface validation summary
-- [ ] T119 [US5] Extend `src/OpenSkiTime.Desktop/Views/EventSeriesOverviewView.axaml` to display the summary
-- [ ] T120 [US5] Extend `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` filter set with `MissingRequiredData` predicate
+- [x] T116 [US5] Create `src/OpenSkiTime.Application/EventSeries/EventSeriesValidationSummaryService.cs` (computes counts + missing-data list)
+- [x] T117 [US5] Extend `src/OpenSkiTime.Domain/Competitors/Competitor.cs` with `IsUsableForRaceEntry` (FR-021) — likely already added in T075; ensure exposed
+- [x] T118 [US5] Extend `src/OpenSkiTime.Desktop/ViewModels/EventSeriesOverviewViewModel.cs` to surface validation summary
+- [x] T119 [US5] Extend `src/OpenSkiTime.Desktop/Views/EventSeriesOverviewView.axaml` to display the summary
+- [x] T120 [US5] Extend `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` filter set with `MissingRequiredData` predicate
 
 **Checkpoint**: US5 demo-ready: overview surfaces validation status; filter narrows the grid accordingly.
 
@@ -307,12 +307,12 @@ Multi-project .NET solution per plan.md `Project Structure`:
 **Purpose**: Documentation, screenshots, ADRs, offline smoke verification.
 
 - [x] T121 [P] Create `README.md` at repo root: what Open Ski Time is (open-source alpine race timing & race management), MIT license, prerequisites, build/run/test commands, screenshot placeholders for Event Series Overview / Competitor Grid / Competition Editor / Import Preview, links to constitution, list of out-of-scope items (timing, Alge, FIS API/XML, draws, live timing); note that Alge Timy3 + MT1 integration is planned after this feature; FIS API/XML integration is planned later and credentials must NOT be stored in the public repository
-- [ ] T122 [P] Create `docs/screenshots/event-series-overview.placeholder.png` (1x1 PNG with caption text in `docs/screenshots/README.md` describing intended content) — same for `competitor-grid`, `competition-editor`, `import-preview`
-- [ ] T123 [P] Create `docs/architecture.md` — module map mirroring `src/`, dependency arrows enforced by csproj refs, import workflow diagram from `plan.md`
-- [ ] T124 [P] Create `docs/adr/0001-net10-avalonia-sqlite.md` recording constitution defaults
-- [ ] T125 [P] Create `docs/adr/0002-efcore-over-dapper.md`
-- [ ] T126 [P] Create `docs/adr/0003-mvvm-with-community-toolkit.md`
-- [ ] T127 Update `.specify/memory/constitution.md` Sync Impact Report: close `TODO(README)` and `TODO(ADR)`; bump to `1.0.1` (PATCH — clarification, no principle change) with `Last Amended: 2026-05-28`
+- [x] T122 [P] Create `docs/screenshots/event-series-overview.placeholder.png` (1x1 PNG with caption text in `docs/screenshots/README.md` describing intended content) — same for `competitor-grid`, `competition-editor`, `import-preview`
+- [x] T123 [P] Create `docs/architecture.md` — module map mirroring `src/`, dependency arrows enforced by csproj refs, import workflow diagram from `plan.md`
+- [x] T124 [P] Create `docs/adr/0001-net10-avalonia-sqlite.md` recording constitution defaults
+- [x] T125 [P] Create `docs/adr/0002-efcore-over-dapper.md`
+- [x] T126 [P] Create `docs/adr/0003-mvvm-with-community-toolkit.md`
+- [x] T127 Update `.specify/memory/constitution.md` Sync Impact Report: close `TODO(README)` and `TODO(ADR)`; bump to `1.0.1` (PATCH — clarification, no principle change) with `Last Amended: 2026-05-28`
 - [ ] T128 Add `tests/OpenSkiTime.Desktop.Tests/Smoke/OfflineSmokeTest.cs` (Avalonia.Headless) — registers a throwing `IHttpClientFactory`; starts the app; creates an Event Series; imports 100 rows; quits cleanly. Maps to SC-005, SC-007.
 - [x] T129 Run full test suite (`dotnet test`) and full build (`dotnet build`) — both must be green with TreatWarningsAsErrors enabled
 - [ ] T130 Run quickstart validation: follow `specs/001-event-series-management/quickstart.md` end-to-end on a clean machine state (delete `%LOCALAPPDATA%\OpenSkiTime\openskitime.db` first); confirm all steps succeed
