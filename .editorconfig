@@ -43,3 +43,12 @@ dotnet_diagnostic.CA1062.severity = warning
 dotnet_diagnostic.CA1822.severity = warning
 dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait not needed in desktop / app code
 dotnet_diagnostic.IDE0005.severity = warning   # Remove unused usings
+
+# EF Core generated migration files — relax style/CA rules for generated code.
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_diagnostic.CA1062.severity = none
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+dotnet_diagnostic.IDE0161.severity = none

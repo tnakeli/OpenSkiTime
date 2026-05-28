@@ -1,20 +1,25 @@
+using OpenSkiTime.Domain.Series;
+
 namespace OpenSkiTime.Application.Abstractions;
 
 /// <summary>
-/// Aggregate-root repository for Event Series. The full graph
-/// (competitions, competitors, participations, category rules) is
-/// reachable through <see cref="EventSeriesSnapshot"/>; mutations are
-/// committed via <see cref="IUnitOfWork.SaveChangesAsync"/>.
+/// Aggregate-root repository for Event Series. Read paths return either
+/// summaries (lightweight list view) or the full aggregate including
+/// owned competitions (and, in later phases, competitors and
+/// participations). Write paths use EF-style change tracking; commit
+/// happens via <see cref="IUnitOfWork.SaveChangesAsync"/>.
 /// </summary>
-/// <remarks>
-/// The actual aggregate type lives in <c>OpenSkiTime.Domain</c> and is
-/// added in Phase 3 (User Story 1). At Phase 2 we publish only the
-/// transport records needed by callers (UI, importer) so they can be
-/// implemented in parallel.
-/// </remarks>
 public interface IEventSeriesRepository
 {
     Task<IReadOnlyList<EventSeriesSummary>> ListAsync(CancellationToken ct = default);
+
+    Task<EventSeries?> GetByIdAsync(Guid id, CancellationToken ct = default);
+
+    Task AddAsync(EventSeries series, CancellationToken ct = default);
+
+    void Update(EventSeries series);
+
+    void Remove(EventSeries series);
 
     Task<EventSeriesSnapshot?> LoadSnapshotAsync(Guid id, CancellationToken ct = default);
 }

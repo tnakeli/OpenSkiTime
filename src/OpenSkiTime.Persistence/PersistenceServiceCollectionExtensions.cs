@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OpenSkiTime.Application.Abstractions;
+using OpenSkiTime.Persistence.Repositories;
 
 namespace OpenSkiTime.Persistence;
 
@@ -20,6 +22,9 @@ public static class PersistenceServiceCollectionExtensions
 
         services.AddDbContext<OpenSkiTimeDbContext>(opts =>
             opts.UseSqlite($"Data Source={sqliteFilePath}"));
+
+        services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
+        services.AddScoped<IEventSeriesRepository, EventSeriesRepository>();
 
         return services;
     }

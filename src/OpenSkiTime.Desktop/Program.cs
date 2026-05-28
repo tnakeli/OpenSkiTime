@@ -1,4 +1,5 @@
 using Avalonia;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenSkiTime.Application.Abstractions;
@@ -20,7 +21,15 @@ internal static class Program
     public static int Main(string[] args)
     {
         ServiceProvider = BuildServices();
+        ApplyMigrations(ServiceProvider);
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    private static void ApplyMigrations(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpenSkiTimeDbContext>();
+        db.Database.Migrate();
     }
 
     /// <summary>
