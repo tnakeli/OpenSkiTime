@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using OpenSkiTime.Application.Abstractions;
 using OpenSkiTime.Application.Competitions;
 using OpenSkiTime.Application.Competitors;
+using OpenSkiTime.Application.Participations;
 using OpenSkiTime.Application.Series;
 using OpenSkiTime.Desktop.Services;
 using OpenSkiTime.Desktop.ViewModels;
@@ -75,9 +76,12 @@ internal static class Program
         services.AddScoped<UpdateCompetitionUseCase>();
         services.AddScoped<RemoveCompetitionUseCase>();
         services.AddScoped<AddCompetitorUseCase>();
+        services.AddScoped<EditCompetitorUseCase>();
         services.AddScoped<RemoveCompetitorUseCase>();
         services.AddScoped<AssignBibUseCase>();
         services.AddScoped<ListCompetitorsUseCase>();
+        services.AddScoped<SetParticipationUseCase>();
+        services.AddScoped<EventSeriesValidationSummaryService>();
         services.AddScoped<ImportPreviewService>();
         services.AddScoped<ImportApplyService>();
 
@@ -93,6 +97,7 @@ internal static class Program
         services.AddScoped<EventSeriesOverviewViewModel>();
         services.AddTransient<CompetitionEditorViewModel>();
         services.AddTransient<ImportViewModel>();
+        services.AddTransient<CompetitorGridViewModel>();
         services.AddScoped<ShellViewModel>();
 
         return services.BuildServiceProvider();

@@ -102,7 +102,12 @@ public static class DiffEngine
                     continue;
                 }
 
-                bool isParticipating = IsParticipatingValue(rawValue);
+                if (string.IsNullOrWhiteSpace(rawValue))
+                {
+                    continue;
+                }
+
+                bool isParticipating = ParticipationValueMatcher.IsParticipating(rawValue);
 
                 if (existing is not null)
                 {
@@ -160,16 +165,4 @@ public static class DiffEngine
         return new ImportDiff(newCompetitors, bibAssignments, participations, warnings);
     }
 
-    private static bool IsParticipatingValue(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return false;
-        }
-
-        var v = raw.Trim();
-        return v is "1" or "x" or "X" or "true" or "True" or "TRUE" or "yes" or "Yes" or "YES"
-            || (!string.IsNullOrEmpty(v) && v != "0" && v != "false" && v != "False" && v != "FALSE"
-                && v != "no" && v != "No" && v != "NO");
-    }
 }

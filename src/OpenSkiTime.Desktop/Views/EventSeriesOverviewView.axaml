@@ -87,6 +87,15 @@
                      Margin="12,0,0,0" />
         </StackPanel>
 
+        <!-- Validation summary -->
+        <Border IsVisible="{Binding ValidationSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                Background="#fef3c7" Padding="10,6" CornerRadius="4"
+                BorderBrush="#fbbf24" BorderThickness="1">
+          <TextBlock Text="{Binding ValidationSummaryText}"
+                     Foreground="#92400e"
+                     TextWrapping="Wrap" />
+        </Border>
+
         <!-- Competitions list -->
         <Border Background="White" Padding="16" CornerRadius="6"
                 BorderBrush="#e5e7eb" BorderThickness="1">
