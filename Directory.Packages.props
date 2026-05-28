@@ -24,6 +24,7 @@
     <PackageVersion Include="Avalonia.Diagnostics"              Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Headless"                 Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Headless.XUnit"           Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Controls.DataGrid"        Version="$(AvaloniaVersion)" />
 
     <!-- MVVM -->
     <PackageVersion Include="CommunityToolkit.Mvvm"             Version="$(CommunityToolkitMvvmVersion)" />
