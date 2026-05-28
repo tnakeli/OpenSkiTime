@@ -1,0 +1,72 @@
+# --- .NET / Visual Studio / Rider ---
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+*.dbmdl
+*.jfm
+*.pidb
+*.svclog
+*.scc
+
+# Build results / packaging
+[Pp]ackages/
+*.nupkg
+*.snupkg
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.cer
+*.pri
+
+# IDE folders
+.vs/
+.vscode/
+.idea/
+*.swp
+*.tmp
+~$*
+
+# Test / coverage artifacts
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+coverage/
+.nyc_output/
+
+# Tooling caches
+*.cache
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local SQLite databases (any seeded dev data should never be committed)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# --- Secrets & local-only configuration (Constitution Principle VI) ---
+appsettings.Local.json
+appsettings.*.Local.json
+*.secrets.json
+.env
+.env.*
+!.env.example
+secrets/
