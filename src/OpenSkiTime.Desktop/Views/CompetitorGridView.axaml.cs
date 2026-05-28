@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using OpenSkiTime.Desktop.ViewModels;
 
@@ -14,8 +13,15 @@ public partial class CompetitorGridView : UserControl
 
     private void OnDataGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (DataContext is not CompetitorGridViewModel vm) return;
-        if (sender is not DataGrid grid) return;
+        if (DataContext is not CompetitorGridViewModel vm)
+        {
+            return;
+        }
+
+        if (sender is not DataGrid grid)
+        {
+            return;
+        }
 
         vm.SelectedItems.Clear();
         foreach (var item in grid.SelectedItems)
