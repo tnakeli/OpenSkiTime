@@ -1,12 +1,12 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace OpenSkiTime.Desktop.ViewModels;
 
 /// <summary>
 /// Top-level VM. Owns the overview VM and swaps in a competition editor
-/// when the user starts one. Keeps content swapping deliberately simple
-/// for feature 001 — there are only two views to switch between.
+/// or the import view when requested.
 /// </summary>
 public sealed partial class ShellViewModel : ViewModelBase
 {
@@ -29,6 +29,15 @@ public sealed partial class ShellViewModel : ViewModelBase
     public async Task LoadAsync()
     {
         await _overview.LoadAsync().ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task NavigateToImportAsync()
+    {
+        var vm = _services.GetRequiredService<ImportViewModel>();
+        vm.Cancelled += (_, _) => CurrentContent = _overview;
+        CurrentContent = vm;
+        await vm.LoadAsync().ConfigureAwait(true);
     }
 
     private void OnCompetitionEditorRequested(object? sender, CompetitionEditorRequestedEventArgs e)

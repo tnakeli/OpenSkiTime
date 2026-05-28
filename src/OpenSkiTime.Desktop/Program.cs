@@ -9,6 +9,7 @@ using OpenSkiTime.Application.Series;
 using OpenSkiTime.Desktop.Services;
 using OpenSkiTime.Desktop.ViewModels;
 using OpenSkiTime.Fis;
+using OpenSkiTime.Import;
 using OpenSkiTime.Persistence;
 
 namespace OpenSkiTime.Desktop;
@@ -77,6 +78,8 @@ internal static class Program
         services.AddScoped<RemoveCompetitorUseCase>();
         services.AddScoped<AssignBibUseCase>();
         services.AddScoped<ListCompetitorsUseCase>();
+        services.AddScoped<ImportPreviewService>();
+        services.AddScoped<ImportApplyService>();
 
         // Desktop services
         services.AddSingleton<IDialogService, DialogService>();
@@ -89,6 +92,7 @@ internal static class Program
         // keeps things uniform.
         services.AddScoped<EventSeriesOverviewViewModel>();
         services.AddTransient<CompetitionEditorViewModel>();
+        services.AddTransient<ImportViewModel>();
         services.AddScoped<ShellViewModel>();
 
         return services.BuildServiceProvider();
