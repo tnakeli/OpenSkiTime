@@ -25,6 +25,7 @@ public static class PersistenceServiceCollectionExtensions
 
         services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
         services.AddScoped<IEventSeriesRepository, EventSeriesRepository>();
+        services.AddScoped<IParticipationRepository, ParticipationRepository>();
 
         return services;
     }
