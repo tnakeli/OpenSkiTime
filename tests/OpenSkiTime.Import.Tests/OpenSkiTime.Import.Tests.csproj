@@ -22,6 +22,8 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+    <Using Include="OpenSkiTime.Import" />
+    <Using Include="OpenSkiTime.Application.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
