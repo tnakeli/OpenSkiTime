@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenSkiTime.Application/OpenSkiTime.Application.csproj" />
+    <Project Path="src/OpenSkiTime.Desktop/OpenSkiTime.Desktop.csproj" />
+    <Project Path="src/OpenSkiTime.Domain/OpenSkiTime.Domain.csproj" />
+    <Project Path="src/OpenSkiTime.Fis.Placeholder/OpenSkiTime.Fis.Placeholder.csproj" />
+    <Project Path="src/OpenSkiTime.Import/OpenSkiTime.Import.csproj" />
+    <Project Path="src/OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenSkiTime.Application.Tests/OpenSkiTime.Application.Tests.csproj" />
+    <Project Path="tests/OpenSkiTime.Desktop.Tests/OpenSkiTime.Desktop.Tests.csproj" />
+    <Project Path="tests/OpenSkiTime.Domain.Tests/OpenSkiTime.Domain.Tests.csproj" />
+    <Project Path="tests/OpenSkiTime.Import.Tests/OpenSkiTime.Import.Tests.csproj" />
+    <Project Path="tests/OpenSkiTime.Persistence.Tests/OpenSkiTime.Persistence.Tests.csproj" />
+  </Folder>
+</Solution>

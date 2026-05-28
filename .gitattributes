@@ -1,0 +1,35 @@
+# Default: let Git decide based on content, normalize to LF in the repo
+* text=auto eol=lf
+
+# Source / config: always LF in the repo
+*.cs        text eol=lf
+*.csproj    text eol=lf
+*.sln       text eol=lf
+*.props     text eol=lf
+*.targets   text eol=lf
+*.axaml     text eol=lf
+*.xaml      text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.editorconfig text eol=lf
+*.gitignore    text eol=lf
+*.gitattributes text eol=lf
+
+# PowerShell on Windows: keep CRLF
+*.ps1   text eol=crlf
+*.psm1  text eol=crlf
+*.psd1  text eol=crlf
+
+# Bash scripts: LF
+*.sh    text eol=lf
+
+# Binaries
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.snk   binary
+*.pfx   binary
+*.dll   binary
+*.exe   binary
