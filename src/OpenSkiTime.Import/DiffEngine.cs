@@ -174,6 +174,32 @@ public static class DiffEngine
                     }
                 }
 
+                // Only update LastName/FirstName when matched by FIS Code
+                // (to avoid overwriting the key used to find the competitor).
+                bool matchedByFis = !string.IsNullOrWhiteSpace(fisCode)
+                    && string.Equals(existing.Code, fisCode?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                if (matchedByFis)
+                {
+                    CheckField("LastName",  lastNameUpper, existing.LastNameUpper);
+                    CheckField("FirstName", firstName,     existing.FirstName);
+                }
+
+                if (row.TryGet(ImportField.YearOfBirth, out var importedYob)
+                    && int.TryParse(importedYob, out var newYob)
+                    && newYob != existing.YearOfBirth)
+                {
+                    fieldChanges.Add(new FieldChangeDiff(
+                        existing.Id, "YearOfBirth",
+                        existing.YearOfBirth.ToString(CultureInfo.InvariantCulture),
+                        newYob.ToString(CultureInfo.InvariantCulture)));
+                }
+
+                if (row.TryGet(ImportField.Gender, out var importedGender))
+                {
+                    CheckField("Gender", importedGender, existing.Gender);
+                }
+
                 if (row.TryGet(ImportField.FisCode, out var importedFis))
                 {
                     CheckField("FisCode", importedFis, existing.Code);
