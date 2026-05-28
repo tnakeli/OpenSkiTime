@@ -17,6 +17,9 @@
     <DataTemplate DataType="vm:CompetitionEditorViewModel">
       <views:CompetitionEditorView />
     </DataTemplate>
+    <DataTemplate DataType="vm:ImportViewModel">
+      <views:ImportView />
+    </DataTemplate>
   </Application.DataTemplates>
 
   <Application.Styles>
