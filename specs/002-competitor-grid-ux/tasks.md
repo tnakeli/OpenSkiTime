@@ -73,8 +73,11 @@
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] `src/OpenSkiTime.Desktop/ViewModels/CompetitorRowViewModel.cs` — add `RowState` observable property; add `IsEditing` flag; add `PendingChanges` list; make all competitor fields observable and editable (remove readonly)
-- [ ] T023 [US2] `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` — add `CompetitorChangeLog` (`ObservableCollection<ChangeLogEntry>`, max 200); add `AddCompetitorCommand` (inserts new `Added` row); add `DeleteCompetitorCommand(row)` (marks `Deleted`); hook cell-edit events to produce `Edit` log entries; add `RestoreCommand(entry)`; add `DiscardAllCommand`; extend `SaveCommand` to commit all staged rows then clear log
+- [ ] T022 [US2] Extract `src/OpenSkiTime.Desktop/ViewModels/CompetitorRowViewModel.cs` — move `CompetitorRowViewModel` out of `CompetitorGridViewModel.cs` into its own file; add `RowState` observable property; add `IsEditing` flag; add `PendingChanges` (`List<ChangeLogEntry>`); make all competitor fields (`LastName`, `FirstName`, `YearOfBirth`, `Gender`, `NationCode`, `ClubName`, `FisCode`) `[ObservableProperty]` (editable); `BibNumber` remains get-only
+- [ ] T023a [US2] `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` — **Add**: add `CompetitorChangeLog` (`ObservableCollection<ChangeLogEntry>`, cap 200 — evict oldest on overflow); add `HasStagedChanges` computed property (`Competitors.Any(r => r.RowState != RowState.Unchanged)`); add `AddCompetitorCommand` — inserts new empty `CompetitorRowViewModel` with `RowState.Added` at top; produces `ChangeLogEntry(Add)`
+- [ ] T023b [US2] `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` — **Edit**: hook `CompetitorRowViewModel` property-changed events; on field change produce `ChangeLogEntry(Edit, fieldName, before, after)` and set `RowState.Edited`
+- [ ] T023c [US2] `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` — **Delete**: add `DeleteCompetitorCommand(row)` — marks `RowState.Deleted`; produces `ChangeLogEntry(Delete)`; add `RestoreCommand(entry)` — reverts row to before-state and removes entry from log; add `DiscardAllCommand` — resets all rows to persisted state and clears log
+- [ ] T023d [US2] `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` — **Save**: extend `SaveCommand` to iterate staged rows: `Added` → `AddCompetitorUseCase`, `Edited` → `EditCompetitorUseCase`, `Deleted` → repository remove; on success set all rows to `Unchanged` and clear `CompetitorChangeLog`
 - [ ] T024 [US2] `src/OpenSkiTime.Desktop/Views/CompetitorGridView.axaml` — set `IsReadOnly="False"` on editable columns; add row background converter for `RowState` (green/yellow/red); add Change Log collapsible side panel with `ListBox` of entries and Restore button per entry; add Discard All and Save buttons to toolbar
 
 **Checkpoint**: US2 demo-ready — inline CRUD, row colouring, Change Log panel, Restore, Discard All, Save.
@@ -149,8 +152,8 @@
 
 **Purpose**: Unsaved-changes guard, final wiring, docs update, full test run.
 
-- [ ] T060 [P] Unsaved-changes navigation guard — in `EventSeriesOverviewViewModel`, before switching away from Competitors tab or changing series, if `CompetitorGridViewModel` has staged changes call `IDialogService.ConfirmAsync("Discard unsaved changes?")` and discard on confirm
-- [ ] T061 [P] `src/OpenSkiTime.Desktop/Program.cs` — verify DI registrations: `CompetitorGridViewModel` is already registered; `ImportPasteSession` is transient (new per paste); no new registrations needed
+- [ ] T060 [P] Unsaved-changes navigation guard — in `EventSeriesOverviewViewModel`, before switching away from Competitors tab or changing series, check `CompetitorGridViewModel.HasStagedChanges` (defined in T023a); if true call `IDialogService.ConfirmAsync("Discard unsaved changes?")` and call `DiscardAllCommand` on confirm
+- [ ] T061 [P] `src/OpenSkiTime.Desktop/Program.cs` — verify DI registrations: `CompetitorGridViewModel` is already registered; no new registrations needed (`ImportPasteSession` is a plain record instantiated inline in `PasteCommand`, not a DI service)
 - [ ] T062 [P] Update `docs/architecture.md` — add Change Log and Paste Session to the ViewModel Hierarchy section; note that `ImportViewModel` is no longer a top-level nav target
 - [ ] T063 Run `dotnet build OpenSkiTime.slnx` — must succeed with zero errors and zero `TreatWarningsAsErrors` violations
 - [ ] T064 Run `dotnet test OpenSkiTime.slnx` — all tests green (target: existing 234 + new ~15)
@@ -166,17 +169,17 @@
 
 - **Phase 1** (Foundation): No dependencies — start immediately
 - **Phase 2** (US1): Depends on Phase 1 (T001–T003)
-- **Phase 3** (US2): Depends on Phase 1 and Phase 2 (T012, T013 must be done so `CompetitorGridViewModel` is wired)
-- **Phase 4** (US3): Depends on Phase 3 (`CompetitorRowViewModel` extended with `RowState`)
-- **Phase 5** (US4): Depends on Phase 3 (`SelectedItems` available in grid)
-- **Phase 6** (US5): Depends on Phase 2 T022 (`CompetitorRowViewModel`)
+- **Phase 3** (US2): Depends on Phase 1 and Phase 2 (T012, T013 must be done so `CompetitorGridViewModel` is wired); T023a–T023d are sequential within US2
+- **Phase 4** (US3): Depends on T022 (`CompetitorRowViewModel` with `RowState`) and T023a (`CompetitorChangeLog`)
+- **Phase 5** (US4): Depends on T022 (`SelectedItems` typed) and T023a
+- **Phase 6** (US5): Depends on T022 (`CompetitorRowViewModel` extracted)
 - **Phase 7** (Polish): Depends on Phases 2–6
 
 ### User Story Dependencies
 
 - **US1** (P1): Independent after Phase 1
 - **US2** (P1): Independent after US1 nav wiring (T013)
-- **US3** (P1): Depends on US2 (`RowState` on `CompetitorRowViewModel`)
+- **US3** (P1): Depends on T022 (`RowState`) and T023a (`HasStagedChanges`, `CompetitorChangeLog`)
 - **US4** (P2): Depends on Phase 3 grid setup (SelectedItems, `IClipboardService`)
 - **US5** (P2): Depends on US2 T022
 

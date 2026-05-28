@@ -61,3 +61,20 @@ All foundational technology decisions are inherited from feature 001 (ADRs 0001�
 **Rationale**: `Competition` entity does not own bibs — `Competitor` does. The editor was showing a non-existent relationship. The bib column in the grid is informational; editing it belongs to a future Draw feature.
 
 **Note**: `Competition.Create` and `Competition.Update` never had a Bib parameter — the change is UI-only (remove the field from ViewModel + XAML).
+
+---
+
+## R-007: Deleted Row Visual Style — Background-Only (No Strikethrough)
+
+**Decision**: Deleted rows are shown with a **red background** only. Strikethrough text decoration is **not used**.
+
+**Rationale**: Avalonia `DataGrid` row background is trivially set via a `IValueConverter` on `DataGridRow.Background` using a `RowState`-bound style. Strikethrough requires overriding `DataGridCell` `ContentTemplate` for every column — significant template overhead for minimal UX gain. A red background clearly communicates "marked for deletion" without implementation complexity.
+
+**Colour palette** (consistent with Avalonia default theme):
+- `Added` → `#d1fae5` (light green)
+- `Edited` → `#fef9c3` (light yellow)
+- `Deleted` → `#fee2e2` (light red)
+- `PasteHighlighted` → `#dbeafe` (light blue)
+- `Unchanged` → transparent
+
+**Alternatives considered**: Full strikethrough via `TextDecorations` on each cell template — rejected (high XAML overhead, fragile with custom column templates). Opacity reduction — rejected (makes text hard to read in dense grids).
