@@ -1,0 +1,39 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+      NU1903 = transitive package has a known vulnerability. Keep it as a
+      warning so it stays visible, but do not fail the build for upstream
+      issues we cannot fix from this repository. Update upstream packages
+      (EF Core, Avalonia) when fixed versions are available.
+    -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!--
+      We require XML doc generation only so IDE0005 (Remove unnecessary usings)
+      is enforceable at build time per editorconfig. We do not actually require
+      every public member to be documented.
+        CS1591 = Missing XML comment for publicly visible type or member.
+    -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <NeutralLanguage>en</NeutralLanguage>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>Open Ski Time contributors</Authors>
+    <Product>Open Ski Time</Product>
+    <Copyright>Open Ski Time contributors</Copyright>
+    <RepositoryUrl>https://example.invalid/openskitime</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+</Project>

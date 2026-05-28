@@ -1,0 +1,51 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+
+    <AvaloniaVersion>11.2.3</AvaloniaVersion>
+    <CommunityToolkitMvvmVersion>8.4.0</CommunityToolkitMvvmVersion>
+    <EfCoreVersion>10.0.0</EfCoreVersion>
+    <ExtensionsVersion>10.0.0</ExtensionsVersion>
+    <XunitVersion>2.9.3</XunitVersion>
+    <XunitRunnerVersion>3.1.4</XunitRunnerVersion>
+    <NetTestSdkVersion>17.14.1</NetTestSdkVersion>
+    <FluentAssertionsVersion>6.12.2</FluentAssertionsVersion>
+    <CoverletVersion>6.0.4</CoverletVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Avalonia (UI) -->
+    <PackageVersion Include="Avalonia"                          Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Desktop"                  Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Themes.Fluent"            Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Fonts.Inter"              Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Diagnostics"              Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Headless"                 Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Headless.XUnit"           Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Controls.DataGrid"        Version="$(AvaloniaVersion)" />
+
+    <!-- MVVM -->
+    <PackageVersion Include="CommunityToolkit.Mvvm"             Version="$(CommunityToolkitMvvmVersion)" />
+
+    <!-- EF Core / SQLite -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore"        Version="$(EfCoreVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(EfCoreVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(EfCoreVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="$(EfCoreVersion)" />
+
+    <!-- DI / Logging -->
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="$(ExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging"             Version="$(ExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug"       Version="$(ExtensionsVersion)" />
+
+    <!-- Test -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk"   Version="$(NetTestSdkVersion)" />
+    <PackageVersion Include="xunit"                    Version="$(XunitVersion)" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="$(XunitRunnerVersion)" />
+    <PackageVersion Include="FluentAssertions"         Version="$(FluentAssertionsVersion)" />
+    <PackageVersion Include="coverlet.collector"       Version="$(CoverletVersion)" />
+  </ItemGroup>
+
+</Project>
