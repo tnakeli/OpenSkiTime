@@ -63,10 +63,10 @@ public partial class CompetitorGridView : UserControl
         grid.CellEditEnded -= OnCellEditEnded;
         grid.Columns.Clear();
 
-        grid.Columns.Add(new DataGridTextColumn { Header = "FIS Code",   Binding = new Binding(nameof(CompetitorRowViewModel.FisCode)),      Width = new DataGridLength(100) });
-        grid.Columns.Add(new DataGridTextColumn { Header = "Last Name",  Binding = new Binding(nameof(CompetitorRowViewModel.LastName)),     Width = new DataGridLength(150) });
-        grid.Columns.Add(new DataGridTextColumn { Header = "First Name", Binding = new Binding(nameof(CompetitorRowViewModel.FirstName)),    Width = new DataGridLength(130) });
-        grid.Columns.Add(new DataGridTextColumn { Header = "YOB",        Binding = new Binding(nameof(CompetitorRowViewModel.YearOfBirth)),  Width = new DataGridLength(60) });
+        grid.Columns.Add(MakeTextCol("FIS Code",   nameof(CompetitorRowViewModel.FisCode),    100));
+        grid.Columns.Add(MakeTextCol("Last Name",  nameof(CompetitorRowViewModel.LastName),   150));
+        grid.Columns.Add(MakeTextCol("First Name", nameof(CompetitorRowViewModel.FirstName),  130));
+        grid.Columns.Add(MakeTextCol("YOB",        nameof(CompetitorRowViewModel.YearOfBirth), 60));
 
         grid.Columns.Add(new DataGridTemplateColumn
         {
@@ -92,8 +92,8 @@ public partial class CompetitorGridView : UserControl
             }),
         });
 
-        grid.Columns.Add(new DataGridTextColumn { Header = "Nation", Binding = new Binding(nameof(CompetitorRowViewModel.NationCode)), Width = new DataGridLength(60) });
-        grid.Columns.Add(new DataGridTextColumn { Header = "Club",   Binding = new Binding(nameof(CompetitorRowViewModel.ClubName)),   Width = new DataGridLength(150) });
+        grid.Columns.Add(MakeTextCol("Nation", nameof(CompetitorRowViewModel.NationCode), 60));
+        grid.Columns.Add(MakeTextCol("Club",   nameof(CompetitorRowViewModel.ClubName),  150));
 
         if (_vm is not null)
         {
@@ -199,6 +199,44 @@ public partial class CompetitorGridView : UserControl
                 e.Handled = true;
             }
         }
+    }
+
+    private static readonly Avalonia.Media.IBrush s_modifiedCellBrush =
+        Avalonia.Media.SolidColorBrush.Parse("#fed7aa"); // orange-200
+
+    /// <summary>
+    /// Creates an editable DataGridTemplateColumn whose display cell turns orange
+    /// when the field name appears in the row's <see cref="CompetitorRowViewModel.ModifiedFields"/>.
+    /// </summary>
+    private static DataGridTemplateColumn MakeTextCol(string header, string fieldName, double width)
+    {
+        return new DataGridTemplateColumn
+        {
+            Header = header,
+            Width = new DataGridLength(width),
+            CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _) =>
+            {
+                var tb = new TextBlock
+                {
+                    [!TextBlock.TextProperty] = new Binding(fieldName),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Avalonia.Thickness(8, 0),
+                };
+                var border = new Border { Child = tb };
+                if (row is not null && row.IsFieldModified(fieldName))
+                {
+                    border.Background = s_modifiedCellBrush;
+                }
+
+                return border;
+            }),
+            CellEditingTemplate = new FuncDataTemplate<CompetitorRowViewModel>((_, _2) =>
+            {
+                var box = new TextBox();
+                box.Bind(TextBox.TextProperty, new Binding(fieldName) { Mode = BindingMode.TwoWay });
+                return box;
+            }),
+        };
     }
 
     private void OnDataGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
