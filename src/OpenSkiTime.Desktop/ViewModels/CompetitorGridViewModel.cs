@@ -58,6 +58,8 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
         _clipboard = clipboard;
         _preview = preview;
         _apply = apply;
+
+        ChangeLog.CollectionChanged += (_, _) => CommitChangeLogCommand.NotifyCanExecuteChanged();
     }
 
     public ObservableCollection<CompetitorRowViewModel> Competitors { get; } = [];
@@ -330,26 +332,62 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RestoreEntry(ChangeLogEntry entry)
+    private async Task RestoreEntryAsync(ChangeLogEntry entry)
     {
-        var row = Competitors.FirstOrDefault(r => r.Id == entry.CompetitorId);
-        if (row is null)
-        {
-            return;
-        }
+        ArgumentNullException.ThrowIfNull(entry);
 
-        if (entry.OperationType == ChangeOp.Delete)
+        var row = Competitors.FirstOrDefault(r => r.Id == entry.CompetitorId);
+
+        if (entry.OperationType == ChangeOp.Edit)
         {
-            row.RowState = RowState.Unchanged;
-        }
-        else if (entry.OperationType == ChangeOp.Edit && entry.FieldName is not null)
-        {
-            row.RowState = RowState.Unchanged;
+            if (row is null || entry.FieldName is null)
+            {
+                ChangeLog.Remove(entry);
+                return;
+            }
+
+            row.SetFieldValue(entry.FieldName, entry.BeforeValue);
+
+            var result = await _editCompetitor.ExecuteAsync(new EditCompetitorRequest
+            {
+                EventSeriesId = _seriesId,
+                CompetitorId = row.Id,
+                LastName = row.LastName.ToUpperInvariant(),
+                FirstName = row.FirstName,
+                YearOfBirth = row.YearOfBirth,
+                Gender = string.IsNullOrWhiteSpace(row.Gender) ? null : Enum.TryParse<OpenSkiTime.Domain.Common.Gender>(row.Gender, out var g) ? g : null,
+                NationCode = string.IsNullOrWhiteSpace(row.NationCode) ? null : row.NationCode,
+                ClubName = string.IsNullOrWhiteSpace(row.ClubName) ? null : row.ClubName,
+                FisCode = string.IsNullOrWhiteSpace(row.FisCode) ? null : row.FisCode,
+            });
+
+            if (!result.Succeeded)
+            {
+                StatusMessage = $"Restore failed: {result.ErrorMessage}";
+                return;
+            }
+
             row.SnapshotOriginals();
+            row.RowState = RowState.Unchanged;
+            StatusMessage = $"Restored {row.LastName} — {entry.FieldName}";
+        }
+        else if (entry.OperationType == ChangeOp.Delete)
+        {
+            if (row is not null)
+            {
+                row.RowState = RowState.Unchanged;
+            }
+
+            StatusMessage = "Delete undone — competitor restored.";
         }
         else if (entry.OperationType == ChangeOp.Add)
         {
-            Competitors.Remove(row);
+            if (row is not null)
+            {
+                Competitors.Remove(row);
+            }
+
+            StatusMessage = "Add undone.";
         }
 
         ChangeLog.Remove(entry);
@@ -360,6 +398,41 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     {
         await RefreshAsync();
     }
+
+    /// <summary>
+    /// Commits all pending change-log entries permanently:
+    /// saves any Deleted rows to the database, then clears the change log.
+    /// Add/Edit changes are already auto-saved on cell exit.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasChangeLogEntries))]
+    private async Task CommitChangeLogAsync()
+    {
+        var errors = new List<string>();
+
+        foreach (var row in Competitors.Where(r => r.RowState == RowState.Deleted).ToList())
+        {
+            var result = await _removeCompetitor.ExecuteAsync(_seriesId, row.Id);
+            if (result.Succeeded)
+            {
+                Competitors.Remove(row);
+            }
+            else
+            {
+                errors.Add($"Delete {row.LastName}: {result.ErrorMessage}");
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            await _dialogs.ShowErrorAsync("Commit errors", string.Join("\n", errors));
+            return;
+        }
+
+        ChangeLog.Clear();
+        StatusMessage = "Changes committed.";
+    }
+
+    private bool HasChangeLogEntries => ChangeLog.Count > 0;
 
     [RelayCommand]
     private async Task SaveAsync()
