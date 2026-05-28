@@ -113,11 +113,11 @@ public partial class CompetitorGridView : UserControl
                         {
                             cb.Bind(CheckBox.IsCheckedProperty,
                                 new Binding($"Participations[{idx}].IsParticipating") { Mode = BindingMode.TwoWay });
-                            cb.IsCheckedChanged += (s, _) =>
+                            cb.IsCheckedChanged += async (s, e2) =>
                             {
                                 if (_vm is not null && row is not null && idx < row.Participations.Count)
                                 {
-                                    _ = _vm.SaveParticipationAsync(row, row.Participations[idx]);
+                                    await _vm.SaveParticipationAsync(row, row.Participations[idx]);
                                 }
                             };
                         }
