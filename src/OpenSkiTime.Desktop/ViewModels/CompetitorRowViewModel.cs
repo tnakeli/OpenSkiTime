@@ -78,9 +78,40 @@ public sealed partial class CompetitorRowViewModel : ObservableObject
     public List<ChangeLogEntry> PendingChanges { get; } = [];
 
     /// <summary>Fields changed by a paste operation (highlights individual cells).</summary>
-    public HashSet<string> ModifiedFields { get; } = [];
+    private readonly HashSet<string> _modifiedFields = [];
 
-    public bool IsFieldModified(string fieldName) => ModifiedFields.Contains(fieldName);
+    /// <summary>Tracks that <paramref name="fieldName"/> was changed by paste and fires a reactive PropertyChanged.</summary>
+    public void MarkFieldModified(string fieldName)
+    {
+        _modifiedFields.Add(fieldName);
+        OnPropertyChanged($"IsModified{fieldName}");
+    }
+
+    /// <summary>Returns true when the named field was changed by a paste operation.</summary>
+    public bool IsFieldModified(string fieldName) => _modifiedFields.Contains(fieldName);
+
+    /// <summary>True when any field has been marked modified by a paste.</summary>
+    public bool HasModifiedFields => _modifiedFields.Count > 0;
+
+    /// <summary>Clears all paste-level cell highlights.</summary>
+    public void ClearModifiedFields()
+    {
+        var was = _modifiedFields.ToList();
+        _modifiedFields.Clear();
+        foreach (var f in was)
+        {
+            OnPropertyChanged($"IsModified{f}");
+        }
+    }
+
+    // Reactive properties consumed by MakeTextCol CellTemplate bindings.
+    public bool IsModifiedLastName    => IsFieldModified(nameof(LastName));
+    public bool IsModifiedFirstName   => IsFieldModified(nameof(FirstName));
+    public bool IsModifiedYearOfBirth => IsFieldModified(nameof(YearOfBirth));
+    public bool IsModifiedGender      => IsFieldModified(nameof(Gender));
+    public bool IsModifiedNationCode  => IsFieldModified(nameof(NationCode));
+    public bool IsModifiedClubName    => IsFieldModified(nameof(ClubName));
+    public bool IsModifiedFisCode     => IsFieldModified(nameof(FisCode));
 
     /// <summary>One cell per competition in the event series, ordered by date.</summary>
     public ObservableCollection<ParticipationCellViewModel> Participations { get; } = [];
@@ -94,7 +125,7 @@ public sealed partial class CompetitorRowViewModel : ObservableObject
         _originalNationCode = NationCode;
         _originalClubName = ClubName;
         _originalFisCode = FisCode;
-        ModifiedFields.Clear();
+        ClearModifiedFields();
     }
 
     internal void RestoreOriginals()
