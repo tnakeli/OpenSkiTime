@@ -203,18 +203,22 @@ public partial class CompetitorGridView : UserControl
 
     private static readonly Avalonia.Media.IBrush s_modifiedCellBrush =
         Avalonia.Media.SolidColorBrush.Parse("#fed7aa"); // orange-200
+    private static readonly Avalonia.Media.IBrush s_transparentBrush =
+        Avalonia.Media.Brushes.Transparent;
 
     /// <summary>
     /// Creates an editable DataGridTemplateColumn whose display cell turns orange
-    /// when the field name appears in the row's <see cref="CompetitorRowViewModel.ModifiedFields"/>.
+    /// reactively when <c>IsModified_{fieldName}</c> is true on the row VM.
     /// </summary>
     private static DataGridTemplateColumn MakeTextCol(string header, string fieldName, double width)
     {
+        var modifiedPropName = $"IsModified{fieldName}";
+
         return new DataGridTemplateColumn
         {
             Header = header,
             Width = new DataGridLength(width),
-            CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((row, _) =>
+            CellTemplate = new FuncDataTemplate<CompetitorRowViewModel>((_, _2) =>
             {
                 var tb = new TextBlock
                 {
@@ -223,11 +227,12 @@ public partial class CompetitorGridView : UserControl
                     Margin = new Avalonia.Thickness(8, 0),
                 };
                 var border = new Border { Child = tb };
-                if (row is not null && row.IsFieldModified(fieldName))
+                // Reactive binding: IsModified_NationCode etc. fires PropertyChanged via MarkFieldModified
+                border.Bind(Border.BackgroundProperty, new Binding(modifiedPropName)
                 {
-                    border.Background = s_modifiedCellBrush;
-                }
-
+                    Converter = new Avalonia.Data.Converters.FuncValueConverter<bool, Avalonia.Media.IBrush>(
+                        v => v ? s_modifiedCellBrush : s_transparentBrush),
+                });
                 return border;
             }),
             CellEditingTemplate = new FuncDataTemplate<CompetitorRowViewModel>((_, _2) =>

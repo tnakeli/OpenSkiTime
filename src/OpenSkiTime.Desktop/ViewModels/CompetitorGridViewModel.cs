@@ -532,12 +532,7 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
                 case "ClubName":   existing.ClubName   = fc.NewValue; break;
             }
 
-            existing.ModifiedFields.Add(fc.FieldName);
-
-            if (existing.RowState == RowState.Unchanged)
-            {
-                existing.RowState = RowState.Edited;
-            }
+            existing.MarkFieldModified(fc.FieldName);
 
             changedCount++;
         }
@@ -555,7 +550,7 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
         }
 
         var pasteRows = Competitors.Where(r => r.RowState == RowState.PasteHighlighted).ToList();
-        var editedRows = Competitors.Where(r => r.RowState == RowState.Edited && r.ModifiedFields.Count > 0).ToList();
+        var editedRows = Competitors.Where(r => r.HasModifiedFields).ToList();
         var errors = new List<string>();
 
         foreach (var row in pasteRows)
