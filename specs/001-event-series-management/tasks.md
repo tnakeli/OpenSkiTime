@@ -33,23 +33,23 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 **Purpose**: Solution scaffolding and repo hygiene. Independent of every user story.
 
-- [ ] T001 Create `OpenSkiTime.sln` at repo root (`dotnet new sln -n OpenSkiTime`)
-- [ ] T002 [P] Add `.gitignore` at repo root with .NET / Visual Studio / Rider / `appsettings.Local.json` / `*.secrets.json` / `bin/` / `obj/` / `.vs/` patterns
-- [ ] T003 [P] Add `.gitattributes` at repo root: `* text=auto eol=lf` and `*.{cs,csproj,sln,axaml,xaml,md,json,yml} text` plus `*.{ps1} text eol=crlf`
-- [ ] T004 [P] Add `.editorconfig` at repo root: 4-space indent for C#, file-scoped namespaces, `dotnet_diagnostic.CA*` rules at warning, `csharp_style_namespace_declarations = file_scoped:warning`
-- [ ] T005 Add `Directory.Build.props` at repo root pinning: `<TargetFramework>net10.0</TargetFramework>`, `<LangVersion>latest</LangVersion>`, `<Nullable>enable</Nullable>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<ImplicitUsings>enable</ImplicitUsings>`
-- [ ] T006 Add `Directory.Packages.props` at repo root with central NuGet versions for: `Avalonia` 11.x, `Avalonia.Desktop` 11.x, `Avalonia.Themes.Fluent` 11.x, `Avalonia.ReactiveUI` (NOT used — omit), `CommunityToolkit.Mvvm` 8.x, `Microsoft.EntityFrameworkCore.Sqlite` 10.x, `Microsoft.EntityFrameworkCore.Design` 10.x, `Microsoft.Extensions.DependencyInjection` 10.x, `Microsoft.Extensions.Logging` 10.x, `Microsoft.Extensions.Logging.Debug` 10.x, `xunit` 2.x, `xunit.runner.visualstudio` 2.x, `Microsoft.NET.Test.Sdk` 17.x, `FluentAssertions` 6.x, `Avalonia.Headless.XUnit` 11.x; set `<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>`
-- [ ] T007 Create empty source project folders: `src/OpenSkiTime.Domain/`, `src/OpenSkiTime.Application/`, `src/OpenSkiTime.Persistence/`, `src/OpenSkiTime.Import/`, `src/OpenSkiTime.Fis.Placeholder/`, `src/OpenSkiTime.Desktop/`
-- [ ] T008 Create empty test project folders: `tests/OpenSkiTime.Domain.Tests/`, `tests/OpenSkiTime.Application.Tests/`, `tests/OpenSkiTime.Persistence.Tests/`, `tests/OpenSkiTime.Import.Tests/`, `tests/OpenSkiTime.Desktop.Tests/`
-- [ ] T009 [P] Create `src/OpenSkiTime.Domain/OpenSkiTime.Domain.csproj` (classlib, no dependencies)
-- [ ] T010 [P] Create `src/OpenSkiTime.Application/OpenSkiTime.Application.csproj` referencing `OpenSkiTime.Domain`
-- [ ] T011 [P] Create `src/OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj` referencing `OpenSkiTime.Application`, `OpenSkiTime.Domain` and packages `Microsoft.EntityFrameworkCore.Sqlite`, `Microsoft.EntityFrameworkCore.Design`, `Microsoft.Extensions.DependencyInjection`
-- [ ] T012 [P] Create `src/OpenSkiTime.Import/OpenSkiTime.Import.csproj` referencing `OpenSkiTime.Application`, `OpenSkiTime.Domain`
-- [ ] T013 [P] Create `src/OpenSkiTime.Fis.Placeholder/OpenSkiTime.Fis.Placeholder.csproj` referencing `OpenSkiTime.Domain` only (NO HttpClient package, NO `System.Net.Http` reference)
-- [ ] T014 Create `src/OpenSkiTime.Desktop/OpenSkiTime.Desktop.csproj` (`<OutputType>WinExe</OutputType>`, references all of the above + Avalonia/CommunityToolkit packages)
-- [ ] T015 [P] Create each test csproj (`tests/<Module>.Tests/<Module>.Tests.csproj`) referencing the corresponding source project + `xunit`, `xunit.runner.visualstudio`, `FluentAssertions`, `Microsoft.NET.Test.Sdk`. The Desktop tests project additionally references `Avalonia.Headless.XUnit`
-- [ ] T016 Add all 11 csproj files to `OpenSkiTime.sln` (`dotnet sln add ...`)
-- [ ] T017 Verify clean build: `dotnet build` from repo root succeeds with zero warnings
+- [x] T001 Create `OpenSkiTime.sln` at repo root (`dotnet new sln -n OpenSkiTime`)
+- [x] T002 [P] Add `.gitignore` at repo root with .NET / Visual Studio / Rider / `appsettings.Local.json` / `*.secrets.json` / `bin/` / `obj/` / `.vs/` patterns
+- [x] T003 [P] Add `.gitattributes` at repo root: `* text=auto eol=lf` and `*.{cs,csproj,sln,axaml,xaml,md,json,yml} text` plus `*.{ps1} text eol=crlf`
+- [x] T004 [P] Add `.editorconfig` at repo root: 4-space indent for C#, file-scoped namespaces, `dotnet_diagnostic.CA*` rules at warning, `csharp_style_namespace_declarations = file_scoped:warning`
+- [x] T005 Add `Directory.Build.props` at repo root pinning: `<TargetFramework>net10.0</TargetFramework>`, `<LangVersion>latest</LangVersion>`, `<Nullable>enable</Nullable>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<ImplicitUsings>enable</ImplicitUsings>`
+- [x] T006 Add `Directory.Packages.props` at repo root with central NuGet versions for: `Avalonia` 11.x, `Avalonia.Desktop` 11.x, `Avalonia.Themes.Fluent` 11.x, `Avalonia.ReactiveUI` (NOT used — omit), `CommunityToolkit.Mvvm` 8.x, `Microsoft.EntityFrameworkCore.Sqlite` 10.x, `Microsoft.EntityFrameworkCore.Design` 10.x, `Microsoft.Extensions.DependencyInjection` 10.x, `Microsoft.Extensions.Logging` 10.x, `Microsoft.Extensions.Logging.Debug` 10.x, `xunit` 2.x, `xunit.runner.visualstudio` 2.x, `Microsoft.NET.Test.Sdk` 17.x, `FluentAssertions` 6.x, `Avalonia.Headless.XUnit` 11.x; set `<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>`
+- [x] T007 Create empty source project folders: `src/OpenSkiTime.Domain/`, `src/OpenSkiTime.Application/`, `src/OpenSkiTime.Persistence/`, `src/OpenSkiTime.Import/`, `src/OpenSkiTime.Fis.Placeholder/`, `src/OpenSkiTime.Desktop/`
+- [x] T008 Create empty test project folders: `tests/OpenSkiTime.Domain.Tests/`, `tests/OpenSkiTime.Application.Tests/`, `tests/OpenSkiTime.Persistence.Tests/`, `tests/OpenSkiTime.Import.Tests/`, `tests/OpenSkiTime.Desktop.Tests/`
+- [x] T009 [P] Create `src/OpenSkiTime.Domain/OpenSkiTime.Domain.csproj` (classlib, no dependencies)
+- [x] T010 [P] Create `src/OpenSkiTime.Application/OpenSkiTime.Application.csproj` referencing `OpenSkiTime.Domain`
+- [x] T011 [P] Create `src/OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj` referencing `OpenSkiTime.Application`, `OpenSkiTime.Domain` and packages `Microsoft.EntityFrameworkCore.Sqlite`, `Microsoft.EntityFrameworkCore.Design`, `Microsoft.Extensions.DependencyInjection`
+- [x] T012 [P] Create `src/OpenSkiTime.Import/OpenSkiTime.Import.csproj` referencing `OpenSkiTime.Application`, `OpenSkiTime.Domain`
+- [x] T013 [P] Create `src/OpenSkiTime.Fis.Placeholder/OpenSkiTime.Fis.Placeholder.csproj` referencing `OpenSkiTime.Domain` only (NO HttpClient package, NO `System.Net.Http` reference)
+- [x] T014 Create `src/OpenSkiTime.Desktop/OpenSkiTime.Desktop.csproj` (`<OutputType>WinExe</OutputType>`, references all of the above + Avalonia/CommunityToolkit packages)
+- [x] T015 [P] Create each test csproj (`tests/<Module>.Tests/<Module>.Tests.csproj`) referencing the corresponding source project + `xunit`, `xunit.runner.visualstudio`, `FluentAssertions`, `Microsoft.NET.Test.Sdk`. The Desktop tests project additionally references `Avalonia.Headless.XUnit`
+- [x] T016 Add all 11 csproj files to `OpenSkiTime.sln` (`dotnet sln add ...`)
+- [x] T017 Verify clean build: `dotnet build` from repo root succeeds with zero warnings
 
 ---
 
@@ -59,40 +59,40 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 ### Domain primitives
 
-- [ ] T018 [P] Create `src/OpenSkiTime.Domain/Common/Discipline.cs` defining `enum Discipline { SL, GS, SG, DH, AC, KOMBI, OTHER }`
-- [ ] T019 [P] Create `src/OpenSkiTime.Domain/Common/Gender.cs` defining `enum Gender { Male, Female, Other }`
-- [ ] T020 [P] Create `src/OpenSkiTime.Domain/Common/RaceType.cs` defining `enum RaceType { FIS, National, Club, Training }`
-- [ ] T021 [P] Create `src/OpenSkiTime.Domain/Common/UpperCaseName.cs` value object enforcing FR-023 (non-empty, trimmed, `ToUpperInvariant`); implicit `string` conversion; equality by value
-- [ ] T022 [P] Create `tests/OpenSkiTime.Domain.Tests/Common/UpperCaseNameTests.cs` covering: rejects null/empty/whitespace, normalizes to uppercase, trims, preserves diacritics ("Ärm" → "ÄRM"), case-insensitive equality
+- [x] T018 [P] Create `src/OpenSkiTime.Domain/Common/Discipline.cs` defining `enum Discipline { SL, GS, SG, DH, AC, KOMBI, OTHER }`
+- [x] T019 [P] Create `src/OpenSkiTime.Domain/Common/Gender.cs` defining `enum Gender { Male, Female, Other }`
+- [x] T020 [P] Create `src/OpenSkiTime.Domain/Common/RaceType.cs` defining `enum RaceType { FIS, National, Club, Training }`
+- [x] T021 [P] Create `src/OpenSkiTime.Domain/Common/UpperCaseName.cs` value object enforcing FR-023 (non-empty, trimmed, `ToUpperInvariant`); implicit `string` conversion; equality by value
+- [x] T022 [P] Create `tests/OpenSkiTime.Domain.Tests/Common/UpperCaseNameTests.cs` covering: rejects null/empty/whitespace, normalizes to uppercase, trims, preserves diacritics ("Ärm" → "ÄRM"), case-insensitive equality
 
 ### Application abstractions
 
-- [ ] T023 [P] Create `src/OpenSkiTime.Application/Abstractions/IClock.cs` exposing `DateOnly Today()` and `DateTime UtcNow()`
-- [ ] T024 [P] Create `src/OpenSkiTime.Application/Abstractions/IUnitOfWork.cs` per `contracts/persistence.md`
-- [ ] T025 Create `src/OpenSkiTime.Application/Abstractions/IEventSeriesRepository.cs` and `EventSeriesSummary`, `EventSeriesSnapshot` records per `contracts/persistence.md`
+- [x] T023 [P] Create `src/OpenSkiTime.Application/Abstractions/IClock.cs` exposing `DateOnly Today()` and `DateTime UtcNow()`
+- [x] T024 [P] Create `src/OpenSkiTime.Application/Abstractions/IUnitOfWork.cs` per `contracts/persistence.md`
+- [x] T025 Create `src/OpenSkiTime.Application/Abstractions/IEventSeriesRepository.cs` and `EventSeriesSummary`, `EventSeriesSnapshot` records per `contracts/persistence.md`
 
 ### Persistence skeleton
 
-- [ ] T026 Create `src/OpenSkiTime.Persistence/OpenSkiTimeDbContext.cs` with empty `DbSet<>`s placeholders (will be filled per-entity in user-story phases) and `OnModelCreating` calling `ApplyConfigurationsFromAssembly`
-- [ ] T027 Create `src/OpenSkiTime.Persistence/PersistenceServiceCollectionExtensions.cs` exposing `AddOpenSkiTimePersistence(string sqliteFilePath)` per `contracts/persistence.md`
-- [ ] T028 Create `tests/OpenSkiTime.Persistence.Tests/Infrastructure/TempSqliteFixture.cs` test helper (creates temp DB file, applies migrations, deletes on dispose)
+- [x] T026 Create `src/OpenSkiTime.Persistence/OpenSkiTimeDbContext.cs` with empty `DbSet<>`s placeholders (will be filled per-entity in user-story phases) and `OnModelCreating` calling `ApplyConfigurationsFromAssembly`
+- [x] T027 Create `src/OpenSkiTime.Persistence/PersistenceServiceCollectionExtensions.cs` exposing `AddOpenSkiTimePersistence(string sqliteFilePath)` per `contracts/persistence.md`
+- [x] T028 Create `tests/OpenSkiTime.Persistence.Tests/Infrastructure/TempSqliteFixture.cs` test helper (creates temp DB file, applies migrations, deletes on dispose)
 
 ### FIS placeholder skeleton
 
-- [ ] T029 [P] Create `src/OpenSkiTime.Fis.Placeholder/IFisCompetitionUpdater.cs` and `FisUpdateResult` discriminated record per `contracts/fis-placeholder.md`
-- [ ] T030 [P] Create `src/OpenSkiTime.Fis.Placeholder/NotImplementedFisUpdater.cs` returning `FisUpdateResult.NotImplemented("FIS API update is not yet available in this release.")` with no I/O
+- [x] T029 [P] Create `src/OpenSkiTime.Fis.Placeholder/IFisCompetitionUpdater.cs` and `FisUpdateResult` discriminated record per `contracts/fis-placeholder.md`
+- [x] T030 [P] Create `src/OpenSkiTime.Fis.Placeholder/NotImplementedFisUpdater.cs` returning `FisUpdateResult.NotImplemented("FIS API update is not yet available in this release.")` with no I/O
 
 ### Desktop shell
 
-- [ ] T031 Create `src/OpenSkiTime.Desktop/Program.cs` with Avalonia `BuildAvaloniaApp` + `Microsoft.Extensions.DependencyInjection` composition root resolving SQLite path from `Environment.SpecialFolder.LocalApplicationData` → `OpenSkiTime/openskitime.db` and registering `IClock` (system clock) and FIS placeholder. **Do NOT register `HttpClient` / `IHttpClientFactory`.**
-- [ ] T032 Create `src/OpenSkiTime.Desktop/App.axaml` and `App.axaml.cs` (Fluent theme; `OnFrameworkInitializationCompleted` shows the Shell window)
-- [ ] T033 Create `src/OpenSkiTime.Desktop/Shell/ShellWindow.axaml` and `.axaml.cs` (left navigation, content pane; empty by default — populated in user-story phases)
-- [ ] T034 Create `src/OpenSkiTime.Desktop/Services/IDialogService.cs` and `DialogService.cs` (message/confirm/error)
-- [ ] T035 Create `src/OpenSkiTime.Desktop/Services/IClipboardService.cs` and `ClipboardService.cs` (read text from Avalonia clipboard)
+- [x] T031 Create `src/OpenSkiTime.Desktop/Program.cs` with Avalonia `BuildAvaloniaApp` + `Microsoft.Extensions.DependencyInjection` composition root resolving SQLite path from `Environment.SpecialFolder.LocalApplicationData` → `OpenSkiTime/openskitime.db` and registering `IClock` (system clock) and FIS placeholder. **Do NOT register `HttpClient` / `IHttpClientFactory`.**
+- [x] T032 Create `src/OpenSkiTime.Desktop/App.axaml` and `App.axaml.cs` (Fluent theme; `OnFrameworkInitializationCompleted` shows the Shell window)
+- [x] T033 Create `src/OpenSkiTime.Desktop/Shell/ShellWindow.axaml` and `.axaml.cs` (left navigation, content pane; empty by default — populated in user-story phases)
+- [x] T034 Create `src/OpenSkiTime.Desktop/Services/IDialogService.cs` and `DialogService.cs` (message/confirm/error)
+- [x] T035 Create `src/OpenSkiTime.Desktop/Services/IClipboardService.cs` and `ClipboardService.cs` (read text from Avalonia clipboard)
 
 ### Foundational test pass
 
-- [ ] T036 Run `dotnet test` — UpperCaseName tests pass; everything else green or empty. **Checkpoint**: foundation ready.
+- [x] T036 Run `dotnet test` — UpperCaseName tests pass; everything else green or empty. **Checkpoint**: foundation ready.
 
 ---
 
@@ -104,52 +104,52 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 ### Tests for User Story 1 (write FIRST, watch them fail)
 
-- [ ] T037 [P] [US1] `tests/OpenSkiTime.Domain.Tests/EventSeries/EventSeriesTests.cs` — required basic data, `EndDate >= StartDate` invariant, add/remove competition
-- [ ] T038 [P] [US1] `tests/OpenSkiTime.Domain.Tests/Competitions/CompetitionTests.cs` — required fields (FR-012), FIS-code-required-on-FIS-race (FR-013), allows blank FIS code on Club/National/Training, `NumberOfRuns >= 1`, `NumberOfIntermediateTimes >= 0`
-- [ ] T039 [P] [US1] `tests/OpenSkiTime.Application.Tests/EventSeries/CreateEventSeriesUseCaseTests.cs`
-- [ ] T040 [P] [US1] `tests/OpenSkiTime.Application.Tests/Competitions/AddCompetitionUseCaseTests.cs` (incl. FIS code rule)
-- [ ] T041 [P] [US1] `tests/OpenSkiTime.Persistence.Tests/EventSeriesRepositoryTests.cs` — round-trip with competitions; cascade delete
+- [x] T037 [P] [US1] `tests/OpenSkiTime.Domain.Tests/EventSeries/EventSeriesTests.cs` — required basic data, `EndDate >= StartDate` invariant, add/remove competition
+- [x] T038 [P] [US1] `tests/OpenSkiTime.Domain.Tests/Competitions/CompetitionTests.cs` — required fields (FR-012), FIS-code-required-on-FIS-race (FR-013), allows blank FIS code on Club/National/Training, `NumberOfRuns >= 1`, `NumberOfIntermediateTimes >= 0`
+- [x] T039 [P] [US1] `tests/OpenSkiTime.Application.Tests/EventSeries/CreateEventSeriesUseCaseTests.cs`
+- [x] T040 [P] [US1] `tests/OpenSkiTime.Application.Tests/Competitions/AddCompetitionUseCaseTests.cs` (incl. FIS code rule)
+- [x] T041 [P] [US1] `tests/OpenSkiTime.Persistence.Tests/EventSeriesRepositoryTests.cs` — round-trip with competitions; cascade delete
 
 ### Implementation for User Story 1
 
 #### Domain
 
-- [ ] T042 [P] [US1] Create `src/OpenSkiTime.Domain/EventSeries/EventSeries.cs` (Id, Name, Location, Organizer, StartDate, EndDate, Nation, Season, owned `Competitions`, `Competitors`, `CategoryRules`, `RowVersion`) per `data-model.md`
-- [ ] T043 [P] [US1] Create `src/OpenSkiTime.Domain/Competitions/Competition.cs` with all fields per `data-model.md`; factory enforces FR-012 + FR-013
+- [x] T042 [P] [US1] Create `src/OpenSkiTime.Domain/EventSeries/EventSeries.cs` (Id, Name, Location, Organizer, StartDate, EndDate, Nation, Season, owned `Competitions`, `Competitors`, `CategoryRules`, `RowVersion`) per `data-model.md`
+- [x] T043 [P] [US1] Create `src/OpenSkiTime.Domain/Competitions/Competition.cs` with all fields per `data-model.md`; factory enforces FR-012 + FR-013
 
 #### Application
 
-- [ ] T044 [US1] Create `src/OpenSkiTime.Application/EventSeries/CreateEventSeriesUseCase.cs` (depends on T042, T024, T025)
-- [ ] T045 [US1] Create `src/OpenSkiTime.Application/EventSeries/UpdateEventSeriesUseCase.cs`
-- [ ] T046 [US1] Create `src/OpenSkiTime.Application/EventSeries/ListEventSeriesUseCase.cs`
-- [ ] T047 [US1] Create `src/OpenSkiTime.Application/Competitions/AddCompetitionUseCase.cs` (depends on T043)
-- [ ] T048 [US1] Create `src/OpenSkiTime.Application/Competitions/UpdateCompetitionUseCase.cs`
+- [x] T044 [US1] Create `src/OpenSkiTime.Application/EventSeries/CreateEventSeriesUseCase.cs` (depends on T042, T024, T025)
+- [x] T045 [US1] Create `src/OpenSkiTime.Application/EventSeries/UpdateEventSeriesUseCase.cs`
+- [x] T046 [US1] Create `src/OpenSkiTime.Application/EventSeries/ListEventSeriesUseCase.cs`
+- [x] T047 [US1] Create `src/OpenSkiTime.Application/Competitions/AddCompetitionUseCase.cs` (depends on T043)
+- [x] T048 [US1] Create `src/OpenSkiTime.Application/Competitions/UpdateCompetitionUseCase.cs`
 
 #### Persistence
 
-- [ ] T049 [P] [US1] Create `src/OpenSkiTime.Persistence/Configurations/EventSeriesConfiguration.cs` (EF type config; `RowVersion` as `long`)
-- [ ] T050 [P] [US1] Create `src/OpenSkiTime.Persistence/Configurations/CompetitionConfiguration.cs` with indexes per `data-model.md` (`IX_Competitions_EventSeriesId_Date`, `UQ_Competitions_EventSeriesId_ShortLabel`)
-- [ ] T051 [US1] Add `DbSet<EventSeries>` and `DbSet<Competition>` to `OpenSkiTimeDbContext`; implement `RowVersion` increment in `SaveChangesAsync`
-- [ ] T052 [US1] Create `src/OpenSkiTime.Persistence/Repositories/EventSeriesRepository.cs` implementing `IEventSeriesRepository`
-- [ ] T053 [US1] Create initial EF migration `0001_Initial` containing EventSeries + Competitions tables (`dotnet ef migrations add 0001_Initial --project src/OpenSkiTime.Persistence --startup-project src/OpenSkiTime.Desktop`)
-- [ ] T054 [US1] Apply migrations on startup in `src/OpenSkiTime.Desktop/Program.cs` (`db.Database.Migrate()` inside scope)
+- [x] T049 [P] [US1] Create `src/OpenSkiTime.Persistence/Configurations/EventSeriesConfiguration.cs` (EF type config; `RowVersion` as `long`)
+- [x] T050 [P] [US1] Create `src/OpenSkiTime.Persistence/Configurations/CompetitionConfiguration.cs` with indexes per `data-model.md` (`IX_Competitions_EventSeriesId_Date`, `UQ_Competitions_EventSeriesId_ShortLabel`)
+- [x] T051 [US1] Add `DbSet<EventSeries>` and `DbSet<Competition>` to `OpenSkiTimeDbContext`; implement `RowVersion` increment in `SaveChangesAsync`
+- [x] T052 [US1] Create `src/OpenSkiTime.Persistence/Repositories/EventSeriesRepository.cs` implementing `IEventSeriesRepository`
+- [x] T053 [US1] Create initial EF migration `0001_Initial` containing EventSeries + Competitions tables (`dotnet ef migrations add 0001_Initial --project src/OpenSkiTime.Persistence --startup-project src/OpenSkiTime.Desktop`)
+- [x] T054 [US1] Apply migrations on startup in `src/OpenSkiTime.Desktop/Program.cs` (`db.Database.Migrate()` inside scope)
 
 #### UI
 
-- [ ] T055 [P] [US1] Create `src/OpenSkiTime.Desktop/ViewModels/EventSeriesOverviewViewModel.cs` using `[ObservableProperty]` / `[RelayCommand]`
-- [ ] T056 [US1] Create `src/OpenSkiTime.Desktop/Views/EventSeriesOverviewView.axaml(.cs)` showing Event Series basic data form, competitions list, "New Competition" button
-- [ ] T057 [P] [US1] Create `src/OpenSkiTime.Desktop/ViewModels/CompetitionEditorViewModel.cs` (basic-data form fields)
-- [ ] T058 [US1] Create `src/OpenSkiTime.Desktop/Views/CompetitionEditorView.axaml(.cs)` (form for all competition basic-data fields per `data-model.md`)
-- [ ] T059 [US1] Wire `ShellWindow` left nav: "Event Series" → opens `EventSeriesOverviewView`; "+ New Event Series" command
+- [x] T055 [P] [US1] Create `src/OpenSkiTime.Desktop/ViewModels/EventSeriesOverviewViewModel.cs` using `[ObservableProperty]` / `[RelayCommand]`
+- [x] T056 [US1] Create `src/OpenSkiTime.Desktop/Views/EventSeriesOverviewView.axaml(.cs)` showing Event Series basic data form, competitions list, "New Competition" button
+- [x] T057 [P] [US1] Create `src/OpenSkiTime.Desktop/ViewModels/CompetitionEditorViewModel.cs` (basic-data form fields)
+- [x] T058 [US1] Create `src/OpenSkiTime.Desktop/Views/CompetitionEditorView.axaml(.cs)` (form for all competition basic-data fields per `data-model.md`)
+- [x] T059 [US1] Wire `ShellWindow` left nav: "Event Series" → opens `EventSeriesOverviewView`; "+ New Event Series" command
 
 #### Lifecycle: Delete & Remove (covers FR-001 "delete", FR-004 "remove" — added per /speckit.analyze C1, C2)
 
-- [ ] T131 [P] [US1] `tests/OpenSkiTime.Application.Tests/EventSeries/DeleteEventSeriesUseCaseTests.cs` — deletes series, asserts cascade delete of owned competitions/competitors/participations/category-rules, asserts not-found returns failure result
-- [ ] T132 [P] [US1] `tests/OpenSkiTime.Application.Tests/Competitions/RemoveCompetitionUseCaseTests.cs` — removes a competition, asserts cascade delete of its participation rows, asserts other competitions in the same series are untouched
-- [ ] T133 [US1] Create `src/OpenSkiTime.Application/EventSeries/DeleteEventSeriesUseCase.cs` (loads via `IEventSeriesRepository.GetByIdAsync`, calls `Remove`, commits via `IUnitOfWork.SaveChangesAsync`)
-- [ ] T134 [US1] Create `src/OpenSkiTime.Application/Competitions/RemoveCompetitionUseCase.cs` (loads parent EventSeries, removes the competition, saves; relies on EF cascade for participations)
-- [ ] T135 [US1] Extend `src/OpenSkiTime.Desktop/ViewModels/EventSeriesOverviewViewModel.cs` with `DeleteEventSeriesCommand` and `RemoveCompetitionCommand`, both routed through `IDialogService.ConfirmAsync` with explicit "this cannot be undone" messaging (FR-082 plain-language errors)
-- [ ] T136 [US1] Update `src/OpenSkiTime.Desktop/Views/EventSeriesOverviewView.axaml` to expose: a "Delete Event Series" toolbar action, and a "Remove" action per row in the competitions list (icon + tooltip, both wired to the commands above)
+- [x] T131 [P] [US1] `tests/OpenSkiTime.Application.Tests/EventSeries/DeleteEventSeriesUseCaseTests.cs` — deletes series, asserts cascade delete of owned competitions/competitors/participations/category-rules, asserts not-found returns failure result
+- [x] T132 [P] [US1] `tests/OpenSkiTime.Application.Tests/Competitions/RemoveCompetitionUseCaseTests.cs` — removes a competition, asserts cascade delete of its participation rows, asserts other competitions in the same series are untouched
+- [x] T133 [US1] Create `src/OpenSkiTime.Application/EventSeries/DeleteEventSeriesUseCase.cs` (loads via `IEventSeriesRepository.GetByIdAsync`, calls `Remove`, commits via `IUnitOfWork.SaveChangesAsync`)
+- [x] T134 [US1] Create `src/OpenSkiTime.Application/Competitions/RemoveCompetitionUseCase.cs` (loads parent EventSeries, removes the competition, saves; relies on EF cascade for participations)
+- [x] T135 [US1] Extend `src/OpenSkiTime.Desktop/ViewModels/EventSeriesOverviewViewModel.cs` with `DeleteEventSeriesCommand` and `RemoveCompetitionCommand`, both routed through `IDialogService.ConfirmAsync` with explicit "this cannot be undone" messaging (FR-082 plain-language errors)
+- [x] T136 [US1] Update `src/OpenSkiTime.Desktop/Views/EventSeriesOverviewView.axaml` to expose: a "Delete Event Series" toolbar action, and a "Remove" action per row in the competitions list (icon + tooltip, both wired to the commands above)
 
 **Checkpoint**: User Story 1 demo-ready: create series + competitions, edit, delete (with confirm), remove individual competitions (with confirm), save, restart offline, data persists.
 
@@ -165,20 +165,20 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 #### Domain / Application
 
-- [ ] T060 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Competitors/CompetitorTests.cs` — `IsUsableForRaceEntry` matrix (FR-021), year-of-birth range, gender enum, club may be empty (FR-022)
-- [ ] T061 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Participation/ParticipationTests.cs` — idempotent toggle, scoped to one Event Series
+- [x] T060 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Competitors/CompetitorTests.cs` — `IsUsableForRaceEntry` matrix (FR-021), year-of-birth range, gender enum, club may be empty (FR-022)
+- [x] T061 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Participation/ParticipationTests.cs` — idempotent toggle, scoped to one Event Series
 - [ ] T062 [P] [US2] `tests/OpenSkiTime.Domain.Tests/Categories/CategoryResolverTests.cs` — simple rule set produces expected category for `(year, gender)`
 - [ ] T063 [P] [US2] `tests/OpenSkiTime.Application.Tests/Competitors/EditCompetitorUseCaseTests.cs` — uppercase last name on edit (FR-023)
 - [ ] T064 [P] [US2] `tests/OpenSkiTime.Application.Tests/Competitors/CompetitorCodeUniqueWithinSeriesTests.cs`
 
 #### Importer
 
-- [ ] T065 [P] [US2] `tests/OpenSkiTime.Import.Tests/Tsv/TsvTokenizerTests.cs` — tab/comma/CRLF/LF/quoted/whitespace
-- [ ] T066 [P] [US2] `tests/OpenSkiTime.Import.Tests/Headers/HeaderMapperTests.cs` — case-insensitive, trimmed; recognizes the FR-051 set; `Last Name` + `First Name` together cause `Name` to be ignored
+- [x] T065 [P] [US2] `tests/OpenSkiTime.Import.Tests/Tsv/TsvTokenizerTests.cs` — tab/comma/CRLF/LF/quoted/whitespace
+- [x] T066 [P] [US2] `tests/OpenSkiTime.Import.Tests/Headers/HeaderMapperTests.cs` — case-insensitive, trimmed; recognizes the FR-051 set; `Last Name` + `First Name` together cause `Name` to be ignored
 - [ ] T067 [P] [US2] `tests/OpenSkiTime.Import.Tests/Names/SeparateLastFirstNameTests.cs` — uses Last/First directly, last name uppercased on import
 - [ ] T068 [P] [US2] `tests/OpenSkiTime.Import.Tests/Participation/ParticipationValueMatcherTests.cs` — accepts `Yes`, `YES`, `yes`, `Kyllä`, `KYLLÄ`, `kyllä`, `x`, `X`; rejects `1`, `true`, `kyllä!`, empty (FR-032)
 - [ ] T069 [P] [US2] `tests/OpenSkiTime.Import.Tests/Participation/ParticipationColumnHeaderTests.cs` — header `3.1 SL` mapped to the matching Competition `ShortLabel`; unknown labels go to `UnknownColumns`
-- [ ] T070 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/DiffEngineTests.cs` — New/Updated/Unchanged/Error/Unknown buckets correct; match-by-Code preferred; fallback `(LastName, First, Year, Gender)` flagged `MatchedBy.NameYearGenderTuple`
+- [x] T070 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/DiffEngineTests.cs` — New/Updated/Unchanged/Error/Unknown buckets correct; match-by-Code preferred; fallback `(LastName, First, Year, Gender)` flagged `MatchedBy.NameYearGenderTuple`
 - [ ] T071 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/EmptyDoesNotOverwriteTests.cs` — default mode does not overwrite (FR-033, FR-052); `OverwriteWithEmpty=true` clears values (FR-053)
 - [ ] T072 [P] [US2] `tests/OpenSkiTime.Import.Tests/Preview/PartialUpdateTests.cs` — only columns present in the source can be updated; absent columns never produce a `FieldDelta`
 
@@ -191,44 +191,44 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 #### Domain
 
-- [ ] T075 [P] [US2] Create `src/OpenSkiTime.Domain/Competitors/Competitor.cs` per `data-model.md`; factory normalizes last name via `UpperCaseName`, validates required fields, year range, gender, code presence rules
-- [ ] T076 [P] [US2] Create `src/OpenSkiTime.Domain/Participation/Participation.cs` (Id, EventSeriesId, CompetitorId, CompetitionId, IsParticipating)
-- [ ] T077 [P] [US2] Create `src/OpenSkiTime.Domain/Categories/CategoryRule.cs` and `src/OpenSkiTime.Domain/Categories/ICategoryResolver.cs` + `RuleBasedCategoryResolver.cs` (first-match-wins on Order)
+- [x] T075 [P] [US2] Create `src/OpenSkiTime.Domain/Competitors/Competitor.cs` per `data-model.md`; factory normalizes last name via `UpperCaseName`, validates required fields, year range, gender, code presence rules
+- [x] T076 [P] [US2] Create `src/OpenSkiTime.Domain/Participation/Participation.cs` (Id, EventSeriesId, CompetitorId, CompetitionId, IsParticipating)
+- [x] T077 [P] [US2] Create `src/OpenSkiTime.Domain/Categories/CategoryRule.cs` and `src/OpenSkiTime.Domain/Categories/ICategoryResolver.cs` + `RuleBasedCategoryResolver.cs` (first-match-wins on Order)
 
 #### Application
 
-- [ ] T078 [US2] Create `src/OpenSkiTime.Application/Competitors/AddCompetitorUseCase.cs` (depends on T075)
+- [x] T078 [US2] Create `src/OpenSkiTime.Application/Competitors/AddCompetitorUseCase.cs` (depends on T075)
 - [ ] T079 [US2] Create `src/OpenSkiTime.Application/Competitors/EditCompetitorUseCase.cs` (FR-023 enforcement on edit)
 - [ ] T080 [US2] Create `src/OpenSkiTime.Application/Participation/SetParticipationUseCase.cs` (depends on T076)
 - [ ] T081 [US2] Create `src/OpenSkiTime.Application/Import/IImportPreviewService.cs`, `IImportApplyService.cs`, `ImportPreview`, `ImportOptions`, `CompetitorDraft`, `ParticipationDraft`, `FieldDelta`, `MatchedBy`, `NewOrUpdate`, `CompetitorField` per `contracts/importer.md`
 
 #### Importer module
 
-- [ ] T082 [P] [US2] Create `src/OpenSkiTime.Import/Tsv/TsvTokenizer.cs` (handles tab + comma fallback, CRLF/LF, quoted cells, surrounding whitespace)
-- [ ] T083 [P] [US2] Create `src/OpenSkiTime.Import/Headers/HeaderMapper.cs` mapping recognized headers (FR-051) + Competition `ShortLabel` to `MappedField`
-- [ ] T084 [P] [US2] Create `src/OpenSkiTime.Import/Names/SeparateNameProjector.cs` — when `Last Name` + `First Name` headers present, project directly with uppercase last name
+- [x] T082 [P] [US2] Create `src/OpenSkiTime.Import/Tsv/TsvTokenizer.cs` (handles tab + comma fallback, CRLF/LF, quoted cells, surrounding whitespace)
+- [x] T083 [P] [US2] Create `src/OpenSkiTime.Import/Headers/HeaderMapper.cs` mapping recognized headers (FR-051) + Competition `ShortLabel` to `MappedField`
+- [x] T084 [P] [US2] Create `src/OpenSkiTime.Import/Names/SeparateNameProjector.cs` — when `Last Name` + `First Name` headers present, project directly with uppercase last name
 - [ ] T085 [P] [US2] Create `src/OpenSkiTime.Import/Participation/ParticipationValueMatcher.cs` accepting `Yes`, `Kyllä`, `x` case-insensitively (FR-032)
-- [ ] T086 [US2] Create `src/OpenSkiTime.Import/Preview/DiffEngine.cs` — match by Code first, fallback `(UpperLastName, FirstName, YearOfBirth, Gender)` flagged with `MatchedBy.NameYearGenderTuple`; produces `ImportPreview` per `contracts/importer.md`
-- [ ] T087 [US2] Create `src/OpenSkiTime.Import/ImportPreviewService.cs` implementing `IImportPreviewService` (pure function: no DB writes, reads `EventSeriesSnapshot`)
-- [ ] T088 [US2] Create `src/OpenSkiTime.Import/ImportApplyService.cs` implementing `IImportApplyService` — transactional via `IUnitOfWork`; default mode skips empty cells; `OverwriteWithEmpty` clears them; verifies `EventSeriesSnapshotVersion`
+- [x] T086 [US2] Create `src/OpenSkiTime.Import/Preview/DiffEngine.cs` — match by Code first, fallback `(UpperLastName, FirstName, YearOfBirth, Gender)` flagged with `MatchedBy.NameYearGenderTuple`; produces `ImportPreview` per `contracts/importer.md`
+- [x] T087 [US2] Create `src/OpenSkiTime.Import/ImportPreviewService.cs` implementing `IImportPreviewService` (pure function: no DB writes, reads `EventSeriesSnapshot`)
+- [x] T088 [US2] Create `src/OpenSkiTime.Import/ImportApplyService.cs` implementing `IImportApplyService` — transactional via `IUnitOfWork`; default mode skips empty cells; `OverwriteWithEmpty` clears them; verifies `EventSeriesSnapshotVersion`
 
 #### Persistence
 
-- [ ] T089 [P] [US2] Create `src/OpenSkiTime.Persistence/Configurations/CompetitorConfiguration.cs` with `UQ_Competitors_EventSeriesId_Code` and `IX_Competitors_EventSeriesId_LastName_FirstName`
-- [ ] T090 [P] [US2] Create `src/OpenSkiTime.Persistence/Configurations/ParticipationConfiguration.cs` with `UQ_Participations_CompetitorId_CompetitionId` and `IX_Participations_EventSeriesId`
-- [ ] T091 [P] [US2] Create `src/OpenSkiTime.Persistence/Configurations/CategoryRuleConfiguration.cs`
-- [ ] T092 [US2] Add `DbSet<Competitor>`, `DbSet<Participation>`, `DbSet<CategoryRule>` to `OpenSkiTimeDbContext`; extend `IEventSeriesRepository.LoadSnapshotAsync` to include them
-- [ ] T093 [US2] Create EF migration `0002_Competitors_Participation_Categories` (`dotnet ef migrations add 0002_...`)
+- [x] T089 [P] [US2] Create `src/OpenSkiTime.Persistence/Configurations/CompetitorConfiguration.cs` with `UQ_Competitors_EventSeriesId_Code` and `IX_Competitors_EventSeriesId_LastName_FirstName`
+- [x] T090 [P] [US2] Create `src/OpenSkiTime.Persistence/Configurations/ParticipationConfiguration.cs` with `UQ_Participations_CompetitorId_CompetitionId` and `IX_Participations_EventSeriesId`
+- [x] T091 [P] [US2] Create `src/OpenSkiTime.Persistence/Configurations/CategoryRuleConfiguration.cs`
+- [x] T092 [US2] Add `DbSet<Competitor>`, `DbSet<Participation>`, `DbSet<CategoryRule>` to `OpenSkiTimeDbContext`; extend `IEventSeriesRepository.LoadSnapshotAsync` to include them
+- [x] T093 [US2] Create EF migration `0002_Competitors_Participation_Categories` (`dotnet ef migrations add 0002_...`)
 
 #### UI
 
 - [ ] T094 [P] [US2] Create `src/OpenSkiTime.Desktop/ViewModels/CompetitorGridViewModel.cs` (Items, ViewMode {Flat, ByCategory, ByClub, ByNation}, Filters, PasteCommand)
 - [ ] T095 [P] [US2] Create `src/OpenSkiTime.Desktop/Controls/CompetitorRowEditor.axaml` (uppercase last-name display via converter, debounced commit)
 - [ ] T096 [US2] Create `src/OpenSkiTime.Desktop/Views/CompetitorGridView.axaml(.cs)` — virtualized `DataGrid`, dynamic per-Competition participation columns (one per Competition `ShortLabel`), toolbar (paste / view-mode / filters)
-- [ ] T097 [P] [US2] Create `src/OpenSkiTime.Desktop/ViewModels/ImportPreviewViewModel.cs` exposing tabs: New / Updated / Unchanged / Errors / UncertainNames / UnknownColumns; `OverwriteWithEmpty` toggle; Apply / Cancel
-- [ ] T098 [US2] Create `src/OpenSkiTime.Desktop/Views/ImportPreviewView.axaml(.cs)` — modal/sheet style; row-level edit not yet (US3 adds it)
-- [ ] T099 [US2] Wire paste workflow: `CompetitorGridViewModel.PasteCommand` → `IClipboardService.GetText` → `IImportPreviewService.BuildPreview` → open `ImportPreviewView` → on Apply call `IImportApplyService.Apply` → reload grid
-- [ ] T100 [US2] Wire `ShellWindow` left nav: "Competitors" → `CompetitorGridView` for the selected Event Series
+- [x] T097 [P] [US2] Create `src/OpenSkiTime.Desktop/ViewModels/ImportPreviewViewModel.cs` exposing tabs: New / Updated / Unchanged / Errors / UncertainNames / UnknownColumns; `OverwriteWithEmpty` toggle; Apply / Cancel
+- [x] T098 [US2] Create `src/OpenSkiTime.Desktop/Views/ImportPreviewView.axaml(.cs)` — modal/sheet style; row-level edit not yet (US3 adds it)
+- [x] T099 [US2] Wire paste workflow: `CompetitorGridViewModel.PasteCommand` → `IClipboardService.GetText` → `IImportPreviewService.BuildPreview` → open `ImportPreviewView` → on Apply call `IImportApplyService.Apply` → reload grid
+- [x] T100 [US2] Wire `ShellWindow` left nav: "Competitors" → `CompetitorGridView` for the selected Event Series
 
 **Checkpoint**: US2 demo-ready: paste, preview, apply, filter, group; participation columns reflect competitions of the series; uppercase last names everywhere.
 
@@ -306,7 +306,7 @@ Multi-project .NET solution per plan.md `Project Structure`:
 
 **Purpose**: Documentation, screenshots, ADRs, offline smoke verification.
 
-- [ ] T121 [P] Create `README.md` at repo root: what Open Ski Time is (open-source alpine race timing & race management), MIT license, prerequisites, build/run/test commands, screenshot placeholders for Event Series Overview / Competitor Grid / Competition Editor / Import Preview, links to constitution, list of out-of-scope items (timing, Alge, FIS API/XML, draws, live timing); note that Alge Timy3 + MT1 integration is planned after this feature; FIS API/XML integration is planned later and credentials must NOT be stored in the public repository
+- [x] T121 [P] Create `README.md` at repo root: what Open Ski Time is (open-source alpine race timing & race management), MIT license, prerequisites, build/run/test commands, screenshot placeholders for Event Series Overview / Competitor Grid / Competition Editor / Import Preview, links to constitution, list of out-of-scope items (timing, Alge, FIS API/XML, draws, live timing); note that Alge Timy3 + MT1 integration is planned after this feature; FIS API/XML integration is planned later and credentials must NOT be stored in the public repository
 - [ ] T122 [P] Create `docs/screenshots/event-series-overview.placeholder.png` (1x1 PNG with caption text in `docs/screenshots/README.md` describing intended content) — same for `competitor-grid`, `competition-editor`, `import-preview`
 - [ ] T123 [P] Create `docs/architecture.md` — module map mirroring `src/`, dependency arrows enforced by csproj refs, import workflow diagram from `plan.md`
 - [ ] T124 [P] Create `docs/adr/0001-net10-avalonia-sqlite.md` recording constitution defaults
@@ -314,7 +314,7 @@ Multi-project .NET solution per plan.md `Project Structure`:
 - [ ] T126 [P] Create `docs/adr/0003-mvvm-with-community-toolkit.md`
 - [ ] T127 Update `.specify/memory/constitution.md` Sync Impact Report: close `TODO(README)` and `TODO(ADR)`; bump to `1.0.1` (PATCH — clarification, no principle change) with `Last Amended: 2026-05-28`
 - [ ] T128 Add `tests/OpenSkiTime.Desktop.Tests/Smoke/OfflineSmokeTest.cs` (Avalonia.Headless) — registers a throwing `IHttpClientFactory`; starts the app; creates an Event Series; imports 100 rows; quits cleanly. Maps to SC-005, SC-007.
-- [ ] T129 Run full test suite (`dotnet test`) and full build (`dotnet build`) — both must be green with TreatWarningsAsErrors enabled
+- [x] T129 Run full test suite (`dotnet test`) and full build (`dotnet build`) — both must be green with TreatWarningsAsErrors enabled
 - [ ] T130 Run quickstart validation: follow `specs/001-event-series-management/quickstart.md` end-to-end on a clean machine state (delete `%LOCALAPPDATA%\OpenSkiTime\openskitime.db` first); confirm all steps succeed
 
 ---
