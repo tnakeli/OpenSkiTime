@@ -35,7 +35,7 @@ public class DiffEngineTests
     public void New_competitor_row_appears_in_NewCompetitors()
     {
         var snapshot = EmptySnapshot();
-        var tsv = BuildTsv("SMITH\tJohn\t2005\tFIN\t1\t1\t");
+        var tsv = BuildTsv("SMITH\tJohn\t2005\tFIN\t1\tx\t");
         var rows = ParseRows(tsv, snapshot);
 
         var diff = DiffEngine.Compute(snapshot, rows);
@@ -81,7 +81,7 @@ public class DiffEngineTests
                 new(existingId, Comp1Id, false),
             });
 
-        var tsv = "LastName\tFirstName\tYOB\t3.1 SL\nSMITH\tJohn\t2005\t1";
+        var tsv = "LastName\tFirstName\tYOB\t3.1 SL\nSMITH\tJohn\t2005\tx";
         var rows = ParseRows(tsv, snapshot);
 
         var diff = DiffEngine.Compute(snapshot, rows);
@@ -128,7 +128,7 @@ public class DiffEngineTests
             new List<CompetitorRef> { new(existingId, "", "SMITH", "John", 2005) },
             new List<ParticipationRef> { new(existingId, Comp1Id, true) });
 
-        var tsv = "LastName\tFirstName\tYOB\t3.1 SL\nSMITH\tJohn\t2005\t1";
+        var tsv = "LastName\tFirstName\tYOB\t3.1 SL\nSMITH\tJohn\t2005\tx";
         var rows = ParseRows(tsv, snapshot);
 
         var diff = DiffEngine.Compute(snapshot, rows);

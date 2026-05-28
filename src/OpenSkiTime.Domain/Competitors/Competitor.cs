@@ -68,6 +68,16 @@ public class Competitor
     public IReadOnlyList<Participation.Participation> Participations => _participations;
 
     /// <summary>
+    /// FR-021: a competitor is usable for race entry when
+    /// first name, last name and year of birth are all present and valid.
+    /// Gender and FIS code are optional.
+    /// </summary>
+    public bool IsUsableForRaceEntry =>
+        !string.IsNullOrWhiteSpace(FirstName) &&
+        YearOfBirth >= 1900 &&
+        YearOfBirth <= DateTime.UtcNow.Year;
+
+    /// <summary>
     /// Factory: validates required fields and constructs the entity.
     /// </summary>
     public static Competitor Create(

@@ -77,6 +77,79 @@ public class CompetitorPersistenceTests
     }
 
     [Fact]
+    public async Task Duplicate_name_yob_raises_db_constraint()
+    {
+        await using var fx = new TempSqliteFixture();
+        var repo = new EventSeriesRepository(fx.Context);
+
+        var series = NewSeries();
+        series.AddCompetitor(NewCompetitor(series.Id, "SMITH", "John", 2005));
+
+        await repo.AddAsync(series);
+        await fx.Context.SaveChangesAsync();
+
+        var options = new DbContextOptionsBuilder<OpenSkiTimeDbContext>()
+            .UseSqlite($"Data Source={fx.DbPath}")
+            .Options;
+        await using var db2 = new OpenSkiTimeDbContext(options);
+        var loaded = await db2.EventSeries
+            .Include(e => e.Competitors)
+            .FirstAsync(e => e.Id == series.Id);
+
+        var duplicate = NewCompetitor(loaded.Id, "SMITH", "John", 2005);
+        var act = () => loaded.AddCompetitor(duplicate);
+        act.Should().Throw<InvalidOperationException>().WithMessage("*already exists*");
+    }
+
+    [Fact]
+    public async Task Import_apply_transaction_rolls_back_on_failure()
+    {
+        await using var fx = new TempSqliteFixture();
+        var repo = new EventSeriesRepository(fx.Context);
+
+        var series = NewSeries();
+        await repo.AddAsync(series);
+        await fx.Context.SaveChangesAsync();
+
+        int competitorsBefore = await fx.Context.Competitors.CountAsync();
+
+        var options = new DbContextOptionsBuilder<OpenSkiTimeDbContext>()
+            .UseSqlite($"Data Source={fx.DbPath}")
+            .Options;
+        await using var db2 = new OpenSkiTimeDbContext(options);
+        var loaded = await db2.EventSeries.FirstAsync(e => e.Id == series.Id);
+
+        loaded.AddCompetitor(NewCompetitor(loaded.Id, "SMITH", "John", 2005));
+        loaded.AddCompetitor(NewCompetitor(loaded.Id, "JONES", "Alice", 2006));
+
+        var act = async () =>
+        {
+            await using var tx = await db2.Database.BeginTransactionAsync();
+            try
+            {
+                await db2.SaveChangesAsync();
+                loaded.AddCompetitor(NewCompetitor(loaded.Id, "SMITH", "John", 2005));
+                await db2.SaveChangesAsync();
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        };
+
+        await act.Should().ThrowAsync<Exception>();
+
+        var options3 = new DbContextOptionsBuilder<OpenSkiTimeDbContext>()
+            .UseSqlite($"Data Source={fx.DbPath}")
+            .Options;
+        await using var db3 = new OpenSkiTimeDbContext(options3);
+        (await db3.Competitors.CountAsync()).Should().Be(competitorsBefore,
+            "rollback should leave the DB unchanged");
+    }
+
+    [Fact]
     public async Task Bib_assignment_persists_correctly()
     {
         await using var fx = new TempSqliteFixture();

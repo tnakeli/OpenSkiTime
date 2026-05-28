@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:OpenSkiTime.Desktop.ViewModels"
+             x:Class="OpenSkiTime.Desktop.Views.CompetitorGridView"
+             x:DataType="vm:CompetitorGridViewModel">
+
+  <DockPanel>
+
+    <!-- Toolbar -->
+    <Border DockPanel.Dock="Top"
+            Background="#f3f4f6"
+            Padding="12,8"
+            BorderBrush="#e5e7eb" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Competitors"
+                   FontSize="16" FontWeight="SemiBold"
+                   VerticalAlignment="Center" />
+        <Button Content="Import…"
+                Command="{Binding RequestImportCommand}"
+                Padding="10,4" />
+        <Button Content="Refresh"
+                Command="{Binding RefreshAsync_Command}"
+                Padding="10,4" />
+        <Separator Width="1" Background="#d1d5db" Margin="4,0" />
+        <TextBlock Text="Filter:" VerticalAlignment="Center" Foreground="#6b7280" />
+        <TextBox Text="{Binding FilterText}"
+                 Watermark="Name, club, nation…"
+                 Width="200" />
+        <Separator Width="1" Background="#d1d5db" Margin="4,0" />
+        <TextBlock Text="Group by:" VerticalAlignment="Center" Foreground="#6b7280" />
+        <ComboBox SelectedItem="{Binding ViewMode}" Width="110">
+          <vm:CompetitorViewMode>Flat</vm:CompetitorViewMode>
+          <vm:CompetitorViewMode>ByClub</vm:CompetitorViewMode>
+          <vm:CompetitorViewMode>ByNation</vm:CompetitorViewMode>
+        </ComboBox>
+        <TextBlock Text="{Binding StatusMessage}"
+                   VerticalAlignment="Center"
+                   Foreground="#6b7280"
+                   Margin="12,0,0,0" />
+      </StackPanel>
+    </Border>
+
+    <!-- Grid -->
+    <DataGrid ItemsSource="{Binding Competitors}"
+              AutoGenerateColumns="False"
+              IsReadOnly="True"
+              GridLinesVisibility="Horizontal"
+              CanUserReorderColumns="True"
+              CanUserResizeColumns="True">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Bib"       Binding="{Binding BibNumber}"   Width="55" />
+        <DataGridTextColumn Header="Last Name" Binding="{Binding LastName}"    Width="150" />
+        <DataGridTextColumn Header="First Name" Binding="{Binding FirstName}" Width="130" />
+        <DataGridTextColumn Header="YOB"       Binding="{Binding YearOfBirth}" Width="60" />
+        <DataGridTextColumn Header="Gender"    Binding="{Binding Gender}"      Width="70" />
+        <DataGridTextColumn Header="Nation"    Binding="{Binding NationCode}"  Width="70" />
+        <DataGridTextColumn Header="Club"      Binding="{Binding ClubName}"    Width="160" />
+        <DataGridTextColumn Header="FIS Code"  Binding="{Binding FisCode}"     Width="90" />
+      </DataGrid.Columns>
+    </DataGrid>
+
+  </DockPanel>
+</UserControl>
