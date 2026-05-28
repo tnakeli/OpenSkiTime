@@ -1,4 +1,6 @@
+using OpenSkiTime.Domain.CategoryRules;
 using OpenSkiTime.Domain.Competitions;
+using OpenSkiTime.Domain.Competitors;
 
 namespace OpenSkiTime.Domain.Series;
 
@@ -9,6 +11,8 @@ namespace OpenSkiTime.Domain.Series;
 public class EventSeries
 {
     private readonly List<Competition> _competitions = [];
+    private readonly List<Competitor> _competitors = [];
+    private readonly List<CategoryRule> _categoryRules = [];
 
     /// <summary>EF Core constructor. Do not call from production code.</summary>
     private EventSeries() { }
@@ -71,6 +75,10 @@ public class EventSeries
     public void IncrementRowVersion() => RowVersion += 1;
 
     public IReadOnlyList<Competition> Competitions => _competitions;
+
+    public IReadOnlyList<Competitor> Competitors => _competitors;
+
+    public IReadOnlyList<CategoryRule> CategoryRules => _categoryRules;
 
     /// <summary>
     /// Factory enforcing the spec's required-field rules for Event Series
@@ -166,6 +174,105 @@ public class EventSeries
         }
 
         return _competitions.Remove(c);
+    }
+
+    // ── Competitor management ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Adds a competitor to this series. Enforces that the competitor belongs
+    /// to this series and that no duplicate (same last name + first name +
+    /// year-of-birth) already exists.
+    /// </summary>
+    public void AddCompetitor(Competitor competitor)
+    {
+        ArgumentNullException.ThrowIfNull(competitor);
+
+        if (competitor.EventSeriesId != Id)
+        {
+            throw new InvalidOperationException(
+                "Competitor's EventSeriesId does not match this Event Series.");
+        }
+
+        var duplicate = _competitors.FirstOrDefault(c =>
+            c.LastName.Value == competitor.LastName.Value &&
+            string.Equals(c.FirstName, competitor.FirstName, StringComparison.OrdinalIgnoreCase) &&
+            c.YearOfBirth == competitor.YearOfBirth);
+
+        if (duplicate is not null)
+        {
+            throw new InvalidOperationException(
+                $"A competitor '{competitor.LastName} {competitor.FirstName}' " +
+                $"born {competitor.YearOfBirth} already exists in this Event Series.");
+        }
+
+        _competitors.Add(competitor);
+    }
+
+    /// <summary>
+    /// Removes a competitor and returns <c>true</c> if found.
+    /// The caller (use case) is responsible for removing orphan Participations.
+    /// </summary>
+    public bool RemoveCompetitor(Guid competitorId)
+    {
+        var c = _competitors.FirstOrDefault(x => x.Id == competitorId);
+        if (c is null)
+        {
+            return false;
+        }
+
+        return _competitors.Remove(c);
+    }
+
+    /// <summary>
+    /// Assigns a bib to a competitor. Enforces uniqueness within the series.
+    /// Pass <c>null</c> to clear the bib.
+    /// </summary>
+    public void AssignBib(Guid competitorId, int? bib)
+    {
+        var competitor = _competitors.FirstOrDefault(c => c.Id == competitorId)
+            ?? throw new InvalidOperationException(
+                $"Competitor {competitorId} not found in this Event Series.");
+
+        if (bib.HasValue)
+        {
+            var conflict = _competitors.FirstOrDefault(c =>
+                c.Id != competitorId && c.BibNumber == bib.Value);
+
+            if (conflict is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Bib {bib.Value} is already assigned to " +
+                    $"'{conflict.LastName} {conflict.FirstName}'.");
+            }
+        }
+
+        competitor.SetBib(bib);
+    }
+
+    // ── Category rule management ──────────────────────────────────────────────
+
+    public void AddCategoryRule(CategoryRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        if (rule.EventSeriesId != Id)
+        {
+            throw new InvalidOperationException(
+                "CategoryRule's EventSeriesId does not match this Event Series.");
+        }
+
+        _categoryRules.Add(rule);
+    }
+
+    public bool RemoveCategoryRule(Guid ruleId)
+    {
+        var r = _categoryRules.FirstOrDefault(x => x.Id == ruleId);
+        if (r is null)
+        {
+            return false;
+        }
+
+        return _categoryRules.Remove(r);
     }
 
     private static void ValidateName(string name)

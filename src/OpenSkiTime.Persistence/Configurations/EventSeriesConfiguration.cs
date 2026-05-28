@@ -26,7 +26,7 @@ internal sealed class EventSeriesConfiguration : IEntityTypeConfiguration<EventS
         // an EF concurrency token (we're a single-process desktop app).
         b.Property(e => e.RowVersion).IsRequired();
 
-        // Owned children
+        // Owned children — cascade so deleting a series removes all children.
         b.HasMany(e => e.Competitions)
             .WithOne()
             .HasForeignKey(c => c.EventSeriesId)
@@ -35,5 +35,23 @@ internal sealed class EventSeriesConfiguration : IEntityTypeConfiguration<EventS
         b.Navigation(e => e.Competitions)
             .UsePropertyAccessMode(PropertyAccessMode.Field)
             .HasField("_competitions");
+
+        b.HasMany(e => e.Competitors)
+            .WithOne()
+            .HasForeignKey("EventSeriesId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.Navigation(e => e.Competitors)
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .HasField("_competitors");
+
+        b.HasMany(e => e.CategoryRules)
+            .WithOne()
+            .HasForeignKey("EventSeriesId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.Navigation(e => e.CategoryRules)
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .HasField("_categoryRules");
     }
 }

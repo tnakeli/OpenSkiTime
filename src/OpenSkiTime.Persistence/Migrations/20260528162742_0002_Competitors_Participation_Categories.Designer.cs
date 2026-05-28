@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OpenSkiTime.Persistence;
 
@@ -10,9 +11,11 @@ using OpenSkiTime.Persistence;
 namespace OpenSkiTime.Persistence.Migrations
 {
     [DbContext(typeof(OpenSkiTimeDbContext))]
-    partial class OpenSkiTimeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260528162742_0002_Competitors_Participation_Categories")]
+    partial class _0002_Competitors_Participation_Categories
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
