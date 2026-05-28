@@ -161,6 +161,8 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     /// </summary>
     public async Task OnCellEditCommittedAsync(CompetitorRowViewModel row, string fieldName)
     {
+        ArgumentNullException.ThrowIfNull(row);
+
         if (row.RowState == RowState.Deleted)
         {
             return;
@@ -184,6 +186,8 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     /// <summary>Saves a single row immediately (used for auto-save on cell exit).</summary>
     public async Task AutoSaveRowAsync(CompetitorRowViewModel row)
     {
+        ArgumentNullException.ThrowIfNull(row);
+
         if (row.RowState == RowState.Unchanged || row.RowState == RowState.Deleted
             || row.RowState == RowState.PasteHighlighted)
         {
@@ -253,6 +257,9 @@ public sealed partial class CompetitorGridViewModel : ViewModelBase
     /// <summary>Save participation for one cell immediately.</summary>
     public async Task SaveParticipationAsync(CompetitorRowViewModel row, ParticipationCellViewModel cell)
     {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(cell);
+
         if (row.RowState == RowState.Added || row.RowState == RowState.Deleted)
         {
             return;
