@@ -9,7 +9,8 @@ namespace OpenSkiTime.Rewrite.Desktop;
 public enum WorkspaceSection { Series, Competitions, Competitors }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
-    ILegacyConversionPreviewer? legacyPreviewer = null) : ObservableObject, IDisposable
+    ILegacyConversionPreviewer? legacyPreviewer = null,
+    IEntryExchange? entryExchange = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private SeriesDetails? _current;
@@ -50,7 +51,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         if (section != WorkspaceSection.Series && !CanEditCompetitions) { return; }
         if (section != ActiveSection && HasDeskDrafts)
         {
-            SetStatus("Save or discard the current competitor row before leaving this view.", error: true);
+            SetStatus(IsImportReviewOpen ? "Commit or close the import review before leaving this view."
+                : "Save or discard the current competitor row before leaving this view.", error: true);
             return;
         }
         ActiveSection = section;
@@ -112,7 +114,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         if (HasDeskDrafts)
         {
-            SetStatus("Save or discard the current competitor row before starting a new series.", error: true);
+            SetStatus(IsImportReviewOpen ? "Commit or close the import review before starting a new series."
+                : "Save or discard the current competitor row before starting a new series.", error: true);
             return;
         }
         IsCreatingNew = true;

@@ -101,7 +101,7 @@ public class SeriesFileTests
         await workspace.CloseAsync();
         await using (var db = new SeriesDbContext(options))
         {
-            Assert.Equal(3, (await db.Database.GetAppliedMigrationsAsync()).Count());
+            Assert.Equal(4, (await db.Database.GetAppliedMigrationsAsync()).Count());
         }
 
         await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
@@ -179,7 +179,42 @@ public class SeriesFileTests
         }
         await using (var upgraded = new SeriesDbContext(options))
         {
-            Assert.Equal(3, (await upgraded.Database.GetAppliedMigrationsAsync()).Count());
+            Assert.Equal(4, (await upgraded.Database.GetAppliedMigrationsAsync()).Count());
+        }
+    }
+
+    [Fact]
+    public async Task M2FileUpgradesToImportReceiptsWithoutChangingEntries()
+    {
+        using var folder = new TestFolder();
+        var path = folder.PathFor("m2.ost");
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        var series = await workspace.CreateAsync(path, s_series);
+        var competition = await workspace.SaveCompetitionAsync(null, s_competition, series.Revision);
+        var athlete = await workspace.SaveDeskRowAsync(null,
+            new CompetitorValues("Laine", "Lea", 2010, null, "FIN", "Club", Gender.Female),
+            Assert.Single(competition.Competitions).Id, true, 19, competition.Revision);
+        await workspace.CloseAsync();
+        var options = new DbContextOptionsBuilder<SeriesDbContext>()
+            .UseSqlite($"Data Source={path};Pooling=False").Options;
+        await using (var db = new SeriesDbContext(options))
+        {
+            await db.GetService<IMigrator>().MigrateAsync("20260926142810_CompetitorDesk");
+            Assert.Equal(3, (await db.Database.GetAppliedMigrationsAsync()).Count());
+        }
+        await workspace.OpenAsync(path);
+        var desk = await workspace.ReadCompetitorDeskAsync();
+        Assert.Equal(athlete.Value.Id, Assert.Single(desk.Competitors).Id);
+        Assert.Equal(19, Assert.Single(desk.Participations).ImportedBib);
+        var backup = Assert.Single(Directory.GetFiles(folder.Root, "*.before-upgrade-*.ost"));
+        await using (var db = new SeriesDbContext(new DbContextOptionsBuilder<SeriesDbContext>()
+            .UseSqlite($"Data Source={backup};Pooling=False").Options))
+        {
+            Assert.Equal(3, (await db.Database.GetAppliedMigrationsAsync()).Count());
+        }
+        await using (var db = new SeriesDbContext(options))
+        {
+            Assert.Equal(4, (await db.Database.GetAppliedMigrationsAsync()).Count());
         }
     }
 

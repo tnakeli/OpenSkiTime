@@ -236,9 +236,9 @@
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Spacing="1">
                 <TextBlock Text="SERIES / REGISTRATION" Classes="eyebrow" />
-                <TextBlock Text="Competitor desk" Classes="sectionTitle" />
+                <TextBlock Text="{Binding CompetitorSectionTitle}" Classes="sectionTitle" />
               </StackPanel>
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="{Binding IsCompetitorDeskVisible}">
                 <Button Content="Add competitor" Command="{Binding AddCompetitorCommand}" Classes="primaryAction" />
                 <Button Content="Save row" Command="{Binding SaveSelectedCompetitorCommand}" Classes="secondaryAction" />
                 <Button Content="Discard draft" Command="{Binding DiscardCompetitorDraftCommand}" Classes="secondaryAction" />
@@ -246,6 +246,7 @@
                 <Button Content="Remove competitor" Command="{Binding RemoveCompetitorCommand}" IsEnabled="{Binding SelectedCompetitorRow}" Classes="dangerAction" />
               </StackPanel>
             </Grid>
+            <StackPanel Spacing="12" IsVisible="{Binding IsCompetitorDeskVisible}">
             <Grid ColumnDefinitions="*,12,170,12,190">
               <TextBox Name="CompetitorFilterInput" Text="{Binding CompetitorFilterText}" Watermark="Filter names, club, code or category" />
               <ComboBox Grid.Column="2" ItemsSource="{Binding CompetitorGroupings}" SelectedItem="{Binding CompetitorGrouping}" />
@@ -255,10 +256,18 @@
                 </ComboBox.ItemTemplate>
               </ComboBox>
             </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="Paste from Excel" Command="{Binding PasteFromExcelCommand}" Classes="secondaryAction" />
+              <Button Content="Copy selection" Command="{Binding CopySelectedCompetitorCommand}" Classes="secondaryAction" />
+              <Button Content="Export selection TSV" Command="{Binding ExportSelectedTsvCommand}" Classes="secondaryAction" />
+              <TextBlock Text="Paste opens a separate review; only Commit writes imported changes."
+                         Classes="supportingText" VerticalAlignment="Center" Margin="8,0,0,0" />
+            </StackPanel>
             <TextBlock Text="Entry and imported bib refer to the selected competition. Birth year and gender suggest a category; drawing race bibs comes later."
                        Classes="supportingText" FontSize="11" />
             <DataGrid Name="CompetitorGrid" Classes="raceGrid" ItemsSource="{Binding VisibleCompetitors}"
-                      SelectedItem="{Binding SelectedCompetitorRow}" AutoGenerateColumns="False" IsReadOnly="False"
+                      SelectedItem="{Binding SelectedCompetitorRow}" SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged"
+                      AutoGenerateColumns="False" IsReadOnly="False"
                       MinHeight="160" MaxHeight="420" RowHeight="34" ColumnHeaderHeight="30"
                       RowEditEnded="CompetitorGrid_RowEditEnded" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
               <DataGrid.Columns>
@@ -325,7 +334,64 @@
                 </StackPanel>
               </StackPanel>
             </Expander>
-            <Expander Header="Legacy conversion preview · read only" HorizontalAlignment="Stretch">
+            </StackPanel>
+            <StackPanel Spacing="12" IsVisible="{Binding IsImportReviewOpen}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{Binding ImportReviewSummary}" Classes="supportingText" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                  <Button Content="Reset review" Command="{Binding ResetImportReviewCommand}" Classes="secondaryAction" />
+                  <Button Content="Close review" Command="{Binding CloseImportReviewCommand}" Classes="secondaryAction" />
+                  <Button Content="Commit import" Command="{Binding CommitImportCommand}" Classes="primaryAction" />
+                </StackPanel>
+              </Grid>
+              <TextBlock Text="Highlighted cells differ from saved data. Edit values here; X enters a race, 0 removes participation, blank preserves it. Use ~ to clear an optional value."
+                         Classes="supportingText" TextWrapping="Wrap" />
+              <DataGrid Name="ImportReviewGrid" Classes="raceGrid" ItemsSource="{Binding ImportReviewRows}"
+                        SelectedItem="{Binding SelectedImportReviewRow}" AutoGenerateColumns="False" IsReadOnly="True"
+                        MinHeight="180" MaxHeight="400" RowHeight="38" ColumnHeaderHeight="30">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="ROW" Binding="{Binding SourceRow}" Width="65" />
+                  <DataGridTextColumn Header="MATCH" Binding="{Binding MatchNote}" Width="78" />
+                  <DataGridTemplateColumn Header="SURNAME" Width="145"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding Surname}" Classes="importCell" Classes.changed="{Binding IsSurnameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="FIRST NAME" Width="115"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding FirstName}" Classes="importCell" Classes.changed="{Binding IsFirstNameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="YEAR" Width="70"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding BirthYearText}" Classes="importCell" Classes.changed="{Binding IsYearChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="GENDER" Width="82"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding GenderText}" Classes="importCell" Classes.changed="{Binding IsGenderChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="NAT" Width="70"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding Nation}" Classes="importCell" Classes.changed="{Binding IsNationChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="CLUB" Width="125"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding Club}" Classes="importCell" Classes.changed="{Binding IsClubChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                  <DataGridTemplateColumn Header="FED ID" Width="95"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding FederationCode}" Classes="importCell" Classes.changed="{Binding IsCodeChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                  <DataGridTextColumn Header="CHANGES" Binding="{Binding Changes}" Width="*" />
+                  <DataGridTemplateColumn Header="REVIEW" Width="80"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding Approved}" IsVisible="{Binding NeedsApproval}" HorizontalAlignment="Center" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                </DataGrid.Columns>
+              </DataGrid>
+              <TextBlock Text="{Binding SelectedImportReviewRow.WarningText}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
+              <Border Classes="subtleSurface" Padding="12,10" IsVisible="{Binding SelectedImportReviewRow}">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="Selected row · competition entries" Classes="fieldLabel" />
+                  <ScrollViewer MaxHeight="170"><ItemsControl ItemsSource="{Binding SelectedImportReviewRow.Entries}">
+                    <ItemsControl.ItemTemplate><DataTemplate>
+                      <Grid ColumnDefinitions="100,*,155,85,100,90" Margin="0,2">
+                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{Binding Current}" Classes="supportingText" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="3" Text="{Binding ParticipationText}" Watermark="X / 0" />
+                        <TextBlock Grid.Column="4" Text="Bib reference" Classes="supportingText" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        <TextBox Grid.Column="5" Text="{Binding BibText}" Watermark="blank" />
+                      </Grid>
+                    </DataTemplate></ItemsControl.ItemTemplate>
+                  </ItemsControl></ScrollViewer>
+                </StackPanel>
+              </Border>
+              <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate>
+                <TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
+              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+              <Expander Header="Pasted source · edit and preview again" HorizontalAlignment="Stretch">
+                <StackPanel Margin="0,8,0,0" Spacing="6">
+                  <TextBox Text="{Binding ImportSourceText}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="90" MaxHeight="160" />
+                  <Button Content="Preview source again" Command="{Binding PreviewImportCommand}" Classes="secondaryAction" HorizontalAlignment="Left" />
+                </StackPanel>
+              </Expander>
+            </StackPanel>
+            <Expander Header="Legacy conversion preview · read only" HorizontalAlignment="Stretch" IsVisible="{Binding IsCompetitorDeskVisible}">
               <StackPanel Margin="0,10,0,2" Spacing="10">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                   <Button Content="Preview legacy file" Command="{Binding PreviewLegacyCommand}" Classes="secondaryAction" />

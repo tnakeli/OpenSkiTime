@@ -36,6 +36,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void CompetitorGrid_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is DataGrid grid && DataContext is MainViewModel viewModel)
+        {
+            viewModel.SetSelectedExportRows(grid.SelectedItems.OfType<CompetitorGridRow>());
+        }
+    }
+
     private void DatePickerButton_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button)
