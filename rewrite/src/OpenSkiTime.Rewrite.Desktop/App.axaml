@@ -5,19 +5,43 @@
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
-    <Style Selector="Button.accent">
-      <Setter Property="Background" Value="#0f766e" />
+    <Style Selector="Button.primaryAction">
+      <Setter Property="Background" Value="#087F75" />
       <Setter Property="Foreground" Value="White" />
-      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="Padding" Value="16,9" />
       <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="MinHeight" Value="38" />
     </Style>
-    <Style Selector="Button.subtle">
-      <Setter Property="Background" Value="#e8eef3" />
-      <Setter Property="Foreground" Value="#183247" />
-      <Setter Property="Padding" Value="12,7" />
+    <Style Selector="Button.secondaryAction">
+      <Setter Property="Background" Value="#E5ECEF" />
+      <Setter Property="Foreground" Value="#244553" />
+      <Setter Property="Padding" Value="14,9" />
+      <Setter Property="MinHeight" Value="38" />
+    </Style>
+    <Style Selector="Button.headerAction">
+      <Setter Property="Background" Value="#E8F1F3" />
+      <Setter Property="Foreground" Value="#173B49" />
+      <Setter Property="Padding" Value="13,8" />
+      <Setter Property="MinHeight" Value="36" />
+    </Style>
+    <Style Selector="StackPanel.field">
+      <Setter Property="Spacing" Value="7" />
+    </Style>
+    <Style Selector="TextBlock.fieldLabel">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#496674" />
     </Style>
     <Style Selector="TextBox">
-      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="MinHeight" Value="38" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="NumericUpDown">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
   </Application.Styles>
 </Application>

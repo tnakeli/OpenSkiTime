@@ -38,19 +38,40 @@ public class DesktopWorkflowTests
             vm.Location = "Levi";
             vm.Organizer = "Test Club";
             vm.Season = "2025/26";
+            vm.StartDateText = "06.05.2026";
+            vm.EndDateText = "07.05.2026";
+            AssertNumericDates(window);
             Click(window, "Create series file");
             await vm.CreateSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.True(File.Exists(file));
             Assert.True(vm.IsOpen);
 
+            vm.StartDateText = "31.02.2026";
+            Click(window, "Save series");
+            await vm.SaveSeriesCommand.ExecutionTask!;
+            Assert.True(vm.IsError);
+            Assert.Equal(new DateOnly(2026, 5, 6), (await workspace.ReadAsync()).Values.StartDate);
+            vm.StartDateText = "6.5.2026";
+            Click(window, "Save series");
+            await vm.SaveSeriesCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal("06.05.2026", vm.StartDateText);
+
             Click(window, "Add competition");
             vm.CompetitionName = "Slalom";
             vm.CompetitionShortLabel = "3.1 SL";
+            AssertNumericDates(window);
+            window.Width = 980;
+            AssertFieldSpacing(window);
+            window.Width = 1280;
+            AssertFieldSpacing(window);
             Click(window, "Save competition");
             await vm.SaveCompetitionCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Single(vm.Competitions);
+            Assert.Equal(new DateOnly(2026, 5, 6), vm.Competitions[0].Values.Date);
+            Assert.Equal(new DateOnly(2026, 5, 7), (await workspace.ReadAsync()).Values.EndDate);
 
             Click(window, "Backup / transfer");
             await vm.BackupCommand.ExecutionTask!;
@@ -63,6 +84,13 @@ public class DesktopWorkflowTests
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Single(vm.Competitions);
             Assert.Equal(backup, vm.FileLabel);
+            var startDateInput = window.FindControl<TextBox>("SeriesStartDateInput");
+            Assert.NotNull(startDateInput);
+            startDateInput.Text = "07.05.2026";
+            Click(window, "Save series");
+            await vm.SaveSeriesCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(new DateOnly(2026, 5, 7), (await workspace.ReadAsync()).Values.StartDate);
             window.Close();
         }
         finally
@@ -78,6 +106,50 @@ public class DesktopWorkflowTests
             .Single(b => Equals(b.Content, label) && b.IsVisible);
         Assert.True(button.IsEnabled, $"{label} was disabled");
         button.Command?.Execute(button.CommandParameter);
+    }
+
+    private static void AssertNumericDates(Window window)
+    {
+        window.UpdateLayout();
+        foreach (var name in new[] { "SeriesStartDateInput", "SeriesEndDateInput", "CompetitionDateInput" })
+        {
+            var input = window.FindControl<TextBox>(name);
+            Assert.NotNull(input);
+            var expected = name switch
+            {
+                "SeriesStartDateInput" => ((MainViewModel)window.DataContext!).StartDateText,
+                "SeriesEndDateInput" => ((MainViewModel)window.DataContext!).EndDateText,
+                _ => ((MainViewModel)window.DataContext!).CompetitionDateText,
+            };
+            Assert.Equal(expected, input.Text);
+        }
+    }
+
+    private static void AssertFieldSpacing(Window window)
+    {
+        window.UpdateLayout();
+        foreach (var field in window.GetVisualDescendants().OfType<StackPanel>()
+            .Where(panel => panel.IsVisible && panel.Classes.Contains("field")))
+        {
+            var children = field.Children.OfType<Control>().ToArray();
+            Assert.Equal(2, children.Length);
+            Assert.True(children[1].Bounds.Top >= children[0].Bounds.Bottom + 4,
+                $"The label touches its input in {children[0].GetType().Name}.");
+            Assert.True(children[1].Bounds.Width >= 100,
+                $"{(children[0] as TextBlock)?.Text} input became too narrow ({children[1].Bounds.Width:0}px).");
+        }
+
+        foreach (var grid in window.GetVisualDescendants().OfType<Grid>())
+        {
+            var fields = grid.Children.OfType<StackPanel>()
+                .Where(panel => panel.IsVisible && panel.Classes.Contains("field"))
+                .OrderBy(panel => panel.Bounds.Left).ToArray();
+            for (var i = 1; i < fields.Length; i++)
+            {
+                Assert.True(fields[i - 1].Bounds.Right + 8 <= fields[i].Bounds.Left,
+                    "Adjacent fields need a visible gutter.");
+            }
+        }
     }
 
     private sealed class FileDialogsStub : IFileDialogs
