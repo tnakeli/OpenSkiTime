@@ -74,6 +74,50 @@ public class DesktopWorkflowTests
             Assert.Equal(new DateOnly(2026, 5, 6), vm.Competitions[0].Values.Date);
             Assert.Equal(new DateOnly(2026, 5, 7), (await workspace.ReadAsync()).Values.EndDate);
 
+            Click(window, "Add competitor");
+            var competitorRow = Assert.IsType<CompetitorGridRow>(vm.SelectedCompetitorRow);
+            competitorRow.Surname = "Mäkelä";
+            competitorRow.FirstName = "Aino";
+            competitorRow.BirthYearText = "2010";
+            competitorRow.GenderText = "Female";
+            competitorRow.Nation = "fin";
+            competitorRow.ImportedBibText = "27";
+            competitorRow.IsParticipating = true;
+            Click(window, "Save row");
+            await vm.SaveSelectedCompetitorCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Same(competitorRow, vm.SelectedCompetitorRow);
+            Assert.Equal("MÄKELÄ", competitorRow.Surname);
+            Assert.Equal(27, Assert.Single((await workspace.ReadCompetitorDeskAsync()).Participations).ImportedBib);
+            competitorRow.Club = "Unsaved draft";
+            var selectedRace = vm.DeskCompetition;
+            vm.DeskCompetition = null;
+            Assert.Same(selectedRace, vm.DeskCompetition);
+            Assert.True(vm.IsError);
+            Click(window, "Discard draft");
+            Assert.Equal(string.Empty, competitorRow.Club);
+            competitorRow.Club = "Club A";
+            Click(window, "Save row");
+            await vm.SaveSelectedCompetitorCommand.ExecutionTask!;
+            Click(window, "Undo saved");
+            await vm.UndoDeskEditCommand.ExecutionTask!;
+            Assert.Same(competitorRow, vm.SelectedCompetitorRow);
+            Assert.Equal(string.Empty, competitorRow.Club);
+            vm.CategoryLabel = "Girls U16";
+            vm.CategoryMinYearText = "2010";
+            vm.CategoryMaxYearText = "2011";
+            vm.CategoryGenderText = "Female";
+            window.GetVisualDescendants().OfType<Expander>()
+                .Single(x => Equals(x.Header, "Category rules · birth-year range and gender")).IsExpanded = true;
+            Click(window, "Save rule");
+            await vm.SaveCategoryRuleCommand.ExecutionTask!;
+            Assert.Equal("Girls U16", Assert.Single(vm.VisibleCompetitors).Category);
+            vm.CompetitorFilterText = "NO MATCH";
+            Assert.Empty(vm.VisibleCompetitors);
+            vm.CompetitorFilterText = "MÄK";
+            Assert.Single(vm.VisibleCompetitors);
+            vm.CompetitorFilterText = string.Empty;
+
             Click(window, "Backup / transfer");
             await vm.BackupCommand.ExecutionTask!;
             Assert.True(File.Exists(backup));
@@ -84,6 +128,8 @@ public class DesktopWorkflowTests
             await vm.OpenSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Single(vm.Competitions);
+            Assert.Equal("MÄKELÄ", Assert.Single(vm.VisibleCompetitors).Surname);
+            Assert.Single(vm.CategoryRules);
             Assert.Equal(backup, vm.FileLabel);
             var startDateInput = window.FindControl<TextBox>("SeriesStartDateInput");
             Assert.NotNull(startDateInput);
@@ -169,6 +215,8 @@ public class DesktopWorkflowTests
         public Task<string?> ChooseNewAsync(string suggestedName) => Task.FromResult<string?>(NewPath);
         public Task<string?> ChooseOpenAsync() => Task.FromResult<string?>(OpenPath);
         public Task<string?> ChooseBackupAsync(string suggestedName) => Task.FromResult<string?>(BackupPath);
+        public Task<string?> ChooseLegacyDatabaseAsync() => Task.FromResult<string?>(null);
         public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(true);
+        public Task<bool> ConfirmRemoveCompetitorAsync(string surname) => Task.FromResult(true);
     }
 }

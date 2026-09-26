@@ -8,6 +8,7 @@ namespace OpenSkiTime.Rewrite.Desktop;
 public sealed class App : Avalonia.Application, IDisposable
 {
     private SeriesWorkspace? _workspace;
+    private MainViewModel? _viewModel;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -17,7 +18,9 @@ public sealed class App : Avalonia.Application, IDisposable
         {
             _workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
             var window = new MainWindow();
-            window.DataContext = new MainViewModel(_workspace, new AvaloniaFileDialogs(window));
+            _viewModel = new MainViewModel(_workspace, new AvaloniaFileDialogs(window),
+                new SqliteLegacyConversionPreviewer());
+            window.DataContext = _viewModel;
             desktop.MainWindow = window;
             desktop.Exit += OnExit;
         }
@@ -35,6 +38,8 @@ public sealed class App : Avalonia.Application, IDisposable
 
     public void Dispose()
     {
+        _viewModel?.Dispose();
+        _viewModel = null;
         if (_workspace is not null)
         {
             _workspace.DisposeAsync().AsTask().GetAwaiter().GetResult();

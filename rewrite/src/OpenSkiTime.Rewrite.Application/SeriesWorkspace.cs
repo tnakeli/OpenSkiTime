@@ -15,6 +15,13 @@ public interface ISeriesFileSession : IAsyncDisposable
     Task<SeriesDetails> SaveSeriesAsync(SeriesValues values, long expectedRevision, CancellationToken ct = default);
     Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision, CancellationToken ct = default);
     Task<SeriesDetails> RemoveCompetitionAsync(Guid id, long expectedRevision, CancellationToken ct = default);
+    Task<CompetitorDeskDetails> ReadCompetitorDeskAsync(CancellationToken ct = default);
+    Task<DeskMutationResult<CompetitorDetails>> SaveDeskRowAsync(Guid? id, CompetitorValues values,
+        Guid? competitionId, bool participates, int? importedBib, long expectedRevision, CancellationToken ct = default);
+    Task<long> RemoveCompetitorAsync(Guid id, long expectedRevision, CancellationToken ct = default);
+    Task<DeskMutationResult<CategoryRuleDetails>> SaveCategoryRuleAsync(Guid? id, CategoryRuleValues values,
+        long expectedRevision, CancellationToken ct = default);
+    Task<long> RemoveCategoryRuleAsync(Guid id, long expectedRevision, CancellationToken ct = default);
     Task BackupAsync(string destinationPath, CancellationToken ct = default);
 }
 
@@ -91,6 +98,18 @@ public sealed class SeriesWorkspace(ISeriesFileStore store) : IAsyncDisposable
         => WithSessionAsync(s => s.SaveCompetitionAsync(id, values, expectedRevision, ct), ct);
     public Task<SeriesDetails> RemoveCompetitionAsync(Guid id, long expectedRevision, CancellationToken ct = default)
         => WithSessionAsync(s => s.RemoveCompetitionAsync(id, expectedRevision, ct), ct);
+    public Task<CompetitorDeskDetails> ReadCompetitorDeskAsync(CancellationToken ct = default)
+        => WithSessionAsync(s => s.ReadCompetitorDeskAsync(ct), ct);
+    public Task<DeskMutationResult<CompetitorDetails>> SaveDeskRowAsync(Guid? id, CompetitorValues values,
+        Guid? competitionId, bool participates, int? importedBib, long expectedRevision, CancellationToken ct = default)
+        => WithSessionAsync(s => s.SaveDeskRowAsync(id, values, competitionId, participates, importedBib, expectedRevision, ct), ct);
+    public Task<long> RemoveCompetitorAsync(Guid id, long expectedRevision, CancellationToken ct = default)
+        => WithSessionAsync(s => s.RemoveCompetitorAsync(id, expectedRevision, ct), ct);
+    public Task<DeskMutationResult<CategoryRuleDetails>> SaveCategoryRuleAsync(Guid? id, CategoryRuleValues values,
+        long expectedRevision, CancellationToken ct = default)
+        => WithSessionAsync(s => s.SaveCategoryRuleAsync(id, values, expectedRevision, ct), ct);
+    public Task<long> RemoveCategoryRuleAsync(Guid id, long expectedRevision, CancellationToken ct = default)
+        => WithSessionAsync(s => s.RemoveCategoryRuleAsync(id, expectedRevision, ct), ct);
     public Task BackupAsync(string destinationPath, CancellationToken ct = default)
         => WithSessionAsync(async s => { await s.BackupAsync(destinationPath, ct); return true; }, ct);
 

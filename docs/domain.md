@@ -46,7 +46,7 @@ These are new requirements/design, not recovered timing behavior:
 | Model | Meaning |
 |---|---|
 | EventSeries / CompetitorRegistration | Weekend and athlete data, referenced without loading one giant aggregate. Points carry discipline, list/season and provenance when supported. |
-| Competition / RaceEntry | Race configuration and entries, eligibility/category and effective bib under the approved policy. Participation is independent of run outcome. |
+| Competition / RaceEntry | Race configuration and entries, eligibility/category and effective bib under the approved policy. Participation is independent of run outcome. Optional imported bib references are competition-specific; Draw later allocates actual bibs. |
 | Run / StartListRevision | Explicit numbered run and ordered entries. Freeze/revise with rule version and inputs; retain draw seed/algorithm version. Never infer later-run order from a mutable grid. |
 | DeviceSession / RawTimingInput | Device/session, exact bytes/chunks, monotonic receive sequence, UTC receipt metadata and transport diagnostics. Append-only; survives parse failure. |
 | TimingObservation | Parsed device time/channel/precision/sequence with raw references. Device details stay outside race rules. Unknown athlete/run association remains unresolved. |

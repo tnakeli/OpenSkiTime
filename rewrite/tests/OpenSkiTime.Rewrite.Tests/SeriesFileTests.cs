@@ -101,7 +101,7 @@ public class SeriesFileTests
         await workspace.CloseAsync();
         await using (var db = new SeriesDbContext(options))
         {
-            Assert.Equal(2, (await db.Database.GetAppliedMigrationsAsync()).Count());
+            Assert.Equal(3, (await db.Database.GetAppliedMigrationsAsync()).Count());
         }
 
         await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
@@ -137,6 +137,50 @@ public class SeriesFileTests
         Assert.Equal(file, workspace.FilePath);
         await Assert.ThrowsAsync<SeriesFileException>(() => workspace.BackupAsync(file));
         Assert.True(File.Exists(file));
+    }
+
+    [Fact]
+    public async Task M1FileUpgradesToCompetitorDeskAfterBackingUpExistingCompetition()
+    {
+        using var folder = new TestFolder();
+        var path = folder.PathFor("m1.ost");
+        var options = new DbContextOptionsBuilder<SeriesDbContext>()
+            .UseSqlite($"Data Source={path};Pooling=False").Options;
+        await using (var db = new SeriesDbContext(options))
+        {
+            await db.GetService<IMigrator>().MigrateAsync("20260926121406_Competitions");
+        }
+        var seriesId = Guid.NewGuid();
+        var competitionId = Guid.NewGuid();
+        await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO Series (SingleRow, FormatId, Id, Name, Location, Organizer, StartDate, EndDate, Nation, Season, Revision)
+                VALUES (1, 'OpenSkiTime.New/1', $series, 'Levi', 'Levi', 'Club', '2026-01-10', '2026-01-11', 'FIN', '2025/26', 1);
+                INSERT INTO Competitions (Id, SeriesId, Name, ShortLabel, ShortLabelKey, Date, Discipline, RaceType, RunCount, IntermediateCount)
+                VALUES ($race, $series, 'Slalom', 'SL', 'SL', '2026-01-10', 'Slalom', 'Club', 2, 0);
+                """;
+            insert.Parameters.AddWithValue("$series", seriesId.ToString().ToUpperInvariant());
+            insert.Parameters.AddWithValue("$race", competitionId.ToString().ToUpperInvariant());
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        var opened = await workspace.OpenAsync(path);
+        Assert.Equal(competitionId, Assert.Single(opened.Competitions).Id);
+        Assert.Empty((await workspace.ReadCompetitorDeskAsync()).Competitors);
+        var backup = Assert.Single(Directory.GetFiles(folder.Root, "*.before-upgrade-*.ost"));
+        await using (var backedUp = new SeriesDbContext(new DbContextOptionsBuilder<SeriesDbContext>()
+            .UseSqlite($"Data Source={backup};Pooling=False").Options))
+        {
+            Assert.Equal(2, (await backedUp.Database.GetAppliedMigrationsAsync()).Count());
+        }
+        await using (var upgraded = new SeriesDbContext(options))
+        {
+            Assert.Equal(3, (await upgraded.Database.GetAppliedMigrationsAsync()).Count());
+        }
     }
 
     private sealed class TestFolder : IDisposable

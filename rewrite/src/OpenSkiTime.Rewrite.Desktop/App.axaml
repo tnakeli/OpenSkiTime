@@ -176,6 +176,10 @@
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       <Setter Property="BorderThickness" Value="3,0,0,0" />
     </Style>
+    <Style Selector="DataGrid.raceGrid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
     <Style Selector="DataGrid.raceGrid DataGridCell:selected">
       <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />

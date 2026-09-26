@@ -236,7 +236,7 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         row.Name, row.Location, row.Organizer, row.StartDate, row.EndDate, row.Nation, row.Season);
 }
 
-internal sealed class SqliteSeriesFileSession(string filePath) : ISeriesFileSession
+internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeriesFileSession
 {
     private readonly SemaphoreSlim _write = new(1, 1);
     private bool _disposed;
