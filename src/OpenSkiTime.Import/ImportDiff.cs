@@ -11,11 +11,13 @@ public sealed class ImportDiff
         IReadOnlyList<NewCompetitorDiff> newCompetitors,
         IReadOnlyList<BibAssignmentDiff> bibAssignments,
         IReadOnlyList<ParticipationDiff> participations,
+        IReadOnlyList<FieldChangeDiff> fieldChanges,
         IReadOnlyList<ImportRowWarning> warnings)
     {
         NewCompetitors = newCompetitors;
         BibAssignments = bibAssignments;
         Participations = participations;
+        FieldChanges = fieldChanges;
         Warnings = warnings;
     }
 
@@ -28,13 +30,17 @@ public sealed class ImportDiff
     /// <summary>Participation flags that will be set (IsParticipating toggled).</summary>
     public IReadOnlyList<ParticipationDiff> Participations { get; }
 
+    /// <summary>Field-level changes for existing competitors (e.g. NationCode FIN→NOR).</summary>
+    public IReadOnlyList<FieldChangeDiff> FieldChanges { get; }
+
     /// <summary>Non-fatal row-level warnings (e.g. unresolved columns, bad year).</summary>
     public IReadOnlyList<ImportRowWarning> Warnings { get; }
 
     public bool HasChanges =>
         NewCompetitors.Count > 0 ||
         BibAssignments.Count > 0 ||
-        Participations.Count > 0;
+        Participations.Count > 0 ||
+        FieldChanges.Count > 0;
 }
 
 public sealed record NewCompetitorDiff(
@@ -61,5 +67,12 @@ public sealed record ParticipationDiff(
     Guid CompetitionId,
     string CompetitionShortLabel,
     bool IsParticipating);
+
+/// <summary>A single field value change for an existing competitor.</summary>
+public sealed record FieldChangeDiff(
+    Guid CompetitorId,
+    string FieldName,
+    string OldValue,
+    string NewValue);
 
 public sealed record ImportRowWarning(int RowIndex, string Message);

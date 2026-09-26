@@ -77,7 +77,8 @@ internal sealed class EventSeriesRepository : IEventSeriesRepository
 
         var competitors = series.Competitors
             .Select(c => new CompetitorRef(c.Id, c.FisCode ?? string.Empty,
-                c.LastName.Value, c.FirstName, c.YearOfBirth))
+                c.LastName.Value, c.FirstName, c.YearOfBirth, c.NationCode, c.ClubName,
+                c.Gender?.ToString()))
             .ToList();
 
         var participations = series.Competitors

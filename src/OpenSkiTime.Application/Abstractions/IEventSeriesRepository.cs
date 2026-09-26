@@ -43,5 +43,5 @@ public sealed record EventSeriesSnapshot(
     IReadOnlyList<ParticipationRef> Participations);
 
 public sealed record CompetitionRef(Guid Id, string ShortLabel, DateOnly Date);
-public sealed record CompetitorRef(Guid Id, string Code, string LastNameUpper, string FirstName, int YearOfBirth);
+public sealed record CompetitorRef(Guid Id, string Code, string LastNameUpper, string FirstName, int YearOfBirth, string? NationCode, string? ClubName, string? Gender);
 public sealed record ParticipationRef(Guid CompetitorId, Guid CompetitionId, bool IsParticipating);

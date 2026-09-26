@@ -54,7 +54,7 @@ public class DiffEngineTests
         var snapshot = new EventSeriesSnapshot(
             SeriesId, 1,
             new List<CompetitionRef> { new(Comp1Id, "3.1 SL", new DateOnly(2026, 1, 10)) },
-            new List<CompetitorRef> { new(existingId, "", "SMITH", "John", 2005) },
+            new List<CompetitorRef> { new(existingId, "", "SMITH", "John", 2005, null, null, null) },
             new List<ParticipationRef>());
 
         var tsv = "LastName\tFirstName\tYOB\tBib\n" +
@@ -75,7 +75,7 @@ public class DiffEngineTests
         var snapshot = new EventSeriesSnapshot(
             SeriesId, 1,
             new List<CompetitionRef> { new(Comp1Id, "3.1 SL", new DateOnly(2026, 1, 10)) },
-            new List<CompetitorRef> { new(existingId, "", "SMITH", "John", 2005) },
+            new List<CompetitorRef> { new(existingId, "", "SMITH", "John", 2005, null, null, null) },
             new List<ParticipationRef>
             {
                 new(existingId, Comp1Id, false),
@@ -125,7 +125,7 @@ public class DiffEngineTests
         var snapshot = new EventSeriesSnapshot(
             SeriesId, 1,
             new List<CompetitionRef> { new(Comp1Id, "3.1 SL", new DateOnly(2026, 1, 10)) },
-            new List<CompetitorRef> { new(existingId, "", "SMITH", "John", 2005) },
+            new List<CompetitorRef> { new(existingId, "", "SMITH", "John", 2005, null, null, null) },
             new List<ParticipationRef> { new(existingId, Comp1Id, true) });
 
         var tsv = "LastName\tFirstName\tYOB\t3.1 SL\nSMITH\tJohn\t2005\tx";

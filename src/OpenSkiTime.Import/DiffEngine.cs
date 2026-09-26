@@ -22,6 +22,7 @@ public static class DiffEngine
         var newCompetitors = new List<NewCompetitorDiff>();
         var bibAssignments = new List<BibAssignmentDiff>();
         var participations = new List<ParticipationDiff>();
+        var fieldChanges = new List<FieldChangeDiff>();
         var warnings = new List<ImportRowWarning>();
 
         // Existing participation index: (competitorId, competitionId) → IsParticipating
@@ -149,9 +150,6 @@ public static class DiffEngine
                 // Existing competitor — check bib assignment.
                 if (bibNumber.HasValue)
                 {
-                    // We don't carry old bib in CompetitorRef (snapshot-only data);
-                    // emit a BibAssignmentDiff regardless — the apply service handles
-                    // idempotency via AssignBibUseCase.
                     bibAssignments.Add(new BibAssignmentDiff(
                         existing.Id,
                         existing.LastNameUpper,
@@ -159,10 +157,67 @@ public static class DiffEngine
                         null,
                         bibNumber.Value));
                 }
+
+                // Check scalar field changes.
+                void CheckField(string fieldName, string? importedRaw, string? currentValue)
+                {
+                    if (string.IsNullOrWhiteSpace(importedRaw))
+                    {
+                        return;
+                    }
+
+                    var imported = importedRaw.Trim();
+                    var current = currentValue ?? string.Empty;
+                    if (!string.Equals(imported, current, StringComparison.OrdinalIgnoreCase))
+                    {
+                        fieldChanges.Add(new FieldChangeDiff(existing.Id, fieldName, current, imported));
+                    }
+                }
+
+                // Only update LastName/FirstName when matched by FIS Code
+                // (to avoid overwriting the key used to find the competitor).
+                bool matchedByFis = !string.IsNullOrWhiteSpace(fisCode)
+                    && string.Equals(existing.Code, fisCode?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                if (matchedByFis)
+                {
+                    CheckField("LastName",  lastNameUpper, existing.LastNameUpper);
+                    CheckField("FirstName", firstName,     existing.FirstName);
+                }
+
+                if (row.TryGet(ImportField.YearOfBirth, out var importedYob)
+                    && int.TryParse(importedYob, out var newYob)
+                    && newYob != existing.YearOfBirth)
+                {
+                    fieldChanges.Add(new FieldChangeDiff(
+                        existing.Id, "YearOfBirth",
+                        existing.YearOfBirth.ToString(CultureInfo.InvariantCulture),
+                        newYob.ToString(CultureInfo.InvariantCulture)));
+                }
+
+                if (row.TryGet(ImportField.Gender, out var importedGender))
+                {
+                    CheckField("Gender", importedGender, existing.Gender);
+                }
+
+                if (row.TryGet(ImportField.FisCode, out var importedFis))
+                {
+                    CheckField("FisCode", importedFis, existing.Code);
+                }
+
+                if (row.TryGet(ImportField.NationCode, out var importedNation))
+                {
+                    CheckField("NationCode", importedNation, existing.NationCode);
+                }
+
+                if (row.TryGet(ImportField.ClubName, out var importedClub))
+                {
+                    CheckField("ClubName", importedClub, existing.ClubName);
+                }
             }
         }
 
-        return new ImportDiff(newCompetitors, bibAssignments, participations, warnings);
+        return new ImportDiff(newCompetitors, bibAssignments, participations, fieldChanges, warnings);
     }
 
 }

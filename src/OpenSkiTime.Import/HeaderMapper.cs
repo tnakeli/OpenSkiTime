@@ -51,6 +51,10 @@ public sealed class HeaderMapper
             ["club name"]   = ImportField.ClubName,
             ["team"]        = ImportField.ClubName,
 
+            ["gender"]      = ImportField.Gender,
+            ["sex"]         = ImportField.Gender,
+            ["sukupuoli"]   = ImportField.Gender,
+
             ["bib"]         = ImportField.BibNumber,
             ["bib number"]  = ImportField.BibNumber,
             ["bibnumber"]   = ImportField.BibNumber,

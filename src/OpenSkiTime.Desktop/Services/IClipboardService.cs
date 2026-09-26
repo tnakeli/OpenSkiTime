@@ -10,6 +10,7 @@ namespace OpenSkiTime.Desktop.Services;
 public interface IClipboardService
 {
     Task<string?> GetTextAsync();
+    Task SetTextAsync(string text);
 }
 
 public sealed class ClipboardService : IClipboardService
@@ -27,5 +28,16 @@ public sealed class ClipboardService : IClipboardService
 
         var clipboard = desktop.MainWindow.Clipboard;
         return clipboard is null ? null : await clipboard.GetTextAsync();
+    }
+
+    public async Task SetTextAsync(string text)
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop ||
+            desktop.MainWindow?.Clipboard is null)
+        {
+            return;
+        }
+
+        await desktop.MainWindow.Clipboard.SetTextAsync(text);
     }
 }
