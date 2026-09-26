@@ -15,6 +15,7 @@ public sealed partial class MainViewModel
     private UndoDeskEdit? _lastDeskEdit;
 
     public ObservableCollection<CompetitorGridRow> VisibleCompetitors { get; } = [];
+    public ObservableCollection<CompetitionEntryChoice> ParticipationChoices { get; } = [];
     public ObservableCollection<CategoryRuleDetails> CategoryRules { get; } = [];
     public ObservableCollection<LegacySeriesPreview> LegacySeriesPreviews { get; } = [];
     public ObservableCollection<string> LegacySourceWarnings { get; } = [];
@@ -36,6 +37,19 @@ public sealed partial class MainViewModel
         }
     }
     [ObservableProperty] private CompetitorGridRow? _selectedCompetitorRow;
+
+    partial void OnSelectedCompetitorRowChanged(CompetitorGridRow? value)
+    {
+        ParticipationChoices.Clear();
+        if (value?.Id is not { } competitorId) { return; }
+        foreach (var competition in Competitions)
+        {
+            var entry = _desk?.Participations.FirstOrDefault(x => x.CompetitorId == competitorId
+                && x.CompetitionId == competition.Id);
+            ParticipationChoices.Add(new CompetitionEntryChoice(competition,
+                entry?.Participates ?? false, entry?.ImportedBib));
+        }
+    }
     [ObservableProperty] private string _competitorFilterText = string.Empty;
     [ObservableProperty] private string _competitorGrouping = "Surname";
     [ObservableProperty] private CategoryRuleDetails? _selectedCategoryRule;
@@ -56,7 +70,8 @@ public sealed partial class MainViewModel
               + $"{value.Entries.Count} entries · {value.Categories.Count} categories · {value.Warnings.Count} warnings";
     }
 
-    private bool HasDeskDrafts => _allCompetitorRows.Any(x => x.HasDraftChanges);
+    private bool HasDeskDrafts => _allCompetitorRows.Any(x => x.HasDraftChanges)
+        || ParticipationChoices.Any(x => x.IsSaving || x.IsParticipating != x.SavedParticipation);
 
     private void EnsureDeskClean()
     {
@@ -116,6 +131,7 @@ public sealed partial class MainViewModel
         _desk = null;
         _allCompetitorRows.Clear();
         VisibleCompetitors.Clear();
+        ParticipationChoices.Clear();
         CategoryRules.Clear();
         SelectedCompetitorRow = null;
         DeskCompetition = null;
@@ -192,6 +208,7 @@ public sealed partial class MainViewModel
                     ? new ParticipationDetails(result.Value.Id, id, row.IsParticipating, bib, null) : null;
                 row.MarkSaved(result.Value, entry);
                 UpdateDeskSnapshot(result.Value, entry, result.Revision);
+                if (previous is null) { OnSelectedCompetitorRowChanged(row); }
                 UpdateIndicators(row);
                 _lastDeskEdit = new UndoDeskEdit(result.Value.Id, previous, raceId, previousParticipation, previousBib);
                 CanUndoDeskEdit = true;
@@ -209,6 +226,49 @@ public sealed partial class MainViewModel
             .Where(x => x.CompetitorId != entry.CompetitorId || x.CompetitionId != entry.CompetitionId)
             .Append(entry).ToArray();
         _desk = _desk with { Revision = revision, Competitors = competitors, Participations = entries };
+        if (SelectedCompetitorRow?.Id == competitor.Id && entry is not null)
+        {
+            var choice = ParticipationChoices.FirstOrDefault(x => x.CompetitionId == entry.CompetitionId);
+            if (choice is not null) { choice.IsParticipating = entry.Participates; choice.MarkSaved(); }
+        }
+    }
+
+    public async Task SaveParticipationChoiceAsync(CompetitionEntryChoice choice)
+    {
+        ArgumentNullException.ThrowIfNull(choice);
+        await _deskRowSaveGate.WaitAsync();
+        try
+        {
+            if (choice.IsParticipating == choice.SavedParticipation) { return; }
+            if (SelectedCompetitorRow is not { Id: { } competitorId, SavedValues: { } values } row
+                || _current is not { } series || row.HasDraftChanges)
+            {
+                choice.Restore();
+                SetStatus("Save the selected competitor row before changing participation.", error: true);
+                return;
+            }
+            choice.IsSaving = true;
+            await GuardAsync(async () =>
+            {
+                var result = await workspace.SaveDeskRowAsync(competitorId, values, choice.CompetitionId,
+                    choice.IsParticipating, choice.ImportedBib, series.Revision);
+                _current = series with { Revision = result.Revision };
+                var entry = new ParticipationDetails(competitorId, choice.CompetitionId,
+                    choice.IsParticipating, choice.ImportedBib, null);
+                UpdateDeskSnapshot(result.Value, entry, result.Revision);
+                if (DeskCompetition?.Id == choice.CompetitionId)
+                {
+                    row.SetEntry(entry);
+                    UpdateIndicators(row);
+                }
+                choice.MarkSaved();
+                _lastDeskEdit = null;
+                CanUndoDeskEdit = false;
+                SetStatus($"Participation saved for {choice.Label}.");
+            });
+            if (IsError) { choice.Restore(); }
+        }
+        finally { choice.IsSaving = false; _deskRowSaveGate.Release(); }
     }
 
     [RelayCommand]

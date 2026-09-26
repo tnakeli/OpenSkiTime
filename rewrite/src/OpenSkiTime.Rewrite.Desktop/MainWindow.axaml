@@ -3,7 +3,7 @@
         x:Class="OpenSkiTime.Rewrite.Desktop.MainWindow" x:CompileBindings="False"
         Title="OpenSkiTime" Width="1280" Height="820" MinWidth="980" MinHeight="680"
         Background="{DynamicResource CanvasBrush}">
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
     <Border Grid.Row="0" Background="{DynamicResource NavyBrush}" Padding="22,11">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
@@ -24,9 +24,18 @@
         </StackPanel>
       </Grid>
     </Border>
-    <ScrollViewer Name="WorkspaceScroll" Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+    <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="22,7">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="1  Event series" Command="{Binding ShowSeriesCommand}" Click="Navigation_Click" Classes="sectionNav" Classes.active="{Binding IsSeriesSection}" />
+        <Button Content="2  Competitions" Command="{Binding ShowCompetitionsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitionsSection}" />
+        <Button Content="3  Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
+        <TextBlock Text="{Binding FileLabel}" MaxWidth="390" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FileLabel}"
+                   Classes="supportingText" VerticalAlignment="Center" Margin="16,0,0,0" />
+      </StackPanel>
+    </Border>
+    <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" MaxWidth="1280" HorizontalAlignment="Center">
-        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}">
+        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSeriesSection}">
           <StackPanel Spacing="14">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Spacing="1">
@@ -95,7 +104,7 @@
             </StackPanel>
           </StackPanel>
         </Border>
-        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding CanEditCompetitions}">
+        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsCompetitionsSection}">
           <StackPanel Spacing="12">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Spacing="1">
@@ -222,7 +231,7 @@
             </Border>
           </StackPanel>
         </Border>
-        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding CanEditCompetitions}">
+        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsCompetitorsSection}">
           <StackPanel Spacing="12">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Spacing="1">
@@ -266,6 +275,29 @@
                 <DataGridTextColumn Header="STATUS" Binding="{Binding Readiness}" IsReadOnly="True" Width="170" />
               </DataGrid.Columns>
             </DataGrid>
+            <Border Classes="subtleSurface" Padding="12,10" IsVisible="{Binding SelectedCompetitorRow}">
+              <StackPanel Spacing="7">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Selected competitor · competitions entered" Classes="fieldLabel" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="Tick to save participation" Classes="supportingText" FontSize="11" />
+                </Grid>
+                <ScrollViewer MaxHeight="144">
+                  <ItemsControl Name="ParticipationChoicesList" ItemsSource="{Binding ParticipationChoices}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid ColumnDefinitions="32,100,*,120" Margin="0,2">
+                          <CheckBox IsChecked="{Binding IsParticipating}" IsEnabled="{Binding !IsSaving}" Click="Participation_Click" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="3" Text="{Binding ImportedBib, StringFormat='Bib ref: {0}'}"
+                                     Classes="supportingText" VerticalAlignment="Center" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </StackPanel>
+            </Border>
             <Expander Header="Category rules · birth-year range and gender" HorizontalAlignment="Stretch">
               <StackPanel Margin="0,10,0,2" Spacing="10">
                 <DataGrid Classes="raceGrid" ItemsSource="{Binding CategoryRules}" SelectedItem="{Binding SelectedCategoryRule}"
@@ -348,7 +380,7 @@
         </Border>
       </StackPanel>
     </ScrollViewer>
-    <Border Grid.Row="2" Classes="statusBar" Classes.error="{Binding IsError}"
+    <Border Grid.Row="3" Classes="statusBar" Classes.error="{Binding IsError}"
             BorderThickness="0,1,0,0" Padding="22,8">
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsError}" />
