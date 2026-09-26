@@ -8,6 +8,7 @@ namespace OpenSkiTime.Rewrite.Desktop;
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs) : ObservableObject
 {
+    private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private SeriesDetails? _current;
     private Guid? _editingCompetitionId;
 
@@ -34,8 +35,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private string _location = string.Empty;
     [ObservableProperty] private string _organizer = string.Empty;
-    [ObservableProperty] private DateTimeOffset? _startDate = DateTimeOffset.Now.Date;
-    [ObservableProperty] private DateTimeOffset? _endDate = DateTimeOffset.Now.Date;
+    [ObservableProperty] private string _startDateText = TodayText();
+    [ObservableProperty] private string _endDateText = TodayText();
     [ObservableProperty] private string _nation = "FIN";
     [ObservableProperty] private string _season = string.Empty;
     [ObservableProperty] private CompetitionDetails? _selectedCompetition;
@@ -43,7 +44,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty] private string _competitionEditorTitle = "Competition";
     [ObservableProperty] private string _competitionName = string.Empty;
     [ObservableProperty] private string _competitionShortLabel = string.Empty;
-    [ObservableProperty] private DateTimeOffset? _competitionDate = DateTimeOffset.Now.Date;
+    [ObservableProperty] private string _competitionDateText = TodayText();
     [ObservableProperty] private Discipline _competitionDiscipline = Discipline.Slalom;
     [ObservableProperty] private RaceType _competitionRaceType = RaceType.Club;
     [ObservableProperty] private int _competitionRunCount = 2;
@@ -63,7 +64,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         CompetitionEditorTitle = "Edit competition";
         CompetitionName = value.Values.Name;
         CompetitionShortLabel = value.Values.ShortLabel;
-        CompetitionDate = AsOffset(value.Values.Date);
+        CompetitionDateText = FormatDate(value.Values.Date);
         CompetitionDiscipline = value.Values.Discipline;
         CompetitionRaceType = value.Values.RaceType;
         CompetitionRunCount = value.Values.RunCount;
@@ -83,7 +84,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         IsCreatingNew = true;
         Name = Location = Organizer = Season = string.Empty;
-        StartDate = EndDate = DateTimeOffset.Now.Date;
+        StartDateText = EndDateText = TodayText();
         Nation = "FIN";
         IsCompetitionEditing = false;
         SetStatus("Enter the weekend details, then choose where to save its file.");
@@ -186,7 +187,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         CompetitionName = CompetitionShortLabel = CompetitionFisCode = CompetitionLocalRaceCode = string.Empty;
         CompetitionCourseName = CompetitionStartAltitude = CompetitionFinishAltitude = string.Empty;
         CompetitionVerticalDrop = CompetitionHomologation = string.Empty;
-        CompetitionDate = StartDate;
+        CompetitionDateText = StartDateText;
         CompetitionDiscipline = Discipline.Slalom;
         CompetitionRaceType = RaceType.Club;
         CompetitionRunCount = 2;
@@ -230,10 +231,10 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     }
 
     private SeriesValues DraftSeries() => new(Name, Location, Organizer,
-        AsDate(StartDate, "Start date"), AsDate(EndDate, "End date"), Nation, Season);
+        AsDate(StartDateText, "Start date"), AsDate(EndDateText, "End date"), Nation, Season);
 
     private CompetitionValues DraftCompetition() => new(
-        CompetitionName, CompetitionShortLabel, AsDate(CompetitionDate, "Competition date"),
+        CompetitionName, CompetitionShortLabel, AsDate(CompetitionDateText, "Competition date"),
         CompetitionDiscipline, CompetitionRaceType, CompetitionRunCount, CompetitionIntermediateCount,
         CompetitionFisCode, CompetitionLocalRaceCode, CompetitionCourseName,
         OptionalInt(CompetitionStartAltitude, "Start altitude"),
@@ -251,12 +252,22 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         return result;
     }
 
-    private static DateOnly AsDate(DateTimeOffset? date, string label)
-        => date is { } value ? DateOnly.FromDateTime(value.Date)
-            : throw new DomainValidationException($"{label} is required.");
+    private static DateOnly AsDate(string text, string label)
+    {
+        if (!DateOnly.TryParseExact(text, s_dateFormats, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var date))
+        {
+            throw new DomainValidationException($"{label} must be a valid date in DD.MM.YYYY format.");
+        }
 
-    private static DateTimeOffset AsOffset(DateOnly date)
-        => new(date.Year, date.Month, date.Day, 0, 0, 0, TimeSpan.Zero);
+        return date;
+    }
+
+    private static string FormatDate(DateOnly date)
+        => date.ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string TodayText()
+        => FormatDate(DateOnly.FromDateTime(DateTime.Today));
 
     private static string SafeFileName(string name)
     {
@@ -270,8 +281,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         Name = details.Values.Name;
         Location = details.Values.Location;
         Organizer = details.Values.Organizer;
-        StartDate = AsOffset(details.Values.StartDate);
-        EndDate = AsOffset(details.Values.EndDate);
+        StartDateText = FormatDate(details.Values.StartDate);
+        EndDateText = FormatDate(details.Values.EndDate);
         Nation = details.Values.Nation;
         Season = details.Values.Season;
         Competitions.Clear();

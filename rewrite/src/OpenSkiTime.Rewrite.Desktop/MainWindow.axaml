@@ -2,116 +2,178 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="OpenSkiTime.Rewrite.Desktop.MainWindow" x:CompileBindings="False"
         Title="OpenSkiTime" Width="1280" Height="820" MinWidth="980" MinHeight="680"
-        Background="#F4F7F9">
+        Background="#F1F5F7">
   <Grid RowDefinitions="Auto,*,Auto">
-    <Border Grid.Row="0" Background="#112D3A" Padding="24,16">
+    <Border Grid.Row="0" Background="#102D3B" Padding="28,16">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel Spacing="2">
-          <TextBlock Text="OpenSkiTime" FontSize="23" FontWeight="Bold" Foreground="White" />
-          <TextBlock Text="RACE OFFICE  ·  LOCAL WORKSPACE" FontSize="10" FontWeight="SemiBold" Foreground="#9CC1C9" />
+          <TextBlock Text="OpenSkiTime" FontSize="24" FontWeight="Bold" Foreground="White" />
+          <TextBlock Text="RACE OFFICE  /  EVENT WORKSPACE" FontSize="10" FontWeight="SemiBold" Foreground="#9BBAC7" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="subtle" />
-          <Button Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="subtle" />
-          <Button Content="Backup / transfer" Command="{Binding BackupCommand}" IsEnabled="{Binding IsOpen}" Classes="subtle" />
-          <Button Content="Close file" Command="{Binding CloseSeriesCommand}" IsEnabled="{Binding IsOpen}" Classes="subtle" />
+          <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="headerAction" />
+          <Button Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="headerAction" />
+          <Button Content="Backup / transfer" Command="{Binding BackupCommand}" IsEnabled="{Binding IsOpen}" Classes="headerAction" />
+          <Button Content="Close file" Command="{Binding CloseSeriesCommand}" IsEnabled="{Binding IsOpen}" Classes="headerAction" />
         </StackPanel>
       </Grid>
     </Border>
     <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Margin="28,24" Spacing="20" MaxWidth="1150" HorizontalAlignment="Center">
-        <Border Background="White" CornerRadius="10" Padding="22" BorderBrush="#DEE7EC" BorderThickness="1">
-          <StackPanel Spacing="17">
+      <StackPanel Margin="28,28,28,32" Spacing="20" MaxWidth="1220" HorizontalAlignment="Center">
+        <Border Background="White" CornerRadius="12" Padding="26" BorderBrush="#DCE6EA" BorderThickness="1">
+          <StackPanel Spacing="22">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Spacing="3">
-                <TextBlock Text="Event series" FontSize="20" FontWeight="SemiBold" Foreground="#153443" />
-                <TextBlock Text="One portable file contains this series and its competitions." FontSize="12" Foreground="#647B88" />
+                <TextBlock Text="Event series" FontSize="21" FontWeight="SemiBold" Foreground="#153442" />
+                <TextBlock Text="Weekend details and the portable event file" FontSize="12" Foreground="#657C89" />
               </StackPanel>
-              <TextBlock Grid.Column="1" Text="{Binding FileLabel}" MaxWidth="410" TextWrapping="Wrap" FontSize="11" Foreground="#647B88" VerticalAlignment="Center" />
+              <Border Grid.Column="1" Background="#F1F6F8" CornerRadius="6" Padding="10,6" VerticalAlignment="Center">
+                <TextBlock Text="{Binding FileLabel}" ToolTip.Tip="{Binding FileLabel}" MaxWidth="380"
+                           TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#536D7A" />
+              </Border>
             </Grid>
-            <Grid ColumnDefinitions="2*,2*,2*,*,*" RowDefinitions="Auto,Auto,Auto,Auto">
-              <TextBlock Grid.Row="0" Grid.Column="0" Text="Series name *" />
-              <TextBlock Grid.Row="0" Grid.Column="1" Text="Location *" />
-              <TextBlock Grid.Row="0" Grid.Column="2" Text="Organizer *" />
-              <TextBlock Grid.Row="0" Grid.Column="3" Text="Nation *" />
-              <TextBlock Grid.Row="0" Grid.Column="4" Text="Season *" />
-              <TextBox Grid.Row="1" Grid.Column="0" Text="{Binding Name}" Watermark="Weekend name" />
-              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Location}" Watermark="Venue" />
-              <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Organizer}" Watermark="Organizing club" />
-              <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Nation}" MaxLength="3" />
-              <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding Season}" Watermark="2026–27" />
-              <TextBlock Grid.Row="2" Grid.Column="0" Text="Start date *" Margin="0,8,0,0" />
-              <TextBlock Grid.Row="2" Grid.Column="1" Text="End date *" Margin="0,8,0,0" />
-              <DatePicker Grid.Row="3" Grid.Column="0" SelectedDate="{Binding StartDate}" />
-              <DatePicker Grid.Row="3" Grid.Column="1" SelectedDate="{Binding EndDate}" />
-            </Grid>
+            <StackPanel Spacing="16">
+              <Grid ColumnDefinitions="2*,16,2*,16,2*,16,130,16,130">
+                <StackPanel Grid.Column="0" Classes="field">
+                  <TextBlock Text="SERIES NAME *" Classes="fieldLabel" />
+                  <TextBox Text="{Binding Name}" Watermark="Weekend name" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Classes="field">
+                  <TextBlock Text="LOCATION *" Classes="fieldLabel" />
+                  <TextBox Text="{Binding Location}" Watermark="Venue" />
+                </StackPanel>
+                <StackPanel Grid.Column="4" Classes="field">
+                  <TextBlock Text="ORGANIZER *" Classes="fieldLabel" />
+                  <TextBox Text="{Binding Organizer}" Watermark="Organizing club" />
+                </StackPanel>
+                <StackPanel Grid.Column="6" Classes="field">
+                  <TextBlock Text="NATION *" Classes="fieldLabel" />
+                  <TextBox Text="{Binding Nation}" MaxLength="3" />
+                </StackPanel>
+                <StackPanel Grid.Column="8" Classes="field">
+                  <TextBlock Text="SEASON *" Classes="fieldLabel" />
+                  <TextBox Text="{Binding Season}" Watermark="2026–27" />
+                </StackPanel>
+              </Grid>
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <StackPanel Classes="field" Width="232">
+                  <TextBlock Text="START DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
+                  <TextBox Name="SeriesStartDateInput" Text="{Binding StartDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                </StackPanel>
+                <StackPanel Classes="field" Width="232">
+                  <TextBlock Text="END DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
+                  <TextBox Name="SeriesEndDateInput" Text="{Binding EndDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Create series file" Command="{Binding CreateSeriesCommand}" IsVisible="{Binding IsCreatingNew}" Classes="accent" />
-              <Button Content="Cancel" Command="{Binding CancelNewSeriesCommand}" IsVisible="{Binding IsCreatingNew}" Classes="subtle" />
-              <Button Content="Save series" Command="{Binding SaveSeriesCommand}" IsVisible="{Binding IsEditingSeries}" Classes="accent" />
+              <Button Content="Create series file" Command="{Binding CreateSeriesCommand}" IsVisible="{Binding IsCreatingNew}" Classes="primaryAction" />
+              <Button Content="Cancel" Command="{Binding CancelNewSeriesCommand}" IsVisible="{Binding IsCreatingNew}" Classes="secondaryAction" />
+              <Button Content="Save series" Command="{Binding SaveSeriesCommand}" IsVisible="{Binding IsEditingSeries}" Classes="primaryAction" />
             </StackPanel>
           </StackPanel>
         </Border>
-        <Border Background="White" CornerRadius="10" Padding="22" BorderBrush="#DEE7EC" BorderThickness="1" IsVisible="{Binding CanEditCompetitions}">
-          <StackPanel Spacing="16">
+        <Border Background="White" CornerRadius="12" Padding="26" BorderBrush="#DCE6EA" BorderThickness="1" IsVisible="{Binding CanEditCompetitions}">
+          <StackPanel Spacing="20">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Spacing="3">
-                <TextBlock Text="Competitions" FontSize="20" FontWeight="SemiBold" Foreground="#153443" />
-                <TextBlock Text="Select a row to edit its details." FontSize="12" Foreground="#647B88" />
+                <TextBlock Text="Competitions" FontSize="21" FontWeight="SemiBold" Foreground="#153442" />
+                <TextBlock Text="Select a competition to edit its details" FontSize="12" Foreground="#657C89" />
               </StackPanel>
-              <Button Grid.Column="1" Content="Add competition" Command="{Binding NewCompetitionCommand}" Classes="accent" />
+              <Button Grid.Column="1" Content="Add competition" Command="{Binding NewCompetitionCommand}" Classes="primaryAction" />
             </Grid>
             <DataGrid ItemsSource="{Binding Competitions}" SelectedItem="{Binding SelectedCompetition}" AutoGenerateColumns="False"
-                      IsReadOnly="True" MinHeight="110" MaxHeight="235" GridLinesVisibility="Horizontal"
-                      HeadersVisibility="Column" BorderBrush="#DEE7EC" BorderThickness="1">
+                      IsReadOnly="True" MinHeight="110" MaxHeight="235" RowHeight="40" ColumnHeaderHeight="38"
+                      GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderBrush="#DCE6EA" BorderThickness="1">
               <DataGrid.Columns>
-                <DataGridTextColumn Header="Date" Binding="{Binding Values.Date}" Width="120" />
+                <DataGridTextColumn Header="Date" Binding="{Binding Values.Date}" Width="130" />
                 <DataGridTextColumn Header="Short label" Binding="{Binding Values.ShortLabel}" Width="150" />
                 <DataGridTextColumn Header="Competition" Binding="{Binding Values.Name}" Width="*" />
                 <DataGridTextColumn Header="Discipline" Binding="{Binding Values.Discipline}" Width="135" />
                 <DataGridTextColumn Header="Runs" Binding="{Binding Values.RunCount}" Width="80" />
               </DataGrid.Columns>
             </DataGrid>
-            <Border Background="#F4F8FA" CornerRadius="8" Padding="16" IsVisible="{Binding IsCompetitionEditing}">
-              <StackPanel Spacing="12">
-                <TextBlock Text="{Binding CompetitionEditorTitle}" FontSize="17" FontWeight="SemiBold" Foreground="#153443" />
-                <Grid ColumnDefinitions="2*,*,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto">
-                  <TextBlock Grid.Row="0" Grid.Column="0" Text="Name *" />
-                  <TextBlock Grid.Row="0" Grid.Column="1" Text="Short label *" />
-                  <TextBlock Grid.Row="0" Grid.Column="2" Text="Date *" />
-                  <TextBlock Grid.Row="0" Grid.Column="3" Text="Discipline" />
-                  <TextBlock Grid.Row="0" Grid.Column="4" Text="Race type" />
-                  <TextBox Grid.Row="1" Grid.Column="0" Text="{Binding CompetitionName}" />
-                  <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CompetitionShortLabel}" />
-                  <DatePicker Grid.Row="1" Grid.Column="2" SelectedDate="{Binding CompetitionDate}" />
-                  <ComboBox Grid.Row="1" Grid.Column="3" ItemsSource="{Binding Disciplines}" SelectedItem="{Binding CompetitionDiscipline}" />
-                  <ComboBox Grid.Row="1" Grid.Column="4" ItemsSource="{Binding RaceTypes}" SelectedItem="{Binding CompetitionRaceType}" />
-                  <TextBlock Grid.Row="2" Grid.Column="0" Text="FIS code" Margin="0,8,0,0" />
-                  <TextBlock Grid.Row="2" Grid.Column="1" Text="Local race code" Margin="0,8,0,0" />
-                  <TextBlock Grid.Row="2" Grid.Column="2" Text="Runs" Margin="0,8,0,0" />
-                  <TextBlock Grid.Row="2" Grid.Column="3" Text="Intermediates" Margin="0,8,0,0" />
-                  <TextBox Grid.Row="3" Grid.Column="0" Text="{Binding CompetitionFisCode}" />
-                  <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding CompetitionLocalRaceCode}" />
-                  <NumericUpDown Grid.Row="3" Grid.Column="2" Value="{Binding CompetitionRunCount}" Minimum="1" Maximum="9" FormatString="0" />
-                  <NumericUpDown Grid.Row="3" Grid.Column="3" Value="{Binding CompetitionIntermediateCount}" Minimum="0" Maximum="20" FormatString="0" />
-                </Grid>
-                <Expander Header="Course and homologation details">
-                  <Grid Margin="0,12,0,0" ColumnDefinitions="2*,*,*,*,2*" RowDefinitions="Auto,Auto">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Course" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Start altitude, m" />
-                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Finish altitude, m" />
-                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Vertical drop, m" />
-                    <TextBlock Grid.Row="0" Grid.Column="4" Text="Homologation" />
-                    <TextBox Grid.Row="1" Grid.Column="0" Text="{Binding CompetitionCourseName}" />
-                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CompetitionStartAltitude}" />
-                    <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding CompetitionFinishAltitude}" />
-                    <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding CompetitionVerticalDrop}" />
-                    <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding CompetitionHomologation}" />
+            <Border Background="#F4F8FA" CornerRadius="9" Padding="22" IsVisible="{Binding IsCompetitionEditing}">
+              <StackPanel Spacing="20">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="{Binding CompetitionEditorTitle}" FontSize="17" FontWeight="SemiBold" Foreground="#153442" />
+                  <TextBlock Text="Race identity and course settings" FontSize="11" Foreground="#657C89" />
+                </StackPanel>
+                <StackPanel Spacing="16">
+                  <Grid ColumnDefinitions="2*,16,*,16,232">
+                    <StackPanel Grid.Column="0" Classes="field">
+                      <TextBlock Text="NAME *" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionName}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Classes="field">
+                      <TextBlock Text="SHORT LABEL *" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionShortLabel}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" Classes="field">
+                      <TextBlock Text="DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
+                      <TextBox Name="CompetitionDateInput" Text="{Binding CompetitionDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                    </StackPanel>
                   </Grid>
+                  <Grid ColumnDefinitions="2*,16,2*,16,120,16,150">
+                    <StackPanel Grid.Column="0" Classes="field">
+                      <TextBlock Text="DISCIPLINE" Classes="fieldLabel" />
+                      <ComboBox ItemsSource="{Binding Disciplines}" SelectedItem="{Binding CompetitionDiscipline}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Classes="field">
+                      <TextBlock Text="RACE TYPE" Classes="fieldLabel" />
+                      <ComboBox ItemsSource="{Binding RaceTypes}" SelectedItem="{Binding CompetitionRaceType}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" Classes="field">
+                      <TextBlock Text="RUNS" Classes="fieldLabel" />
+                      <NumericUpDown Value="{Binding CompetitionRunCount}" Minimum="1" Maximum="9" FormatString="0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="6" Classes="field">
+                      <TextBlock Text="INTERMEDIATES" Classes="fieldLabel" />
+                      <NumericUpDown Value="{Binding CompetitionIntermediateCount}" Minimum="0" Maximum="20" FormatString="0" />
+                    </StackPanel>
+                  </Grid>
+                  <Grid ColumnDefinitions="*,16,*">
+                    <StackPanel Grid.Column="0" Classes="field">
+                      <TextBlock Text="FIS CODE" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionFisCode}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Classes="field">
+                      <TextBlock Text="LOCAL RACE CODE" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionLocalRaceCode}" />
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+                <Expander Header="Course and homologation details" HorizontalAlignment="Stretch">
+                  <StackPanel Margin="0,14,0,4" Spacing="16">
+                    <Grid ColumnDefinitions="2*,16,*">
+                      <StackPanel Grid.Column="0" Classes="field">
+                        <TextBlock Text="COURSE" Classes="fieldLabel" />
+                        <TextBox Text="{Binding CompetitionCourseName}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Classes="field">
+                        <TextBlock Text="HOMOLOGATION" Classes="fieldLabel" />
+                        <TextBox Text="{Binding CompetitionHomologation}" />
+                      </StackPanel>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,16,*,16,*">
+                      <StackPanel Grid.Column="0" Classes="field">
+                        <TextBlock Text="START ALTITUDE · M" Classes="fieldLabel" />
+                        <TextBox Text="{Binding CompetitionStartAltitude}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Classes="field">
+                        <TextBlock Text="FINISH ALTITUDE · M" Classes="fieldLabel" />
+                        <TextBox Text="{Binding CompetitionFinishAltitude}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="4" Classes="field">
+                        <TextBlock Text="VERTICAL DROP · M" Classes="fieldLabel" />
+                        <TextBox Text="{Binding CompetitionVerticalDrop}" />
+                      </StackPanel>
+                    </Grid>
+                  </StackPanel>
                 </Expander>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Button Content="Save competition" Command="{Binding SaveCompetitionCommand}" Classes="accent" />
-                  <Button Content="Remove competition" Command="{Binding RemoveCompetitionCommand}" Classes="subtle" IsVisible="{Binding SelectedCompetition}" />
+                  <Button Content="Save competition" Command="{Binding SaveCompetitionCommand}" Classes="primaryAction" />
+                  <Button Content="Remove competition" Command="{Binding RemoveCompetitionCommand}" Classes="secondaryAction" IsVisible="{Binding SelectedCompetition}" />
                 </StackPanel>
               </StackPanel>
             </Border>
@@ -119,8 +181,8 @@
         </Border>
       </StackPanel>
     </ScrollViewer>
-    <Border Grid.Row="2" Background="#E9F0F3" Padding="24,10">
-      <TextBlock Text="{Binding StatusMessage}" Foreground="#234354" TextWrapping="Wrap" />
+    <Border Grid.Row="2" Background="#E7EFF2" Padding="28,11">
+      <TextBlock Text="{Binding StatusMessage}" Foreground="#294956" TextWrapping="Wrap" />
     </Border>
   </Grid>
 </Window>
