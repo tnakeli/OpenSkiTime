@@ -3,12 +3,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSkiTime.Application.Abstractions;
 using OpenSkiTime.Application.Competitors;
+using OpenSkiTime.Application.Competitions;
 using OpenSkiTime.Application.Participations;
+using OpenSkiTime.Application.Series;
 using OpenSkiTime.Desktop.Services;
 using OpenSkiTime.Desktop.ViewModels;
 using OpenSkiTime.Domain.Common;
 using OpenSkiTime.Domain.Competitions;
 using OpenSkiTime.Domain.Series;
+using OpenSkiTime.Fis;
 using OpenSkiTime.Import;
 using OpenSkiTime.Persistence;
 
@@ -27,6 +30,14 @@ internal sealed class LegacyGridFixture : IAsyncDisposable
         _services = new ServiceCollection()
             .AddOpenSkiTimePersistence(_dbPath)
             .AddSingleton<IClock, SystemClock>()
+            .AddSingleton<IFisCompetitionUpdater, NotImplementedFisUpdater>()
+            .AddScoped<CreateEventSeriesUseCase>()
+            .AddScoped<UpdateEventSeriesUseCase>()
+            .AddScoped<DeleteEventSeriesUseCase>()
+            .AddScoped<AddCompetitionUseCase>()
+            .AddScoped<UpdateCompetitionUseCase>()
+            .AddScoped<RemoveCompetitionUseCase>()
+            .AddScoped<EventSeriesValidationSummaryService>()
             .AddScoped<AddCompetitorUseCase>()
             .AddScoped<EditCompetitorUseCase>()
             .AddScoped<RemoveCompetitorUseCase>()
@@ -37,6 +48,9 @@ internal sealed class LegacyGridFixture : IAsyncDisposable
             .AddSingleton<IClipboardService>(Clipboard)
             .AddSingleton<IDialogService>(Dialogs)
             .AddScoped<CompetitorGridViewModel>()
+            .AddScoped<EventSeriesOverviewViewModel>()
+            .AddTransient<CompetitionEditorViewModel>()
+            .AddScoped<ShellViewModel>()
             .BuildServiceProvider();
         _scope = _services.CreateAsyncScope();
     }
@@ -79,11 +93,13 @@ internal sealed class LegacyGridFixture : IAsyncDisposable
         return Grid.Competitors.Single();
     }
 
-    public async Task<EventSeries> ReopenAsync()
+    public Task<EventSeries> ReopenAsync() => ReopenSeriesAsync(SeriesId);
+
+    public async Task<EventSeries> ReopenSeriesAsync(Guid seriesId)
     {
         await using var reopened = _services.CreateAsyncScope();
         return await reopened.ServiceProvider.GetRequiredService<IEventSeriesRepository>()
-            .GetByIdAsync(SeriesId) ?? throw new InvalidOperationException("Series was not persisted.");
+            .GetByIdAsync(seriesId) ?? throw new InvalidOperationException("Series was not persisted.");
     }
 
     public async ValueTask DisposeAsync()
