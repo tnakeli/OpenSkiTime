@@ -1,6 +1,6 @@
 # OpenSkiTime rewrite plan
 
-Rewrite planning; only M0 is in progress. Work on `rewrite/codex`. Recovered master is fixed at `5505ceb` by `legacy-recovered-pre-codex`; original `legacy-pre-codex` (`8259809`) and the initial M0 snapshot (`6744c1a`) remain available. Historical Feature 001/002 specs and ADRs are evidence, not execution plans. See [architecture.md](architecture.md) and [M0 evidence](m0-evidence.md). M1 has not started.
+Work on `rewrite/codex`. The M1 implementation lives in the separate `rewrite/` solution; see [M1 evidence](m1-evidence.md) for verification and remaining desktop review. Recovered master is fixed at `5505ceb` by `legacy-recovered-pre-codex`; original `legacy-pre-codex` (`8259809`) and the initial M0 snapshot (`6744c1a`) remain available. Historical Feature 001/002 specs and ADRs are evidence, not execution plans. See [architecture.md](architecture.md) and [M0 evidence](m0-evidence.md).
 
 ## Incremental migration
 
@@ -17,7 +17,7 @@ Each milestone produces an executable workflow or meaningful acceptance test, in
 | Milestone | Runnable/testable outcome | Acceptance evidence |
 |---|---|---|
 | M0 — Establish reference | Reproducible recovered-legacy build/test run and synthetic characterization fixtures. | Build/tests, migrations, use cases and headless Avalonia screens/commands verified; native Windows review remains open. Compare Feature 001/002 with actual save/undo/paste/copy behavior and reopened storage. Record defects separately; see evidence document. |
-| M1 — Open a weekend | New desktop app creates/opens/closes one file per series, edits competitions, reopens offline and creates portable backup/transfer copies. | Real migrations on new/upgraded files; series isolation; reopen a transferred copy on another machine; failed-save isolation and storage recovery. Compact shell and theme/DPI review. |
+| M1 — Open a weekend | New desktop app creates/opens/closes one file per series, edits competitions, reopens offline and creates portable backup/transfer copies. | Implemented and covered by SQLite and headless UI tests. Actual second-machine transfer and native theme/DPI/operator review remain open; see [M1 evidence](m1-evidence.md). |
 | M2 — Competitor desk | Keyboard-editable competitor/participation grid, explicit save/undo semantics, bib conflicts, categories, readiness, filtering/grouping and legacy-data conversion preview. | Ownership/FK/uniqueness, category/draft tests; persisted field/participation edits, restored changes, focus preservation and conversion checks. Operator completes representative edits without a manual. |
 | M3 — Import/exchange entries | Paste → editable review → atomic apply; selected-entry clipboard/TSV export. | Actual rollback/cancellation/retry; changed source/series/revision rejection; discard restores the review buffer. Verify every previewed field, bib and participation against reopened data; false entries export blank. Cover duplicate identities, absent/blank/invalid values and quoted round trips. |
 | M4 — Prepare runs | Create runs, review/freeze/revise start lists and print/export approved ordering. | Approved eligibility/draw fixtures; reproducible seed/version; bib versus position separation; no duplicate entry/position; invalid lists blocked. Start with explicit manual ordering if competitive draw rules are undecided. |
