@@ -58,11 +58,17 @@
               <StackPanel Orientation="Horizontal" Spacing="16">
                 <StackPanel Classes="field" Width="232">
                   <TextBlock Text="START DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
-                  <TextBox Name="SeriesStartDateInput" Text="{Binding StartDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                  <Grid ColumnDefinitions="*,8,42">
+                    <TextBox Name="SeriesStartDateInput" Text="{Binding StartDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                    <Button Name="SeriesStartDatePickerButton" Grid.Column="2" Content="▦" ToolTip.Tip="Choose start date" Click="DatePickerButton_Click" />
+                  </Grid>
                 </StackPanel>
                 <StackPanel Classes="field" Width="232">
                   <TextBlock Text="END DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
-                  <TextBox Name="SeriesEndDateInput" Text="{Binding EndDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                  <Grid ColumnDefinitions="*,8,42">
+                    <TextBox Name="SeriesEndDateInput" Text="{Binding EndDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                    <Button Name="SeriesEndDatePickerButton" Grid.Column="2" Content="▦" ToolTip.Tip="Choose end date" Click="DatePickerButton_Click" />
+                  </Grid>
                 </StackPanel>
               </StackPanel>
             </StackPanel>
@@ -111,7 +117,10 @@
                     </StackPanel>
                     <StackPanel Grid.Column="4" Classes="field">
                       <TextBlock Text="DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
-                      <TextBox Name="CompetitionDateInput" Text="{Binding CompetitionDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                      <Grid ColumnDefinitions="*,8,42">
+                        <TextBox Name="CompetitionDateInput" Text="{Binding CompetitionDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
+                        <Button Name="CompetitionDatePickerButton" Grid.Column="2" Content="▦" ToolTip.Tip="Choose competition date" Click="DatePickerButton_Click" />
+                      </Grid>
                     </StackPanel>
                   </Grid>
                   <Grid ColumnDefinitions="2*,16,2*,16,120,16,150">
