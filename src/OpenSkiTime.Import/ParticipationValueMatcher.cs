@@ -9,7 +9,7 @@ namespace OpenSkiTime.Import;
 public static class ParticipationValueMatcher
 {
     private static readonly HashSet<string> TruthyValues =
-        new(StringComparer.OrdinalIgnoreCase) { "yes", "kyllä", "x" };
+        new(StringComparer.OrdinalIgnoreCase) { "yes", "kyllä", "kylla", "x", "joo", "k" };
 
     public static bool IsParticipating(string? value)
     {

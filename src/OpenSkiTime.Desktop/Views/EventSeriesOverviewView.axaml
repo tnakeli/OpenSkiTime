@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:OpenSkiTime.Desktop.ViewModels"
+             xmlns:views="clr-namespace:OpenSkiTime.Desktop.Views"
              xmlns:dom="clr-namespace:OpenSkiTime.Domain.Competitions;assembly=OpenSkiTime.Domain"
              x:Class="OpenSkiTime.Desktop.Views.EventSeriesOverviewView"
              x:DataType="vm:EventSeriesOverviewViewModel">
@@ -35,21 +36,17 @@
       </DockPanel>
     </Border>
 
-    <!-- Detail (right) -->
-    <ScrollViewer Grid.Column="1" Padding="24">
-      <StackPanel Spacing="16" MaxWidth="800">
+    <!-- Detail (right) — Grid rows: fixed form at top, tabs fill rest -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,*">
 
-        <TextBlock FontSize="22" FontWeight="SemiBold">
-          <TextBlock.Text>
-            <MultiBinding StringFormat="{}{0}">
-              <Binding Path="Name" />
-            </MultiBinding>
-          </TextBlock.Text>
-        </TextBlock>
+      <!-- Row 0: series form, always fully visible -->
+      <StackPanel Grid.Row="0" Spacing="10" Margin="24,16,24,8">
 
-        <Border Background="White" Padding="16" CornerRadius="6"
+        <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding Name}" />
+
+        <Border Background="White" Padding="12" CornerRadius="6"
                 BorderBrush="#e5e7eb" BorderThickness="1">
-          <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+          <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
             <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" VerticalAlignment="Center" />
             <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding Name}" />
 
@@ -87,7 +84,6 @@
                      Margin="12,0,0,0" />
         </StackPanel>
 
-        <!-- Validation summary -->
         <Border IsVisible="{Binding ValidationSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                 Background="#fef3c7" Padding="10,6" CornerRadius="4"
                 BorderBrush="#fbbf24" BorderThickness="1">
@@ -96,55 +92,63 @@
                      TextWrapping="Wrap" />
         </Border>
 
-        <!-- Competitions list -->
-        <Border Background="White" Padding="16" CornerRadius="6"
-                BorderBrush="#e5e7eb" BorderThickness="1">
-          <DockPanel LastChildFill="True">
-            <StackPanel DockPanel.Dock="Top"
-                        Orientation="Horizontal"
-                        HorizontalAlignment="Stretch"
-                        Margin="0,0,0,12">
-              <TextBlock Text="Competitions"
-                         FontSize="16" FontWeight="SemiBold"
-                         VerticalAlignment="Center" />
-              <Button Content="+ New Competition"
-                      Command="{Binding NewCompetitionCommand}"
-                      Margin="16,0,0,0" />
-            </StackPanel>
-            <DataGrid ItemsSource="{Binding Competitions}"
-                      AutoGenerateColumns="False"
-                      IsReadOnly="True"
-                      GridLinesVisibility="Horizontal"
-                      MinHeight="200">
-              <DataGrid.Columns>
-                <DataGridTextColumn Header="Date"     Binding="{Binding Date}"        Width="110" />
-                <DataGridTextColumn Header="Label"    Binding="{Binding ShortLabel}"  Width="100" />
-                <DataGridTextColumn Header="Name"     Binding="{Binding Name}"        Width="*" />
-                <DataGridTextColumn Header="Discipline" Binding="{Binding Discipline}" Width="110" />
-                <DataGridTextColumn Header="Type"     Binding="{Binding RaceType}"    Width="110" />
-                <DataGridTextColumn Header="Runs"     Binding="{Binding NumberOfRuns}" Width="60" />
-                <DataGridTextColumn Header="FIS code" Binding="{Binding FisCode}"     Width="100" />
-                <DataGridTemplateColumn Header="" Width="200">
-                  <DataGridTemplateColumn.CellTemplate>
-                    <DataTemplate x:DataType="dom:Competition">
-                      <StackPanel Orientation="Horizontal" Spacing="4">
-                        <Button Content="Edit"
-                                Command="{Binding $parent[DataGrid].((vm:EventSeriesOverviewViewModel)DataContext).EditCompetitionCommand}"
-                                CommandParameter="{Binding}" />
-                        <Button Content="Remove"
-                                Command="{Binding $parent[DataGrid].((vm:EventSeriesOverviewViewModel)DataContext).RemoveCompetitionCommand}"
-                                CommandParameter="{Binding}" />
-                      </StackPanel>
-                    </DataTemplate>
-                  </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-              </DataGrid.Columns>
-            </DataGrid>
-          </DockPanel>
-        </Border>
-
       </StackPanel>
-    </ScrollViewer>
+
+      <!-- Row 1: tabs fill the rest of the window -->
+      <TabControl Grid.Row="1" Margin="12,0,12,8">
+        <TabItem Header="Competitions">
+          <Border Background="White" Padding="8" CornerRadius="6"
+                  BorderBrush="#e5e7eb" BorderThickness="1">
+            <DockPanel LastChildFill="True">
+              <StackPanel DockPanel.Dock="Top"
+                          Orientation="Horizontal"
+                          HorizontalAlignment="Stretch"
+                          Margin="0,0,0,8">
+                <TextBlock Text="Competitions"
+                           FontSize="15" FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+                <Button Content="+ New Competition"
+                        Command="{Binding NewCompetitionCommand}"
+                        Margin="16,0,0,0" />
+              </StackPanel>
+              <DataGrid ItemsSource="{Binding Competitions}"
+                        AutoGenerateColumns="False"
+                        IsReadOnly="True"
+                        GridLinesVisibility="Horizontal">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Date"       Binding="{Binding Date}"         Width="110" />
+                  <DataGridTextColumn Header="Label"      Binding="{Binding ShortLabel}"   Width="100" />
+                  <DataGridTextColumn Header="Name"       Binding="{Binding Name}"         Width="*" />
+                  <DataGridTextColumn Header="Discipline" Binding="{Binding Discipline}"   Width="110" />
+                  <DataGridTextColumn Header="Type"       Binding="{Binding RaceType}"     Width="110" />
+                  <DataGridTextColumn Header="Runs"       Binding="{Binding NumberOfRuns}" Width="60" />
+                  <DataGridTextColumn Header="FIS code"   Binding="{Binding FisCode}"      Width="100" />
+                  <DataGridTemplateColumn Header="" Width="200">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate x:DataType="dom:Competition">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <Button Content="Edit"
+                                  Command="{Binding $parent[DataGrid].((vm:EventSeriesOverviewViewModel)DataContext).EditCompetitionCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="Remove"
+                                  Command="{Binding $parent[DataGrid].((vm:EventSeriesOverviewViewModel)DataContext).RemoveCompetitionCommand}"
+                                  CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
+                </DataGrid.Columns>
+              </DataGrid>
+            </DockPanel>
+          </Border>
+        </TabItem>
+
+        <TabItem Header="Competitors">
+          <views:CompetitorGridView DataContext="{Binding Competitors}" />
+        </TabItem>
+      </TabControl>
+
+    </Grid>
 
   </Grid>
 </UserControl>

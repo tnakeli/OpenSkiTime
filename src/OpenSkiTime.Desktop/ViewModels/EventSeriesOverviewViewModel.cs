@@ -33,7 +33,8 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
         DeleteEventSeriesUseCase deleteUseCase,
         RemoveCompetitionUseCase removeCompetitionUseCase,
         EventSeriesValidationSummaryService validationSummary,
-        IDialogService dialogs)
+        IDialogService dialogs,
+        CompetitorGridViewModel competitorGrid)
     {
         _repository = repository;
         _createUseCase = createUseCase;
@@ -42,7 +43,10 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
         _removeCompetitionUseCase = removeCompetitionUseCase;
         _validationSummary = validationSummary;
         _dialogs = dialogs;
+        Competitors = competitorGrid;
     }
+
+    public CompetitorGridViewModel Competitors { get; }
 
     public ObservableCollection<EventSeriesSummary> SeriesList { get; } = [];
 
@@ -103,6 +107,20 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
 
     public async Task SelectSeriesAsync(Guid id, CancellationToken ct = default)
     {
+        if (Competitors.HasStagedChanges)
+        {
+            var ok = await _dialogs.ConfirmAsync(
+                "Unsaved changes",
+                "The competitor grid has unsaved changes. Discard and switch series?")
+                .ConfigureAwait(true);
+            if (!ok)
+            {
+                return;
+            }
+
+            await Competitors.DiscardAllCommand.ExecuteAsync(null).ConfigureAwait(true);
+        }
+
         var series = await _repository.GetByIdAsync(id, ct).ConfigureAwait(true);
         BindToSeries(series);
         await RefreshValidationSummaryAsync(id, ct).ConfigureAwait(true);
@@ -157,6 +175,8 @@ public sealed partial class EventSeriesOverviewViewModel : ViewModelBase
         {
             Competitions.Add(c);
         }
+
+        _ = Competitors.LoadAsync(series.Id);
     }
 
     [RelayCommand]

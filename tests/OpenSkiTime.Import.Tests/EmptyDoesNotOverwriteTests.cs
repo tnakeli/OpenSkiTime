@@ -9,7 +9,7 @@ public class EmptyDoesNotOverwriteTests
     private static EventSeriesSnapshot SnapshotWithCompetitor(int? bib = 5) =>
         new(SeriesId, 1,
             [new CompetitionRef(CompetitionId, "3.1 SL", new DateOnly(2026, 1, 10))],
-            [new CompetitorRef(CompetitorId, "1234567", "SMITH", "John", 2005)],
+            [new CompetitorRef(CompetitorId, "1234567", "SMITH", "John", 2005, null, null, null)],
             [new ParticipationRef(CompetitorId, CompetitionId, true)]);
 
     private static RawImportRow Row(string last, string first, int yob,
@@ -51,7 +51,7 @@ public class EmptyDoesNotOverwriteTests
     {
         var snapshot = new EventSeriesSnapshot(SeriesId, 1,
             [new CompetitionRef(CompetitionId, "3.1 SL", new DateOnly(2026, 1, 10))],
-            [new CompetitorRef(CompetitorId, "1234567", "SMITH", "John", 2005)],
+            [new CompetitorRef(CompetitorId, "1234567", "SMITH", "John", 2005, null, null, null)],
             [new ParticipationRef(CompetitorId, CompetitionId, false)]);
 
         var row = Row("SMITH", "John", 2005, new Dictionary<string, string>

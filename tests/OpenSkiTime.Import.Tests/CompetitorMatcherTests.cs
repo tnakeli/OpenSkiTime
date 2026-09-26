@@ -3,7 +3,7 @@ namespace OpenSkiTime.Import.Tests;
 public class CompetitorMatcherTests
 {
     private static CompetitorRef Ref(string last, string first, int yob, string code = "")
-        => new(Guid.NewGuid(), code, last, first, yob);
+        => new(Guid.NewGuid(), code, last, first, yob, null, null, null);
 
     [Fact]
     public void Matches_by_fis_code_takes_priority()
