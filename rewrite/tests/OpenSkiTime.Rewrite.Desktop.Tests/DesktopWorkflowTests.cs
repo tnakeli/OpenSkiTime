@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Desktop;
@@ -87,10 +88,18 @@ public class DesktopWorkflowTests
             var startDateInput = window.FindControl<TextBox>("SeriesStartDateInput");
             Assert.NotNull(startDateInput);
             startDateInput.Text = "07.05.2026";
+            var pickerButton = window.FindControl<Button>("SeriesStartDatePickerButton");
+            Assert.NotNull(pickerButton);
+            pickerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var datePicker = Assert.IsType<DatePicker>(Assert.IsType<Flyout>(pickerButton.Flyout).Content);
+            Assert.Equal("MM MMMM", datePicker.MonthFormat);
+            Assert.Equal(new DateTime(2026, 5, 7), datePicker.SelectedDate?.DateTime);
+            datePicker.SelectedDate = new DateTimeOffset(2026, 5, 6, 0, 0, 0, TimeSpan.Zero);
+            Assert.Equal("06.05.2026", startDateInput.Text);
             Click(window, "Save series");
             await vm.SaveSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.Equal(new DateOnly(2026, 5, 7), (await workspace.ReadAsync()).Values.StartDate);
+            Assert.Equal(new DateOnly(2026, 5, 6), (await workspace.ReadAsync()).Values.StartDate);
             window.Close();
         }
         finally
