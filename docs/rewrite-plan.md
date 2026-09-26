@@ -1,6 +1,6 @@
 # OpenSkiTime rewrite plan
 
-Planning only. Work on `rewrite/codex`; `legacy-pre-codex` fixes the reference at `8259809`. This replaces the old feature's implementation sequence for the rewrite while preserving useful requirements. Historical specs/ADRs remain evidence; gaps are in [architecture.md](architecture.md). This review changes no source, project configuration or database.
+Rewrite planning; only M0 is in progress. Work on `rewrite/codex`. Recovered master is fixed at `5505ceb` by `legacy-recovered-pre-codex`; original `legacy-pre-codex` (`8259809`) and the initial M0 snapshot (`6744c1a`) remain available. Historical Feature 001/002 specs and ADRs are evidence, not execution plans. See [architecture.md](architecture.md) and [M0 evidence](m0-evidence.md). M1 has not started.
 
 ## Incremental migration
 
@@ -16,10 +16,10 @@ Each milestone produces an executable workflow or meaningful acceptance test, in
 
 | Milestone | Runnable/testable outcome | Acceptance evidence |
 |---|---|---|
-| M0 — Establish reference | Reproducible legacy build/test run and characterization fixtures from anonymized examples. | Record actual results, defects and screenshots. Exercise create/edit/reopen/import through real use cases; distinguish defects from desired assertions. |
+| M0 — Establish reference | Reproducible recovered-legacy build/test run and synthetic characterization fixtures. | Build/tests, migrations, use cases and grid commands verified; native UI review remains open. Compare Feature 001/002 with actual save/undo/paste/copy behavior and reopened storage. Record defects separately; see evidence document. |
 | M1 — Open a weekend | New desktop app creates/opens/closes one file per series, edits competitions, reopens offline and creates portable backup/transfer copies. | Real migrations on new/upgraded files; series isolation; reopen a transferred copy on another machine; failed-save isolation and storage recovery. Compact shell and theme/DPI review. |
-| M2 — Competitor desk | Keyboard-editable competitor/participation grid, bib conflicts, categories, readiness, filtering/grouping and legacy-data conversion preview. | Ownership/FK/uniqueness, category/draft tests; focus-preserving edits and conversion field/relationship checks. Operator completes representative edits without a manual. |
-| M3 — Import/exchange entries | Paste → editable review → atomic apply; selected-entry clipboard/TSV export. | Actual importer rollback/cancellation/retry; changed text/series/revision rejection; absent/blank/value semantics, duplicate identities, unknown values, combined names, quoted input and export round trip. Retain accepted change summary/source. |
+| M2 — Competitor desk | Keyboard-editable competitor/participation grid, explicit save/undo semantics, bib conflicts, categories, readiness, filtering/grouping and legacy-data conversion preview. | Ownership/FK/uniqueness, category/draft tests; persisted field/participation edits, restored changes, focus preservation and conversion checks. Operator completes representative edits without a manual. |
+| M3 — Import/exchange entries | Paste → editable review → atomic apply; selected-entry clipboard/TSV export. | Actual rollback/cancellation/retry; changed source/series/revision rejection; discard restores the review buffer. Verify every previewed field, bib and participation against reopened data; false entries export blank. Cover duplicate identities, absent/blank/invalid values and quoted round trips. |
 | M4 — Prepare runs | Create runs, review/freeze/revise start lists and print/export approved ordering. | Approved eligibility/draw fixtures; reproducible seed/version; bib versus position separation; no duplicate entry/position; invalid lists blocked. Start with explicit manual ordering if competitive draw rules are undecided. |
 | M5 — Simulated timing | Simulator/replay feeds durable raw capture; operator resolves observations, views run/combined results, corrects and undoes with audit. | Golden fixtures; duplicate/out-of-order/split/malformed input, midnight/reset, ties/statuses, crash/restart/full replay, correction+audit atomicity, disk-full/backlog alarm and blocked unsafe publication. Closing/switching series drains capture safely without cross-file writes. |
 | M6 — ALGE timing | One approved device end-to-end, then the second; Timy3/MT1 order follows available hardware. | Record firmware/interface/protocol; captured trace and real-device disconnect/reconnect/replay tests. Compare device evidence to calculated times. Unknown packets retained; stalled UI cannot stop capture. |
@@ -37,6 +37,7 @@ Use prior targets provisionally: series/three races/import 100 competitors in un
 | Categories/points | Confirm season/age basis, gender eligibility, overlap precedence and relevant point lists/associations. Version classification policies. | M2; points before draw |
 | Hardware | Confirm Timy3/MT1 models, firmware, transport, channel mapping, clock setup, backup timing procedure and protocol/trace access. | M5/M6 |
 | Desktop/support | Validate compact-grid prototype with an operator; agree Windows/laptop/display targets and themes. One portable database per event series is decided. | M1/M2 |
+| Save/undo/clipboard behavior | Recommend autosave for validated manual edits, explicit Apply/Discard for an isolated import preview, and visible durable-save status. Confirm deletion/undo rules, bib visibility and clipboard column order; Feature 002 and later code disagree. | M2/M3 |
 | Recovery/publication | Agree operator attribution, correction permissions, retention/backup destination and acceptable recovery time; prioritize local reports versus FIS/live. | M5/M7 |
 
 ## Completion evidence
