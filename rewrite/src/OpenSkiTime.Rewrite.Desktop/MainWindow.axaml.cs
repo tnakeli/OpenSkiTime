@@ -9,6 +9,15 @@ public partial class MainWindow : Window
 {
     public MainWindow() => AvaloniaXamlLoader.Load(this);
 
+    private async void CompetitorGrid_RowEditEnded(object? sender, DataGridRowEditEndedEventArgs e)
+    {
+        if (e.EditAction == DataGridEditAction.Commit && e.Row.DataContext is CompetitorGridRow row
+            && DataContext is MainViewModel viewModel)
+        {
+            await viewModel.SaveCompetitorRowAsync(row);
+        }
+    }
+
     private void DatePickerButton_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button)

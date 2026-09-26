@@ -6,7 +6,8 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
-public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs) : ObservableObject
+public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
+    ILegacyConversionPreviewer? legacyPreviewer = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private SeriesDetails? _current;
@@ -60,6 +61,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     partial void OnSelectedCompetitionChanged(CompetitionDetails? value)
     {
         if (value is null) { return; }
+        DeskCompetition = value;
         _editingCompetitionId = value.Id;
         CompetitionEditorTitle = "Edit competition";
         CompetitionName = value.Values.Name;
@@ -82,6 +84,11 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [RelayCommand]
     private void NewSeries()
     {
+        if (HasDeskDrafts)
+        {
+            SetStatus("Save or discard the current competitor row before starting a new series.", error: true);
+            return;
+        }
         IsCreatingNew = true;
         Name = Location = Organizer = Season = string.Empty;
         StartDateText = EndDateText = TodayText();
@@ -109,6 +116,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         await GuardAsync(async () =>
         {
+            EnsureDeskClean();
             var values = DraftSeries().Validated();
             var path = await dialogs.ChooseNewAsync(SafeFileName(values.Name));
             if (path is null) { return; }
@@ -116,6 +124,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             Apply(details);
             IsOpen = true;
             IsCreatingNew = false;
+            await LoadCompetitorDeskAsync();
             SetStatus("Event series created and saved.");
         });
     }
@@ -125,12 +134,14 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         await GuardAsync(async () =>
         {
+            EnsureDeskClean();
             var path = await dialogs.ChooseOpenAsync();
             if (path is null) { return; }
             var details = await workspace.OpenAsync(path);
             Apply(details);
             IsOpen = true;
             IsCreatingNew = false;
+            await LoadCompetitorDeskAsync();
             SetStatus("Event series opened.");
         });
     }
@@ -140,12 +151,14 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         await GuardAsync(async () =>
         {
+            EnsureDeskClean();
             await workspace.CloseAsync();
             _current = null;
             Competitions.Clear();
             SelectedCompetition = null;
             IsCompetitionEditing = false;
             IsOpen = false;
+            ClearCompetitorDesk();
             FileLabel = "No series file open";
             NewSeries();
             SetStatus("Event series closed. All completed changes are saved.");
@@ -157,6 +170,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         await GuardAsync(async () =>
         {
+            EnsureDeskClean();
             var revision = _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
             var details = await workspace.SaveSeriesAsync(DraftSeries(), revision);
             Apply(details);
@@ -169,6 +183,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         await GuardAsync(async () =>
         {
+            EnsureDeskClean();
             if (_current is null) { throw new SeriesFileException("Open an event series first."); }
             var path = await dialogs.ChooseBackupAsync(SafeFileName(_current.Values.Name));
             if (path is null) { return; }
@@ -200,6 +215,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         await GuardAsync(async () =>
         {
+            EnsureDeskClean();
             var revision = _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
             var values = DraftCompetition().Validated();
             var details = await workspace.SaveCompetitionAsync(_editingCompetitionId, values, revision);
@@ -208,6 +224,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             SelectedCompetition = id is null
                 ? details.Competitions.Single(c => c.Values.ShortLabel.Equals(values.ShortLabel, StringComparison.OrdinalIgnoreCase))
                 : details.Competitions.FirstOrDefault(c => c.Id == id);
+            await LoadCompetitorDeskAsync();
             SetStatus("Competition saved.");
         });
     }
@@ -217,6 +234,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         await GuardAsync(async () =>
         {
+            EnsureDeskClean();
             if (_current is null || _editingCompetitionId is not { } id)
             {
                 throw new SeriesFileException("Select a saved competition first.");
@@ -226,6 +244,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             Apply(details);
             SelectedCompetition = null;
             IsCompetitionEditing = false;
+            await LoadCompetitorDeskAsync();
             SetStatus("Competition removed.");
         });
     }
@@ -277,6 +296,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     private void Apply(SeriesDetails details)
     {
+        var deskCompetitionId = DeskCompetition?.Id;
         _current = details;
         Name = details.Values.Name;
         Location = details.Values.Location;
@@ -290,6 +310,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             Competitions.Add(competition);
         }
+        DeskCompetition = Competitions.FirstOrDefault(x => x.Id == deskCompetitionId) ?? Competitions.FirstOrDefault();
         FileLabel = workspace.FilePath ?? "No series file open";
     }
 

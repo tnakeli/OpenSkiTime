@@ -8,7 +8,9 @@ public interface IFileDialogs
     Task<string?> ChooseNewAsync(string suggestedName);
     Task<string?> ChooseOpenAsync();
     Task<string?> ChooseBackupAsync(string suggestedName);
+    Task<string?> ChooseLegacyDatabaseAsync();
     Task<bool> ConfirmRemoveAsync(string competitionName);
+    Task<bool> ConfirmRemoveCompetitorAsync(string surname);
 }
 
 public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
@@ -48,15 +50,34 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
         return file?.TryGetLocalPath();
     }
 
-    public async Task<bool> ConfirmRemoveAsync(string competitionName)
+    public async Task<string?> ChooseLegacyDatabaseAsync()
+    {
+        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Preview legacy OpenSkiTime database", AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("SQLite database")
+            {
+                Patterns = ["*.db", "*.sqlite", "*.sqlite3", "*.ost"],
+            }],
+        });
+        return files.Count == 0 ? null : files[0].TryGetLocalPath();
+    }
+
+    public Task<bool> ConfirmRemoveAsync(string competitionName)
+        => ConfirmAsync("competition", competitionName);
+
+    public Task<bool> ConfirmRemoveCompetitorAsync(string surname)
+        => ConfirmAsync("competitor", surname);
+
+    private async Task<bool> ConfirmAsync(string kind, string name)
     {
         var prompt = new Window
         {
-            Title = "Remove competition", Width = 360, Height = 150,
+            Title = $"Remove {kind}", Width = 360, Height = 150,
             CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
         };
-        var remove = new Button { Content = "Remove", Classes = { "accent" } };
-        var cancel = new Button { Content = "Cancel", Classes = { "subtle" } };
+        var remove = new Button { Content = "Remove", Classes = { "dangerAction" } };
+        var cancel = new Button { Content = "Cancel", Classes = { "secondaryAction" } };
         remove.Click += (_, _) => prompt.Close(true);
         cancel.Click += (_, _) => prompt.Close(false);
         prompt.Content = new StackPanel
@@ -64,7 +85,7 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
             Margin = new Avalonia.Thickness(18), Spacing = 16,
             Children =
             {
-                new TextBlock { Text = $"Remove '{competitionName}' from this series?", TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                new TextBlock { Text = $"Remove {kind} '{name}' from this series?", TextWrapping = Avalonia.Media.TextWrapping.Wrap },
                 new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8,
                     HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
                     Children = { cancel, remove } },

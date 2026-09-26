@@ -1,0 +1,11 @@
+# M2 competitor desk evidence
+
+M2 adds a competitor grid to the rewrite desktop application. Competitors belong to one event series; participation and optional imported bib references belong to one competition. A bib is normally blank. Actual bib allocation and FIS/local draw rules belong to Draw in M4. Birth year and gender produce a category suggestion; missing data or overlapping rules remain visible for review. No automatic category assignment is persisted.
+
+Rows save on committed grid-row edits or through **Save row**. **Discard draft** restores the current unsaved row; **Undo saved** reverses the last persisted row edit. Competition/file changes are refused while a row has unsaved changes. Category rules, filtering and grouping are available in the same desk. Readiness is advisory. Competitor removal requires confirmation.
+
+The new SQLite migration adds competitors, participations and category rules. Composite foreign keys keep entries within their series; unique indexes protect federation codes, category labels and competition-specific imported bib references. The M1-to-M2 migration test preserves an existing series and competition. A legacy conversion preview reads a consistent SQLite backup, reports source hash, mapped fields/relationships and warnings, and does not write a converted file or alter the source. Actual conversion/apply is later work.
+
+Release solution build and all rewrite tests passed: 8 core tests and 1 headless desktop workflow test. The tests cover persisted competitor and entry edits after reopening, per-competition bib references/conflicts, category ambiguity, cross-series database rejection, migration, legacy preview/source preservation, UI row selection, draft protection, undo, category filtering and backup/reopen. EF reports no pending model changes after the migration. A headless Avalonia render at 1280 px was inspected for desk spacing, selection and clipping.
+
+The Release desktop executable started on Windows and remained running during a four-second smoke check. Native keyboard/operator review remains open; the headless render does not establish native interaction quality. Legacy conversion is preview-only, and no M3 import/apply or M4 Draw workflow has been implemented. The build still reports existing NU1903 dependency advisories.
