@@ -87,6 +87,10 @@ public class DesktopWorkflowTests
             Assert.Equal(2, vm.Competitions.Count);
 
             Click(window, "3  Competitors");
+            Assert.Contains(window.FindControl<DataGrid>("CompetitorGrid")!.Columns,
+                column => Equals(column.Header, "3.1 SL"));
+            Assert.Contains(window.FindControl<DataGrid>("CompetitorGrid")!.Columns,
+                column => Equals(column.Header, "3.2 GS"));
             Click(window, "Add competitor");
             var competitorRow = Assert.IsType<CompetitorGridRow>(vm.SelectedCompetitorRow);
             competitorRow.Surname = "Mäkelä";
@@ -128,6 +132,13 @@ public class DesktopWorkflowTests
             participationCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True((await workspace.ReadCompetitorDeskAsync()).Participations
                 .Single(x => x.CompetitionId == participation.CompetitionId).Participates);
+            var gridEntry = competitorRow.GridEntries.Single(x => x.Label == "3.1 SL");
+            gridEntry.IsParticipating = false;
+            await vm.SaveGridParticipationAsync(competitorRow, gridEntry);
+            Assert.False((await workspace.ReadCompetitorDeskAsync()).Participations
+                .Single(x => x.CompetitionId == gridEntry.CompetitionId).Participates);
+            gridEntry.IsParticipating = true;
+            await vm.SaveGridParticipationAsync(competitorRow, gridEntry);
             competitorRow.Club = "Unsaved draft";
             Click(window, "2  Competitions");
             Assert.Equal(WorkspaceSection.Competitors, vm.ActiveSection);
@@ -167,25 +178,41 @@ public class DesktopWorkflowTests
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.True(vm.IsImportReviewOpen);
             Assert.Equal(2, vm.ImportReviewRows.Count);
-            Assert.True(window.FindControl<DataGrid>("ImportReviewGrid")!.IsVisible);
+            Assert.True(window.FindControl<DataGrid>("CompetitorGrid")!.IsVisible);
+            Assert.Equal(2, vm.VisibleCompetitors.Count);
+            Assert.All(vm.VisibleCompetitors, row => Assert.True(row.IsImportHighlighted));
+            Assert.Equal("NEW", vm.VisibleCompetitors.Single(x => x.Id is null).ImportMarker);
+            Assert.True(vm.VisibleCompetitors.Single(x => x.Id == competitorRow.Id)
+                .GridEntries.Single(x => x.Label == "3.1 SL").IsParticipating);
+            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
             window.UpdateLayout();
             var changed = vm.ImportReviewRows.Single(x => !x.IsNew);
             Assert.True(changed.IsClubChanged);
-            var clubEditor = window.FindControl<DataGrid>("ImportReviewGrid")!.GetVisualDescendants()
-                .OfType<TextBox>().Single(x => ReferenceEquals(x.DataContext, changed) && x.Text == "Review Club");
-            clubEditor.Text = "Edited in grid";
-            Assert.Equal("Edited in grid", changed.Club);
-            Click(window, "Reset review");
-            await vm.ResetImportReviewCommand.ExecutionTask!;
-            Assert.Equal("Review Club", vm.ImportReviewRows.Single(x => !x.IsNew).Club);
+            var stagedRow = vm.VisibleCompetitors.Single(x => x.Id == changed.CompetitorId);
+            Assert.True(stagedRow.IsClubChanged);
+            stagedRow.Club = "Edited in grid";
+            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
+            Click(window, "Discard import");
+            Assert.False(vm.IsImportReviewOpen);
+            Assert.Single(vm.VisibleCompetitors);
+            Assert.Equal(string.Empty, vm.VisibleCompetitors.Single().Club);
+            Assert.False(vm.VisibleCompetitors.Single().IsImportHighlighted);
+            Click(window, "Paste from Excel");
+            await vm.PasteFromExcelCommand.ExecutionTask!;
+            Assert.Equal("Review Club", vm.VisibleCompetitors.Single(x => x.Id == changed.CompetitorId).Club);
             vm.ImportSourceText += "changed source";
             Click(window, "Commit import");
             await vm.CommitImportCommand.ExecutionTask!;
             Assert.True(vm.IsError);
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
             vm.ImportSourceText = exchange.ClipboardText;
-            vm.ImportReviewRows.Single(x => !x.IsNew).Club = "Edited Club";
+            vm.VisibleCompetitors.Single(x => x.Id == changed.CompetitorId).Club = "Edited Club";
             vm.ImportReviewRows.Single(x => !x.IsNew).Entries.Single(x => x.Label == "3.1 SL").BibText = "12";
+            var stagedNew = vm.VisibleCompetitors.Single(x => x.Id is null);
+            var stagedEntry = stagedNew.GridEntries.Single(x => x.Label == "3.2 GS");
+            stagedEntry.IsParticipating = true;
+            await vm.SaveGridParticipationAsync(stagedNew, stagedEntry);
+            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
             Click(window, "Commit import");
             await vm.CommitImportCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
@@ -197,6 +224,9 @@ public class DesktopWorkflowTests
             Assert.Equal(12, importedDesk.Participations.Single(x =>
                 x.CompetitorId == importedAthlete.Id
                 && x.CompetitionId == vm.Competitions.Single(c => c.Values.ShortLabel == "3.1 SL").Id).ImportedBib);
+            var importedNew = importedDesk.Competitors.Single(x => x.Values.Surname == "LAINE");
+            Assert.True(importedDesk.Participations.Single(x => x.CompetitorId == importedNew.Id
+                && x.CompetitionId == vm.Competitions.Single(c => c.Values.ShortLabel == "3.2 GS").Id).Participates);
             vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "MÄKELÄ");
             window.FindControl<DataGrid>("CompetitorGrid")!.SelectedItems.Add(
                 vm.VisibleCompetitors.Single(x => x.Surname == "LAINE"));
@@ -216,7 +246,7 @@ public class DesktopWorkflowTests
             await vm.CommitImportCommand.ExecutionTask!;
             Assert.True(vm.IsError);
             Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
-            Click(window, "Close review");
+            Click(window, "Discard import");
             Assert.False(vm.IsImportReviewOpen);
 
             Click(window, "Backup / transfer");
@@ -248,6 +278,22 @@ public class DesktopWorkflowTests
             await vm.SaveSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(new DateOnly(2026, 5, 6), (await workspace.ReadAsync()).Values.StartDate);
+            Click(window, "3  Competitors");
+            vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "LAINE");
+            Click(window, "Remove competitor");
+            await vm.RemoveCompetitorCommand.ExecutionTask!;
+            Assert.True(vm.SelectedCompetitorRow.IsPendingDelete);
+            Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
+            var deletion = vm.DeskChangeLog.Single(x => x.Kind == DeskChangeKind.Delete);
+            vm.RestoreDeskChangeCommand.Execute(deletion);
+            await vm.RestoreDeskChangeCommand.ExecutionTask!;
+            Assert.False(vm.SelectedCompetitorRow.IsPendingDelete);
+            Click(window, "Remove competitor");
+            await vm.RemoveCompetitorCommand.ExecutionTask!;
+            Click(window, "Commit Changes");
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
+            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
+            Assert.False(vm.HasDeskChangeLog);
             window.Close();
         }
         finally
