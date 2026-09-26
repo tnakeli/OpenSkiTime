@@ -2,38 +2,48 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="OpenSkiTime.Rewrite.Desktop.MainWindow" x:CompileBindings="False"
         Title="OpenSkiTime" Width="1280" Height="820" MinWidth="980" MinHeight="680"
-        Background="#F1F5F7">
+        Background="{DynamicResource CanvasBrush}">
   <Grid RowDefinitions="Auto,*,Auto">
-    <Border Grid.Row="0" Background="#102D3B" Padding="28,16">
+    <Border Grid.Row="0" Background="{DynamicResource NavyBrush}" Padding="22,11">
       <Grid ColumnDefinitions="*,Auto">
-        <StackPanel Spacing="2">
-          <TextBlock Text="OpenSkiTime" FontSize="24" FontWeight="Bold" Foreground="White" />
-          <TextBlock Text="RACE OFFICE  /  EVENT WORKSPACE" FontSize="10" FontWeight="SemiBold" Foreground="#9BBAC7" />
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Border Width="30" Height="30" Background="{DynamicResource AccentBrush}" CornerRadius="4">
+            <TextBlock Text="O" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Foreground="White" />
+          </Border>
+          <StackPanel Spacing="0" VerticalAlignment="Center">
+            <TextBlock Text="OpenSkiTime" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" Foreground="White" />
+            <TextBlock Text="RACE OFFICE  /  LOCAL WORKSPACE" FontSize="{DynamicResource MetaSize}" FontWeight="SemiBold" Foreground="#9CC0C7" />
+          </StackPanel>
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="headerAction" />
-          <Button Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="headerAction" />
-          <Button Content="Backup / transfer" Command="{Binding BackupCommand}" IsEnabled="{Binding IsOpen}" Classes="headerAction" />
-          <Button Content="Close file" Command="{Binding CloseSeriesCommand}" IsEnabled="{Binding IsOpen}" Classes="headerAction" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="toolbarAction" />
+          <Button Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="toolbarAction" />
+          <Border Width="1" Background="#42606A" Margin="4,6" />
+          <Button Content="Backup / transfer" Command="{Binding BackupCommand}" IsEnabled="{Binding IsOpen}" Classes="toolbarAction" />
+          <Button Content="Close file" Command="{Binding CloseSeriesCommand}" IsEnabled="{Binding IsOpen}" Classes="toolbarAction" />
         </StackPanel>
       </Grid>
     </Border>
     <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Margin="28,28,28,32" Spacing="20" MaxWidth="1220" HorizontalAlignment="Center">
-        <Border Background="White" CornerRadius="12" Padding="26" BorderBrush="#DCE6EA" BorderThickness="1">
-          <StackPanel Spacing="22">
+      <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" MaxWidth="1280" HorizontalAlignment="Center">
+        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}">
+          <StackPanel Spacing="14">
             <Grid ColumnDefinitions="*,Auto">
-              <StackPanel Spacing="3">
-                <TextBlock Text="Event series" FontSize="21" FontWeight="SemiBold" Foreground="#153442" />
-                <TextBlock Text="Weekend details and the portable event file" FontSize="12" Foreground="#657C89" />
+              <StackPanel Spacing="1">
+                <TextBlock Text="WORKSPACE / SERIES" Classes="eyebrow" />
+                <TextBlock Text="Event series" Classes="sectionTitle" />
               </StackPanel>
-              <Border Grid.Column="1" Background="#F1F6F8" CornerRadius="6" Padding="10,6" VerticalAlignment="Center">
-                <TextBlock Text="{Binding FileLabel}" ToolTip.Tip="{Binding FileLabel}" MaxWidth="380"
-                           TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#536D7A" />
+              <Border Grid.Column="1" Classes="subtleSurface" Padding="10,5" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding IsOpen}" />
+                  <TextBlock Text="EVENT FILE" Classes="eyebrow" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding FileLabel}" ToolTip.Tip="{Binding FileLabel}" MaxWidth="390"
+                             TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                </StackPanel>
               </Border>
             </Grid>
-            <StackPanel Spacing="16">
-              <Grid ColumnDefinitions="2*,16,2*,16,2*,16,130,16,130">
+            <StackPanel Spacing="12">
+              <Grid ColumnDefinitions="2*,12,2*,12,2*,12,100,12,110">
                 <StackPanel Grid.Column="0" Classes="field">
                   <TextBlock Text="SERIES NAME *" Classes="fieldLabel" />
                   <TextBox Text="{Binding Name}" Watermark="Weekend name" />
@@ -55,19 +65,25 @@
                   <TextBox Text="{Binding Season}" Watermark="2026–27" />
                 </StackPanel>
               </Grid>
-              <StackPanel Orientation="Horizontal" Spacing="16">
+              <StackPanel Orientation="Horizontal" Spacing="12">
                 <StackPanel Classes="field" Width="232">
                   <TextBlock Text="START DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
                   <Grid ColumnDefinitions="*,8,42">
                     <TextBox Name="SeriesStartDateInput" Text="{Binding StartDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
-                    <Button Name="SeriesStartDatePickerButton" Grid.Column="2" Content="▦" ToolTip.Tip="Choose start date" Click="DatePickerButton_Click" />
+                    <Button Name="SeriesStartDatePickerButton" Grid.Column="2" ToolTip.Tip="Choose start date" Click="DatePickerButton_Click" Classes="dateAction">
+                      <Path Width="15" Height="15" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.5"
+                            Data="M2,4 L13,4 13,13 2,13 Z M2,7 L13,7 M5,2 L5,5 M10,2 L10,5" />
+                    </Button>
                   </Grid>
                 </StackPanel>
                 <StackPanel Classes="field" Width="232">
                   <TextBlock Text="END DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
                   <Grid ColumnDefinitions="*,8,42">
                     <TextBox Name="SeriesEndDateInput" Text="{Binding EndDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
-                    <Button Name="SeriesEndDatePickerButton" Grid.Column="2" Content="▦" ToolTip.Tip="Choose end date" Click="DatePickerButton_Click" />
+                    <Button Name="SeriesEndDatePickerButton" Grid.Column="2" ToolTip.Tip="Choose end date" Click="DatePickerButton_Click" Classes="dateAction">
+                      <Path Width="15" Height="15" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.5"
+                            Data="M2,4 L13,4 13,13 2,13 Z M2,7 L13,7 M5,2 L5,5 M10,2 L10,5" />
+                    </Button>
                   </Grid>
                 </StackPanel>
               </StackPanel>
@@ -79,34 +95,49 @@
             </StackPanel>
           </StackPanel>
         </Border>
-        <Border Background="White" CornerRadius="12" Padding="26" BorderBrush="#DCE6EA" BorderThickness="1" IsVisible="{Binding CanEditCompetitions}">
-          <StackPanel Spacing="20">
+        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding CanEditCompetitions}">
+          <StackPanel Spacing="12">
             <Grid ColumnDefinitions="*,Auto">
-              <StackPanel Spacing="3">
-                <TextBlock Text="Competitions" FontSize="21" FontWeight="SemiBold" Foreground="#153442" />
-                <TextBlock Text="Select a competition to edit its details" FontSize="12" Foreground="#657C89" />
+              <StackPanel Spacing="1">
+                <TextBlock Text="SERIES / RACES" Classes="eyebrow" />
+                <TextBlock Text="Competitions" Classes="sectionTitle" />
               </StackPanel>
               <Button Grid.Column="1" Content="Add competition" Command="{Binding NewCompetitionCommand}" Classes="primaryAction" />
             </Grid>
-            <DataGrid ItemsSource="{Binding Competitions}" SelectedItem="{Binding SelectedCompetition}" AutoGenerateColumns="False"
-                      IsReadOnly="True" MinHeight="110" MaxHeight="235" RowHeight="40" ColumnHeaderHeight="38"
-                      GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderBrush="#DCE6EA" BorderThickness="1">
+            <DataGrid Classes="raceGrid" ItemsSource="{Binding Competitions}" SelectedItem="{Binding SelectedCompetition}" AutoGenerateColumns="False"
+                      IsReadOnly="True" MinHeight="86" MaxHeight="210" RowHeight="36" ColumnHeaderHeight="30"
+                      GridLinesVisibility="Horizontal" HeadersVisibility="Column" HorizontalGridLinesBrush="{DynamicResource LineBrush}">
+              <DataGrid.Resources>
+                <StaticResource x:Key="DataGridRowSelectedBackgroundBrush" ResourceKey="SelectionBrush" />
+                <StaticResource x:Key="DataGridRowSelectedUnfocusedBackgroundBrush" ResourceKey="SelectionBrush" />
+                <StaticResource x:Key="DataGridRowSelectedHoveredBackgroundBrush" ResourceKey="SelectionBrush" />
+                <StaticResource x:Key="DataGridRowSelectedHoveredUnfocusedBackgroundBrush" ResourceKey="SelectionBrush" />
+                <x:Double x:Key="DataGridRowSelectedBackgroundOpacity">1</x:Double>
+                <x:Double x:Key="DataGridRowSelectedUnfocusedBackgroundOpacity">1</x:Double>
+                <x:Double x:Key="DataGridRowSelectedHoveredBackgroundOpacity">1</x:Double>
+                <x:Double x:Key="DataGridRowSelectedHoveredUnfocusedBackgroundOpacity">1</x:Double>
+              </DataGrid.Resources>
               <DataGrid.Columns>
-                <DataGridTextColumn Header="Date" Binding="{Binding Values.Date}" Width="130" />
-                <DataGridTextColumn Header="Short label" Binding="{Binding Values.ShortLabel}" Width="150" />
-                <DataGridTextColumn Header="Competition" Binding="{Binding Values.Name}" Width="*" />
-                <DataGridTextColumn Header="Discipline" Binding="{Binding Values.Discipline}" Width="135" />
-                <DataGridTextColumn Header="Runs" Binding="{Binding Values.RunCount}" Width="80" />
+                <DataGridTextColumn Header="DATE" Binding="{Binding Values.Date}" Width="130" />
+                <DataGridTextColumn Header="ID" Binding="{Binding Values.ShortLabel}" Width="150" />
+                <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.Name}" Width="*" />
+                <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Values.Discipline}" Width="135" />
+                <DataGridTextColumn Header="RUNS" Binding="{Binding Values.RunCount}" Width="80" />
               </DataGrid.Columns>
             </DataGrid>
-            <Border Background="#F4F8FA" CornerRadius="9" Padding="22" IsVisible="{Binding IsCompetitionEditing}">
-              <StackPanel Spacing="20">
-                <StackPanel Spacing="3">
-                  <TextBlock Text="{Binding CompetitionEditorTitle}" FontSize="17" FontWeight="SemiBold" Foreground="#153442" />
-                  <TextBlock Text="Race identity and course settings" FontSize="11" Foreground="#657C89" />
-                </StackPanel>
-                <StackPanel Spacing="16">
-                  <Grid ColumnDefinitions="2*,16,*,16,232">
+            <Border Classes="subtleSurface" Padding="16,13" IsVisible="{Binding IsCompetitionEditing}">
+              <StackPanel Spacing="14">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="1">
+                    <TextBlock Text="ACTIVE RACE / DETAILS" Classes="eyebrow" />
+                    <TextBlock Text="{Binding CompetitionEditorTitle}" Classes="sectionTitle" />
+                  </StackPanel>
+                  <Border Grid.Column="1" Background="{DynamicResource AccentTintBrush}" CornerRadius="3" Padding="8,4" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CompetitionShortLabel}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                  </Border>
+                </Grid>
+                <StackPanel Spacing="12">
+                  <Grid ColumnDefinitions="2*,12,*,12,232">
                     <StackPanel Grid.Column="0" Classes="field">
                       <TextBlock Text="NAME *" Classes="fieldLabel" />
                       <TextBox Text="{Binding CompetitionName}" />
@@ -119,11 +150,14 @@
                       <TextBlock Text="DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
                       <Grid ColumnDefinitions="*,8,42">
                         <TextBox Name="CompetitionDateInput" Text="{Binding CompetitionDateText}" Watermark="dd.mm.yyyy" MaxLength="10" />
-                        <Button Name="CompetitionDatePickerButton" Grid.Column="2" Content="▦" ToolTip.Tip="Choose competition date" Click="DatePickerButton_Click" />
+                        <Button Name="CompetitionDatePickerButton" Grid.Column="2" ToolTip.Tip="Choose competition date" Click="DatePickerButton_Click" Classes="dateAction">
+                          <Path Width="15" Height="15" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.5"
+                                Data="M2,4 L13,4 13,13 2,13 Z M2,7 L13,7 M5,2 L5,5 M10,2 L10,5" />
+                        </Button>
                       </Grid>
                     </StackPanel>
                   </Grid>
-                  <Grid ColumnDefinitions="2*,16,2*,16,120,16,150">
+                  <Grid ColumnDefinitions="2*,12,2*,12,120,12,150">
                     <StackPanel Grid.Column="0" Classes="field">
                       <TextBlock Text="DISCIPLINE" Classes="fieldLabel" />
                       <ComboBox ItemsSource="{Binding Disciplines}" SelectedItem="{Binding CompetitionDiscipline}" />
@@ -141,7 +175,7 @@
                       <NumericUpDown Value="{Binding CompetitionIntermediateCount}" Minimum="0" Maximum="20" FormatString="0" />
                     </StackPanel>
                   </Grid>
-                  <Grid ColumnDefinitions="*,16,*">
+                  <Grid ColumnDefinitions="*,12,*">
                     <StackPanel Grid.Column="0" Classes="field">
                       <TextBlock Text="FIS CODE" Classes="fieldLabel" />
                       <TextBox Text="{Binding CompetitionFisCode}" />
@@ -153,8 +187,8 @@
                   </Grid>
                 </StackPanel>
                 <Expander Header="Course and homologation details" HorizontalAlignment="Stretch">
-                  <StackPanel Margin="0,14,0,4" Spacing="16">
-                    <Grid ColumnDefinitions="2*,16,*">
+                  <StackPanel Margin="0,10,0,2" Spacing="12">
+                    <Grid ColumnDefinitions="2*,12,*">
                       <StackPanel Grid.Column="0" Classes="field">
                         <TextBlock Text="COURSE" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionCourseName}" />
@@ -164,7 +198,7 @@
                         <TextBox Text="{Binding CompetitionHomologation}" />
                       </StackPanel>
                     </Grid>
-                    <Grid ColumnDefinitions="*,16,*,16,*">
+                    <Grid ColumnDefinitions="*,12,*,12,*">
                       <StackPanel Grid.Column="0" Classes="field">
                         <TextBlock Text="START ALTITUDE · M" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionStartAltitude}" />
@@ -182,7 +216,7 @@
                 </Expander>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <Button Content="Save competition" Command="{Binding SaveCompetitionCommand}" Classes="primaryAction" />
-                  <Button Content="Remove competition" Command="{Binding RemoveCompetitionCommand}" Classes="secondaryAction" IsVisible="{Binding SelectedCompetition}" />
+                  <Button Content="Remove competition" Command="{Binding RemoveCompetitionCommand}" Classes="dangerAction" IsVisible="{Binding SelectedCompetition}" />
                 </StackPanel>
               </StackPanel>
             </Border>
@@ -190,8 +224,14 @@
         </Border>
       </StackPanel>
     </ScrollViewer>
-    <Border Grid.Row="2" Background="#E7EFF2" Padding="28,11">
-      <TextBlock Text="{Binding StatusMessage}" Foreground="#294956" TextWrapping="Wrap" />
+    <Border Grid.Row="2" Classes="statusBar" Classes.error="{Binding IsError}"
+            BorderThickness="0,1,0,0" Padding="22,8">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsError}" />
+        <TextBlock Text="!" FontWeight="Bold" Foreground="{DynamicResource ErrorBrush}" IsVisible="{Binding IsError}" />
+        <TextBlock Text="{Binding StatusMessage}" Classes="statusText" Classes.error="{Binding IsError}"
+                   FontSize="11" TextWrapping="Wrap" />
+      </StackPanel>
     </Border>
   </Grid>
 </Window>
