@@ -6,6 +6,8 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
+public enum WorkspaceSection { Series, Competitions, Competitors }
+
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     ILegacyConversionPreviewer? legacyPreviewer = null) : ObservableObject, IDisposable
 {
@@ -29,6 +31,30 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     public bool IsEditingSeries => IsOpen && !IsCreatingNew;
     public bool CanEditCompetitions => IsEditingSeries;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSeriesSection))]
+    [NotifyPropertyChangedFor(nameof(IsCompetitionsSection))]
+    [NotifyPropertyChangedFor(nameof(IsCompetitorsSection))]
+    private WorkspaceSection _activeSection = WorkspaceSection.Series;
+    public bool IsSeriesSection => ActiveSection == WorkspaceSection.Series;
+    public bool IsCompetitionsSection => ActiveSection == WorkspaceSection.Competitions;
+    public bool IsCompetitorsSection => ActiveSection == WorkspaceSection.Competitors;
+
+    [RelayCommand] private void ShowSeries() => SwitchSection(WorkspaceSection.Series);
+    [RelayCommand] private void ShowCompetitions() => SwitchSection(WorkspaceSection.Competitions);
+    [RelayCommand] private void ShowCompetitors() => SwitchSection(WorkspaceSection.Competitors);
+
+    private void SwitchSection(WorkspaceSection section)
+    {
+        if (section != WorkspaceSection.Series && !CanEditCompetitions) { return; }
+        if (section != ActiveSection && HasDeskDrafts)
+        {
+            SetStatus("Save or discard the current competitor row before leaving this view.", error: true);
+            return;
+        }
+        ActiveSection = section;
+    }
 
     [ObservableProperty] private string _fileLabel = "No series file open";
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";
@@ -90,6 +116,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             return;
         }
         IsCreatingNew = true;
+        ActiveSection = WorkspaceSection.Series;
         Name = Location = Organizer = Season = string.Empty;
         StartDateText = EndDateText = TodayText();
         Nation = "FIN";
@@ -125,6 +152,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             IsOpen = true;
             IsCreatingNew = false;
             await LoadCompetitorDeskAsync();
+            ActiveSection = WorkspaceSection.Competitions;
             SetStatus("Event series created and saved.");
         });
     }
@@ -142,6 +170,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             IsOpen = true;
             IsCreatingNew = false;
             await LoadCompetitorDeskAsync();
+            ActiveSection = WorkspaceSection.Competitions;
             SetStatus("Event series opened.");
         });
     }
@@ -159,6 +188,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             IsCompetitionEditing = false;
             IsOpen = false;
             ClearCompetitorDesk();
+            ActiveSection = WorkspaceSection.Series;
             FileLabel = "No series file open";
             NewSeries();
             SetStatus("Event series closed. All completed changes are saved.");

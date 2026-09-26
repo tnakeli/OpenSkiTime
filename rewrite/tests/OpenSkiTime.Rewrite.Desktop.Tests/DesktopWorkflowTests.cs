@@ -47,6 +47,9 @@ public class DesktopWorkflowTests
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.True(File.Exists(file));
             Assert.True(vm.IsOpen);
+            Assert.Equal(WorkspaceSection.Competitions, vm.ActiveSection);
+
+            Click(window, "1  Event series");
 
             vm.StartDateText = "31.02.2026";
             Click(window, "Save series");
@@ -58,6 +61,8 @@ public class DesktopWorkflowTests
             await vm.SaveSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal("06.05.2026", vm.StartDateText);
+
+            Click(window, "2  Competitions");
 
             Click(window, "Add competition");
             vm.CompetitionName = "Slalom";
@@ -73,7 +78,14 @@ public class DesktopWorkflowTests
             Assert.Single(vm.Competitions);
             Assert.Equal(new DateOnly(2026, 5, 6), vm.Competitions[0].Values.Date);
             Assert.Equal(new DateOnly(2026, 5, 7), (await workspace.ReadAsync()).Values.EndDate);
+            Click(window, "Add competition");
+            vm.CompetitionName = "Giant slalom";
+            vm.CompetitionShortLabel = "3.2 GS";
+            Click(window, "Save competition");
+            await vm.SaveCompetitionCommand.ExecutionTask!;
+            Assert.Equal(2, vm.Competitions.Count);
 
+            Click(window, "3  Competitors");
             Click(window, "Add competitor");
             var competitorRow = Assert.IsType<CompetitorGridRow>(vm.SelectedCompetitorRow);
             competitorRow.Surname = "Mäkelä";
@@ -89,7 +101,35 @@ public class DesktopWorkflowTests
             Assert.Same(competitorRow, vm.SelectedCompetitorRow);
             Assert.Equal("MÄKELÄ", competitorRow.Surname);
             Assert.Equal(27, Assert.Single((await workspace.ReadCompetitorDeskAsync()).Participations).ImportedBib);
+            Assert.Equal(2, vm.ParticipationChoices.Count);
+            var firstRaceParticipation = vm.ParticipationChoices.Single(x => x.Label == "3.1 SL");
+            Assert.False(firstRaceParticipation.IsParticipating);
+            firstRaceParticipation.IsParticipating = true;
+            window.UpdateLayout();
+            var firstRaceCheck = window.FindControl<ItemsControl>("ParticipationChoicesList")!
+                .GetVisualDescendants().OfType<CheckBox>()
+                .Single(x => ReferenceEquals(x.DataContext, firstRaceParticipation));
+            firstRaceCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Participations.Count);
+            var participation = vm.ParticipationChoices.Single(x => x.Label == "3.2 GS");
+            Assert.True(participation.IsParticipating);
+            participation.IsParticipating = false;
+            window.UpdateLayout();
+            var participationList = window.FindControl<ItemsControl>("ParticipationChoicesList");
+            Assert.NotNull(participationList);
+            Assert.True(participationList.IsVisible, "Participation list should be visible for the selected competitor.");
+            var participationCheck = participationList.GetVisualDescendants().OfType<CheckBox>()
+                .Single(x => ReferenceEquals(x.DataContext, participation));
+            participationCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False((await workspace.ReadCompetitorDeskAsync()).Participations
+                .Single(x => x.CompetitionId == participation.CompetitionId).Participates);
+            participation.IsParticipating = true;
+            participationCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True((await workspace.ReadCompetitorDeskAsync()).Participations
+                .Single(x => x.CompetitionId == participation.CompetitionId).Participates);
             competitorRow.Club = "Unsaved draft";
+            Click(window, "2  Competitions");
+            Assert.Equal(WorkspaceSection.Competitors, vm.ActiveSection);
             var selectedRace = vm.DeskCompetition;
             vm.DeskCompetition = null;
             Assert.Same(selectedRace, vm.DeskCompetition);
@@ -127,10 +167,11 @@ public class DesktopWorkflowTests
             Click(window, "Open file");
             await vm.OpenSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.Single(vm.Competitions);
+            Assert.Equal(2, vm.Competitions.Count);
             Assert.Equal("MÄKELÄ", Assert.Single(vm.VisibleCompetitors).Surname);
             Assert.Single(vm.CategoryRules);
             Assert.Equal(backup, vm.FileLabel);
+            Click(window, "1  Event series");
             var startDateInput = window.FindControl<TextBox>("SeriesStartDateInput");
             Assert.NotNull(startDateInput);
             startDateInput.Text = "07.05.2026";

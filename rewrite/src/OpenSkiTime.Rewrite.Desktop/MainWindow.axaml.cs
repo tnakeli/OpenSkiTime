@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -9,12 +10,29 @@ public partial class MainWindow : Window
 {
     public MainWindow() => AvaloniaXamlLoader.Load(this);
 
+    private void Navigation_Click(object? sender, RoutedEventArgs e)
+    {
+        if (this.FindControl<ScrollViewer>("WorkspaceScroll") is { } scroll)
+        {
+            scroll.Offset = Vector.Zero;
+        }
+    }
+
     private async void CompetitorGrid_RowEditEnded(object? sender, DataGridRowEditEndedEventArgs e)
     {
         if (e.EditAction == DataGridEditAction.Commit && e.Row.DataContext is CompetitorGridRow row
             && DataContext is MainViewModel viewModel)
         {
             await viewModel.SaveCompetitorRowAsync(row);
+        }
+    }
+
+    private async void Participation_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox { DataContext: CompetitionEntryChoice choice }
+            && DataContext is MainViewModel viewModel)
+        {
+            await viewModel.SaveParticipationChoiceAsync(choice);
         }
     }
 
