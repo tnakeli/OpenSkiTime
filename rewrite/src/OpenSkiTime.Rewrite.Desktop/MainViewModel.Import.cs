@@ -32,11 +32,10 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _importReviewSummary = string.Empty;
     [ObservableProperty] private ImportReviewGridRow? _selectedImportReviewRow;
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsCompetitorDeskVisible))]
     [NotifyPropertyChangedFor(nameof(CompetitorSectionTitle))]
+    [NotifyPropertyChangedFor(nameof(IsDeskChangeLogVisible))]
     private bool _isImportReviewOpen;
-    public bool IsCompetitorDeskVisible => !IsImportReviewOpen;
-    public string CompetitorSectionTitle => IsImportReviewOpen ? "Import review" : "Competitor desk";
+    public string CompetitorSectionTitle => IsImportReviewOpen ? "Competitor desk · paste preview" : "Competitor desk";
 
     [RelayCommand]
     private async Task PasteFromExcelAsync()
@@ -51,14 +50,12 @@ public sealed partial class MainViewModel
         });
     }
 
-    [RelayCommand]
-    private async Task PreviewImportAsync() => await GuardAsync(BuildImportPreviewAsync);
-
     private async Task BuildImportPreviewAsync()
     {
-        if (_allCompetitorRows.Any(x => x.HasDraftChanges) || ParticipationChoices.Any(x => x.IsSaving))
+        if (_allCompetitorRows.Any(x => x.HasDraftChanges || x.IsPendingDelete)
+            || ParticipationChoices.Any(x => x.IsSaving))
         {
-            throw new DomainValidationException("Save or discard current competitor edits before importing.");
+            throw new DomainValidationException("Save, restore or commit current competitor changes before importing.");
         }
         var series = _current ?? throw new SeriesFileException("Open an event series first.");
         var desk = await workspace.ReadCompetitorDeskAsync();
@@ -66,16 +63,66 @@ public sealed partial class MainViewModel
         _importPreview = preview;
         PopulateReview(preview, desk, series);
         IsImportReviewOpen = true;
-        SetStatus($"Previewed {preview.Rows.Count} rows. Review highlighted values, then Commit or close the review.");
+        CompetitorFilterText = string.Empty;
+        RefreshVisibleCompetitors();
+        SelectedCompetitorRow = _allCompetitorRows.FirstOrDefault(x => x.PendingImport?.NeedsApproval == true)
+            ?? _allCompetitorRows.FirstOrDefault(x => x.IsImportHighlighted);
+        SetStatus($"Previewed {preview.Rows.Count} rows in the competitor grid. Review highlighted changes, then commit or discard.");
     }
 
     private void PopulateReview(ImportPreview preview, CompetitorDeskDetails desk, SeriesDetails series)
     {
+        foreach (var staged in _allCompetitorRows.Where(x => x.IsImportHighlighted).ToArray())
+        {
+            staged.ClearImport();
+            foreach (var choice in staged.GridEntries) { choice.Restore(); }
+            if (staged.Id is null) { _allCompetitorRows.Remove(staged); }
+            else { UpdateIndicators(staged); }
+        }
         ImportReviewRows.Clear();
         foreach (var item in preview.Rows)
         {
             var before = desk.Competitors.FirstOrDefault(x => x.Id == item.CompetitorId)?.Values;
-            ImportReviewRows.Add(new ImportReviewGridRow(item, before, series.Competitions, desk.Participations));
+            var review = new ImportReviewGridRow(item, before, series.Competitions, desk.Participations);
+            ImportReviewRows.Add(review);
+            var row = item.CompetitorId is { } id
+                ? _allCompetitorRows.FirstOrDefault(x => x.Id == id)
+                : null;
+            if (row is null)
+            {
+                row = new CompetitorGridRow();
+                _allCompetitorRows.Add(row);
+            }
+            FillGridEntries(row);
+            row.StageImport(review);
+            foreach (var patch in review.Entries)
+            {
+                var choice = row.GridEntries.First(x => x.CompetitionId == patch.CompetitionId);
+                if (patch.ParticipationText.Length > 0) { choice.IsParticipating = patch.ParticipationText == "X"; }
+                var stagedRow = row;
+                patch.PropertyChanged += (_, args) =>
+                {
+                    if (args.PropertyName == nameof(ImportReviewEntryRow.ParticipationText)
+                        && patch.ParticipationText is "X" or "0")
+                    {
+                        choice.IsParticipating = patch.ParticipationText == "X";
+                    }
+                    if (DeskCompetition?.Id == patch.CompetitionId
+                        && args.PropertyName == nameof(ImportReviewEntryRow.BibText))
+                    {
+                        stagedRow.ImportedBibText = patch.BibText == "~" ? string.Empty : patch.BibText;
+                    }
+                };
+            }
+            var selectedChoice = row.GridEntries.FirstOrDefault(x => x.CompetitionId == DeskCompetition?.Id);
+            if (selectedChoice is not null) { row.IsParticipating = selectedChoice.IsParticipating; }
+            var selectedPatch = review.Entries.FirstOrDefault(x => x.CompetitionId == DeskCompetition?.Id);
+            if (selectedPatch?.BibText.Length > 0)
+            {
+                row.ImportedBibText = selectedPatch.BibText == "~" ? string.Empty : selectedPatch.BibText;
+            }
+            row.Category = CategoryResolver.Resolve(item.Values, CategoryRules);
+            row.Readiness = item.Values.Readiness(selectedChoice?.IsParticipating ?? false);
         }
         ImportWarnings.Clear();
         foreach (var warning in preview.Warnings) { ImportWarnings.Add(warning); }
@@ -86,38 +133,29 @@ public sealed partial class MainViewModel
     }
 
     [RelayCommand]
-    private async Task ResetImportReviewAsync()
-    {
-        await GuardAsync(async () =>
-        {
-            var preview = _importPreview ?? throw new DomainValidationException("No import review is open.");
-            var series = _current ?? throw new SeriesFileException("Open an event series first.");
-            var desk = await workspace.ReadCompetitorDeskAsync();
-            if (series.Id != preview.SeriesId || desk.Revision != preview.Revision
-                || TsvExchange.Hash(ImportSourceText) != preview.SourceHash)
-            {
-                throw new SeriesConflictException();
-            }
-            PopulateReview(preview, desk, series);
-            SetStatus("Review edits discarded; the original pasted preview is restored.");
-        });
-    }
-
-    [RelayCommand]
     private void CloseImportReview()
     {
         ClearImportReview();
-        SetStatus("Import review closed without changing the event file.");
+        SetStatus("Pasted preview discarded. The event file was not changed.");
     }
 
     private void ClearImportReview()
     {
+        foreach (var row in _allCompetitorRows.Where(x => x.IsImportHighlighted).ToArray())
+        {
+            row.ClearImport();
+            foreach (var choice in row.GridEntries) { choice.Restore(); }
+            if (row.Id is null) { _allCompetitorRows.Remove(row); }
+            else { UpdateIndicators(row); }
+        }
         _importPreview = null;
         ImportReviewRows.Clear();
         ImportWarnings.Clear();
         SelectedImportReviewRow = null;
         IsImportReviewOpen = false;
         ImportReviewSummary = string.Empty;
+        RefreshVisibleCompetitors();
+        OnSelectedCompetitorRowChanged(SelectedCompetitorRow);
     }
 
     [RelayCommand]
@@ -132,6 +170,17 @@ public sealed partial class MainViewModel
             {
                 throw new SeriesConflictException();
             }
+            foreach (var row in _allCompetitorRows.Where(x => x.PendingImport is not null))
+            {
+                var review = row.PendingImport!;
+                review.Surname = row.Surname;
+                review.FirstName = row.FirstName;
+                review.BirthYearText = row.BirthYearText;
+                review.GenderText = row.GenderText;
+                review.Nation = row.Nation;
+                review.Club = row.Club;
+                review.FederationCode = row.FederationCode;
+            }
             var unapproved = ImportReviewRows.FirstOrDefault(x => x.NeedsApproval && !x.Approved);
             if (unapproved is not null)
             {
@@ -141,6 +190,9 @@ public sealed partial class MainViewModel
             var result = await workspace.ApplyImportAsync(new ImportCommit(preview.SeriesId, preview.Revision,
                 preview.SourceHash, rows));
             _current = series with { Revision = result.Revision };
+            DeskChangeLog.Clear();
+            OnPropertyChanged(nameof(HasDeskChangeLog));
+            OnPropertyChanged(nameof(IsDeskChangeLogVisible));
             ClearImportReview();
             await LoadCompetitorDeskAsync();
             SetStatus(result.AlreadyApplied

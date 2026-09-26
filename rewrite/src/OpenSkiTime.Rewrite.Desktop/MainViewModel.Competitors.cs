@@ -15,6 +15,16 @@ public sealed partial class MainViewModel
     private UndoDeskEdit? _lastDeskEdit;
 
     public ObservableCollection<CompetitorGridRow> VisibleCompetitors { get; } = [];
+    public ObservableCollection<DeskChangeLogEntry> DeskChangeLog { get; } = [];
+    public bool HasDeskChangeLog => DeskChangeLog.Count > 0;
+    public bool IsDeskChangeLogVisible => HasDeskChangeLog && !IsImportReviewOpen;
+    private void AppendDeskChange(DeskChangeLogEntry entry)
+    {
+        if (DeskChangeLog.Count >= 200) { DeskChangeLog.RemoveAt(0); }
+        DeskChangeLog.Add(entry);
+        OnPropertyChanged(nameof(HasDeskChangeLog));
+        OnPropertyChanged(nameof(IsDeskChangeLogVisible));
+    }
     public ObservableCollection<CompetitionEntryChoice> ParticipationChoices { get; } = [];
     public ObservableCollection<CategoryRuleDetails> CategoryRules { get; } = [];
     public ObservableCollection<LegacySeriesPreview> LegacySeriesPreviews { get; } = [];
@@ -40,15 +50,10 @@ public sealed partial class MainViewModel
 
     partial void OnSelectedCompetitorRowChanged(CompetitorGridRow? value)
     {
+        SelectedImportReviewRow = value?.PendingImport;
         ParticipationChoices.Clear();
         if (value?.Id is not { } competitorId) { return; }
-        foreach (var competition in Competitions)
-        {
-            var entry = _desk?.Participations.FirstOrDefault(x => x.CompetitorId == competitorId
-                && x.CompetitionId == competition.Id);
-            ParticipationChoices.Add(new CompetitionEntryChoice(competition,
-                entry?.Participates ?? false, entry?.ImportedBib));
-        }
+        foreach (var choice in value.GridEntries) { ParticipationChoices.Add(choice); }
     }
     [ObservableProperty] private string _competitorFilterText = string.Empty;
     [ObservableProperty] private string _competitorGrouping = "Surname";
@@ -70,7 +75,7 @@ public sealed partial class MainViewModel
               + $"{value.Entries.Count} entries · {value.Categories.Count} categories · {value.Warnings.Count} warnings";
     }
 
-    private bool HasDeskDrafts => _allCompetitorRows.Any(x => x.HasDraftChanges)
+    private bool HasDeskDrafts => _allCompetitorRows.Any(x => x.HasDraftChanges || x.IsPendingDelete)
         || ParticipationChoices.Any(x => x.IsSaving || x.IsParticipating != x.SavedParticipation)
         || IsImportReviewOpen;
 
@@ -78,7 +83,7 @@ public sealed partial class MainViewModel
     {
         if (IsImportReviewOpen)
         {
-            throw new DomainValidationException("Commit or close the import review before changing the event file or competitions.");
+            throw new DomainValidationException("Commit or discard the pasted preview before changing the event file or competitions.");
         }
         if (HasDeskDrafts)
         {
@@ -123,6 +128,7 @@ public sealed partial class MainViewModel
             var entry = _desk.Participations.FirstOrDefault(x => x.CompetitorId == competitor.Id
                 && x.CompetitionId == DeskCompetition?.Id);
             var row = CompetitorGridRow.From(competitor, entry);
+            FillGridEntries(row);
             UpdateIndicators(row);
             _allCompetitorRows.Add(row);
         }
@@ -137,6 +143,9 @@ public sealed partial class MainViewModel
         _desk = null;
         _selectedExportIds.Clear();
         _allCompetitorRows.Clear();
+        DeskChangeLog.Clear();
+        OnPropertyChanged(nameof(HasDeskChangeLog));
+        OnPropertyChanged(nameof(IsDeskChangeLogVisible));
         VisibleCompetitors.Clear();
         ParticipationChoices.Clear();
         CategoryRules.Clear();
@@ -156,6 +165,18 @@ public sealed partial class MainViewModel
         if (row.SavedValues is not { } values) { return; }
         row.Category = CategoryResolver.Resolve(values, CategoryRules);
         row.Readiness = values.Readiness(row.SavedParticipation);
+    }
+
+    private void FillGridEntries(CompetitorGridRow row)
+    {
+        row.GridEntries.Clear();
+        foreach (var competition in Competitions)
+        {
+            var entry = _desk?.Participations.FirstOrDefault(x => x.CompetitorId == row.Id
+                && x.CompetitionId == competition.Id);
+            row.GridEntries.Add(new CompetitionEntryChoice(competition,
+                entry?.Participates ?? false, entry?.ImportedBib));
+        }
     }
 
     private void RefreshVisibleCompetitors()
@@ -184,7 +205,13 @@ public sealed partial class MainViewModel
     private void AddCompetitor()
     {
         if (!IsEditingSeries) { return; }
+        if (IsImportReviewOpen)
+        {
+            SetStatus("Commit or discard the pasted preview before adding competitors.", error: true);
+            return;
+        }
         var row = new CompetitorGridRow();
+        FillGridEntries(row);
         _allCompetitorRows.Add(row);
         RefreshVisibleCompetitors();
         SelectedCompetitorRow = row;
@@ -194,6 +221,11 @@ public sealed partial class MainViewModel
     public async Task SaveCompetitorRowAsync(CompetitorGridRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
+        if (IsImportReviewOpen)
+        {
+            SetStatus("Commit or discard the pasted preview before saving a competitor row.", error: true);
+            return;
+        }
         await _deskRowSaveGate.WaitAsync();
         try
         {
@@ -201,6 +233,7 @@ public sealed partial class MainViewModel
             {
                 var series = _current ?? throw new SeriesFileException("Open an event series first.");
                 if (row.Id is null && string.IsNullOrWhiteSpace(row.Surname)) { return; }
+                if (row.IsPendingDelete) { throw new DomainValidationException("Restore the pending deletion before editing this competitor."); }
                 var draft = row.Draft();
                 var bib = row.DraftImportedBib();
                 var raceId = DeskCompetition?.Id;
@@ -216,10 +249,19 @@ public sealed partial class MainViewModel
                     ? new ParticipationDetails(result.Value.Id, id, row.IsParticipating, bib, null) : null;
                 row.MarkSaved(result.Value, entry);
                 UpdateDeskSnapshot(result.Value, entry, result.Revision);
-                if (previous is null) { OnSelectedCompetitorRowChanged(row); }
+                if (previous is null)
+                {
+                    FillGridEntries(row);
+                    OnSelectedCompetitorRowChanged(row);
+                }
                 UpdateIndicators(row);
                 _lastDeskEdit = new UndoDeskEdit(result.Value.Id, previous, raceId, previousParticipation, previousBib);
                 CanUndoDeskEdit = true;
+                AppendDeskChange(new DeskChangeLogEntry(Guid.NewGuid(), DateTime.UtcNow,
+                    previous is null ? DeskChangeKind.Add : DeskChangeKind.Edit, result.Value.Id,
+                    previous, raceId, previousParticipation, previousBib,
+                    previous is null ? $"Added: {result.Value.Values.Surname} {result.Value.Values.FirstName}"
+                        : $"Edited: {result.Value.Values.Surname} {result.Value.Values.FirstName}"));
                 SetStatus("Competitor row saved.");
             });
         }
@@ -244,12 +286,18 @@ public sealed partial class MainViewModel
     public async Task SaveParticipationChoiceAsync(CompetitionEntryChoice choice)
     {
         ArgumentNullException.ThrowIfNull(choice);
+        if (IsImportReviewOpen)
+        {
+            choice.Restore();
+            SetStatus("Commit or discard the pasted preview before changing participation.", error: true);
+            return;
+        }
         await _deskRowSaveGate.WaitAsync();
         try
         {
             if (choice.IsParticipating == choice.SavedParticipation) { return; }
             if (SelectedCompetitorRow is not { Id: { } competitorId, SavedValues: { } values } row
-                || _current is not { } series || row.HasDraftChanges)
+                || _current is not { } series || row.HasDraftChanges || row.IsPendingDelete)
             {
                 choice.Restore();
                 SetStatus("Save the selected competitor row before changing participation.", error: true);
@@ -272,11 +320,35 @@ public sealed partial class MainViewModel
                 choice.MarkSaved();
                 _lastDeskEdit = null;
                 CanUndoDeskEdit = false;
+                AppendDeskChange(new DeskChangeLogEntry(Guid.NewGuid(), DateTime.UtcNow,
+                    DeskChangeKind.Edit, competitorId, values, choice.CompetitionId,
+                    !choice.IsParticipating, choice.ImportedBib,
+                    $"Entry: {row.Surname} {row.FirstName} · {choice.Label}"));
                 SetStatus($"Participation saved for {choice.Label}.");
             });
             if (IsError) { choice.Restore(); }
         }
         finally { choice.IsSaving = false; _deskRowSaveGate.Release(); }
+    }
+
+    public async Task SaveGridParticipationAsync(CompetitorGridRow row, CompetitionEntryChoice choice)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(choice);
+        SelectedCompetitorRow = row;
+        if (IsImportReviewOpen)
+        {
+            if (row.PendingImport is not { } review)
+            {
+                choice.Restore();
+                SetStatus("Commit or discard the pasted preview before changing other competitors.", error: true);
+                return;
+            }
+            review.Entries.First(x => x.CompetitionId == choice.CompetitionId).ParticipationText =
+                choice.IsParticipating ? "X" : "0";
+            return;
+        }
+        await SaveParticipationChoiceAsync(choice);
     }
 
     [RelayCommand]
@@ -288,6 +360,11 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private void DiscardCompetitorDraft()
     {
+        if (IsImportReviewOpen)
+        {
+            SetStatus("Use Discard import to reject the entire pasted preview.", error: true);
+            return;
+        }
         if (SelectedCompetitorRow is not { } row) { return; }
         if (row.Id is null) { _allCompetitorRows.Remove(row); }
         else { row.RestoreDraft(); }
@@ -298,6 +375,11 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task UndoDeskEditAsync()
     {
+        if (IsImportReviewOpen)
+        {
+            SetStatus("Commit or discard the pasted preview before undoing a saved edit.", error: true);
+            return;
+        }
         if (_lastDeskEdit is not { } undo || _current is not { } series) { return; }
         await GuardAsync(async () =>
         {
@@ -333,32 +415,113 @@ public sealed partial class MainViewModel
             }
             _lastDeskEdit = null;
             CanUndoDeskEdit = false;
+            var log = DeskChangeLog.LastOrDefault(x => x.CompetitorId == undo.CompetitorId
+                && x.Kind is DeskChangeKind.Add or DeskChangeKind.Edit);
+            if (log is not null)
+            {
+                DeskChangeLog.Remove(log);
+                OnPropertyChanged(nameof(HasDeskChangeLog));
+                OnPropertyChanged(nameof(IsDeskChangeLogVisible));
+            }
             RefreshVisibleCompetitors();
             SetStatus("Last saved competitor edit restored.");
         });
     }
 
     [RelayCommand]
-    private async Task RemoveCompetitorAsync()
+    private async Task RestoreDeskChangeAsync(DeskChangeLogEntry entry)
     {
-        if (SelectedCompetitorRow?.Id is not { } id || _current is not { } series) { return; }
-        if (!await dialogs.ConfirmRemoveCompetitorAsync(SelectedCompetitorRow.Surname)) { return; }
+        ArgumentNullException.ThrowIfNull(entry);
+        if (IsImportReviewOpen)
+        {
+            SetStatus("Commit or discard the pasted preview before restoring changes.", error: true);
+            return;
+        }
+        if (entry.Kind == DeskChangeKind.Delete)
+        {
+            var deleted = _allCompetitorRows.FirstOrDefault(x => x.Id == entry.CompetitorId);
+            if (deleted is not null) { deleted.IsPendingDelete = false; }
+            DeskChangeLog.Remove(entry);
+            OnPropertyChanged(nameof(HasDeskChangeLog));
+            OnPropertyChanged(nameof(IsDeskChangeLogVisible));
+            SetStatus("Pending deletion restored.");
+            return;
+        }
+        _lastDeskEdit = new UndoDeskEdit(entry.CompetitorId, entry.PreviousValues,
+            entry.CompetitionId, entry.PreviousParticipation, entry.PreviousImportedBib);
+        CanUndoDeskEdit = true;
+        await UndoDeskEditAsync();
+        if (!IsError && entry.Kind == DeskChangeKind.Add)
+        {
+            foreach (var later in DeskChangeLog.Where(x => x.CompetitorId == entry.CompetitorId).ToArray())
+            {
+                DeskChangeLog.Remove(later);
+            }
+            OnPropertyChanged(nameof(HasDeskChangeLog));
+            OnPropertyChanged(nameof(IsDeskChangeLogVisible));
+        }
+    }
+
+    [RelayCommand]
+    private async Task CommitDeskChangesAsync()
+    {
+        if (IsImportReviewOpen)
+        {
+            SetStatus("Commit or discard the pasted preview first.", error: true);
+            return;
+        }
+        if (_allCompetitorRows.Any(x => x.HasDraftChanges))
+        {
+            SetStatus("Save or discard unfinished row edits before committing the Change Log.", error: true);
+            return;
+        }
         await GuardAsync(async () =>
         {
-            var revision = await workspace.RemoveCompetitorAsync(id, series.Revision);
-            _current = series with { Revision = revision };
-            _allCompetitorRows.Remove(SelectedCompetitorRow);
-            if (_desk is { } desk)
+            foreach (var row in _allCompetitorRows.Where(x => x.IsPendingDelete).ToArray())
             {
-                _desk = desk with { Revision = revision,
-                    Competitors = desk.Competitors.Where(x => x.Id != id).ToArray(),
-                    Participations = desk.Participations.Where(x => x.CompetitorId != id).ToArray() };
+                var series = _current ?? throw new SeriesFileException("Open an event series first.");
+                var id = row.Id ?? throw new DomainValidationException("An unsaved row cannot be deleted.");
+                var revision = await workspace.RemoveCompetitorAsync(id, series.Revision);
+                _current = series with { Revision = revision };
+                _allCompetitorRows.Remove(row);
+                if (_desk is { } desk)
+                {
+                    _desk = desk with { Revision = revision,
+                        Competitors = desk.Competitors.Where(x => x.Id != id).ToArray(),
+                        Participations = desk.Participations.Where(x => x.CompetitorId != id).ToArray() };
+                }
             }
+            DeskChangeLog.Clear();
+            OnPropertyChanged(nameof(HasDeskChangeLog));
+            OnPropertyChanged(nameof(IsDeskChangeLogVisible));
             _lastDeskEdit = null;
             CanUndoDeskEdit = false;
             RefreshVisibleCompetitors();
-            SetStatus("Competitor removed.");
+            SetStatus("Changes committed. Pending deletions were saved.");
         });
+    }
+
+    [RelayCommand]
+    private async Task RemoveCompetitorAsync()
+    {
+        if (IsImportReviewOpen)
+        {
+            SetStatus("Commit or discard the pasted preview before removing competitors.", error: true);
+            return;
+        }
+        if (SelectedCompetitorRow?.Id is not { } id || _current is null) { return; }
+        if (SelectedCompetitorRow.HasDraftChanges)
+        {
+            SetStatus("Save or discard this row's edits before marking it for deletion.", error: true);
+            return;
+        }
+        if (!await dialogs.ConfirmRemoveCompetitorAsync(SelectedCompetitorRow.Surname)) { return; }
+        if (SelectedCompetitorRow.IsPendingDelete) { return; }
+        SelectedCompetitorRow.IsPendingDelete = true;
+        AppendDeskChange(new DeskChangeLogEntry(Guid.NewGuid(), DateTime.UtcNow,
+            DeskChangeKind.Delete, id, SelectedCompetitorRow.SavedValues, null, false, null,
+            $"Deleted: {SelectedCompetitorRow.Surname} {SelectedCompetitorRow.FirstName}"));
+        SetStatus("Competitor marked for deletion. Restore it in Change Log or Commit Changes.");
     }
 
     [RelayCommand]

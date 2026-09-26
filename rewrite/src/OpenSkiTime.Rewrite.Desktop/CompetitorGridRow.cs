@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using OpenSkiTime.Rewrite.Domain;
 
@@ -10,6 +11,18 @@ public sealed partial class CompetitorGridRow : ObservableObject
     public CompetitorValues? SavedValues { get; private set; }
     public bool SavedParticipation { get; private set; }
     public int? SavedImportedBib { get; private set; }
+    public ImportReviewGridRow? PendingImport { get; private set; }
+    public bool IsImportHighlighted => PendingImport is not null;
+    [ObservableProperty] private bool _isPendingDelete;
+    public string ImportMarker => IsPendingDelete ? "DEL" : PendingImport is null ? string.Empty : PendingImport.IsNew ? "NEW" : "Δ";
+    public bool IsSurnameChanged => PendingImport?.IsSurnameChanged == true;
+    public bool IsFirstNameChanged => PendingImport?.IsFirstNameChanged == true;
+    public bool IsYearChanged => PendingImport?.IsYearChanged == true;
+    public bool IsGenderChanged => PendingImport?.IsGenderChanged == true;
+    public bool IsNationChanged => PendingImport?.IsNationChanged == true;
+    public bool IsClubChanged => PendingImport?.IsClubChanged == true;
+    public bool IsCodeChanged => PendingImport?.IsCodeChanged == true;
+    public ObservableCollection<CompetitionEntryChoice> GridEntries { get; } = [];
     public bool HasDraftChanges => SavedValues is { } saved
         ? Surname != saved.Surname || FirstName != saved.FirstName
           || BirthYearText != (saved.BirthYear?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)
@@ -77,6 +90,52 @@ public sealed partial class CompetitorGridRow : ObservableObject
         IsParticipating = SavedParticipation;
         ImportedBibText = SavedImportedBib?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
     }
+
+    public void StageImport(ImportReviewGridRow review)
+    {
+        ArgumentNullException.ThrowIfNull(review);
+        PendingImport = review;
+        Surname = review.Surname;
+        FirstName = review.FirstName;
+        BirthYearText = review.BirthYearText;
+        GenderText = review.GenderText;
+        Nation = review.Nation;
+        Club = review.Club;
+        FederationCode = review.FederationCode;
+        OnPropertyChanged(nameof(IsImportHighlighted));
+        OnPropertyChanged(nameof(ImportMarker));
+        OnPropertyChanged(nameof(IsSurnameChanged));
+        OnPropertyChanged(nameof(IsFirstNameChanged));
+        OnPropertyChanged(nameof(IsYearChanged));
+        OnPropertyChanged(nameof(IsGenderChanged));
+        OnPropertyChanged(nameof(IsNationChanged));
+        OnPropertyChanged(nameof(IsClubChanged));
+        OnPropertyChanged(nameof(IsCodeChanged));
+    }
+
+    public void ClearImport()
+    {
+        PendingImport = null;
+        if (SavedValues is not null) { RestoreDraft(); }
+        OnPropertyChanged(nameof(IsImportHighlighted));
+        OnPropertyChanged(nameof(ImportMarker));
+        OnPropertyChanged(nameof(IsSurnameChanged));
+        OnPropertyChanged(nameof(IsFirstNameChanged));
+        OnPropertyChanged(nameof(IsYearChanged));
+        OnPropertyChanged(nameof(IsGenderChanged));
+        OnPropertyChanged(nameof(IsNationChanged));
+        OnPropertyChanged(nameof(IsClubChanged));
+        OnPropertyChanged(nameof(IsCodeChanged));
+    }
+
+    partial void OnSurnameChanged(string value) => OnPropertyChanged(nameof(IsSurnameChanged));
+    partial void OnFirstNameChanged(string value) => OnPropertyChanged(nameof(IsFirstNameChanged));
+    partial void OnBirthYearTextChanged(string value) => OnPropertyChanged(nameof(IsYearChanged));
+    partial void OnGenderTextChanged(string value) => OnPropertyChanged(nameof(IsGenderChanged));
+    partial void OnNationChanged(string value) => OnPropertyChanged(nameof(IsNationChanged));
+    partial void OnClubChanged(string value) => OnPropertyChanged(nameof(IsClubChanged));
+    partial void OnFederationCodeChanged(string value) => OnPropertyChanged(nameof(IsCodeChanged));
+    partial void OnIsPendingDeleteChanged(bool value) => OnPropertyChanged(nameof(ImportMarker));
 
     private static int? OptionalNumber(string text, string label)
     {

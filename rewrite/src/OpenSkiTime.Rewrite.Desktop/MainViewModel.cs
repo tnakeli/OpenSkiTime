@@ -51,7 +51,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         if (section != WorkspaceSection.Series && !CanEditCompetitions) { return; }
         if (section != ActiveSection && HasDeskDrafts)
         {
-            SetStatus(IsImportReviewOpen ? "Commit or close the import review before leaving this view."
+            SetStatus(IsImportReviewOpen ? "Commit or discard the pasted preview before leaving this view."
                 : "Save or discard the current competitor row before leaving this view.", error: true);
             return;
         }
@@ -114,7 +114,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         if (HasDeskDrafts)
         {
-            SetStatus(IsImportReviewOpen ? "Commit or close the import review before starting a new series."
+            SetStatus(IsImportReviewOpen ? "Commit or discard the pasted preview before starting a new series."
                 : "Save or discard the current competitor row before starting a new series.", error: true);
             return;
         }
