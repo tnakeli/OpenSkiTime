@@ -1,35 +1,65 @@
 # M0 legacy reference evidence (partial)
 
-Reference: `legacy-pre-codex` at `8259809`; M0 tests run on `rewrite/codex`. This is evidence about the existing application, not acceptance of every legacy behavior.
+Refreshed 2026-09-26 against recovered master `5505ceb` (`legacy-recovered-pre-codex`). The earlier `legacy-pre-codex` tag at `8259809` is unchanged; initial documents and two M0 tests were preserved in `6744c1a`. Master was merged into `rewrite/codex` in `0e3e354`. These are local preservation refs; no push was performed.
 
-## Environment and checks
+The recovered 19 commits add the Feature 002 competitor grid, editing, participation, paste/copy and session undo. Earlier claims that these screens were absent apply only to the old baseline. No production fix or M1 implementation was made during this refresh.
 
-- Windows x64, .NET SDK 10.0.401 / runtime 10.0.12, EF CLI 10.0.0. The complete `OpenSkiTime.slnx` restored, built and tested. Commands here: `dotnet restore OpenSkiTime.slnx --configfile ../work/NuGet.offline.config -p:NuGetAudit=false`, `dotnet build OpenSkiTime.slnx --no-restore`, `dotnet test OpenSkiTime.slnx --no-build --no-restore`. The restore used locally cached official NuGet packages because the Windows TLS stack cannot reach NuGet directly; the prior successful NuGet audit reported vulnerable transitive packages. The build's zero-warning count therefore does not certify dependencies as safe.
-- Baseline before M0 tests: 234 passing tests; no failing tests. The Desktop test assembly discovers **zero** tests. Existing persistence tests use `EnsureCreated`, so their success alone says nothing about migrations. README's claim of 168 tests is stale.
-- Two M0 characterization tests now exercise real on-disk SQLite migrations and a use-case/import/reopen path. Their synthetic names and dates are fixtures, not race results. Both pass; the full suite now has 236 passing tests and no failures. Intermediate test failures were only test cleanup attempting to delete pooled SQLite files; clearing the pools resolved them.
-- The exact desktop executable initially failed to create `%LOCALAPPDATA%\OpenSkiTime` due to sandbox permissions. After permission to create that folder was granted, it started and reported an `Open Ski Time` window. Its new SQLite file was opened read-only after startup: both migrations are recorded, the five business tables exist, all contain zero rows, and `PRAGMA integrity_check` returns `ok`. `PRAGMA foreign_key_list(Participations)` shows a competitor FK but no competition FK. This is a fresh, blank startup database, not an operator database. The process was closed after inspection. This session's UI tool does not expose native Windows app windows, so no desktop screenshot, mouse/keyboard workflow or application-session reopening could be verified.
+## Environment and results
 
-## Verified behavior
+- Windows x64; .NET SDK 10.0.401, runtime 10.0.12, EF CLI 10.0.0. The full `OpenSkiTime.slnx` restores and builds successfully with zero compiler warnings/errors.
+- Restore used a local feed of cached official NuGet packages because this environment's Windows TLS stack could not reach NuGet directly. Audit was disabled for this restore. The prior online audit reported vulnerable transitive packages; no dependency upgrade occurred in recovered master. Zero build warnings are not a clean dependency audit.
+- Untouched recovered master: **234 passing, 0 failing, 0 skipped** (Domain 94, Application 37, Import 93, Persistence 10). Desktop test project contains no inherited tests.
+- Updated working branch: **239 passing, 0 failing, 0 skipped** (same Domain/Application/Import counts, Persistence 12, Desktop 3). No inherited assertion was changed. The five M0 tests cover correct reference behavior, not the defects below.
+- The rebuilt desktop process started, reported an `Open Ski Time` window and produced no stderr; it was then stopped. This verifies startup only. Native Windows controls are unavailable through this session's UI tool, so no screenshot, rendered review, mouse/keyboard workflow or app close/reopen interaction is claimed.
+
+Commands from the repository root in the configured development environment:
+
+```powershell
+dotnet restore OpenSkiTime.slnx --configfile ../work/NuGet.offline.config -p:NuGetAudit=false
+dotnet build OpenSkiTime.slnx --no-restore
+dotnet test OpenSkiTime.slnx --no-build --no-restore
+```
+
+The feed configuration and logs are local environment artifacts under `../work/`; a machine with normal NuGet access can use ordinary restore. This refresh's build/test logs, TRX files and isolated diagnostic probes are under `../work/m0-refreshed/`. They are not committed fixtures or public documentation.
+
+## Verified boundaries
 
 | Workflow | Evidence and limit |
 |---|---|
-| Event Series create/edit | M0 test uses production use cases, then reopens with a new context: edited name and identity persist. UI form behavior unverified. |
-| Competition create/edit | Same migrated-file test creates a competition, updates its name and reopens it. UI editor unverified. |
-| Competitor, bib and participation | TSV preview/apply through production services adds `Müller` as `MÜLLER`, bib 7 and participation in `3.1 SL`. Separate production use cases add `Korhonen`, edit the surname to `VIRTANEN`, and toggle participation true then false. All final values survive reopening. Manual competitor editing is not reached from the shell UI. |
-| Categories | A domain `CategoryRule` is saved and reloaded; its inclusive year/gender matcher returns the expected result. No production UI category editor/resolver was exercised or found. |
-| SQLite migration | Migrate a test file to `0001_Initial`, write a series/competition, upgrade to `0002_Competitors_Participation_Categories`, migrate again, then reopen. Both migration IDs are applied once, no pending migration remains, original rows survive, and new tables are queryable. Separately, the real desktop startup created a fresh database with both migrations. Neither check covers an unknown operator database. |
+| Series and competition create/edit | `Persistence.Tests/LegacyReferenceTests` uses production use cases against a migrated SQLite file; edited names, IDs and competition metadata survive a new context. Forms and navigation remain unverified. |
+| Competitors and participation | Same test exercises service import, bib assignment, manual competitor editing and true/false participation. `Desktop.Tests/LegacyGridReferenceTests` additionally drives actual grid commands for Add, autosaved scalar edit, Restore, participation true/false, staged delete/undo and committed deletion; values are read from a separate context. Controls and event bindings are not exercised. |
+| TSV preview/apply/copy | Service test preserves uppercase `MÜLLER`, bib 7 and participation. Grid test separately previews existing Nation/Club changes without writing, applies them, reopens the file and copies selected fields through a fake clipboard. These are different apply paths; successful service tests do not validate the grid importer. |
+| Categories | A real `CategoryRule` is saved/reloaded and its inclusive year/gender match checked. No production category editor/resolver is connected to the grid. |
+| Schema upgrade | Test creates migration `20260528160602_0001_Initial`, writes a series/competition, applies `20260528162742_0002_Competitors_Participation_Categories`, repeats migration, then reopens. Original rows remain, both migrations are applied once, no pending migration remains, and new tables are queryable. |
+| Actual local database | Before startup, SQLite's backup API made a consistent copy of `%LOCALAPPDATA%/OpenSkiTime/openskitime.db`. Read-only inspection found both migration IDs, five empty business tables, `integrity_check=ok`, no reported FK violations, and only a competitor FK on `Participations`. The recovered version has no schema changes. This is a blank local database; no populated operator database upgrade was tested. |
 
-## Classification for the rewrite
+## Reproduced defects
+
+Isolated diagnostic runs used production grid/import services and migrated temporary databases with synthetic data; reopened reads supplied the observations below. These are observed defects, not passing assertions defining desired behavior. Diagnostics are separate from the repository test suite.
+
+| Reproduction | Observed behavior | Required distinction |
+|---|---|---|
+| Save participation as false, select that competitor, Copy | Stored flag is false; copied competition cell is `x`. | Export must respect the boolean, not merely record existence. |
+| Edit Gender to offered option `Men`, commit cell | Status says Saved, but reopened gender is null. | UI options must map to domain values; free text cannot silently erase data. |
+| Paste a new `Müller / Hannes / 2007` row with Gender `Male`, Bib `7`, `3.1 SL=x`; Apply | Preview participation is true; reopened competitor has no participation, gender or bib. No error dialog occurs. | Grid apply must persist the reviewed fields or explicitly reject unsupported fields. |
+| Existing nation FIN; paste GER; Discard; edit only Club | Immediately after Discard storage is FIN, display is GER; after the Club edit storage is GER. | Discard must restore/isolate preview changes so later edits cannot save them. |
+| Preview Nation FIN→GER through `ImportPreviewService`, then shared `ImportApplyService` | Diff has one field change and Apply succeeds, but reopened nation remains FIN. | Shared service ignores the newly added scalar diff; grid instead has its own implementation. |
+
+Source/schema findings also remain: non-atomic imports; grid ignores captured preview revision; `RowVersion` is not an EF concurrency token; no competition FK on participation; no SQLite code/bib uniqueness; rejected edits can mutate tracked entities before later validation fails. New source-level risks include save callbacks triggered by checkbox binding changes, field identification by reorderable display index, and Refresh/Add reload discarding other staged state. These callback/visual risks have not been reproduced through native controls.
+
+## Classification and specification comparison
 
 | Classification | Findings |
 |---|---|
-| Correct reference behavior | Series/competition metadata survives SQLite reopening; surnames normalize to uppercase; a reviewed simple TSV row can add a competitor, bib and participation; category year bounds are inclusive. Preserve these concepts with new acceptance tests. |
-| Known defects | `ImportApplyService` saves in stages and has no transaction over the reviewed batch. `ImportViewModel.ApplyAsync` recalculates a diff from potentially changed text/series. `RowVersion` is not an EF concurrency token. Migration 0002 has no competition FK on `Participations`; code/bib uniqueness is not enforced by SQLite. These are source/schema findings, not passing correctness claims. |
-| Unfinished | `ShellViewModel` never navigates to `CompetitorGridViewModel`; that grid is read-only and its filter/group properties do not change rows. Category classification is not connected to a production editor/grid. No timing, ALGE, result calculation or result export exists. The Desktop test project is empty. |
-| Needs human decision | Competition versus series bib scope, competitor identity/readiness fields, category overlap priority and age basis, and actual FIS validation/race rules need operator/rulebook decisions. Do not infer them from legacy fields. |
+| Correct reference | Persisted series/competition metadata, uppercase surnames, inclusive category matching, validated manual scalar edits and restore, manual participation toggles, staged delete/undo, and the tested scalar preview/apply path. Keep the compact series-scoped grid and TSV exchange concepts. |
+| Known defects | Reproductions above and source/schema findings. They must not become rewrite acceptance criteria. Passing inherited tests leave these paths uncovered. |
+| Unfinished | Filtering/grouping properties have no implementation; category editor/resolver, association/points, complete import warnings/empty overwrite and durable audit are absent. No actual runs/start lists, timing, ALGE integration, results or result export exist. |
+| Human decision | Autosave versus staged edits, deletion/undo rules, bib display/scope, clipboard column order, identity/readiness, category/age policy and actual FIS/race rules. The rewrite's one portable database per event series is already decided. |
 
-The [README](../README.md) labels Feature 001 shipped and claims optimistic locking; the executable paths and checks above support a narrower state. Historical [Feature 001](../specs/001-event-series-management/spec.md) additionally specifies editable/filterable/grouped competitor participation, category assignment, personal-data update previews and explicit blank overwrite; these are not established by the current UI or M0 tests. Treat the specification as intent, with the confirmed gaps tracked in [architecture.md](architecture.md). Do not execute its old workflow or use checked tasks as proof.
+README still describes the old separate import page, claims optimistic locking and lists 168 tests. Feature 001 is partially implemented; this recovery supplies much of its missing grid workflow but not all validation, category or import behavior. Feature 002 describes Save/Discard for staged edits, application through `ImportApplyService`, a visible read-only bib column and a different clipboard order. Later code instead autosaves edits/participation, commits deletes separately, hides Bib and puts FIS Code first. Its 200-entry session log can be cleared and is not persistent audit. Historical tasks/quickstart therefore are not proof of acceptance. Public README was left unchanged during this internal evidence refresh.
 
-M0 remains open until the actual desktop screens and keyboard/mouse workflows can be exercised in an interactive Windows session. Service and database checks above are reproducible reference evidence, not a substitute for that UI review.
+## Outstanding M0 work
 
-For that review, use synthetic data: create a series named `M0 Test`, add a `3.1 SL` Club competition, edit both names, paste `LastName\tFirstName\tYOB\tBib\t3.1 SL` with a row `Müller\tHannes\t2007\t7\tx` (actual tabs), inspect Preview, Apply, then close and reopen the application. Record what remains visible, any errors, and whether competitor, participation and category editing can be reached from the shell. Do not infer successful persistence from a status message alone; read the resulting SQLite file separately.
+M0 remains **partial** until a Windows operator exercises the recovered screens: series/competition create/edit, manual competitor edits, participation, paste preview/apply/discard, copy, change-log restore/delete and app close/reopen. Verify stored data as well as status messages. Test reordered columns, focus/selection, keyboard shortcuts, error dialogs, DPI/theme and unsaved-change navigation. Category UI cannot be tested because it is unimplemented. No device behavior or real race results exist to exercise.
+
+Failing repository tests: **none**. Unverified work: the native UI checks above, populated operator-database migration/recovery, performance and hardware behavior. The successful process startup and service/view-model tests do not close those gaps. Do not begin M1 on the assumption that M0 is complete.

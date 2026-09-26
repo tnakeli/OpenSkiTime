@@ -1,6 +1,6 @@
 # OpenSkiTime domain
 
-Reference: `legacy-pre-codex` (`8259809`). Sources: [domain code](../src/OpenSkiTime.Domain), [application code](../src/OpenSkiTime.Application), [Feature 001](../specs/001-event-series-management/spec.md) and its [data model](../specs/001-event-series-management/data-model.md). Existing behavior, specification intent and proposed rules are distinguished below.
+Reference: `legacy-recovered-pre-codex` (`5505ceb`), replacing the incomplete `8259809` baseline. Sources: domain/application code, historical [Feature 001](../specs/001-event-series-management/spec.md), [Feature 002](../specs/002-competitor-grid-ux/spec.md), and [M0 runtime evidence](m0-evidence.md). Existing behavior, specification intent and proposed rules are distinguished below.
 
 ## Existing concepts
 
@@ -11,7 +11,8 @@ Reference: `legacy-pre-codex` (`8259809`). Sources: [domain code](../src/OpenSki
 | Competitor | Series-local registration with GUID, uppercase surname, first name, birth year, optional FIS athlete code/nation/club/gender and series-wide bib. Duplicate name/year rejected on add; FIS code uniqueness is not enforced. |
 | Participation | Competitor/competition pair, boolean and optional positive start order. Zero/many entries allowed. Missing record and explicit false differ in storage but are mostly treated alike by imports. |
 | Category rule | Inclusive birth-year range, optional gender, label and display order. Individual matching works; no production resolver/editor connects it to the UI. |
-| Import preview | Header-based TSV; FIS code match before case-insensitive surname/first-name/year match. New rows, bib changes, participation changes and warnings; no general personal-data diff. |
+| Import preview | Header-based TSV; FIS code match before case-insensitive surname/first-name/year match. New rows, bib/participation/scalar changes and warnings. Name/year changes require a FIS match. Preview and the two apply paths are not equivalent. |
+| Desktop edit history | Manual field edits autosave and can be restored during the session; deletes are staged until Commit Changes. Log entries are capped at 200 and cleared by refresh/commit. This is transient undo, not timing audit. |
 
 Disciplines: SL, GS, SG, DH, AC, KOMBI, OTHER. Race types: FIS, National, Club, Training. Gender: Male, Female, Other, often nullable. These are stored vocabulary, not a complete rulebook.
 
@@ -30,11 +31,13 @@ Disciplines: SL, GS, SG, DH, AC, KOMBI, OTHER. Race types: FIS, National, Club, 
 
 Retain the conceptual pipeline: tokenize → map headers → project → match → preview → apply. Useful examples are in `TsvTokenizerTests`, `HeaderMapperTests`, `UpperCaseNameTests`, `ParticipationValueMatcherTests`, and bib/category tests. Keep valid examples while replacing assertions that mirror incomplete behavior.
 
-Keep absent-column and blank-cell preservation by default, and case-insensitive trimmed `Yes`, `Kyllä`, `x` as positive participation input. Model **absent**, **blank**, **explicit value** and **invalid** separately. Unknown values remain visible and unresolved until reviewed; a typo must not silently withdraw an entry. Explicit empty overwrite affects present columns only and must satisfy required-field rules.
+Keep absent-column and blank-cell preservation by default. Legacy positive participation aliases are case-insensitive trimmed `Yes`, `Kyllä`, `Kylla`, `x`, `joo`, `k`. Model **absent**, **blank**, **explicit value** and **invalid** separately. Unknown values remain visible and unresolved until reviewed; a typo must not silently withdraw an entry. Explicit empty overwrite affects present columns only and must satisfy required-field rules.
 
 Preview identifies source row/header, match reason, before/after values, errors, unknown columns, duplicates and uncertain names. Apply exactly the accepted preview, with target-series ID, source/options identity and database revision, in one transaction. Relevant changes invalidate preview. Retry must not duplicate a completed import.
 
-The name heuristic supports comma format and single uppercase tokens, but `VAN DER POEL Jeroen` splits incorrectly despite research promising multi-token surnames. Combined names always need review and editable proposals. Tokenization handles quoted tabs/escaped quotes but not multiline quoted cells or planned comma-delimited fallback. Decide supported formats explicitly; malformed input must not silently shift columns. Gender, association and discipline points remain unimplemented specification requirements.
+The name heuristic supports comma format and single uppercase tokens, but `VAN DER POEL Jeroen` splits incorrectly despite research promising multi-token surnames. Combined names need editable review. Tokenization handles quoted tabs/escaped quotes but not multiline quoted cells or planned comma-delimited fallback. Gender exists in storage and scalar preview, but grid options `Men`/`Women` do not map to `Male`/`Female`, and new-row imports omit it. Association and discipline points remain absent. These are gaps, not desired rules.
+
+Preserve the compact grid, editable scalar preview, manual participation toggle and selected-row TSV exchange conceptually. Do not preserve the reproduced export of false participation as `x`, missing participation/bib/gender in grid import, or persistence of discarded edits. Define autosave versus staged review explicitly; general edit undo must remain separate from durable timing corrections.
 
 ## Proposed race and timing model
 
