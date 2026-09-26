@@ -71,10 +71,15 @@ public sealed partial class MainViewModel
     }
 
     private bool HasDeskDrafts => _allCompetitorRows.Any(x => x.HasDraftChanges)
-        || ParticipationChoices.Any(x => x.IsSaving || x.IsParticipating != x.SavedParticipation);
+        || ParticipationChoices.Any(x => x.IsSaving || x.IsParticipating != x.SavedParticipation)
+        || IsImportReviewOpen;
 
     private void EnsureDeskClean()
     {
+        if (IsImportReviewOpen)
+        {
+            throw new DomainValidationException("Commit or close the import review before changing the event file or competitions.");
+        }
         if (HasDeskDrafts)
         {
             throw new DomainValidationException("Save or discard the current competitor row before changing the event file or races.");
@@ -109,6 +114,7 @@ public sealed partial class MainViewModel
     {
         var selectedId = SelectedCompetitorRow?.Id;
         _desk = await workspace.ReadCompetitorDeskAsync();
+        _selectedExportIds.Clear();
         CategoryRules.Clear();
         foreach (var rule in _desk.Categories) { CategoryRules.Add(rule); }
         _allCompetitorRows.Clear();
@@ -129,6 +135,7 @@ public sealed partial class MainViewModel
     private void ClearCompetitorDesk()
     {
         _desk = null;
+        _selectedExportIds.Clear();
         _allCompetitorRows.Clear();
         VisibleCompetitors.Clear();
         ParticipationChoices.Clear();
@@ -141,6 +148,7 @@ public sealed partial class MainViewModel
         LegacySourceWarnings.Clear();
         SelectedLegacySeries = null;
         LegacySnapshotLabel = string.Empty;
+        ClearImportReview();
     }
 
     private void UpdateIndicators(CompetitorGridRow row)

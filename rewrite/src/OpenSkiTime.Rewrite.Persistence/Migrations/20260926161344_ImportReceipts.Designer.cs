@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OpenSkiTime.Rewrite.Persistence;
 
@@ -10,9 +11,11 @@ using OpenSkiTime.Rewrite.Persistence;
 namespace OpenSkiTime.Rewrite.Persistence.Migrations
 {
     [DbContext(typeof(SeriesDbContext))]
-    partial class SeriesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926161344_ImportReceipts")]
+    partial class ImportReceipts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");

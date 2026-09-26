@@ -12,6 +12,7 @@ public sealed class SeriesDbContext(DbContextOptions<SeriesDbContext> options) :
     internal DbSet<CompetitorRow> Competitors => Set<CompetitorRow>();
     internal DbSet<ParticipationRow> Participations => Set<ParticipationRow>();
     internal DbSet<CategoryRuleRow> CategoryRules => Set<CategoryRuleRow>();
+    internal DbSet<ImportReceiptRow> ImportReceipts => Set<ImportReceiptRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -93,6 +94,13 @@ public sealed class SeriesDbContext(DbContextOptions<SeriesDbContext> options) :
         category.Property(x => x.Label).IsRequired().HasMaxLength(100);
         category.Property(x => x.LabelKey).IsRequired().HasMaxLength(100);
         category.Property(x => x.Gender).HasConversion<string>().HasMaxLength(10);
+
+        var receipt = modelBuilder.Entity<ImportReceiptRow>();
+        receipt.ToTable("ImportReceipts");
+        receipt.HasKey(x => new { x.SeriesId, x.SourceHash });
+        receipt.HasOne<SeriesRow>().WithMany().HasForeignKey(x => x.SeriesId)
+            .HasPrincipalKey(x => x.Id).OnDelete(DeleteBehavior.Cascade);
+        receipt.Property(x => x.SourceHash).HasMaxLength(64);
     }
 }
 
@@ -166,6 +174,15 @@ internal sealed class CategoryRuleRow
     public int BirthYearMax { get; set; }
     public Gender? Gender { get; set; }
     public int DisplayOrder { get; set; }
+}
+
+internal sealed class ImportReceiptRow
+{
+    public Guid SeriesId { get; set; }
+    public string SourceHash { get; set; } = string.Empty;
+    public long Revision { get; set; }
+    public int Created { get; set; }
+    public int Updated { get; set; }
 }
 
 public sealed class SeriesDbContextFactory : IDesignTimeDbContextFactory<SeriesDbContext>

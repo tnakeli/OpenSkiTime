@@ -31,8 +31,9 @@ public class DesktopWorkflowTests
             var file = Path.Combine(root, "series.ost");
             var backup = Path.Combine(root, "transfer.ost");
             var dialogs = new FileDialogsStub { NewPath = file, OpenPath = backup, BackupPath = backup };
+            var exchange = new EntryExchangeStub();
             await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
-            var vm = new MainViewModel(workspace, dialogs);
+            var vm = new MainViewModel(workspace, dialogs, entryExchange: exchange);
             var window = new MainWindow { DataContext = vm };
             window.Show();
             vm.Name = "Levi Weekend";
@@ -158,6 +159,66 @@ public class DesktopWorkflowTests
             Assert.Single(vm.VisibleCompetitors);
             vm.CompetitorFilterText = string.Empty;
 
+            exchange.ClipboardText = "Surname\tFirst name\tYear\tClub\t3.1 SL\tBib:3.1 SL\t3.2 GS\n"
+                + "Mäkelä\tAino\t2010\tReview Club\tX\t11\t0\n"
+                + "Laine\tLea\t2011\tNew Club\tX\t\t\n";
+            Click(window, "Paste from Excel");
+            await vm.PasteFromExcelCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.True(vm.IsImportReviewOpen);
+            Assert.Equal(2, vm.ImportReviewRows.Count);
+            Assert.True(window.FindControl<DataGrid>("ImportReviewGrid")!.IsVisible);
+            window.UpdateLayout();
+            var changed = vm.ImportReviewRows.Single(x => !x.IsNew);
+            Assert.True(changed.IsClubChanged);
+            var clubEditor = window.FindControl<DataGrid>("ImportReviewGrid")!.GetVisualDescendants()
+                .OfType<TextBox>().Single(x => ReferenceEquals(x.DataContext, changed) && x.Text == "Review Club");
+            clubEditor.Text = "Edited in grid";
+            Assert.Equal("Edited in grid", changed.Club);
+            Click(window, "Reset review");
+            await vm.ResetImportReviewCommand.ExecutionTask!;
+            Assert.Equal("Review Club", vm.ImportReviewRows.Single(x => !x.IsNew).Club);
+            vm.ImportSourceText += "changed source";
+            Click(window, "Commit import");
+            await vm.CommitImportCommand.ExecutionTask!;
+            Assert.True(vm.IsError);
+            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
+            vm.ImportSourceText = exchange.ClipboardText;
+            vm.ImportReviewRows.Single(x => !x.IsNew).Club = "Edited Club";
+            vm.ImportReviewRows.Single(x => !x.IsNew).Entries.Single(x => x.Label == "3.1 SL").BibText = "12";
+            Click(window, "Commit import");
+            await vm.CommitImportCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.False(vm.IsImportReviewOpen);
+            Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
+            var importedDesk = await workspace.ReadCompetitorDeskAsync();
+            var importedAthlete = importedDesk.Competitors.Single(x => x.Values.Surname == "MÄKELÄ");
+            Assert.Equal("Edited Club", importedAthlete.Values.Club);
+            Assert.Equal(12, importedDesk.Participations.Single(x =>
+                x.CompetitorId == importedAthlete.Id
+                && x.CompetitionId == vm.Competitions.Single(c => c.Values.ShortLabel == "3.1 SL").Id).ImportedBib);
+            vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "MÄKELÄ");
+            window.FindControl<DataGrid>("CompetitorGrid")!.SelectedItems.Add(
+                vm.VisibleCompetitors.Single(x => x.Surname == "LAINE"));
+            Click(window, "Copy selection");
+            await vm.CopySelectedCompetitorCommand.ExecutionTask!;
+            Assert.Contains("Bib:3.1 SL", exchange.CopiedText);
+            Assert.Equal(3, TsvExchange.Parse(exchange.CopiedText).Count);
+            Click(window, "Export selection TSV");
+            await vm.ExportSelectedTsvCommand.ExecutionTask!;
+            Assert.Equal(exchange.CopiedText, exchange.SavedText);
+
+            exchange.ClipboardText = "Surname\nUnknown";
+            Click(window, "Paste from Excel");
+            await vm.PasteFromExcelCommand.ExecutionTask!;
+            Assert.True(Assert.Single(vm.ImportReviewRows).NeedsApproval);
+            Click(window, "Commit import");
+            await vm.CommitImportCommand.ExecutionTask!;
+            Assert.True(vm.IsError);
+            Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
+            Click(window, "Close review");
+            Assert.False(vm.IsImportReviewOpen);
+
             Click(window, "Backup / transfer");
             await vm.BackupCommand.ExecutionTask!;
             Assert.True(File.Exists(backup));
@@ -168,7 +229,7 @@ public class DesktopWorkflowTests
             await vm.OpenSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(2, vm.Competitions.Count);
-            Assert.Equal("MÄKELÄ", Assert.Single(vm.VisibleCompetitors).Surname);
+            Assert.Contains(vm.VisibleCompetitors, x => x.Surname == "MÄKELÄ");
             Assert.Single(vm.CategoryRules);
             Assert.Equal(backup, vm.FileLabel);
             Click(window, "1  Event series");
@@ -259,5 +320,19 @@ public class DesktopWorkflowTests
         public Task<string?> ChooseLegacyDatabaseAsync() => Task.FromResult<string?>(null);
         public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(true);
         public Task<bool> ConfirmRemoveCompetitorAsync(string surname) => Task.FromResult(true);
+    }
+
+    private sealed class EntryExchangeStub : IEntryExchange
+    {
+        public string ClipboardText { get; set; } = string.Empty;
+        public string CopiedText { get; private set; } = string.Empty;
+        public string SavedText { get; private set; } = string.Empty;
+        public Task<string?> ReadClipboardAsync() => Task.FromResult<string?>(ClipboardText);
+        public Task WriteClipboardAsync(string text) { CopiedText = text; return Task.CompletedTask; }
+        public Task<bool> SaveTsvAsync(string suggestedName, string text)
+        {
+            SavedText = text;
+            return Task.FromResult(true);
+        }
     }
 }
