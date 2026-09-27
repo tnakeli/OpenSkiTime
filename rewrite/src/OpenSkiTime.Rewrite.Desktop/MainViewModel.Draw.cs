@@ -7,6 +7,9 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
+public sealed record DrawDestination(CompetitionDetails Competition, int Run);
+public sealed record DrawMenuCompetition(CompetitionDetails Competition, IReadOnlyList<int> Runs);
+
 public sealed partial class ResultInputRow(StartListEntry entry) : ObservableObject
 {
     public Guid CompetitorId => entry.Entrant.CompetitorId;
@@ -31,14 +34,13 @@ public sealed partial class MainViewModel
     private StartListRevision? _sourceRun;
     private int _drawLoad;
     private bool _settingDraw;
-    public ObservableCollection<int> DrawRuns { get; } = [];
+    public ObservableCollection<DrawMenuCompetition> DrawMenu { get; } = [];
     public ObservableCollection<StartListRevision> DrawRevisions { get; } = [];
     public ObservableCollection<StartListEntry> DrawEntries { get; } = [];
     public ObservableCollection<ResultInputRow> DrawResults { get; } = [];
-    public IReadOnlyList<string> DrawGenders { get; } = ["Women", "Men"];
     public IReadOnlyList<int> ReverseChoices { get; } = [30, 15];
     private CompetitionDetails? _drawCompetition;
-    private string _drawGender = "Women";
+    private Gender? _drawGender;
     private int _drawRun = 1;
     public CompetitionDetails? DrawCompetition
     {
@@ -51,20 +53,8 @@ public sealed partial class MainViewModel
             if (_settingDraw) { return; }
             _settingDraw = true;
             DrawRun = 1;
-            SetDrawRuns();
             _settingDraw = false;
             _ = LoadDrawAsync();
-        }
-    }
-    public string DrawGender
-    {
-        get => _drawGender;
-        set
-        {
-            if (value == _drawGender) { return; }
-            if (!_settingDraw && !CanLeaveDrawInput()) { OnPropertyChanged(); return; }
-            SetProperty(ref _drawGender, value);
-            if (!_settingDraw) { _ = LoadDrawAsync(); }
         }
     }
     public int DrawRun
@@ -89,31 +79,62 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _drawReason = "Initial draw";
     [ObservableProperty] private bool _drawJuryConfirmed;
     [ObservableProperty] private string _drawState = "Choose a competition";
-    [ObservableProperty] private string _drawHelp = "Select the competition, gender and run to prepare its start list.";
+    [ObservableProperty] private string _drawHelp = "Choose a competition and run from the Draw / Start lists menu.";
     [ObservableProperty] private string _drawListInfo = string.Empty;
     [ObservableProperty] private string _drawContext = string.Empty;
     [ObservableProperty] private bool _drawHasChangedEntries;
+    [ObservableProperty] private bool _drawRunStarted;
+    [ObservableProperty] private string _drawEntryIssue = string.Empty;
     public bool IsFirstDrawRun => DrawRun == 1;
     public bool IsLaterDrawRun => DrawRun > 1;
-    public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && (DrawRun == 1 || _sourceRun is not null);
-    public bool CanApproveDraw => DrawRevision is { IsApproved: false } && !IsDrawBusy && !DrawHasChangedEntries && !HasUnsavedRunInput
+    public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && !DrawRunStarted
+        && DrawEntryIssue.Length == 0 && (DrawRun == 1 || (DrawRun == 2 && _sourceRun is not null));
+    public bool CanApproveDraw => DrawRevision is { IsApproved: false } && !IsDrawBusy && !DrawHasChangedEntries && !HasUnsavedRunInput && DrawEntryIssue.Length == 0
         && DrawRevision == DrawRevisions.FirstOrDefault() && DrawJuryConfirmed;
     public bool CanExportDraw => DrawRevision is { IsApproved: true } && !IsDrawBusy && !HasUnsavedRunInput;
     public bool HasDrawSource => _sourceRun is not null;
-    private Gender ActiveDrawGender => DrawGender == "Women" ? Gender.Female : Gender.Male;
+    public bool CanEditDrawResults => HasDrawSource && !DrawRunStarted && !IsDrawBusy;
+    public bool CanMarkRunStarted => CanExportDraw && !DrawRunStarted && !DrawHasChangedEntries
+        && DrawRevision == DrawRevisions.FirstOrDefault() && DrawEntryIssue.Length == 0;
+    public string DrawNavigationLabel => IsDrawSection && DrawCompetition is { } c
+        ? $"4  Draw / Start lists · {c.Values.ShortLabel} / Run {DrawRun}  ▾" : "4  Draw / Start lists  ▾";
     [RelayCommand] private void ShowDrawList() => IsResultInputOpen = false;
     [RelayCommand] private void ShowRunInput() => IsResultInputOpen = true;
 
     [RelayCommand]
-    private async Task ShowDrawAsync()
+    private async Task RefreshDrawMenuAsync()
     {
-        if (!CanLeaveDrawInput()) { return; }
+        DrawMenu.Clear();
+        await GuardAsync(async () =>
+        {
+            foreach (var competition in Competitions.ToArray())
+            {
+                var desk = await workspace.ReadStartListsAsync(competition.Id);
+                var runs = Enumerable.Range(1, competition.Values.RunCount)
+                    .Where(run => IsRunAvailable(desk, run)).ToArray();
+                DrawMenu.Add(new(competition, runs));
+            }
+        });
+    }
+
+    private static bool IsRunAvailable(StartListDesk desk, int run) => run == 1
+        || desk.Revisions.Any(x => x.Plan.RunNumber == run)
+        || desk.Revisions.Any(x => x.Plan.RunNumber == run - 1 && x.StartedAt is not null);
+
+    [RelayCommand]
+    private async Task OpenDrawRunAsync(DrawDestination destination)
+    {
+        if (IsDrawBusy || !CanLeaveDrawInput()) { return; }
+        var competition = Competitions.FirstOrDefault(x => x.Id == destination.Competition.Id);
+        if (competition is null || destination.Run < 1 || destination.Run > competition.Values.RunCount) { return; }
+        var available = false;
+        await GuardAsync(async () => available = IsRunAvailable(await workspace.ReadStartListsAsync(competition.Id), destination.Run));
+        if (!available) { SetStatus("The previous run has not started yet.", error: true); return; }
         SwitchSection(WorkspaceSection.Draw);
         if (!IsDrawSection) { return; }
         _settingDraw = true;
-        DrawCompetition = Competitions.FirstOrDefault(x => x.Id == DrawCompetition?.Id)
-            ?? SelectedCompetition ?? Competitions.FirstOrDefault();
-        SetDrawRuns();
+        DrawCompetition = competition;
+        DrawRun = destination.Run;
         _settingDraw = false;
         await LoadDrawAsync();
     }
@@ -138,14 +159,6 @@ public sealed partial class MainViewModel
         await LoadDrawAsync();
     }
 
-    private void SetDrawRuns()
-    {
-        DrawRuns.Clear();
-        for (var i = 1; i <= (DrawCompetition?.Values.RunCount ?? 1); i++) { DrawRuns.Add(i); }
-        if (!DrawRuns.Contains(DrawRun)) { DrawRun = 1; }
-        OnPropertyChanged(nameof(DrawRun));
-    }
-
     private async Task LoadDrawAsync()
     {
         var load = ++_drawLoad;
@@ -158,6 +171,9 @@ public sealed partial class MainViewModel
         _sourceRun = null;
         DrawJuryConfirmed = false;
         DrawHasChangedEntries = false;
+        DrawRunStarted = false;
+        DrawEntryIssue = string.Empty;
+        _drawGender = null;
         NotifyDraw();
         if (competition is null || !workspace.IsOpen) { DrawState = "Choose a competition"; return; }
         IsDrawBusy = true;
@@ -168,17 +184,28 @@ public sealed partial class MainViewModel
             if (load != _drawLoad) { return; }
             _drawDesk = desk;
             _desk = competitors;
+            var enteredIds = competitors.Participations.Where(x => x.CompetitionId == competition.Id && x.Participates).Select(x => x.CompetitorId).ToHashSet();
+            var entrants = competitors.Competitors.Where(x => enteredIds.Contains(x.Id)).ToArray();
+            var genders = entrants.Select(x => x.Values.Gender).Distinct().ToArray();
+            _drawGender = genders.Length == 1 && genders[0] is Gender.Male or Gender.Female ? genders[0] : null;
+            DrawEntryIssue = entrants.Length == 0 ? "No competitors entered in this competition."
+                : _drawGender is null ? competition.Values.RaceType == RaceType.Fis
+                    ? "FIS competitions must contain either Men or Women. Check the competition entries; nobody has been filtered out."
+                    : "Local mixed competitions use category draws. That rule profile is not implemented yet; nobody has been filtered out."
+                : string.Empty;
+            if (!IsRunAvailable(desk, DrawRun)) { _settingDraw = true; DrawRun = 1; _settingDraw = false; }
             if (_current is not null) { _current = _current with { Revision = competitors.Revision }; }
             DrawRevisions.Clear();
-            foreach (var revision in desk.Revisions.Where(x => x.Plan.Gender == ActiveDrawGender && x.Plan.RunNumber == DrawRun)
+            foreach (var revision in desk.Revisions.Where(x => x.Plan.RunNumber == DrawRun)
                 .OrderByDescending(x => x.Revision)) { DrawRevisions.Add(revision); }
-            var first = desk.Revisions.Where(x => x.Plan.Gender == ActiveDrawGender && x.Plan.RunNumber == 1)
+            var first = desk.Revisions.Where(x => x.Plan.RunNumber == 1)
                 .OrderByDescending(x => x.Revision).FirstOrDefault();
             _sourceRun = first is { IsApproved: true } ? first : null;
             FirstDrawGroup = first?.Plan.Options.FirstGroup ?? 15;
             DrawReverseCount = first?.Plan.Options.ReverseCount ?? 30;
-            DrawFirstBib = first?.Plan.Options.FirstBib ?? (desk.Revisions.Where(x => x.Plan.Gender != ActiveDrawGender && x.Plan.RunNumber == 1)
-                .SelectMany(x => x.Plan.Entries).Select(x => x.Bib).DefaultIfEmpty(0).Max() + 1);
+            DrawFirstBib = first?.Plan.Options.FirstBib ?? 1;
+            DrawRunStarted = DrawRevisions.Any(x => x.StartedAt is not null)
+                || desk.Revisions.Any(x => x.Plan.RunNumber > DrawRun);
             DrawRevision = DrawRevisions.FirstOrDefault();
             DrawReason = DrawRevision is null ? "Initial draw" : string.Empty;
             ShowDrawRevision();
@@ -205,14 +232,15 @@ public sealed partial class MainViewModel
         if (DrawRevision is { } revision)
         {
             foreach (var entry in revision.Plan.Entries) { DrawEntries.Add(entry); }
-            DrawState = revision.IsApproved ? "Approved" : "Draft · review before approval";
+            DrawState = DrawRunStarted ? "Run started" : revision.IsApproved ? "Approved" : "Draft · review before approval";
             DrawListInfo = $"v{revision.Revision} · {revision.Plan.Entries.Count} starters · FIS list {revision.Plan.PointsList.Code} · {revision.Operator} · {revision.Reason}";
-            DrawHelp = revision.IsApproved ? "Frozen start list. Create a new revision to replace it; this version stays in history."
+            DrawHelp = DrawRunStarted ? "Run started. Starting order is locked; select the next run from the Draw / Start lists menu."
+                : revision.IsApproved ? "Approved start list. Mark the run started when racing begins; this locks the starting order."
                 : "Check the starting order and bibs, then approve this list for use at the start.";
             var reference = revision.Plan.RunNumber == 1 ? revision.Plan.Entries : _sourceRun?.Plan.Entries ?? revision.Plan.Entries;
             var entered = _desk?.Participations.Where(x => x.CompetitionId == revision.Plan.CompetitionId && x.Participates)
                 .Select(x => x.CompetitorId).ToHashSet() ?? [];
-            var athletes = _desk?.Competitors.Where(x => entered.Contains(x.Id) && x.Values.Gender == revision.Plan.Gender).ToArray() ?? [];
+            var athletes = _desk?.Competitors.Where(x => entered.Contains(x.Id)).ToArray() ?? [];
             DrawHasChangedEntries = athletes.Length != reference.Count || reference.Any(x => !athletes.Any(a => a.Id == x.Entrant.CompetitorId && a.Values == x.Entrant.Athlete));
             if (DrawHasChangedEntries) { DrawHelp = "Registration changed after this list was prepared. This is a saved snapshot; review the entries and create a new revision."; }
         }
@@ -223,8 +251,9 @@ public sealed partial class MainViewModel
                 : _sourceRun is null ? "Approve Run 1 before preparing the next run." : "Enter the classified Run 1 times/statuses below, then prepare Run 2. Bibs stay unchanged.";
             DrawListInfo = string.Empty;
         }
+        if (DrawEntryIssue.Length > 0) { DrawHelp = DrawEntryIssue; }
         DrawContext = DrawCompetition is { } c
-            ? $"{c.Values.ShortLabel}  /  {DrawGender}  /  Run {DrawRun} of {c.Values.RunCount}  ·  {c.Values.Date:yyyy-MM-dd}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
+            ? $"{c.Values.ShortLabel} · {c.Values.Name}  /  Run {DrawRun} of {c.Values.RunCount}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
             : "Choose a competition";
         NotifyDraw();
     }
@@ -235,6 +264,8 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(CanApproveDraw));
         OnPropertyChanged(nameof(CanExportDraw)); OnPropertyChanged(nameof(HasDrawSource));
         OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(DrawNavigationLabel)); OnPropertyChanged(nameof(CanMarkRunStarted));
+        OnPropertyChanged(nameof(CanEditDrawResults));
     }
 
     [RelayCommand]
@@ -255,14 +286,14 @@ public sealed partial class MainViewModel
                 if (desk.Revision != _drawDesk.SeriesRevision) { throw new SeriesConflictException(); }
                 var ids = desk.Participations.Where(x => x.CompetitionId == competition.Id && x.Participates).Select(x => x.CompetitorId).ToHashSet();
                 var discipline = competition.Values.Discipline switch { Discipline.Slalom => "SL", Discipline.GiantSlalom => "GS", Discipline.SuperG => "SG", Discipline.Downhill => "DH", _ => "AC" };
-                var entrants = desk.Competitors.Where(x => ids.Contains(x.Id) && x.Values.Gender == ActiveDrawGender).Select(x =>
+                var entrants = desk.Competitors.Where(x => ids.Contains(x.Id)).Select(x =>
                 {
                     decimal? points = null;
                     if (x.Values.FederationCode is { } code && list.Athletes.TryGetValue(code, out var athlete)
                         && athlete.Points?.TryGetValue(discipline, out var value) == true) { points = value; }
                     return new DrawEntrant(x.Id, x.Values, points);
                 }).ToArray();
-                plan = FisStartOrder.FirstRun(competition.Id, competition.Values, ActiveDrawGender, entrants,
+                plan = FisStartOrder.FirstRun(competition.Id, competition.Values, _drawGender!.Value, entrants,
                     new(list.ListCode, list.ValidFrom, list.ValidTo), new(FirstDrawGroup, DrawReverseCount, DrawFirstBib),
                     Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
             }
@@ -293,11 +324,25 @@ public sealed partial class MainViewModel
     }
 
     [RelayCommand]
+    private async Task MarkRunStartedAsync()
+    {
+        if (!CanMarkRunStarted || DrawRevision is not { } revision || _drawDesk is null) { return; }
+        IsDrawBusy = true;
+        await GuardAsync(async () =>
+        {
+            await workspace.MarkRunStartedAsync(revision.Id, _drawDesk.SeriesRevision, DrawOperator, DateTimeOffset.UtcNow);
+            await LoadDrawAsync();
+            SetStatus($"Run {DrawRun} marked started. This records run progress; it does not start timing capture.");
+        });
+        IsDrawBusy = false;
+    }
+
+    [RelayCommand]
     private async Task PasteDrawResultsAsync()
     {
         await GuardAsync(async () =>
         {
-            if (_sourceRun is null || entryExchange is null) { return; }
+            if (!CanEditDrawResults || _sourceRun is null || entryExchange is null) { return; }
             var text = await entryExchange.ReadClipboardAsync();
             if (string.IsNullOrWhiteSpace(text)) { throw new DomainValidationException("Copy Bib, Time and optional Status columns first."); }
             var results = RunResultInput.ParseTsv(text, _sourceRun).ToDictionary(x => x.CompetitorId);

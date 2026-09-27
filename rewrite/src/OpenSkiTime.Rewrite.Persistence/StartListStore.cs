@@ -34,6 +34,9 @@ internal sealed partial class SqliteSeriesFileSession
             if (string.IsNullOrWhiteSpace(request.Operator) || string.IsNullOrWhiteSpace(request.Reason))
             { throw new DomainValidationException("Enter the operator and reason for this start-list revision."); }
             await ValidateStartPlanAsync(db, plan, ct);
+            if (await db.StartLists.AnyAsync(x => x.StartedAt != null && db.Runs.Any(r => r.Id == x.RunId
+                && r.CompetitionId == plan.CompetitionId && r.Number == plan.RunNumber), ct))
+            { throw new DomainValidationException("This run has started. Its start list can no longer be redrawn."); }
             var run = await db.Runs.SingleOrDefaultAsync(x => x.CompetitionId == plan.CompetitionId
                 && x.Gender == plan.Gender && x.Number == plan.RunNumber, ct);
             if (run is null)
@@ -73,6 +76,25 @@ internal sealed partial class SqliteSeriesFileSession
         return await ReadStartListsAsync(result.Value, ct);
     }
 
+    public async Task<StartListDesk> MarkRunStartedAsync(Guid listId, long expectedRevision, string operatorName, DateTimeOffset at, CancellationToken ct = default)
+    {
+        var result = await WriteDeskAsync(async (db, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(operatorName)) { throw new DomainValidationException("Enter the operator before marking the run started."); }
+            var row = await db.StartLists.SingleOrDefaultAsync(x => x.Id == listId, ct)
+                ?? throw new DomainValidationException("The start list no longer exists.");
+            if (row.ApprovedAt is null || row.StartedAt is not null
+                || await db.StartLists.AnyAsync(x => x.RunId == row.RunId && x.Revision > row.Revision, ct))
+            { throw new DomainValidationException("Only the latest approved list can be marked started, once."); }
+            var list = await ReadListAsync(db, row, ct);
+            await ValidateStartPlanAsync(db, list.Plan, ct);
+            row.StartedAt = at;
+            row.StartedBy = operatorName.Trim();
+            return list.Plan.CompetitionId;
+        }, expectedRevision, ct);
+        return await ReadStartListsAsync(result.Value, ct);
+    }
+
     private static async Task<StartListRevision> ReadListAsync(SeriesDbContext db, StartListRow row, CancellationToken ct)
     {
         var plan = JsonSerializer.Deserialize<StartListPlan>(row.PlanJson)
@@ -80,7 +102,8 @@ internal sealed partial class SqliteSeriesFileSession
         var entries = await db.StartListEntries.AsNoTracking().Where(x => x.ListId == row.Id).OrderBy(x => x.Position).ToArrayAsync(ct);
         return new(row.Id, row.Revision, row.CreatedAt, row.ApprovedAt, row.Operator, row.Reason,
             plan with { Entries = entries.Select(x => JsonSerializer.Deserialize<StartListEntry>(x.EntryJson)
-                ?? throw new SeriesFileException("Invalid saved start-list entry.")).ToArray() });
+                ?? throw new SeriesFileException("Invalid saved start-list entry.")).ToArray() })
+            { StartedAt = row.StartedAt, StartedBy = row.StartedBy };
     }
 
     private static async Task ValidateStartPlanAsync(SeriesDbContext db, StartListPlan plan, CancellationToken ct)
@@ -112,6 +135,8 @@ internal sealed partial class SqliteSeriesFileSession
             var source = await db.StartLists.SingleOrDefaultAsync(x => x.Id == plan.SourceListId, ct)
                 ?? throw new DomainValidationException("The approved source start list is missing.");
             var first = await ReadListAsync(db, source, ct);
+            if (first.StartedAt is null && !await db.Runs.AnyAsync(x => x.CompetitionId == plan.CompetitionId && x.Number == 2, ct))
+            { throw new DomainValidationException("Mark Run 1 started before preparing Run 2."); }
             if (first.Plan.CompetitionId != plan.CompetitionId || first.Plan.Gender != plan.Gender)
             { throw new DomainValidationException("The source list belongs to a different competition or gender."); }
             if (await db.StartLists.AnyAsync(x => x.RunId == source.RunId && x.Revision > source.Revision, ct))
@@ -125,7 +150,9 @@ internal sealed partial class SqliteSeriesFileSession
         var athletes = await db.Competitors.Where(x => enteredIds.Contains(x.Id)).ToArrayAsync(ct);
         if (athletes.Any(x => x.Gender is null or Gender.Other))
         { throw new DomainValidationException("Assign Men or Women to every entered competitor before drawing."); }
-        var scoped = athletes.Where(x => x.Gender == plan.Gender).ToDictionary(x => x.Id);
+        if (athletes.Any(x => x.Gender != plan.Gender))
+        { throw new DomainValidationException("The FIS profile draws the whole competition. Use separate competitions for Men and Women; local mixed competitions need category draw rules."); }
+        var scoped = athletes.ToDictionary(x => x.Id);
         var referenceEntries = plan.Entries;
         if (plan.SourceListId is { } sourceId)
         {

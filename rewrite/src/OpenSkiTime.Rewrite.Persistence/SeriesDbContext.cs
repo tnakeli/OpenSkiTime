@@ -227,6 +227,8 @@ internal sealed class StartListRow
     public int Revision { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ApprovedAt { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+    public string? StartedBy { get; set; }
     public string Operator { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public string PlanJson { get; set; } = string.Empty;
