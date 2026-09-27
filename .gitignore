@@ -73,3 +73,8 @@ appsettings.*.Local.json
 .env.*
 !.env.example
 secrets/
+
+# Downloaded FIS lists contain personal athlete data; keep them outside Git.
+ALFP*.zip
+AL????*.csv
+fis-points-list.zip

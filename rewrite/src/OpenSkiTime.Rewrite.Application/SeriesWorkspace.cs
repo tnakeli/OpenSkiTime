@@ -22,7 +22,9 @@ public interface ISeriesFileSession : IAsyncDisposable
     Task<DeskMutationResult<CategoryRuleDetails>> SaveCategoryRuleAsync(Guid? id, CategoryRuleValues values,
         long expectedRevision, CancellationToken ct = default);
     Task<long> RemoveCategoryRuleAsync(Guid id, long expectedRevision, CancellationToken ct = default);
+    Task<long> ReplaceCategoryRulesAsync(IReadOnlyList<CategoryRuleValues> rules, long expectedRevision, CancellationToken ct = default);
     Task<ImportCommitResult> ApplyImportAsync(ImportCommit commit, CancellationToken ct = default);
+    Task<DeskBatchResult> ApplyDeskBatchAsync(DeskBatch batch, CancellationToken ct = default);
     Task BackupAsync(string destinationPath, CancellationToken ct = default);
 }
 
@@ -111,8 +113,12 @@ public sealed class SeriesWorkspace(ISeriesFileStore store) : IAsyncDisposable
         => WithSessionAsync(s => s.SaveCategoryRuleAsync(id, values, expectedRevision, ct), ct);
     public Task<long> RemoveCategoryRuleAsync(Guid id, long expectedRevision, CancellationToken ct = default)
         => WithSessionAsync(s => s.RemoveCategoryRuleAsync(id, expectedRevision, ct), ct);
+    public Task<long> ReplaceCategoryRulesAsync(IReadOnlyList<CategoryRuleValues> rules, long expectedRevision, CancellationToken ct = default)
+        => WithSessionAsync(s => s.ReplaceCategoryRulesAsync(rules, expectedRevision, ct), ct);
     public Task<ImportCommitResult> ApplyImportAsync(ImportCommit commit, CancellationToken ct = default)
         => WithSessionAsync(s => s.ApplyImportAsync(commit, ct), ct);
+    public Task<DeskBatchResult> ApplyDeskBatchAsync(DeskBatch batch, CancellationToken ct = default)
+        => WithSessionAsync(s => s.ApplyDeskBatchAsync(batch, ct), ct);
     public Task BackupAsync(string destinationPath, CancellationToken ct = default)
         => WithSessionAsync(async s => { await s.BackupAsync(destinationPath, ct); return true; }, ct);
 

@@ -19,7 +19,7 @@ public sealed class App : Avalonia.Application, IDisposable
             _workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
             var window = new MainWindow();
             _viewModel = new MainViewModel(_workspace, new AvaloniaFileDialogs(window),
-                new SqliteLegacyConversionPreviewer(), new AvaloniaEntryExchange(window));
+                new AvaloniaEntryExchange(window));
             window.DataContext = _viewModel;
             desktop.MainWindow = window;
             desktop.Exit += OnExit;

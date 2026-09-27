@@ -12,7 +12,7 @@
 - Store each event series in its own portable local database, including raw timing input and audit history. Keep user preferences separate; transferring a series must not depend on the original machine or user profile.
 - Prioritize operator speed: dense consistent keyboard-friendly UI, preserved focus, clear status and actionable errors. Rendering and optional online integrations must not block capture.
 - Test behavior through the boundary claimed, including critical failure/replay paths. Run relevant build/tests and report unverified checks honestly. Update affected documentation with behavior changes.
-- Keep credentials and personal race data out of committed fixtures, configuration and diagnostic logs. Use synthetic/anonymized examples.
+- Keep credentials, downloaded FIS lists and personal race data out of Git, committed fixtures, configuration and diagnostic logs. Use synthetic/anonymized examples.
 - Legacy Spec Kit files and legacy source code are historical reference material.
   Do not execute old Spec Kit workflows or treat completed tasks as proof of
   correct behavior. Use them only when relevant to the current task.

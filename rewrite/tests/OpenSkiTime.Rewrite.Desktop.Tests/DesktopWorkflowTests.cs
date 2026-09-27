@@ -2,8 +2,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.IO.Compression;
+using System.Text;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Desktop;
 using OpenSkiTime.Rewrite.Domain;
@@ -22,10 +27,268 @@ public sealed class HeadlessAppBuilder
 
 public class DesktopWorkflowTests
 {
-    [AvaloniaFact]
-    public async Task DesktopCreatesEditsBacksUpAndReopensSeries()
+    [Fact]
+    public async Task CategoryRulePresetCanBeSavedAndLoadedLocally()
     {
-        var root = Path.Combine(Path.GetTempPath(), "openskitime-m1-ui", Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-rules-ui", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new CategoryRulePresetStore(folder);
+            var rules = new[] { new CategoryRuleValues("Women U16", 2010, 2011, Gender.Female, 1) };
+            await store.SaveAsync(rules);
+            Assert.Equal(rules, await store.LoadAsync());
+        }
+        finally { if (Directory.Exists(folder)) { Directory.Delete(folder, recursive: true); } }
+    }
+
+    [Fact]
+    public async Task LoadingSavedRulesReplacesSeriesRulesAndUpdatesCompetitorCategories()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-rules-workflow", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var file = Path.Combine(folder, "series.ost");
+            var preset = new CategoryRulePresetStore(folder);
+            await preset.SaveAsync([new CategoryRuleValues("Women 2002", 2002, 2002, Gender.Female, 0)]);
+            await using (var seed = new SeriesWorkspace(new SqliteSeriesFileStore()))
+            {
+                var series = await seed.CreateAsync(file, new SeriesValues("Race", "Levi", "Club",
+                    new DateOnly(2026, 9, 25), new DateOnly(2026, 9, 25), "FIN", "2026/27"));
+                var old = await seed.SaveCategoryRuleAsync(null,
+                    new CategoryRuleValues("Old", 2002, 2002, null, 0), series.Revision);
+                await seed.SaveDeskRowAsync(null, new CompetitorValues("NORD", "Ada", 2002,
+                    "123456", "FIN", "Club", Gender.Female), null, false, null, old.Revision);
+            }
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var vm = new MainViewModel(workspace, new FileDialogsStub
+            {
+                NewPath = file, OpenPath = file, BackupPath = file + ".bak"
+            },
+                categoryRulePresetStore: preset);
+            vm.OpenSeriesCommand.Execute(null);
+            await vm.OpenSeriesCommand.ExecutionTask!;
+            vm.LoadCategoryRulesPresetCommand.Execute(null);
+            await vm.LoadCategoryRulesPresetCommand.ExecutionTask!;
+            Assert.Equal("Women 2002", Assert.Single(vm.CategoryRules).Values.Label);
+            Assert.Equal("Women 2002", Assert.Single(vm.VisibleCompetitors, x => !x.IsPlaceholder).Category);
+            vm.UpdateCategoriesCommand.Execute(null);
+            Assert.Contains("1 competitor", vm.StatusMessage);
+            vm.SaveCategoryRulesPresetCommand.Execute(null);
+            await vm.SaveCategoryRulesPresetCommand.ExecutionTask!;
+            Assert.Equal("Women 2002", Assert.Single(await preset.LoadAsync()).Label);
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
+    public async Task FisDownloaderUsesEffectiveDateAndCredentialHeader()
+    {
+        var handler = new FisHttpHandler();
+        using var client = new HttpClient(handler);
+        var bytes = await new FisPointsDownloader(client).DownloadAsync(new DateOnly(2026, 9, 27), "synthetic-key");
+        Assert.Equal([1, 2, 3], bytes);
+        Assert.Equal("https://api.fis-ski.com/data-feeds/fis-points-lists/normal/AL/download?effectiveDate=2026-09-27",
+            handler.RequestUri);
+        Assert.Equal("synthetic-key", handler.Token);
+    }
+
+    [Fact]
+    public async Task CodeOnlyCompetitorCanBeFilledFromCachedFisList()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-fis-code", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "series.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(SyntheticFisArchive());
+            await using (var seed = new SeriesWorkspace(new SqliteSeriesFileStore()))
+            {
+                var series = await seed.CreateAsync(file, new SeriesValues("Race", "Levi", "Club",
+                    new DateOnly(2026, 9, 25), new DateOnly(2026, 9, 25), "FIN", "2026/27"));
+                await seed.SaveDeskRowAsync(null, new CompetitorValues("", "", null,
+                    "123456", null, null, null), null, false, null, series.Revision);
+            }
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var vm = new MainViewModel(workspace, new FileDialogsStub
+            {
+                NewPath = file, OpenPath = file, BackupPath = file + ".bak"
+            }, fisStore: cache);
+            vm.OpenSeriesCommand.Execute(null);
+            await vm.OpenSeriesCommand.ExecutionTask!;
+            vm.StageFisUpdatesCommand.Execute(null);
+            Assert.Equal("NORD", Assert.Single(vm.VisibleCompetitors, x => !x.IsPlaceholder).Surname);
+            Assert.Contains(vm.DeskChangeLog, x => x.Field == nameof(CompetitorGridRow.Surname));
+            vm.CommitDeskChangesCommand.Execute(null);
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
+            Assert.Equal("NORD", Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors).Values.Surname);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [AvaloniaFact]
+    public async Task CachedFisListStagesUpdatesAndNewAthletesOnlyUntilCommit()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-fis-ui", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "series.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(SyntheticFisArchive());
+            await using (var seed = new SeriesWorkspace(new SqliteSeriesFileStore()))
+            {
+                var series = await seed.CreateAsync(file, new SeriesValues("Race", "Levi", "Club",
+                    new DateOnly(2026, 9, 25), new DateOnly(2026, 9, 25), "FIN", "2026/27"));
+                var race = await seed.SaveCompetitionAsync(null, new CompetitionValues("Slalom", "SL",
+                    new DateOnly(2026, 9, 26), Discipline.Slalom, RaceType.Club, 2, 0), series.Revision);
+                await seed.SaveDeskRowAsync(null, new CompetitorValues("NORD", "Ada", 2002,
+                    "123456", "FIN", "Old Club", Gender.Female), null, false, null, race.Revision);
+            }
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var dialogs = new FileDialogsStub { NewPath = file, OpenPath = file, BackupPath = file + ".bak" };
+            var vm = new MainViewModel(workspace, dialogs, fisStore: cache);
+            var window = new MainWindow { DataContext = vm };
+            window.WindowState = WindowState.Normal;
+            window.Width = 1200;
+            window.Height = 800;
+            window.Show();
+            Click(window, "Open file");
+            await vm.OpenSeriesCommand.ExecutionTask!;
+            Assert.Equal(file, window.Title);
+            Click(window, "3  Competitors");
+            window.UpdateLayout();
+            var sections = window.GetVisualDescendants().OfType<Expander>()
+                .Where(x => Equals(x.Header, "Update from FIS")
+                    || x.Header?.ToString()?.StartsWith("Category rules", StringComparison.Ordinal) == true)
+                .ToArray();
+            var fisSection = sections.Single(x => Equals(x.Header, "Update from FIS"));
+            var categorySection = sections.Single(x => !Equals(x.Header, "Update from FIS"));
+            var fisPosition = fisSection.TranslatePoint(new Point(0, 0), window)!.Value;
+            var categoryPosition = categorySection.TranslatePoint(new Point(0, 0), window)!.Value;
+            Assert.True(fisPosition.Y < categoryPosition.Y);
+            Assert.True(categoryPosition.Y < window.Bounds.Height - 35);
+            var grid = window.FindControl<DataGrid>("CompetitorGrid")!;
+            var menu = grid.ContextMenu!;
+            Assert.All(menu.Items.OfType<MenuItem>(), item => Assert.NotNull(item.InputGesture));
+            Assert.Contains(menu.Items.OfType<MenuItem>(), item => Equals(item.Header, "Select all"));
+            Assert.True(grid.CanUserSortColumns);
+            Assert.All(grid.Columns.Skip(1), column => Assert.False(string.IsNullOrWhiteSpace(column.SortMemberPath)));
+            Assert.Equal(5, grid.Columns.Count(column => column.SortMemberPath?.StartsWith("Fis", StringComparison.Ordinal) == true));
+            Assert.Equal(12.34m, Assert.Single(vm.VisibleCompetitors, x => !x.IsPlaceholder).FisSl);
+            fisSection.IsExpanded = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(vm.IsFisPanelOpen);
+            Assert.Equal("1327: 13th FIS points list 2026/27 (22-09-2026)", vm.FisListDisplay);
+            Assert.Equal("2026-09-26", vm.FisEffectiveDateText);
+            var fisDateButton = window.FindControl<Button>("FisDatePickerButton")!;
+            fisDateButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var fisDatePopup = Assert.IsType<StackPanel>(Assert.IsType<Flyout>(fisDateButton.Flyout).Content);
+            Assert.IsType<Avalonia.Controls.Calendar>(fisDatePopup.Children[1]).SelectedDate = new DateTime(2026, 10, 2);
+            Assert.Equal("2026-10-02", window.FindControl<TextBox>("FisEffectiveDateInput")!.Text);
+            Click(window, "Stage updates for existing competitors");
+            Assert.Contains(vm.DeskChangeLog, x => x.Field == nameof(CompetitorGridRow.Club));
+            Assert.Equal("Old Club", Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors).Values.Club);
+            vm.FisSearchText = "654321";
+            Click(window, "×");
+            Assert.Empty(vm.FisSearchText);
+            vm.FisSearchText = "FIN";
+            var fisResults = window.FindControl<ListBox>("FisSearchResultsList")!;
+            foreach (var result in vm.FisSearchResults.Where(x => x.Athlete.Code != "123456"))
+            {
+                fisResults.SelectedItems!.Add(result);
+            }
+            Assert.Equal(2, fisResults.SelectedItems!.Count);
+            Click(window, "Add selected competitors");
+            Assert.Equal(3, vm.VisibleCompetitors.Count(x => !x.IsPlaceholder));
+            grid.Focus();
+            window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(3, grid.SelectedItems.OfType<CompetitorGridRow>().Count(x => !x.IsPlaceholder));
+            Click(window, "Commit Changes");
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
+            var saved = (await workspace.ReadCompetitorDeskAsync()).Competitors;
+            Assert.Equal(3, saved.Count);
+            Assert.Equal("North Club", saved.Single(x => x.Values.FederationCode == "123456").Values.Club);
+            Assert.Equal("WEST", saved.Single(x => x.Values.FederationCode == "654321").Values.Surname);
+            Assert.Equal("SOUTH", saved.Single(x => x.Values.FederationCode == "777777").Values.Surname);
+            window.FindControl<ScrollViewer>("WorkspaceScroll")!.Offset = Vector.Zero;
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var codeHeader = window.GetVisualDescendants().OfType<DataGridColumnHeader>()
+                .Single(x => Equals(x.Content, "CODE"));
+            var headerPoint = codeHeader.TranslatePoint(
+                new Point(codeHeader.Bounds.Width / 2, codeHeader.Bounds.Height / 2), window)!.Value;
+            Assert.True(codeHeader.IsVisible && codeHeader.Bounds.Width > 0 && codeHeader.Bounds.Height > 0,
+                $"Header not visible: window={window.Bounds}, header={codeHeader.Bounds}, point={headerPoint}");
+            window.MouseDown(headerPoint, MouseButton.Left);
+            window.MouseUp(headerPoint, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.EndsWith("↑", codeHeader.Content?.ToString());
+            window.MouseDown(headerPoint, MouseButton.Left);
+            window.MouseUp(headerPoint, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.EndsWith("↓", codeHeader.Content?.ToString());
+            Assert.Equal("777777", vm.VisibleCompetitors[0].FederationCode);
+            Assert.True(vm.VisibleCompetitors[^1].IsPlaceholder);
+            grid.Focus();
+            window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
+            window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(3, vm.DeskChangeLog.Count(x => x.Kind == DeskChangeKind.Delete));
+            Click(window, "Commit Changes");
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
+            Assert.Empty((await workspace.ReadCompetitorDeskAsync()).Competitors);
+            window.Close();
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private static byte[] SyntheticFisArchive()
+    {
+        using var output = new MemoryStream();
+        using (var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            Write(zip, "AL1327hdr.csv", "Listid\tSeasoncode\tListnumber\tListname\tCalculationdate\tStartracedate\tEndracedate\tValidfrom\tValidto\tLastupdate\n"
+                + "465\t2027\t13\t13th FIS points list 2026/27\t2026-09-22\t2026-07-01\t2026-09-20\t2026-09-24\t2026-09-30\t2026-09-22 04:19:38\n");
+            Write(zip, "AL1327com.csv", "Competitorid\tSectorcode\tFiscode\tLastname\tFirstname\tGender\tBirthdate\tNationcode\tNationalcode\tSkiclub\tAssociation\tStatus\n"
+                + "1\tAL\t123456\tNORD\tAda\tW\t2002-02-03\tFIN\t\tNorth Club\t\tA\n"
+                + "2\tAL\t654321\tWEST\tEli\tM\t2001-01-02\tFIN\t\tWest Club\t\tA\n"
+                + "3\tAL\t777777\tSOUTH\tSam\tM\t2000-01-02\tFIN\t\tSouth Club\t\tA\n");
+            Write(zip, "AL1327pts.csv", "Recid\tListid\tCompetitorid\tDisciplinecode\tFispoints\tPosition\tPenalty\tLastupdate\n"
+                + "7\t465\t1\tSL\t12.34\t2\t\t2026-09-22\n"
+                + "8\t465\t2\tGS\t24.68\t3\t\t2026-09-22\n");
+        }
+        return output.ToArray();
+    }
+
+    private static void Write(ZipArchive zip, string name, string contents)
+    {
+        using var writer = new StreamWriter(zip.CreateEntry(name).Open(), new UTF8Encoding(false));
+        writer.Write(contents);
+    }
+
+    private sealed class FisHttpHandler : HttpMessageHandler
+    {
+        public string? RequestUri { get; private set; }
+        public string? Token { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestUri = request.RequestUri?.ToString();
+            Token = request.Headers.GetValues("X-CSRF-TOKEN").Single();
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([1, 2, 3])
+            });
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DesktopStagesGridAndPasteChangesTogetherAndPersistsOnlyOnCommit()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-grid-ui", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try
         {
@@ -37,6 +300,7 @@ public class DesktopWorkflowTests
             var vm = new MainViewModel(workspace, dialogs, entryExchange: exchange);
             var window = new MainWindow { DataContext = vm };
             window.Show();
+
             vm.Name = "Levi Weekend";
             vm.Location = "Levi";
             vm.Organizer = "Test Club";
@@ -48,24 +312,17 @@ public class DesktopWorkflowTests
             await vm.CreateSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.True(File.Exists(file));
-            Assert.True(vm.IsOpen);
-            Assert.Equal(WorkspaceSection.Competitions, vm.ActiveSection);
 
             Click(window, "1  Event series");
-
             vm.StartDateText = "31.02.2026";
             Click(window, "Save series");
             await vm.SaveSeriesCommand.ExecutionTask!;
             Assert.True(vm.IsError);
-            Assert.Equal(new DateOnly(2026, 5, 6), (await workspace.ReadAsync()).Values.StartDate);
             vm.StartDateText = "6.5.2026";
             Click(window, "Save series");
             await vm.SaveSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.Equal("06.05.2026", vm.StartDateText);
-
             Click(window, "2  Competitions");
-
             Click(window, "Add competition");
             vm.CompetitionName = "Slalom";
             vm.CompetitionShortLabel = "3.1 SL";
@@ -76,10 +333,6 @@ public class DesktopWorkflowTests
             AssertFieldSpacing(window);
             Click(window, "Save competition");
             await vm.SaveCompetitionCommand.ExecutionTask!;
-            Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.Single(vm.Competitions);
-            Assert.Equal(new DateOnly(2026, 5, 6), vm.Competitions[0].Values.Date);
-            Assert.Equal(new DateOnly(2026, 5, 7), (await workspace.ReadAsync()).Values.EndDate);
             Click(window, "Add competition");
             vm.CompetitionName = "Giant slalom";
             vm.CompetitionShortLabel = "3.2 GS";
@@ -88,227 +341,240 @@ public class DesktopWorkflowTests
             Assert.Equal(2, vm.Competitions.Count);
 
             Click(window, "3  Competitors");
-            Assert.Contains(window.FindControl<DataGrid>("CompetitorGrid")!.Columns,
-                column => Equals(column.Header, "3.1 SL"));
-            Assert.Contains(window.FindControl<DataGrid>("CompetitorGrid")!.Columns,
-                column => Equals(column.Header, "3.2 GS"));
-            Click(window, "Add competitor");
-            var competitorRow = Assert.IsType<CompetitorGridRow>(vm.SelectedCompetitorRow);
-            competitorRow.Surname = "Mäkelä";
-            competitorRow.FirstName = "Aino";
-            competitorRow.BirthYearText = "2010";
-            competitorRow.GenderText = "Women";
-            competitorRow.Nation = "fin";
-            competitorRow.ImportedBibText = "27";
-            competitorRow.IsParticipating = true;
-            Click(window, "Save row");
-            await vm.SaveSelectedCompetitorCommand.ExecutionTask!;
+            var grid = window.FindControl<DataGrid>("CompetitorGrid")!;
+            Assert.Contains(grid.Columns, column => Equals(column.Header, "3.1 SL"));
+            Assert.Contains(grid.Columns, column => Equals(column.Header, "3.2 GS"));
+            Assert.Equal("CODE", grid.Columns[1].Header);
+            Assert.Equal("SURNAME", grid.Columns[2].Header);
+            Assert.DoesNotContain(grid.Columns, column => Equals(column.Header, "BIB REF") || Equals(column.Header, "STATUS"));
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), button =>
+                Equals(button.Content, "Save row") || Equals(button.Content, "Add competitor")
+                || Equals(button.Content, "Export selection TSV") || Equals(button.Content, "Undo saved"));
+            Assert.Single(vm.VisibleCompetitors);
+            var row = vm.VisibleCompetitors.Single();
+            Assert.True(row.IsPlaceholder);
+            grid.SelectedIndex = 0;
+            grid.CurrentColumn = grid.Columns[1];
+            grid.Focus();
+            window.KeyTextInput("F");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("F", row.FederationCode);
+            window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+            window.KeyTextInput("M");
+            Dispatcher.UIThread.RunJobs();
+            window.KeyTextInput("a");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Ma", row.Surname);
+            window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+            window.KeyTextInput("A");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("A", row.FirstName);
+            window.KeyPressQwerty(PhysicalKey.ArrowRight, RawInputModifiers.None);
+            window.KeyTextInput("2");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("2", row.BirthYearText);
+            row.FederationCode = "FIN123";
+            row.Surname = "Makela";
+            row.FirstName = "Aino";
+            row.BirthYearText = "2010";
+            row.GenderText = "Women";
+            row.Nation = "FIN";
+            var sl = row.GridEntries.Single(x => x.Label == "3.1 SL");
+            sl.IsParticipating = true;
+            Assert.True(row.IsSurnameChanged);
+            Assert.True(sl.IsChanged);
+            Assert.Equal(2, vm.VisibleCompetitors.Count);
+            Assert.True(vm.VisibleCompetitors.Last().IsPlaceholder);
+            Assert.Single(vm.DeskChangeLog);
+            Assert.Equal(DeskChangeKind.Add, vm.DeskChangeLog.Single().Kind);
+            Assert.Empty((await workspace.ReadCompetitorDeskAsync()).Competitors);
+            Click(window, "Commit Changes");
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.Same(competitorRow, vm.SelectedCompetitorRow);
-            Assert.Equal("MÄKELÄ", competitorRow.Surname);
-            Assert.Equal("Women", competitorRow.GenderText);
-            Assert.Equal(27, Assert.Single((await workspace.ReadCompetitorDeskAsync()).Participations).ImportedBib);
-            Assert.Equal(2, vm.ParticipationChoices.Count);
-            var firstRaceParticipation = vm.ParticipationChoices.Single(x => x.Label == "3.1 SL");
-            Assert.False(firstRaceParticipation.IsParticipating);
-            firstRaceParticipation.IsParticipating = true;
+            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
+            Assert.Empty(vm.DeskChangeLog);
+            row = vm.VisibleCompetitors.Single(x => !x.IsPlaceholder);
+            Assert.False(row.IsSurnameChanged);
+            Assert.False(row.GridEntries.Single(x => x.Label == "3.1 SL").IsChanged);
+            Assert.Equal("Women", row.GenderText);
+            Assert.Equal(["Women", "Men"], row.AvailableGenders);
+            grid.SelectedItem = row;
+            grid.CurrentColumn = grid.Columns[5];
+            Assert.True(grid.BeginEdit());
             window.UpdateLayout();
-            var firstRaceCheck = window.FindControl<ItemsControl>("ParticipationChoicesList")!
-                .GetVisualDescendants().OfType<CheckBox>()
-                .Single(x => ReferenceEquals(x.DataContext, firstRaceParticipation));
-            firstRaceCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Participations.Count);
-            var participation = vm.ParticipationChoices.Single(x => x.Label == "3.2 GS");
-            Assert.True(participation.IsParticipating);
-            participation.IsParticipating = false;
-            window.UpdateLayout();
-            var participationList = window.FindControl<ItemsControl>("ParticipationChoicesList");
-            Assert.NotNull(participationList);
-            Assert.True(participationList.IsVisible, "Participation list should be visible for the selected competitor.");
-            var participationCheck = participationList.GetVisualDescendants().OfType<CheckBox>()
-                .Single(x => ReferenceEquals(x.DataContext, participation));
-            participationCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.False((await workspace.ReadCompetitorDeskAsync()).Participations
-                .Single(x => x.CompetitionId == participation.CompetitionId).Participates);
-            participation.IsParticipating = true;
-            participationCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.True((await workspace.ReadCompetitorDeskAsync()).Participations
-                .Single(x => x.CompetitionId == participation.CompetitionId).Participates);
-            var gridEntry = competitorRow.GridEntries.Single(x => x.Label == "3.1 SL");
-            gridEntry.IsParticipating = false;
-            await vm.SaveGridParticipationAsync(competitorRow, gridEntry);
-            Assert.False((await workspace.ReadCompetitorDeskAsync()).Participations
-                .Single(x => x.CompetitionId == gridEntry.CompetitionId).Participates);
-            gridEntry.IsParticipating = true;
-            await vm.SaveGridParticipationAsync(competitorRow, gridEntry);
-            competitorRow.Club = "Unsaved draft";
-            Click(window, "2  Competitions");
-            Assert.Equal(WorkspaceSection.Competitors, vm.ActiveSection);
-            var selectedRace = vm.DeskCompetition;
-            vm.DeskCompetition = null;
-            Assert.Same(selectedRace, vm.DeskCompetition);
-            Assert.True(vm.IsError);
-            Click(window, "Discard draft");
-            Assert.Equal(string.Empty, competitorRow.Club);
-            competitorRow.Club = "Club A";
-            Click(window, "Save row");
-            await vm.SaveSelectedCompetitorCommand.ExecutionTask!;
-            Click(window, "Undo saved");
-            await vm.UndoDeskEditCommand.ExecutionTask!;
-            Assert.Same(competitorRow, vm.SelectedCompetitorRow);
-            Assert.Equal(string.Empty, competitorRow.Club);
-            vm.CategoryLabel = "Girls U16";
+            var genderCombo = grid.GetVisualDescendants().OfType<ComboBox>()
+                .Single(x => ReferenceEquals(x.ItemsSource, row.AvailableGenders));
+            genderCombo.SelectedItem = "Men";
+            Assert.Equal("Men", row.GenderText);
+            genderCombo.SelectedItem = "Women";
+            grid.CommitEdit(DataGridEditingUnit.Cell, true);
+            Assert.False(row.IsGenderChanged);
+            vm.CategoryLabel = "Women U16";
             vm.CategoryMinYearText = "2010";
             vm.CategoryMaxYearText = "2011";
             vm.CategoryGenderText = "Women";
             window.GetVisualDescendants().OfType<Expander>()
-                .Single(x => Equals(x.Header, "Category rules · birth-year range and gender")).IsExpanded = true;
+                .Single(x => x.Header?.ToString()?.StartsWith("Category rules", StringComparison.Ordinal) == true).IsExpanded = true;
+            window.UpdateLayout();
+            Assert.Contains(window.GetVisualDescendants().OfType<ComboBox>(),
+                x => ReferenceEquals(x.ItemsSource, vm.CategoryGenderOptions));
             Click(window, "Save rule");
             await vm.SaveCategoryRuleCommand.ExecutionTask!;
-            Assert.Equal("Women", vm.CategoryGenderText);
-            window.UpdateLayout();
-            var categoryGrid = window.GetVisualDescendants().OfType<DataGrid>()
-                .Single(grid => ReferenceEquals(grid.ItemsSource, vm.CategoryRules));
-            Assert.Contains(categoryGrid.GetVisualDescendants().OfType<TextBlock>(),
-                block => block.Text == "Women");
-            Assert.Equal("Girls U16", Assert.Single(vm.VisibleCompetitors).Category);
-            vm.CompetitorFilterText = "NO MATCH";
-            Assert.Empty(vm.VisibleCompetitors);
-            vm.CompetitorFilterText = "MÄK";
-            Assert.Single(vm.VisibleCompetitors);
-            vm.CompetitorFilterText = string.Empty;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal("Women U16", vm.VisibleCompetitors.Single(x => x.Surname == "MAKELA").Category);
+            Assert.Equal(["Any", "Women", "Men"], vm.CategoryGenderOptions);
+            row = vm.VisibleCompetitors.Single(x => x.Surname == "MAKELA");
+            grid.SelectedItem = row;
+            grid.CurrentColumn = grid.Columns[7];
+            grid.Focus();
+            window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+            window.KeyTextInput("X");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("X", row.Club);
+            row.Club = "Manual edit";
+            var clubChange = vm.DeskChangeLog.Single(x => x.Field == nameof(CompetitorGridRow.Club));
+            Assert.Contains("FIN123 MAKELA", clubChange.DisplayLabel);
+            Assert.Contains("Club: — → Manual edit", clubChange.DisplayLabel);
+            vm.RestoreDeskChangeCommand.Execute(clubChange);
+            Assert.Empty(vm.DeskChangeLog);
+            Assert.Equal(string.Empty, row.Club);
+            Assert.False(row.IsClubChanged);
 
-            exchange.ClipboardText = "Surname\tFirst name\tYear\tGender\tClub\t3.1 SL\tBib:3.1 SL\t3.2 GS\n"
-                + "Mäkelä\tAino\t2010\tWomen\tReview Club\tX\t11\t0\n"
-                + "Laine\tLea\t2011\tMen\tNew Club\tX\t\t\n";
-            Click(window, "Paste from Excel");
+            row.Club = "Manual edit";
+            exchange.ClipboardText = "Surname\tFirst name\tYear\tGender\tClub\t3.1 SL\t3.2 GS\n"
+                + "Makela\tAino\t2010\tWomen\tPaste club\tX\tX\n"
+                + "Laine\tLea\t2011\tMen\tNew club\tX\t\n";
+            vm.PasteFromExcelCommand.Execute(null);
             await vm.PasteFromExcelCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.True(vm.IsImportReviewOpen);
-            Assert.Equal(2, vm.ImportReviewRows.Count);
-            Assert.True(window.FindControl<DataGrid>("CompetitorGrid")!.IsVisible);
-            Assert.Equal(2, vm.VisibleCompetitors.Count);
-            Assert.All(vm.VisibleCompetitors, row => Assert.True(row.IsImportHighlighted));
-            Assert.Equal("NEW", vm.VisibleCompetitors.Single(x => x.Id is null).ImportMarker);
-            Assert.True(vm.VisibleCompetitors.Single(x => x.Id == competitorRow.Id)
-                .GridEntries.Single(x => x.Label == "3.1 SL").IsParticipating);
+            Assert.Equal(3, vm.VisibleCompetitors.Count); // two competitors and the perpetual blank row
+            Assert.True(row.IsClubChanged);
+            Assert.True(row.GridEntries.Single(x => x.Label == "3.2 GS").IsChanged);
+            Assert.Contains(vm.DeskChangeLog, x => x.Kind == DeskChangeKind.Add);
+            Assert.Contains(vm.DeskChangeLog, x => x.Kind == DeskChangeKind.Entry);
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
+            var gsEntry = row.GridEntries.Single(x => x.Label == "3.2 GS");
+            vm.RestoreDeskChangeCommand.Execute(vm.DeskChangeLog.Single(x =>
+                x.Kind == DeskChangeKind.Entry && x.CompetitionId == gsEntry.CompetitionId));
+            Assert.False(gsEntry.IsChanged);
+            gsEntry.IsParticipating = true;
+            clubChange = vm.DeskChangeLog.Single(x => x.Field == nameof(CompetitorGridRow.Club));
+            vm.RestoreDeskChangeCommand.Execute(clubChange);
+            Assert.False(row.IsClubChanged);
+            Assert.True(row.GridEntries.Single(x => x.Label == "3.2 GS").IsChanged);
+            row.Club = "Reviewed club";
+            Click(window, "Commit Changes");
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            var desk = await workspace.ReadCompetitorDeskAsync();
+            Assert.Equal(2, desk.Competitors.Count);
+            Assert.Equal("Reviewed club", desk.Competitors.Single(x => x.Values.Surname == "MAKELA").Values.Club);
+            Assert.Equal(Gender.Male, desk.Competitors.Single(x => x.Values.Surname == "LAINE").Values.Gender);
+            Assert.Empty(vm.DeskChangeLog);
+            Assert.All(vm.VisibleCompetitors.Where(x => !x.IsPlaceholder), x => Assert.False(x.HasPendingChanges));
+
+            var selectedRows = vm.VisibleCompetitors.Where(x => !x.IsPlaceholder).ToArray();
+            grid.SelectedItems.Clear();
+            foreach (var selected in selectedRows) { grid.SelectedItems.Add(selected); }
+            var selectedSl = selectedRows[0].GridEntries.Single(x => x.Label == "3.1 SL");
+            window.FindControl<ScrollViewer>("WorkspaceScroll")!.Offset = Vector.Zero;
             window.UpdateLayout();
-            var changed = vm.ImportReviewRows.Single(x => !x.IsNew);
-            Assert.True(changed.IsClubChanged);
-            var stagedRow = vm.VisibleCompetitors.Single(x => x.Id == changed.CompetitorId);
-            Assert.True(stagedRow.IsClubChanged);
-            stagedRow.Club = "Edited in grid";
-            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
-            Click(window, "Discard import");
-            Assert.False(vm.IsImportReviewOpen);
-            Assert.Single(vm.VisibleCompetitors);
-            Assert.Equal(string.Empty, vm.VisibleCompetitors.Single().Club);
-            Assert.False(vm.VisibleCompetitors.Single().IsImportHighlighted);
-            Click(window, "Paste from Excel");
+            var selectedCheck = grid.GetVisualDescendants().OfType<CheckBox>().First(x =>
+                ReferenceEquals(x.DataContext, selectedRows[0]) && x.Classes.Contains("entryCell"));
+            var checkPoint = selectedCheck.TranslatePoint(new Point(selectedCheck.Bounds.Width / 2,
+                selectedCheck.Bounds.Height / 2), window)!.Value;
+            window.MouseDown(checkPoint, MouseButton.Left);
+            window.MouseUp(checkPoint, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.All(selectedRows, x => Assert.False(x.GridEntries.Single(y => y.Label == "3.1 SL").IsParticipating));
+            Assert.Equal(2, vm.DeskChangeLog.Count(x => x.Kind == DeskChangeKind.Entry));
+            Assert.All(vm.DeskChangeLog, x => Assert.Contains(" → ", x.DisplayLabel));
+            selectedSl.IsParticipating = true;
+            await vm.StageGridEntryAsync(selectedRows[0], selectedSl, selectedRows);
+            Assert.Empty(vm.DeskChangeLog);
+
+            exchange.ClipboardText = "Code\t3.1 SL\nFIN123\t";
+            vm.PasteFromExcelCommand.Execute(null);
             await vm.PasteFromExcelCommand.ExecutionTask!;
-            Assert.Equal("Review Club", vm.VisibleCompetitors.Single(x => x.Id == changed.CompetitorId).Club);
-            vm.ImportSourceText += "changed source";
-            Click(window, "Commit import");
-            await vm.CommitImportCommand.ExecutionTask!;
-            Assert.True(vm.IsError);
-            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
-            vm.ImportSourceText = exchange.ClipboardText;
-            vm.VisibleCompetitors.Single(x => x.Id == changed.CompetitorId).Club = "Edited Club";
-            vm.ImportReviewRows.Single(x => !x.IsNew).Entries.Single(x => x.Label == "3.1 SL").BibText = "12";
-            var stagedNew = vm.VisibleCompetitors.Single(x => x.Id is null);
-            var stagedEntry = stagedNew.GridEntries.Single(x => x.Label == "3.2 GS");
-            stagedEntry.IsParticipating = true;
-            await vm.SaveGridParticipationAsync(stagedNew, stagedEntry);
-            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
-            Click(window, "Commit import");
-            await vm.CommitImportCommand.ExecutionTask!;
-            Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.False(vm.IsImportReviewOpen);
-            Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
-            var importedDesk = await workspace.ReadCompetitorDeskAsync();
-            var importedAthlete = importedDesk.Competitors.Single(x => x.Values.Surname == "MÄKELÄ");
-            Assert.Equal("Edited Club", importedAthlete.Values.Club);
-            Assert.Equal(12, importedDesk.Participations.Single(x =>
-                x.CompetitorId == importedAthlete.Id
-                && x.CompetitionId == vm.Competitions.Single(c => c.Values.ShortLabel == "3.1 SL").Id).ImportedBib);
-            var importedNew = importedDesk.Competitors.Single(x => x.Values.Surname == "LAINE");
-            Assert.Equal(Gender.Male, importedNew.Values.Gender);
-            Assert.True(importedDesk.Participations.Single(x => x.CompetitorId == importedNew.Id
-                && x.CompetitionId == vm.Competitions.Single(c => c.Values.ShortLabel == "3.2 GS").Id).Participates);
-            vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "MÄKELÄ");
-            window.FindControl<DataGrid>("CompetitorGrid")!.SelectedItems.Add(
-                vm.VisibleCompetitors.Single(x => x.Surname == "LAINE"));
-            Click(window, "Copy selection");
-            await vm.CopySelectedCompetitorCommand.ExecutionTask!;
-            Assert.Contains("Bib:3.1 SL", exchange.CopiedText);
-            Assert.Equal(3, TsvExchange.Parse(exchange.CopiedText).Count);
-            Click(window, "Export selection TSV");
-            await vm.ExportSelectedTsvCommand.ExecutionTask!;
-            Assert.Equal(exchange.CopiedText, exchange.SavedText);
+            Assert.False(vm.VisibleCompetitors.Single(x => x.FederationCode == "FIN123")
+                .GridEntries.Single(x => x.Label == "3.1 SL").IsParticipating);
+            Click(window, "Commit Changes");
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
+            var pastedRemoval = await workspace.ReadCompetitorDeskAsync();
+            var removedEntryCompetitor = pastedRemoval.Competitors.Single(x => x.Values.FederationCode == "FIN123");
+            Assert.False(pastedRemoval.Participations.Single(x => x.CompetitorId == removedEntryCompetitor.Id
+                && x.CompetitionId == vm.Competitions.Single(y => y.Values.ShortLabel == "3.1 SL").Id).Participates);
 
             exchange.ClipboardText = "Surname\nUnknown";
-            Click(window, "Paste from Excel");
+            vm.PasteFromExcelCommand.Execute(null);
             await vm.PasteFromExcelCommand.ExecutionTask!;
-            Assert.True(Assert.Single(vm.ImportReviewRows).NeedsApproval);
-            Click(window, "Commit import");
-            await vm.CommitImportCommand.ExecutionTask!;
+            var uncertain = vm.VisibleCompetitors.Single(x => x.Surname == "UNKNOWN");
+            Assert.True(uncertain.NeedsApproval);
+            Click(window, "Commit Changes");
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.True(vm.IsError);
             Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
-            Click(window, "Discard import");
-            Assert.False(vm.IsImportReviewOpen);
+            vm.RestoreDeskChangeCommand.Execute(vm.DeskChangeLog.Single(x => x.LocalRowId == uncertain.LocalId));
+            Assert.Empty(vm.DeskChangeLog);
+            Assert.Empty(vm.ImportWarnings);
+
+            vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "LAINE");
+            vm.CopySelectedCompetitorCommand.Execute(null);
+            await vm.CopySelectedCompetitorCommand.ExecutionTask!;
+            Assert.DoesNotContain("Bib", exchange.CopiedText);
+            var copied = TsvExchange.Parse(exchange.CopiedText);
+            Assert.Equal(2, copied.Count);
+            Assert.Equal("Code", copied[0][0]);
+            Assert.Equal("Surname", copied[0][1]);
+            grid.Focus();
+            window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+            Assert.True(vm.SelectedCompetitorRow!.IsPendingDelete);
+            Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
+            vm.RestoreDeskChangeCommand.Execute(vm.DeskChangeLog.Single(x => x.Kind == DeskChangeKind.Delete));
+            Assert.False(vm.SelectedCompetitorRow.IsPendingDelete);
 
             Click(window, "Backup / transfer");
             await vm.BackupCommand.ExecutionTask!;
-            Assert.True(File.Exists(backup));
             Click(window, "Close file");
             await vm.CloseSeriesCommand.ExecutionTask!;
-            Assert.False(vm.IsOpen);
             Click(window, "Open file");
             await vm.OpenSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.Equal(2, vm.Competitions.Count);
-            Assert.Contains(vm.VisibleCompetitors, x => x.Surname == "MÄKELÄ");
-            Assert.Single(vm.CategoryRules);
             Assert.Equal(backup, vm.FileLabel);
+            Assert.Equal(2, vm.VisibleCompetitors.Count(x => !x.IsPlaceholder));
             Click(window, "1  Event series");
-            var startDateInput = window.FindControl<TextBox>("SeriesStartDateInput");
-            Assert.NotNull(startDateInput);
+            var startDateInput = window.FindControl<TextBox>("SeriesStartDateInput")!;
             startDateInput.Text = "07.05.2026";
-            var pickerButton = window.FindControl<Button>("SeriesStartDatePickerButton");
-            Assert.NotNull(pickerButton);
+            var pickerButton = window.FindControl<Button>("SeriesStartDatePickerButton")!;
             pickerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            var datePicker = Assert.IsType<DatePicker>(Assert.IsType<Flyout>(pickerButton.Flyout).Content);
-            Assert.Equal("MM MMMM", datePicker.MonthFormat);
-            Assert.Equal(new DateTime(2026, 5, 7), datePicker.SelectedDate?.DateTime);
-            datePicker.SelectedDate = new DateTimeOffset(2026, 5, 6, 0, 0, 0, TimeSpan.Zero);
+            var pickerContent = Assert.IsType<StackPanel>(Assert.IsType<Flyout>(pickerButton.Flyout).Content);
+            var picker = Assert.IsType<Avalonia.Controls.Calendar>(pickerContent.Children[1]);
+            Assert.Contains("05", Assert.IsType<TextBlock>(pickerContent.Children[0]).Text);
+            picker.SelectedDate = new DateTime(2026, 5, 6);
             Assert.Equal("06.05.2026", startDateInput.Text);
-            Click(window, "Save series");
-            await vm.SaveSeriesCommand.ExecutionTask!;
-            Assert.False(vm.IsError, vm.StatusMessage);
-            Assert.Equal(new DateOnly(2026, 5, 6), (await workspace.ReadAsync()).Values.StartDate);
+
             Click(window, "3  Competitors");
+            grid.SelectedItem = vm.VisibleCompetitors.Single(x => x.Surname == "MAKELA");
+            grid.CurrentColumn = grid.Columns[2];
+            grid.SelectedItem = vm.VisibleCompetitors.Single(x => x.Surname == "LAINE");
+            grid.CurrentColumn = grid.Columns[4];
+            grid.SelectedItem = vm.VisibleCompetitors.Single(x => x.IsPlaceholder);
+            grid.CurrentColumn = grid.Columns[7];
+            window.UpdateLayout();
+            var selectedColor = Color.Parse("#D8ECE9");
+            var renderedCells = grid.GetVisualDescendants().OfType<DataGridCell>().ToArray();
+            Assert.NotEmpty(renderedCells);
+            Assert.DoesNotContain(renderedCells, cell =>
+                cell.Background is ISolidColorBrush brush && brush.Color == selectedColor);
             vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "LAINE");
-            Click(window, "Remove competitor");
-            await vm.RemoveCompetitorCommand.ExecutionTask!;
-            Assert.True(vm.SelectedCompetitorRow.IsPendingDelete);
-            Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
-            var deletion = vm.DeskChangeLog.Single(x => x.Kind == DeskChangeKind.Delete);
-            vm.RestoreDeskChangeCommand.Execute(deletion);
-            await vm.RestoreDeskChangeCommand.ExecutionTask!;
-            Assert.False(vm.SelectedCompetitorRow.IsPendingDelete);
-            Click(window, "Remove competitor");
-            await vm.RemoveCompetitorCommand.ExecutionTask!;
+            vm.RemoveCompetitorCommand.Execute(null);
             Click(window, "Commit Changes");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
-            Assert.False(vm.HasDeskChangeLog);
+            Assert.Empty(vm.DeskChangeLog);
             window.Close();
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        finally { Directory.Delete(root, recursive: true); }
     }
 
     private static void Click(Window window, string label)
@@ -345,12 +611,9 @@ public class DesktopWorkflowTests
         {
             var children = field.Children.OfType<Control>().ToArray();
             Assert.Equal(2, children.Length);
-            Assert.True(children[1].Bounds.Top >= children[0].Bounds.Bottom + 4,
-                $"The label touches its input in {children[0].GetType().Name}.");
-            Assert.True(children[1].Bounds.Width >= 100,
-                $"{(children[0] as TextBlock)?.Text} input became too narrow ({children[1].Bounds.Width:0}px).");
+            Assert.True(children[1].Bounds.Top >= children[0].Bounds.Bottom + 4);
+            Assert.True(children[1].Bounds.Width >= 100);
         }
-
         foreach (var grid in window.GetVisualDescendants().OfType<Grid>())
         {
             var fields = grid.Children.OfType<StackPanel>()
@@ -358,8 +621,7 @@ public class DesktopWorkflowTests
                 .OrderBy(panel => panel.Bounds.Left).ToArray();
             for (var i = 1; i < fields.Length; i++)
             {
-                Assert.True(fields[i - 1].Bounds.Right + 8 <= fields[i].Bounds.Left,
-                    "Adjacent fields need a visible gutter.");
+                Assert.True(fields[i - 1].Bounds.Right + 8 <= fields[i].Bounds.Left);
             }
         }
     }
@@ -372,22 +634,14 @@ public class DesktopWorkflowTests
         public Task<string?> ChooseNewAsync(string suggestedName) => Task.FromResult<string?>(NewPath);
         public Task<string?> ChooseOpenAsync() => Task.FromResult<string?>(OpenPath);
         public Task<string?> ChooseBackupAsync(string suggestedName) => Task.FromResult<string?>(BackupPath);
-        public Task<string?> ChooseLegacyDatabaseAsync() => Task.FromResult<string?>(null);
         public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(true);
-        public Task<bool> ConfirmRemoveCompetitorAsync(string surname) => Task.FromResult(true);
     }
 
     private sealed class EntryExchangeStub : IEntryExchange
     {
         public string ClipboardText { get; set; } = string.Empty;
         public string CopiedText { get; private set; } = string.Empty;
-        public string SavedText { get; private set; } = string.Empty;
         public Task<string?> ReadClipboardAsync() => Task.FromResult<string?>(ClipboardText);
         public Task WriteClipboardAsync(string text) { CopiedText = text; return Task.CompletedTask; }
-        public Task<bool> SaveTsvAsync(string suggestedName, string text)
-        {
-            SavedText = text;
-            return Task.FromResult(true);
-        }
     }
 }

@@ -8,7 +8,14 @@ public sealed record CompetitorValues(
 {
     public CompetitorValues Validated(int eventYear)
     {
-        var surname = SeriesValues.Required(Surname, nameof(Surname), 100).ToUpperInvariant();
+        var surname = Surname?.Trim() ?? string.Empty;
+        var code = Optional(FederationCode, 20);
+        if (surname.Length == 0 && code is null)
+        {
+            throw new DomainValidationException("Enter a Code or surname to identify the competitor.");
+        }
+        if (surname.Length > 100) { throw new DomainValidationException("Surname must be at most 100 characters."); }
+        surname = surname.ToUpperInvariant();
         var firstName = Optional(FirstName, 100) ?? string.Empty;
         if (BirthYear is { } year && (year < 1850 || year > eventYear))
         {
@@ -29,7 +36,7 @@ public sealed record CompetitorValues(
         return this with
         {
             Surname = surname, FirstName = firstName, Nation = nation,
-            FederationCode = Optional(FederationCode, 20), Club = Optional(Club, 160),
+            FederationCode = code, Club = Optional(Club, 160),
         };
     }
 

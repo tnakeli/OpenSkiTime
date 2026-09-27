@@ -145,6 +145,32 @@ internal sealed partial class SqliteSeriesFileSession
         return result.Revision;
     }
 
+    public async Task<long> ReplaceCategoryRulesAsync(IReadOnlyList<CategoryRuleValues> rules,
+        long expectedRevision, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        var result = await WriteDeskAsync(async (db, series) =>
+        {
+            var validated = rules.Select(x => x.Validated(series.EndDate.Year)).ToArray();
+            if (validated.Select(x => x.Label).Distinct(StringComparer.OrdinalIgnoreCase).Count() != validated.Length)
+            {
+                throw new DomainValidationException("Category labels must be unique.");
+            }
+            await db.CategoryRules.Where(x => x.SeriesId == series.Id).ExecuteDeleteAsync(ct);
+            foreach (var rule in validated)
+            {
+                db.CategoryRules.Add(new CategoryRuleRow
+                {
+                    Id = Guid.NewGuid(), SeriesId = series.Id, Label = rule.Label,
+                    LabelKey = rule.Label.ToUpperInvariant(), BirthYearMin = rule.BirthYearMin,
+                    BirthYearMax = rule.BirthYearMax, Gender = rule.Gender, DisplayOrder = rule.DisplayOrder,
+                });
+            }
+            return true;
+        }, expectedRevision, ct);
+        return result.Revision;
+    }
+
     private async Task<DeskMutationResult<T>> WriteDeskAsync<T>(
         Func<SeriesDbContext, SeriesRow, Task<T>> change, long expectedRevision, CancellationToken ct)
     {

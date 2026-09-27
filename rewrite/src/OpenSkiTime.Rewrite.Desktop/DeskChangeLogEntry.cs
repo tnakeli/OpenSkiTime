@@ -1,9 +1,6 @@
-using OpenSkiTime.Rewrite.Domain;
-
 namespace OpenSkiTime.Rewrite.Desktop;
 
-public enum DeskChangeKind { Add, Edit, Delete }
+public enum DeskChangeKind { Add, Edit, Entry, Delete }
 
-public sealed record DeskChangeLogEntry(Guid Id, DateTime Timestamp, DeskChangeKind Kind,
-    Guid CompetitorId, CompetitorValues? PreviousValues, Guid? CompetitionId,
-    bool PreviousParticipation, int? PreviousImportedBib, string DisplayLabel);
+public sealed record DeskChangeLogEntry(Guid LocalRowId, DeskChangeKind Kind,
+    string? Field, Guid? CompetitionId, string DisplayLabel);

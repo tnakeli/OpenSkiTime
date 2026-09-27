@@ -6,11 +6,11 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
-public enum WorkspaceSection { Series, Competitions, Competitors }
+public enum WorkspaceSection { Series, Competitions, Competitors, Settings }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
-    ILegacyConversionPreviewer? legacyPreviewer = null,
-    IEntryExchange? entryExchange = null) : ObservableObject, IDisposable
+    IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
+    CategoryRulePresetStore? categoryRulePresetStore = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private SeriesDetails? _current;
@@ -37,28 +37,39 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(IsSeriesSection))]
     [NotifyPropertyChangedFor(nameof(IsCompetitionsSection))]
     [NotifyPropertyChangedFor(nameof(IsCompetitorsSection))]
+    [NotifyPropertyChangedFor(nameof(IsSettingsSection))]
     private WorkspaceSection _activeSection = WorkspaceSection.Series;
     public bool IsSeriesSection => ActiveSection == WorkspaceSection.Series;
     public bool IsCompetitionsSection => ActiveSection == WorkspaceSection.Competitions;
     public bool IsCompetitorsSection => ActiveSection == WorkspaceSection.Competitors;
+    public bool IsSettingsSection => ActiveSection == WorkspaceSection.Settings;
 
     [RelayCommand] private void ShowSeries() => SwitchSection(WorkspaceSection.Series);
     [RelayCommand] private void ShowCompetitions() => SwitchSection(WorkspaceSection.Competitions);
     [RelayCommand] private void ShowCompetitors() => SwitchSection(WorkspaceSection.Competitors);
+    [RelayCommand] private void ShowSettings()
+    {
+        SwitchSection(WorkspaceSection.Settings);
+        if (IsSettingsSection) { RefreshFisSettingsStatus(); }
+    }
 
     private void SwitchSection(WorkspaceSection section)
     {
-        if (section != WorkspaceSection.Series && !CanEditCompetitions) { return; }
-        if (section != ActiveSection && HasDeskDrafts)
+        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors) && !CanEditCompetitions) { return; }
+        if (section != ActiveSection && HasDeskDrafts
+            && section != WorkspaceSection.Settings
+            && !(ActiveSection == WorkspaceSection.Settings && section == WorkspaceSection.Competitors))
         {
-            SetStatus(IsImportReviewOpen ? "Commit or discard the pasted preview before leaving this view."
-                : "Save or discard the current competitor row before leaving this view.", error: true);
+            SetStatus("Commit or restore competitor changes before leaving this view.", error: true);
             return;
         }
         ActiveSection = section;
     }
 
-    [ObservableProperty] private string _fileLabel = "No series file open";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    private string _fileLabel = "No series file open";
+    public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime" : FileLabel;
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";
     [ObservableProperty] private bool _isError;
     [ObservableProperty] private string _name = string.Empty;
@@ -114,8 +125,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         if (HasDeskDrafts)
         {
-            SetStatus(IsImportReviewOpen ? "Commit or discard the pasted preview before starting a new series."
-                : "Save or discard the current competitor row before starting a new series.", error: true);
+            SetStatus("Commit or restore competitor changes before starting a new series.", error: true);
             return;
         }
         IsCreatingNew = true;
@@ -186,11 +196,11 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             EnsureDeskClean();
             await workspace.CloseAsync();
             _current = null;
+            ClearCompetitorDesk();
             Competitions.Clear();
             SelectedCompetition = null;
             IsCompetitionEditing = false;
             IsOpen = false;
-            ClearCompetitorDesk();
             ActiveSection = WorkspaceSection.Series;
             FileLabel = "No series file open";
             NewSeries();
@@ -329,6 +339,11 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     private void Apply(SeriesDetails details)
     {
+        if (_current?.Id != details.Id)
+        {
+            IsFisPanelOpen = false;
+            FisEffectiveDateText = string.Empty;
+        }
         var deskCompetitionId = DeskCompetition?.Id;
         _current = details;
         Name = details.Values.Name;
