@@ -71,7 +71,7 @@ public partial class DesktopWorkflowTests
             vm.SelectedTimingRow = vm.TimingRows[0];
             var firstBib = vm.SelectedTimingRow.Bib;
             var view = window.FindControl<TimingView>("TimingWorkspace")!;
-            view.FindControl<DataGrid>("TimingResultsGrid")!.Focus();
+            view.FindControl<DataGrid>("AtStartGrid")!.Focus();
             window.KeyPressQwerty(PhysicalKey.F5, RawInputModifiers.None);
             if (vm.ExpectSelectedCommand.ExecutionTask is { } arming) { await arming; }
             Assert.Equal(firstBib, workspace.Timing!.ArmedStart);
@@ -114,11 +114,11 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "timing-live.png");
             window.Width = 980; window.Height = 680;
             CaptureDraw(window, output, "timing-compact.png");
-            Assert.True(view.FindControl<DataGrid>("TimingResultsGrid")!.Bounds.Height > 100);
+            Assert.True(view.FindControl<DataGrid>("AtStartGrid")!.Bounds.Height > 100);
             for (var i = 2; i < vm.TimingRows.Count; i++)
             {
                 vm.SelectedTimingRow = vm.TimingRows[i]; vm.TimingReason = "Synthetic no start";
-                Click(window, "DNS"); await vm.ClassifyTimingCommand.ExecutionTask!;
+                TimingMenu(view, "AtStartGrid", "DNS · did not start"); await vm.ClassifyTimingCommand.ExecutionTask!;
             }
             Assert.True(vm.IsTimingConnected);
             Assert.True(vm.CanPrepareNextTimedRun);
@@ -147,7 +147,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingRows[0].Status == "Finished");
             Assert.Equal("2:08.00", vm.TimingRows[0].TotalTime);
-            Assert.True(view.FindControl<DataGrid>("FinishedGrid")!.Columns.Single(x => Equals(x.Header, "TOTAL")).IsVisible);
+            Assert.True(view.FindControl<DataGrid>("RankingGrid")!.Columns.Single(x => Equals(x.Header, "TOTAL")).IsVisible);
             vm.ShowSettingsCommand.Execute(null);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
             await vm.OpenSeriesCommand.ExecuteAsync(null);

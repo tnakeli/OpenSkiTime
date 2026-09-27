@@ -1,5 +1,8 @@
 using Avalonia.Controls;
+using Avalonia.Collections;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.VisualTree;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Desktop;
@@ -12,6 +15,18 @@ namespace OpenSkiTime.Rewrite.Tests;
 
 public partial class DesktopWorkflowTests
 {
+    private static void TimingMenu(TimingView view, string gridName, string label)
+    {
+        var grid = view.FindControl<DataGrid>(gridName)!;
+        grid.ContextMenu!.Open(grid);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var item = grid.ContextMenu.Items.OfType<MenuItem>().Single(x => Equals(x.Header, label));
+        Assert.True(item.IsEnabled);
+        Assert.True(item.IsVisible);
+        item.Command!.Execute(item.CommandParameter);
+        grid.ContextMenu.Close();
+    }
+
     [AvaloniaFact]
     public async Task RaceControlKeepsQueuesVisibleAndSupportsFastClassificationAndFalseFinishRecovery()
     {
@@ -28,9 +43,11 @@ public partial class DesktopWorkflowTests
             series = await workspace.SaveCompetitionAsync(null, new("Synthetic Slalom", "SL1", date, Discipline.Slalom, RaceType.Fis, 2, 1, "1234"), series.Revision);
             var competition = series.Competitions[0];
             var revision = series.Revision;
+            revision = (await workspace.SaveCategoryRuleAsync(null, new("Test 2000", 2000, 2000, null, 0), revision)).Revision;
+            revision = (await workspace.SaveCategoryRuleAsync(null, new("Test 2001", 2001, 2001, null, 1), revision)).Revision;
             for (var i = 0; i < 12; i++)
             {
-                var saved = await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Athlete", 2000, $"{123456+i}", "FIN", "Synthetic club", Gender.Female), competition.Id, true, null, revision);
+                var saved = await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Athlete", 2000 + i % 2, $"{123456+i}", "FIN", "Synthetic club", Gender.Female), competition.Id, true, null, revision);
                 revision = saved.Revision;
             }
             var preferences = new TimingPreferencesStore(root);
@@ -69,19 +86,21 @@ public partial class DesktopWorkflowTests
             Assert.True(vm.IsTimingConnected);
             vm.ReturnToTimingCommand.Execute(null);
             Assert.StartsWith(b + " ·", vm.NextStartLabel, StringComparison.Ordinal);
-            Click(window, "Absent · DNS"); await vm.NextStartDnsCommand.ExecutionTask!;
+            TimingMenu(view, "AtStartGrid", "Absent next starter · DNS"); await vm.NextStartDnsCommand.ExecutionTask!;
             Assert.Equal("DNS", vm.TimingRows.Single(x => x.Bib == b).Status);
             Assert.StartsWith(c + " ·", vm.NextStartLabel, StringComparison.Ordinal);
-            view.FindControl<DataGrid>("TimingResultsGrid")!.SelectedItem = vm.TimingRows.Single(x => x.Bib == d);
-            Click(window, "Start next · F5"); await vm.ExpectSelectedCommand.ExecutionTask!;
+            view.FindControl<DataGrid>("AtStartGrid")!.SelectedItem = vm.AtStartRows.Single(x => x.Bib == d);
+            TimingMenu(view, "AtStartGrid", "Next at start"); await vm.ExpectSelectedCommand.ExecutionTask!;
             Assert.StartsWith(d + " ·", vm.NextStartLabel, StringComparison.Ordinal);
             vm.SimulationTime = "12:00:05.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 2);
-            view.FindControl<DataGrid>("OnCourseGrid")!.SelectedItem = vm.OnCourseRows.Single(x => x.Bib == d);
+            view.FindControl<DataGrid>("RunningGrid")!.SelectedItem = vm.RunningRows.Single(x => x.Bib == d);
             Assert.True(vm.ReturnToStartCommand.CanExecute(null));
             CaptureDraw(window, output, "race-false-start-selected.png");
-            Click(window, "Back to start"); await vm.ReturnToStartCommand.ExecutionTask!;
+            view.FindControl<DataGrid>("RunningGrid")!.Focus();
+            window.KeyPressQwerty(PhysicalKey.F8, RawInputModifiers.None);
+            await vm.ReturnToStartCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(d, vm.SelectedTimingRow!.Bib);
             Assert.Equal("Ready", vm.SelectedTimingRow.Status);
@@ -98,16 +117,18 @@ public partial class DesktopWorkflowTests
             await WaitTimingAsync(vm, () => vm.IntermediateTimingRows.Count == 1);
             Assert.Equal("I1 0:20.00", vm.OnCourseRows.Single(x => x.Bib == a).SplitTimes);
             // Selection in a different visual pane must target that competitor's quick actions.
-            view.FindControl<DataGrid>("OnCourseGrid")!.SelectedItem = vm.OnCourseRows.Single(x => x.Bib == d);
-            Click(window, "DNF"); await vm.ClassifyTimingCommand.ExecutionTask!;
+            view.FindControl<DataGrid>("RunningGrid")!.SelectedItem = vm.RunningRows.Single(x => x.Bib == d);
+            view.FindControl<DataGrid>("RunningGrid")!.Focus();
+            window.KeyPressQwerty(PhysicalKey.F, RawInputModifiers.Control);
+            await vm.ClassifyTimingCommand.ExecutionTask!;
             Assert.Equal("DNF", vm.TimingRows.Single(x => x.Bib == d).Status);
             Assert.Single(vm.OnCourseRows);
             vm.SimulationTime = "12:00:30.0000";
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.FinishedTimingRows.Count == 1);
             Assert.Equal(d, vm.SelectedTimingRow!.Bib); // background queue changes must not retarget quick actions
-            Assert.Equal(d, Assert.IsType<TimingGridRow>(view.FindControl<DataGrid>("TimingResultsGrid")!.SelectedItem).Bib);
-            Click(window, "False finish · not a racer"); await vm.IgnoreLastFinishCommand.ExecutionTask!;
+            Assert.Equal(d, Assert.IsType<TimingGridRow>(view.FindControl<DataGrid>("RankingGrid")!.SelectedItem).Bib);
+            TimingMenu(view, "RunningGrid", "False finish · not a racer"); await vm.IgnoreLastFinishCommand.ExecutionTask!;
             Assert.Single(vm.OnCourseRows); Assert.Empty(vm.FinishedTimingRows);
             Assert.StartsWith(a + " ·", vm.ExpectedFinishLabel, StringComparison.Ordinal);
             vm.SimulationTime = "12:00:42.1234";
@@ -118,7 +139,7 @@ public partial class DesktopWorkflowTests
             vm.SimulationTime = "12:00:44.0000";
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned"));
-            Click(window, "False finish · not a racer"); await vm.IgnoreLastFinishCommand.ExecutionTask!;
+            TimingMenu(view, "RunningGrid", "False finish · not a racer"); await vm.IgnoreLastFinishCommand.ExecutionTask!;
             Assert.Equal("0:42.12", vm.FinishedTimingRows[0].Time); // a stray unassigned pulse must not erase the previous racer's finish
             vm.SimulationTime = "12:00:45.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
@@ -129,24 +150,56 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "race-live-1366.png");
             window.Width = 980; window.Height = 680;
             CaptureDraw(window, output, "race-live-980.png");
-            Assert.True(view.FindControl<DataGrid>("TimingResultsGrid")!.Bounds.Height > 100);
-            Assert.True(view.FindControl<DataGrid>("OnCourseGrid")!.Bounds.Height > 80);
-            Assert.True(view.FindControl<DataGrid>("IntermediateGrid")!.Bounds.Height >= 60);
-            Assert.True(view.FindControl<DataGrid>("FinishedGrid")!.Bounds.Height >= 65);
+            Assert.True(view.FindControl<DataGrid>("AtStartGrid")!.Bounds.Height > 100);
+            Assert.True(view.FindControl<DataGrid>("RunningGrid")!.Bounds.Height > 80);
+            Assert.Equal(3, view.GetVisualDescendants().OfType<DataGrid>().Count());
+            Assert.True(view.FindControl<DataGrid>("RankingGrid")!.Bounds.Height >= 65);
             vm.CorrectLastFinishCommand.Execute(null); vm.ShowAllTimingObservations = true;
             CaptureDraw(window, output, "race-correction-980.png");
             Assert.Contains(vm.TimingObservations, x => x.State == "Ignored");
             vm.ShowTimingCorrection = false;
             // Each queue exposes the same contextual classification actions.
-            foreach (var name in new[] { "TimingResultsGrid", "OnCourseGrid", "IntermediateGrid", "FinishedGrid" })
+            foreach (var name in new[] { "AtStartGrid", "RunningGrid", "RankingGrid" })
             {
                 var grid = view.FindControl<DataGrid>(name)!;
                 grid.ContextMenu!.Open(grid);
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.Contains(grid.ContextMenu!.Items.OfType<MenuItem>(), x => Equals(x.Header, "DSQ · disqualified"));
                 Assert.Contains(grid.ContextMenu.Items.OfType<MenuItem>(), x => Equals(x.Header, "Back to start") && x.Command == vm.ReturnToStartCommand);
+                Assert.All(grid.ContextMenu.Items.OfType<MenuItem>(), x => Assert.NotNull(x.InputGesture));
                 grid.ContextMenu.Close();
             }
+            // More than three arrivals: Running retains the latest three, Ranking retains everyone.
+            async Task Finish(string at, int count)
+            {
+                vm.SimulationTime = at;
+                Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
+                await WaitTimingAsync(vm, () => vm.FinishedTimingRows.Count == count);
+            }
+            await Finish("12:00:55.0000", 2);
+            await Finish("12:01:00.0000", 3);
+            vm.SimulationTime = "12:01:05.0000";
+            Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
+            await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 1);
+            await Finish("12:01:20.0000", 4);
+            vm.SimulationTime = "12:01:25.0000";
+            Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
+            await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 1);
+            await Finish("12:01:40.0000", 5);
+            Assert.Equal(3, vm.RunningRows.Count);
+            Assert.Equal(vm.FinishedTimingRows.Take(3).Select(x => x.Bib), vm.RunningRows.Select(x => x.Bib));
+            Assert.Equal(7, vm.RankingRows.Count); // five finishers plus DNS and DNF
+            Assert.Equal(vm.FinishedTimingRows[0].Bib, Assert.Single(vm.RankingRows, x => x.IsLatestFinish).Bib);
+            Assert.Equal(2, vm.RankingView.Groups!.OfType<DataGridCollectionViewGroup>().Count());
+            foreach (var group in vm.RankingRows.GroupBy(x => x.Category))
+            {
+                var finished = group.Where(x => x.Result.Status == Timing.TimingStatus.Finished).ToArray();
+                Assert.Equal(finished.OrderBy(x => x.Result.Hundredths), finished);
+                foreach (var row in finished)
+                { Assert.Equal(finished.Count(x => x.Result.Hundredths < row.Result.Hundredths) + 1, row.DisplayRank); }
+            }
+            window.Width = 1366; window.Height = 850;
+            CaptureDraw(window, output, "race-grouped-ranking.png");
             vm.ShowSettingsCommand.Execute(null);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
             if (!string.IsNullOrEmpty(output))
@@ -156,8 +209,10 @@ public partial class DesktopWorkflowTests
             }
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
-            Assert.Equal("0:42.12", vm.FinishedTimingRows.Single().Time);
-            Assert.Equal(2, vm.OnCourseRows.Count);
+            Assert.Equal("0:42.12", vm.FinishedTimingRows.Single(x => x.Bib == a).Time);
+            Assert.Equal(5, vm.FinishedTimingRows.Count);
+            Assert.Empty(vm.OnCourseRows);
+            Assert.Equal(3, vm.RunningRows.Count);
             Assert.Equal(1, Assert.IsType<int>(view.GetVisualDescendants().OfType<ComboBox>().Single().SelectedItem));
             window.Close();
         }
