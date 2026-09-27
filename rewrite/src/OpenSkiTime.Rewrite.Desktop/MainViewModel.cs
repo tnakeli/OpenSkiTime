@@ -11,7 +11,7 @@ public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
     CategoryRulePresetStore? categoryRulePresetStore = null,
-    RecentSeriesStore? recentSeriesStore = null) : ObservableObject, IDisposable
+    RecentSeriesStore? recentSeriesStore = null, TimingPreferencesStore? timingPreferencesStore = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private readonly RecentSeriesStore _recentSeriesStore = recentSeriesStore ?? new();

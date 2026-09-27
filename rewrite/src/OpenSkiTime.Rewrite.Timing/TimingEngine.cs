@@ -26,7 +26,8 @@ public static class TimingEngine
             var bib = decision?.Bib;
             var ignored = decision?.Ignored == true;
             var usable = !changedImpulse && observation.Kind == ObservationKind.Impulse && observation.DeviceTicks is not null
-                && (observation.Channel == startChannel || observation.Channel == finishChannel);
+                && (observation.Channel == startChannel || observation.Channel == finishChannel
+                    || observation.Channel >= 2 && observation.Channel < 2 + list.Plan.Competition.IntermediateCount);
             var reviewedObservation = changedImpulse ? observation with { Kind = ObservationKind.DeviceCorrection,
                 Message = "Previously received impulse changed on the device/server. Review the original assignment: " + observation.Message } : observation;
             reviewed.Add(new(reviewedObservation, bib, ignored, duplicate,
@@ -64,13 +65,28 @@ public static class TimingEngine
             { time = corrected; status = TimingStatus.Finished; detail = "Corrected time · see history"; }
             if (decisions.TryGetValue("s:" + id, out var classification) && classification.Status is { } classified)
             { status = classified; time = null; detail = "Operator classification · see history"; }
-            rows.Add(new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail));
+            var splits = Enumerable.Range(1, list.Plan.Competition.IntermediateCount).Select(number =>
+            {
+                var pulses = assigned.Where(x => x.Channel == number + 1).ToArray();
+                var pulse = pulses.FirstOrDefault();
+                if (pulse is null) { return new TimingSplit(number, null, null, "Awaiting intermediate"); }
+                var valid = pulses.Length == 1 && starts.Length == 1 && pulse.ClockId == starts[0].ClockId
+                    && pulse.Precision >= 3 && starts[0].Precision >= 3 && pulse.DeviceTicks > starts[0].DeviceTicks
+                    && pulse.DeviceTicks - starts[0].DeviceTicks <= TimeSpan.FromHours(2).Ticks
+                    && (finishes.Length == 0 || pulse.DeviceTicks < finishes[0].DeviceTicks);
+                return new TimingSplit(number, pulse.Key, valid ? (pulse.DeviceTicks - starts[0].DeviceTicks) / TimingTime.TicksPerHundredth : null,
+                    valid ? "" : "Review intermediate impulses / clock continuity");
+            }).ToArray();
+            rows.Add(new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail) { Splits = splits });
         }
         var ranked = rows.Where(x => x.Status == TimingStatus.Finished).OrderBy(x => x.Hundredths).ThenBy(x => x.Bib).ToArray();
         var ranks = ranked.Select((x, i) => (x.CompetitorId, Rank: Array.FindIndex(ranked, r => r.Hundredths == x.Hundredths) + 1))
             .ToDictionary(x => x.CompetitorId, x => x.Rank);
+        var badSplits = rows.SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
+            .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
         return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
-            rows.Select(x => x with { Rank = ranks.TryGetValue(x.CompetitorId, out var rank) ? rank : null }).ToArray(), reviewed, audit.ToArray());
+            rows.Select(x => x with { Rank = ranks.TryGetValue(x.CompetitorId, out var rank) ? rank : null }).ToArray(),
+            reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray());
     }
 
     public static string DecisionKey(TimingDecision decision)
@@ -105,8 +121,11 @@ public static class TimingEngine
                 ?? throw new DomainValidationException("Select a received observation.");
             if (decision.Bib is { } bib)
             {
+                var channel = observation.Observation.Channel;
+                var intermediates = snapshot.Results.Count == 0 ? 0 : snapshot.Results[0].Splits.Count;
+                var knownChannel = channel is 0 or 1 || channel >= 2 && channel < 2 + intermediates;
                 if (decision.Ignored || observation.Observation.Kind != ObservationKind.Impulse || observation.DuplicateOf is not null
-                    || observation.Observation.Channel is not (0 or 1))
+                    || !knownChannel)
                 { throw new DomainValidationException("Only an original timing impulse can be assigned. Other input can be reviewed and ignored."); }
                 if (!snapshot.Results.Any(x => x.Bib == bib)) { throw new DomainValidationException("That bib is not on this run's start list."); }
             }
