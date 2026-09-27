@@ -279,6 +279,8 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
             {
                 row = await db.Competitions.SingleOrDefaultAsync(x => x.Id == existingId && x.SeriesId == series.Id, ct)
                     ?? throw new SeriesFileException("The competition no longer exists in this event series.");
+                if (Values(row) != validated && await db.Runs.AnyAsync(x => x.CompetitionId == existingId, ct))
+                { throw new DomainValidationException("This competition has start-list history. Its configuration is frozen to preserve that history."); }
             }
             else
             {
@@ -296,6 +298,8 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
             var series = await LoadForWriteAsync(db, expectedRevision, ct);
             var competition = await db.Competitions.SingleOrDefaultAsync(x => x.Id == id && x.SeriesId == series.Id, ct)
                 ?? throw new SeriesFileException("The competition no longer exists in this event series.");
+            if (await db.Runs.AnyAsync(x => x.CompetitionId == id, ct))
+            { throw new DomainValidationException("This competition has start-list history and cannot be removed."); }
             db.Competitions.Remove(competition);
             series.Revision++;
         }, ct);

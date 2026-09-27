@@ -25,6 +25,7 @@ public partial class MainWindow : Window
         AvaloniaXamlLoader.Load(this);
         DataContextChanged += (_, _) => BindCompetitionColumns();
         SizeChanged += (_, _) => UpdateCompetitorGridHeight();
+        Closing += (_, e) => { if (DataContext is MainViewModel vm && !vm.CanLeaveDrawInput()) { e.Cancel = true; } };
         AddHandler(KeyDownEvent, OnGridKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(TextInputEvent, OnGridTextInput, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnGridPointerPressed, handledEventsToo: true);

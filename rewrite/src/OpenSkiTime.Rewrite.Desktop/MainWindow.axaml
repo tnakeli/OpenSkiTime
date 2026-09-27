@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:OpenSkiTime.Rewrite.Desktop"
         x:Class="OpenSkiTime.Rewrite.Desktop.MainWindow" x:CompileBindings="False"
         Title="{Binding WindowTitle}" Width="1280" Height="820" MinWidth="980" MinHeight="680" WindowState="Maximized"
         Background="{DynamicResource CanvasBrush}">
@@ -15,7 +16,7 @@
             <TextBlock Text="RACE OFFICE  /  LOCAL WORKSPACE" FontSize="{DynamicResource MetaSize}" FontWeight="SemiBold" Foreground="#9CC0C7" />
           </StackPanel>
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsEnabled="{Binding !IsDrawBusy}">
           <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="toolbarAction" />
           <SplitButton Name="OpenFileButton" Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="toolbarAction">
             <SplitButton.Flyout>
@@ -35,11 +36,12 @@
         <Button Content="1  Event series" Command="{Binding ShowSeriesCommand}" Click="Navigation_Click" Classes="sectionNav" Classes.active="{Binding IsSeriesSection}" />
         <Button Content="2  Competitions" Command="{Binding ShowCompetitionsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitionsSection}" />
         <Button Content="3  Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
+        <Button Content="4  Draw / Start lists" Command="{Binding ShowDrawCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsDrawSection}" />
         <TextBlock Text="{Binding FileLabel}" MaxWidth="390" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FileLabel}"
                    Classes="supportingText" VerticalAlignment="Center" Margin="16,0,0,0" />
       </StackPanel>
     </Border>
-    <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !IsDrawSection}">
       <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" HorizontalAlignment="Stretch">
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSeriesSection}">
           <StackPanel Spacing="14">
@@ -381,6 +383,7 @@
         </Border>
       </StackPanel>
     </ScrollViewer>
+    <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />
     <Border Grid.Row="3" Classes="statusBar" Classes.error="{Binding IsError}"
             BorderThickness="0,1,0,0" Padding="22,8">
       <StackPanel Orientation="Horizontal" Spacing="8">

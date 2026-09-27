@@ -26,6 +26,9 @@ public interface ISeriesFileSession : IAsyncDisposable
     Task<ImportCommitResult> ApplyImportAsync(ImportCommit commit, CancellationToken ct = default);
     Task<DeskBatchResult> ApplyDeskBatchAsync(DeskBatch batch, CancellationToken ct = default);
     Task BackupAsync(string destinationPath, CancellationToken ct = default);
+    Task<StartListDesk> ReadStartListsAsync(Guid competitionId, CancellationToken ct = default);
+    Task<StartListDesk> SaveStartListAsync(SaveStartList request, CancellationToken ct = default);
+    Task<StartListDesk> ApproveStartListAsync(Guid id, long expectedRevision, DateTimeOffset at, CancellationToken ct = default);
 }
 
 public sealed class SeriesFileException(string message, Exception? inner = null) : Exception(message, inner);
@@ -121,6 +124,12 @@ public sealed class SeriesWorkspace(ISeriesFileStore store) : IAsyncDisposable
         => WithSessionAsync(s => s.ApplyDeskBatchAsync(batch, ct), ct);
     public Task BackupAsync(string destinationPath, CancellationToken ct = default)
         => WithSessionAsync(async s => { await s.BackupAsync(destinationPath, ct); return true; }, ct);
+    public Task<StartListDesk> ReadStartListsAsync(Guid competitionId, CancellationToken ct = default)
+        => WithSessionAsync(s => s.ReadStartListsAsync(competitionId, ct), ct);
+    public Task<StartListDesk> SaveStartListAsync(SaveStartList request, CancellationToken ct = default)
+        => WithSessionAsync(s => s.SaveStartListAsync(request, ct), ct);
+    public Task<StartListDesk> ApproveStartListAsync(Guid id, long expectedRevision, DateTimeOffset at, CancellationToken ct = default)
+        => WithSessionAsync(s => s.ApproveStartListAsync(id, expectedRevision, at, ct), ct);
 
     private async Task<T> WithSessionAsync<T>(Func<ISeriesFileSession, Task<T>> operation, CancellationToken ct)
     {
