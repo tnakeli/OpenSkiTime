@@ -1,0 +1,68 @@
+using System.Globalization;
+using OpenSkiTime.Rewrite.Domain;
+
+namespace OpenSkiTime.Rewrite.Timing;
+
+public enum ObservationKind { Impulse, DeviceCorrection, Invalid, Information }
+public enum TimingStatus { Ready, OnCourse, Finished, DNS, DNF, DSQ, NPS, Review }
+public enum DecisionKind { Assignment, Status, Time }
+
+// Ticks are integer 100 ns units. Device precision is retained separately; receive time never determines race time.
+public sealed record TimingObservation(string Key, Guid SessionId, long PacketSequence, string Source,
+    string Fingerprint, ObservationKind Kind, int? Channel, long? DeviceTicks, int Precision,
+    int? SuggestedBib, bool Manual, string ClockId, string Message);
+
+public sealed record TimingDecision(DecisionKind Kind, string? ObservationKey = null, Guid? CompetitorId = null,
+    int? Bib = null, bool Ignored = false, TimingStatus? Status = null, long? Hundredths = null);
+
+public sealed record TimingAudit(long Id, Guid ListId, DateTimeOffset At, string Operator, string Reason,
+    TimingDecision Before, TimingDecision After, long? ReversesId = null);
+
+public sealed record TimingResult(StartListEntry Entry, TimingStatus Status, long? Hundredths,
+    int? Rank, string? StartKey, string? FinishKey, string Detail)
+{
+    public int Bib => Entry.Bib;
+    public Guid CompetitorId => Entry.Entrant.CompetitorId;
+    public string Name => Entry.Entrant.Athlete.Surname + " " + Entry.Entrant.Athlete.FirstName;
+    public string Time => TimingTime.Format(Hundredths);
+}
+
+public sealed record ObservationReview(TimingObservation Observation, int? Bib, bool Ignored,
+    string? DuplicateOf, string State);
+
+public sealed record TimingSnapshot(Guid ListId, long AuditVersion, IReadOnlyList<TimingResult> Results,
+    IReadOnlyList<ObservationReview> Observations, IReadOnlyList<TimingAudit> Audit)
+{
+    public int Unresolved => Observations.Count(x => x.State == "Unassigned" || x.State == "Review");
+    public bool Complete => Results.Count > 0 && Results.All(x => x.Status is TimingStatus.Finished
+        or TimingStatus.DNS or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS) && Unresolved == 0;
+
+    public IReadOnlyList<RunFinish> ToRunFinishes()
+    {
+        if (!Complete) { throw new DomainValidationException("Resolve timing observations and classify every starter before preparing the next run."); }
+        return Results.Select(x => new RunFinish(x.CompetitorId, Enum.Parse<FinishStatus>(x.Status.ToString()), x.Hundredths)).ToArray();
+    }
+}
+
+public static class TimingTime
+{
+    public const long TicksPerHundredth = TimeSpan.TicksPerSecond / 100;
+    public static string Format(long? hundredths) => hundredths is not { } value ? "—"
+        : string.Create(CultureInfo.InvariantCulture, $"{value / 6000}:{value / 100 % 60:00}.{value % 100:00}");
+
+    public static bool TryTimeOfDay(string text, out long ticks, out int precision)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ticks = 0; precision = 0;
+        var parts = text.Split([':', '.']);
+        if (parts.Length != 4 || parts[0].Length != 2 || parts[1].Length != 2 || parts[2].Length != 2
+            || parts[3].Length is < 1 or > 7 || text.Any(c => !char.IsAsciiDigit(c) && c != ':' && c != '.')) { return false; }
+        if (!int.TryParse(parts[0], CultureInfo.InvariantCulture, out var h) || h > 23
+            || !int.TryParse(parts[1], CultureInfo.InvariantCulture, out var m) || m > 59
+            || !int.TryParse(parts[2], CultureInfo.InvariantCulture, out var s) || s > 59) { return false; }
+        precision = parts[3].Length;
+        ticks = (h * 3600L + m * 60L + s) * TimeSpan.TicksPerSecond
+            + long.Parse(parts[3].PadRight(7, '0'), CultureInfo.InvariantCulture);
+        return true;
+    }
+}

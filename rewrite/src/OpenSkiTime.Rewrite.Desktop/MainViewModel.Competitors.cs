@@ -546,5 +546,5 @@ public sealed partial class MainViewModel
         _ => throw new DomainValidationException("Category gender must be Women or Men."),
     };
 
-    public void Dispose() => _deskCommitGate.Dispose();
+    public void Dispose() { DisposeTimingUi(); _deskCommitGate.Dispose(); }
 }

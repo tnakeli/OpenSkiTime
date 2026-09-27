@@ -19,13 +19,21 @@ public partial class MainWindow : Window
     private bool _competitorSortDescending;
     private CompetitorGridRow? _entryClickedRow;
     private CompetitorGridRow[] _entrySelectionBeforeClick = [];
+    private bool _timingCloseReady;
 
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
         DataContextChanged += (_, _) => BindCompetitionColumns();
         SizeChanged += (_, _) => UpdateCompetitorGridHeight();
-        Closing += (_, e) => { if (DataContext is MainViewModel vm && !vm.CanLeaveDrawInput()) { e.Cancel = true; } };
+        Closing += async (_, e) =>
+        {
+            if (DataContext is not MainViewModel vm || _timingCloseReady) { return; }
+            if (!vm.CanLeaveDrawInput()) { e.Cancel = true; return; }
+            if (!vm.IsTimingConnected) { return; }
+            e.Cancel = true;
+            if (await vm.StopTimingForCloseAsync()) { _timingCloseReady = true; Close(); }
+        };
         AddHandler(KeyDownEvent, OnGridKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(TextInputEvent, OnGridTextInput, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnGridPointerPressed, handledEventsToo: true);
@@ -104,6 +112,23 @@ public partial class MainWindow : Window
             ToolTip.SetTip(item, path);
             flyout.Items.Add(item);
         }
+    }
+
+    private async void TimingMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel vm || vm.IsTimingBusy) { return; }
+        await vm.RefreshTimingMenuCommand.ExecuteAsync(null);
+        var menu = new MenuFlyout { Placement = Avalonia.Controls.PlacementMode.Bottom };
+        foreach (var competition in vm.TimingMenu)
+        {
+            var item = new MenuItem { Header = competition.Competition.Values.ShortLabel };
+            foreach (var run in competition.Runs)
+            { item.Items.Add(new MenuItem { Header = $"Run {run}", Command = vm.OpenTimingRunCommand, CommandParameter = new DrawDestination(competition.Competition, run) }); }
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count == 0) { menu.Items.Add(new MenuItem { Header = "Prepare a start list in Draw first", IsEnabled = false }); }
+        button.Flyout = menu;
+        menu.ShowAt(button);
     }
 
     private void OnGridViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

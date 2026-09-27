@@ -40,6 +40,13 @@ public sealed partial class MainViewModel
     public IReadOnlyList<int> ReverseChoices { get; } = [30, 15];
     private CompetitionDetails? _drawCompetition;
     private Gender? _drawGender;
+    private Timing.TimingSnapshot? _sourceTiming;
+    private string? _sourceTimingVersion;
+    public bool HasCapturedRunInput => _sourceTiming is not null;
+    public bool CanPasteDrawResults => CanEditDrawResults && !HasCapturedRunInput;
+    public string RunInputHelp => HasCapturedRunInput
+        ? "Results come from Timing. Resolve observations and classify every starter there; then choose the reversal and create the start list."
+        : "Enter every starter's time (1:12.34) or DNS / DNF / DSQ / NPS. Create the start list to save.";
     private int _drawRun = 1;
     public CompetitionDetails? DrawCompetition
     {
@@ -84,8 +91,9 @@ public sealed partial class MainViewModel
     public bool IsFirstDrawRun => DrawRun == 1;
     public bool IsLaterDrawRun => DrawRun > 1;
     public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && !DrawRunStarted
-        && DrawEntryIssue.Length == 0 && (DrawRun == 1 || (DrawRun == 2 && _sourceRun is not null));
-    public bool CanExportDraw => DrawRevision is not null && !IsDrawBusy && !HasUnsavedRunInput;
+        && DrawEntryIssue.Length == 0 && (DrawRun == 1 || (DrawRun == 2 && _sourceRun is not null && (_sourceTiming is null || _sourceTiming.Complete)));
+    public bool CanExportDraw => DrawRevision is not null && !IsDrawBusy && !HasUnsavedRunInput
+        && (_sourceTiming is null || (_sourceTiming.Complete && DrawRevision.SourceTimingVersion == _sourceTimingVersion));
     public bool HasDrawSource => _sourceRun is not null;
     public bool CanEditDrawResults => HasDrawSource && !DrawRunStarted && !IsDrawBusy;
     public bool CanMarkRunStarted => CanExportDraw && !DrawRunStarted && !DrawHasChangedEntries && DrawEntryIssue.Length == 0;
@@ -165,6 +173,8 @@ public sealed partial class MainViewModel
         DrawResults.Clear();
         DrawRevision = null;
         _sourceRun = null;
+        _sourceTiming = null;
+        _sourceTimingVersion = null;
         DrawHasChangedEntries = false;
         DrawRunStarted = false;
         DrawEntryIssue = string.Empty;
@@ -194,6 +204,15 @@ public sealed partial class MainViewModel
             var first = desk.Revisions.Where(x => x.Plan.RunNumber == 1)
                 .OrderByDescending(x => x.Revision).FirstOrDefault();
             _sourceRun = first;
+            if (DrawRun > 1 && first is not null)
+            {
+                var captured = await workspace.ReadTimingAsync(first.Id);
+                if (captured.Sessions.Count > 0)
+                {
+                    _sourceTiming = TimingReplay.Restore(captured, new Devices.AlgeDecoderFactory());
+                    _sourceTimingVersion = TimingReplay.InputVersion(captured);
+                }
+            }
             FirstDrawGroup = first?.Plan.Options.FirstGroup ?? 15;
             DrawReverseCount = lists.FirstOrDefault()?.Plan.Options.ReverseCount ?? first?.Plan.Options.ReverseCount ?? 30;
             DrawFirstBib = first?.Plan.Options.FirstBib ?? 1;
@@ -216,6 +235,8 @@ public sealed partial class MainViewModel
                 var row = new ResultInputRow(entry);
                 var result = DrawRevision?.Plan.SourceResults.FirstOrDefault(x => x.CompetitorId == row.CompetitorId);
                 if (result is not null) { row.Time = RunResultInput.FormatTime(result.Hundredths); row.Status = result.Status.ToString(); }
+                var measured = _sourceTiming?.Results.FirstOrDefault(x => x.CompetitorId == row.CompetitorId);
+                if (measured is not null) { row.Time = RunResultInput.FormatTime(measured.Hundredths); row.Status = measured.Status.ToString(); }
                 row.PropertyChanged += (_, _) => HasUnsavedRunInput = true;
                 DrawResults.Add(row);
             }
@@ -243,6 +264,13 @@ public sealed partial class MainViewModel
             DrawListInfo = string.Empty;
         }
         if (DrawEntryIssue.Length > 0) { DrawHelp = DrawEntryIssue; }
+        if (DrawRun > 1 && _sourceTiming is { } measuredSource)
+        {
+            DrawHelp = !measuredSource.Complete ? "Run 1 timing is incomplete. Resolve observations and classify every starter in Timing."
+                : DrawRevision is { } saved && !saved.Plan.SourceResults.SequenceEqual(measuredSource.ToRunFinishes())
+                    ? "Run 1 timing changed after this starting order was created. Recreate the start list before racing."
+                    : "Run 1 results loaded from Timing. Choose the reversal and create the start list.";
+        }
         DrawContext = DrawCompetition is { } c
             ? $"{c.Values.ShortLabel}  /  Run {DrawRun} of {c.Values.RunCount}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
             : "Choose a competition";
@@ -257,6 +285,7 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(DrawNavigationLabel)); OnPropertyChanged(nameof(CanMarkRunStarted));
         OnPropertyChanged(nameof(CanEditDrawResults));
+        OnPropertyChanged(nameof(HasCapturedRunInput)); OnPropertyChanged(nameof(CanPasteDrawResults)); OnPropertyChanged(nameof(RunInputHelp));
     }
 
     [RelayCommand]
@@ -290,10 +319,10 @@ public sealed partial class MainViewModel
             else
             {
                 if (DrawRun != 2 || _sourceRun is null) { throw new DomainValidationException("This profile currently supports Run 2 only."); }
-                plan = FisStartOrder.SecondRun(_sourceRun, DrawResults.Select(x => x.Read()).ToArray(), DrawReverseCount);
+                plan = FisStartOrder.SecondRun(_sourceRun, _sourceTiming?.ToRunFinishes() ?? DrawResults.Select(x => x.Read()).ToArray(), DrawReverseCount);
             }
             await workspace.SaveStartListAsync(new(plan, _drawDesk.SeriesRevision, Environment.UserName,
-                DrawRun == 1 ? "Draw" : "Run 2 start order", DateTimeOffset.UtcNow));
+                DrawRun == 1 ? "Draw" : "Run 2 start order", DateTimeOffset.UtcNow, _sourceTimingVersion));
             await LoadDrawAsync();
             SetStatus("Start list saved.");
         });
@@ -319,7 +348,7 @@ public sealed partial class MainViewModel
     {
         await GuardAsync(async () =>
         {
-            if (!CanEditDrawResults || _sourceRun is null || entryExchange is null) { return; }
+            if (!CanPasteDrawResults || _sourceRun is null || entryExchange is null) { return; }
             var text = await entryExchange.ReadClipboardAsync();
             if (string.IsNullOrWhiteSpace(text)) { throw new DomainValidationException("Copy Bib, Time and optional Status columns first."); }
             var results = RunResultInput.ParseTsv(text, _sourceRun).ToDictionary(x => x.CompetitorId);

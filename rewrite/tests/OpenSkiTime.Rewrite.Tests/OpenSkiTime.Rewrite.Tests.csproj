@@ -6,5 +6,6 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <ProjectReference Include="../../src/OpenSkiTime.Rewrite.Persistence/OpenSkiTime.Rewrite.Persistence.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.Rewrite.Devices/OpenSkiTime.Rewrite.Devices.csproj" />
   </ItemGroup>
 </Project>

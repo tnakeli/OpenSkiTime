@@ -1,0 +1,172 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OpenSkiTime.Rewrite.Desktop.TimingView" x:CompileBindings="False">
+  <UserControl.Resources>
+    <x:Double x:Key="DataGridSortIconMinWidth">14</x:Double>
+    <ControlTheme x:Key="DataGridCellTextBlockTheme" TargetType="TextBlock">
+      <Setter Property="Margin" Value="6,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </ControlTheme>
+  </UserControl.Resources>
+  <Border Classes="workSurface" Padding="14">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+      <Grid ColumnDefinitions="*,12,Auto" Margin="0,0,0,8">
+        <StackPanel Spacing="3">
+          <TextBlock Text="{Binding TimingContext}" Classes="sectionTitle" />
+          <TextBlock Text="{Binding TimingSummary}" Classes="supportingText" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Content="Prepare Run 2" Command="{Binding PrepareNextTimedRunCommand}" IsVisible="{Binding CanPrepareNextTimedRun}" Classes="secondaryAction" />
+          <Button Content="Connect" Command="{Binding ConnectTimingCommand}" IsEnabled="{Binding CanConnectTiming}" IsVisible="{Binding !IsTimingConnected}" Classes="primaryAction" />
+          <Button Content="Disconnect" Command="{Binding DisconnectTimingCommand}" IsVisible="{Binding IsTimingConnected}" IsEnabled="{Binding !IsTimingBusy}" Classes="secondaryAction" />
+        </StackPanel>
+      </Grid>
+      <StackPanel Grid.Row="1" Spacing="6" Margin="0,0,0,8">
+        <Border Classes="subtleSurface" Padding="10,6">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding TimingConnection}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="1" Text="{Binding TimingStorage}" Classes="supportingText" Margin="12,0,0,0" />
+          </Grid>
+        </Border>
+        <Border IsVisible="{Binding HasTimingAlarm}" BorderBrush="{DynamicResource ErrorBrush}" BorderThickness="1" Padding="8">
+          <Grid ColumnDefinitions="*,8,Auto">
+            <TextBlock Text="{Binding TimingAlarm}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
+            <Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" />
+          </Grid>
+        </Border>
+        <Expander Header="Device connection" IsExpanded="{Binding TimingSettingsOpen}" HorizontalAlignment="Stretch">
+          <ScrollViewer MaxHeight="220" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="8" Margin="0,8,0,0" IsEnabled="{Binding CanChangeTimingDevice}">
+              <Grid ColumnDefinitions="2*,10,130,10,110,10,110,10,*">
+                <StackPanel Classes="field"><TextBlock Text="SOURCE" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding TimingSources}" SelectedItem="{Binding TimingSource}" HorizontalAlignment="Stretch" /></StackPanel>
+                <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="DEVICE DATE" Classes="fieldLabel" /><TextBox Text="{Binding TimingDeviceDate}" Watermark="YYYY-MM-DD" /></StackPanel>
+                <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="START CH." Classes="fieldLabel" /><NumericUpDown Value="{Binding TimingStartChannel}" Minimum="0" Maximum="8" FormatString="0" /></StackPanel>
+                <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="FINISH CH." Classes="fieldLabel" /><NumericUpDown Value="{Binding TimingFinishChannel}" Minimum="0" Maximum="8" FormatString="0" /></StackPanel>
+                <StackPanel Grid.Column="8" Classes="field"><TextBlock Text="OPERATOR" Classes="fieldLabel" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
+              </Grid>
+              <TextBlock Text="{Binding TimingDeviceHelp}" Classes="supportingText" TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="180,10,180,10,Auto" IsVisible="{Binding IsTimyUsb}">
+                <TextBox Text="{Binding TimyDeviceId}" Watermark="USB device ID (optional)" ToolTip.Tip="Leave blank to use the first connected Timy. Other devices are not merged." />
+                <TextBox Grid.Column="2" Text="{Binding TimingFirmware}" Watermark="Firmware version" />
+                <Button Grid.Column="4" Content="Set up USB library" Command="{Binding SetupTimyUsbCommand}" Classes="secondaryAction" />
+              </Grid>
+              <Grid ColumnDefinitions="150,8,Auto,10,130,*" IsVisible="{Binding IsMt1Serial}">
+                <ComboBox ItemsSource="{Binding TimingPorts}" SelectedItem="{Binding TimingPort}" PlaceholderText="COM port" HorizontalAlignment="Stretch" />
+                <Button Grid.Column="2" Content="Refresh ports" Command="{Binding RefreshTimingPortsCommand}" Classes="secondaryAction" />
+                <NumericUpDown Grid.Column="4" Value="{Binding TimingBaud}" Minimum="1200" Maximum="115200" FormatString="0" ToolTip.Tip="Serial baud rate. Timy PC Timer defaults to 38400; check the connected device." />
+              </Grid>
+              <StackPanel IsVisible="{Binding IsAlgeResults}" Spacing="8">
+                <Grid ColumnDefinitions="*,10,*,10,2*">
+                  <TextBox Text="{Binding Mt1StartDevice}" Watermark="Start MT1 device ID" />
+                  <TextBox Grid.Column="2" Text="{Binding Mt1FinishDevice}" Watermark="Finish MT1 device ID" />
+                  <TextBox Grid.Column="4" Text="{Binding Mt1FromUtc}" Watermark="Receive from UTC (empty = now)" />
+                </Grid>
+                <Grid ColumnDefinitions="2*,10,2*,10,Auto">
+                  <TextBox Text="{Binding Mt1Username}" Watermark="ALGE Results username" />
+                  <TextBox Grid.Column="2" Text="{Binding Mt1Password}" PasswordChar="•" Watermark="Password (empty = saved password)" />
+                  <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding RememberAlgePassword}" />
+                </Grid>
+              </StackPanel>
+              <TextBox IsVisible="{Binding IsTimingReplay}" Text="{Binding TimingReplayPath}" Watermark="Path to raw ALGE ASCII file" />
+            </StackPanel>
+          </ScrollViewer>
+        </Expander>
+      </StackPanel>
+      <Grid Grid.Row="2" ColumnDefinitions="70,8,Auto,16,70,8,Auto,10,Auto,*,Auto" Margin="0,0,0,8" IsEnabled="{Binding HasTimingRun}">
+        <TextBox Name="StartBibInput" Text="{Binding StartBibText}" Watermark="Bib" ToolTip.Tip="Next start bib" />
+        <Button Grid.Column="2" Content="Arm start · F5" Command="{Binding ArmStartCommand}" Classes="primaryAction" />
+        <TextBox Grid.Column="4" Text="{Binding FinishBibText}" Watermark="Bib" ToolTip.Tip="Expected finish bib" />
+        <Button Grid.Column="6" Content="Arm finish · F6" Command="{Binding ArmFinishCommand}" Classes="primaryAction" />
+        <Button Grid.Column="8" Content="Clear" Command="{Binding ClearArmedBibsCommand}" Classes="secondaryAction" />
+        <TextBlock Grid.Column="10" Text="{Binding ArmedBibs}" FontWeight="SemiBold" VerticalAlignment="Center" />
+      </Grid>
+      <Grid Grid.Row="3" ColumnDefinitions="2*,12,*">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+            <TextBlock Text="RACE / START LIST &amp; RESULTS" Classes="eyebrow" VerticalAlignment="Center" />
+            <CheckBox Grid.Column="1" Content="Correction history" IsChecked="{Binding ShowTimingHistory}" />
+          </Grid>
+          <DataGrid Grid.Row="1" Name="TimingResultsGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimingRows}" SelectedItem="{Binding SelectedTimingRow}"
+                    IsVisible="{Binding !ShowTimingHistory}" AutoGenerateColumns="False" IsReadOnly="True" RowHeight="30" GridLinesVisibility="Horizontal">
+            <DataGrid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Arm start" InputGesture="F5" Command="{Binding ArmStartCommand}" />
+                <MenuItem Header="Arm finish" InputGesture="F6" Command="{Binding ArmFinishCommand}" />
+                <Separator />
+                <MenuItem Header="DNS · did not start" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNS" />
+                <MenuItem Header="DNF · did not finish" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNF" />
+                <MenuItem Header="DSQ · disqualified" Command="{Binding ClassifyTimingCommand}" CommandParameter="DSQ" />
+                <MenuItem Header="NPS · not permitted to start" Command="{Binding ClassifyTimingCommand}" CommandParameter="NPS" />
+                <MenuItem Header="Clear classification" Command="{Binding ClassifyTimingCommand}" CommandParameter="Clear" />
+              </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="#" Binding="{Binding Position}" Width="40" />
+              <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="55" />
+              <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="120" />
+              <DataGridTextColumn Header="STATE" Binding="{Binding Status}" Width="86" />
+              <DataGridTextColumn Header="TIME" Binding="{Binding Time}" SortMemberPath="Result.Hundredths" Width="85" />
+              <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="50" />
+              <DataGridTextColumn Header="TOTAL" Binding="{Binding TotalTime}" SortMemberPath="Total" Width="85" />
+              <DataGridTextColumn Header="RK" Binding="{Binding TotalRank}" Width="50" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <DataGrid Grid.Row="1" Name="TimingHistoryGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimingHistory}" SelectedItem="{Binding SelectedTimingHistory}"
+                    IsVisible="{Binding ShowTimingHistory}" AutoGenerateColumns="False" IsReadOnly="True" RowHeight="34">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="TIME" Binding="{Binding Time}" Width="76" />
+              <DataGridTextColumn Header="CHANGE" Binding="{Binding Summary}" Width="2*" />
+              <DataGridTextColumn Header="REASON" Binding="{Binding Reason}" Width="*" />
+              <DataGridTextColumn Header="OPERATOR" Binding="{Binding Operator}" Width="95" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <StackPanel Grid.Row="2" Spacing="6" Margin="0,8,0,0">
+            <TextBlock Text="{Binding SelectedTimingRow.Detail}" Classes="supportingText" TextWrapping="Wrap" />
+            <Grid ColumnDefinitions="*,8,110,8,Auto">
+              <TextBox Text="{Binding TimingReason}" Watermark="Reason for correction / classification" />
+              <TextBox Grid.Column="2" Text="{Binding CorrectedTimeText}" Watermark="1:12.34" />
+              <Button Grid.Column="4" Content="Correct time" Command="{Binding CorrectTimingTimeCommand}" Classes="secondaryAction" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="DNS" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNS" Classes="secondaryAction" />
+              <Button Content="DNF" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNF" Classes="secondaryAction" />
+              <Button Content="DSQ" Command="{Binding ClassifyTimingCommand}" CommandParameter="DSQ" Classes="secondaryAction" />
+              <Button Content="NPS" Command="{Binding ClassifyTimingCommand}" CommandParameter="NPS" Classes="secondaryAction" />
+              <Button Content="Clear status" Command="{Binding ClassifyTimingCommand}" CommandParameter="Clear" Classes="secondaryAction" />
+              <Button Content="Undo selected change" Command="{Binding UndoTimingChangeCommand}" IsVisible="{Binding ShowTimingHistory}" Classes="secondaryAction" />
+            </StackPanel>
+            <Grid ColumnDefinitions="130,8,Auto,8,Auto" IsVisible="{Binding IsTimingSimulator}">
+              <TextBox Text="{Binding SimulationTime}" ToolTip.Tip="Simulated device clock, HH:mm:ss.ffff" />
+              <Button Grid.Column="2" Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+              <Button Grid.Column="4" Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+            </Grid>
+          </StackPanel>
+        </Grid>
+        <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto">
+          <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+            <TextBlock Text="OBSERVATIONS" Classes="eyebrow" VerticalAlignment="Center" />
+            <CheckBox Grid.Column="1" Content="Show all" IsChecked="{Binding ShowAllTimingObservations}" />
+          </Grid>
+          <DataGrid Grid.Row="1" Name="TimingObservationsGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimingObservations}" SelectedItem="{Binding SelectedTimingObservation}"
+                    AutoGenerateColumns="False" IsReadOnly="True" RowHeight="30" GridLinesVisibility="Horizontal">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="DEVICE TIME" Binding="{Binding Time}" SortMemberPath="Review.Observation.DeviceTicks" Width="125" />
+              <DataGridTextColumn Header="CH." Binding="{Binding Channel}" Width="46" />
+              <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="46" />
+              <DataGridTextColumn Header="STATE" Binding="{Binding State}" Width="*" MinWidth="76" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <StackPanel Grid.Row="2" Spacing="6" Margin="0,8,0,0">
+            <TextBlock Text="{Binding SelectedTimingObservation.Detail}" Classes="supportingText" TextWrapping="Wrap" MaxHeight="62" />
+            <Grid ColumnDefinitions="65,8,Auto,8,Auto,8,Auto">
+              <TextBox Text="{Binding ObservationBibText}" Watermark="Bib" />
+              <Button Grid.Column="2" Content="Assign" Command="{Binding ChangeObservationCommand}" CommandParameter="assign" Classes="primaryAction" />
+              <Button Grid.Column="4" Content="Unassign" Command="{Binding ChangeObservationCommand}" CommandParameter="unassign" Classes="secondaryAction" />
+              <Button Grid.Column="6" Content="Ignore" Command="{Binding ChangeObservationCommand}" CommandParameter="ignore" Classes="secondaryAction" />
+            </Grid>
+            <TextBlock Text="Original input is always retained. Use the reason field for corrections and ignored observations." Classes="supportingText" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </Grid>
+    </Grid>
+  </Border>
+</UserControl>

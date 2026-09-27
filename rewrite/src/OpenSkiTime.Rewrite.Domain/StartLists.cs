@@ -19,6 +19,7 @@ public sealed record StartListRevision(Guid Id, int Revision, DateTimeOffset Cre
 {
     public DateTimeOffset? StartedAt { get; init; }
     public string? StartedBy { get; init; }
+    public string? SourceTimingVersion { get; init; }
 }
 
 public static class FisStartOrder

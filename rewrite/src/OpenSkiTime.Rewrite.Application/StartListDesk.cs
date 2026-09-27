@@ -6,7 +6,8 @@ using OpenSkiTime.Rewrite.Domain;
 namespace OpenSkiTime.Rewrite.Application;
 
 public sealed record StartListDesk(long SeriesRevision, IReadOnlyList<StartListRevision> Revisions);
-public sealed record SaveStartList(StartListPlan Plan, long ExpectedRevision, string Operator, string Reason, DateTimeOffset At);
+public sealed record SaveStartList(StartListPlan Plan, long ExpectedRevision, string Operator, string Reason, DateTimeOffset At,
+    string? ExpectedTimingVersion = null);
 
 public static class StartListExchange
 {

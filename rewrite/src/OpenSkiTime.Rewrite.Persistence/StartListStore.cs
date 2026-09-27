@@ -34,6 +34,12 @@ internal sealed partial class SqliteSeriesFileSession
             if (string.IsNullOrWhiteSpace(request.Operator) || string.IsNullOrWhiteSpace(request.Reason))
             { throw new DomainValidationException("Enter the operator and reason for this start-list revision."); }
             await ValidateStartPlanAsync(db, plan, ct);
+            if (plan.SourceListId is { } timingSourceId && await db.Captures.AnyAsync(x => x.ListId == timingSourceId, ct))
+            {
+                var timing = await ReadTimingAsync(timingSourceId, ct);
+                if (request.ExpectedTimingVersion != TimingReplay.InputVersion(timing))
+                { throw new DomainValidationException("Run 1 timing changed. Reload its results before creating the next start list."); }
+            }
             if (await db.StartLists.AnyAsync(x => x.StartedAt != null && db.Runs.Any(r => r.Id == x.RunId
                 && r.CompetitionId == plan.CompetitionId && r.Number == plan.RunNumber), ct))
             { throw new DomainValidationException("This run has started. Its start list can no longer be redrawn."); }
@@ -47,7 +53,7 @@ internal sealed partial class SqliteSeriesFileSession
             var revision = (await db.StartLists.Where(x => x.RunId == run.Id).MaxAsync(x => (int?)x.Revision, ct) ?? 0) + 1;
             var list = new StartListRow { Id = Guid.NewGuid(), RunId = run.Id, Revision = revision,
                 CreatedAt = request.At, Operator = request.Operator.Trim(), Reason = request.Reason.Trim(),
-                PlanJson = JsonSerializer.Serialize(plan with { Entries = [] }) };
+                PlanJson = JsonSerializer.Serialize(plan with { Entries = [] }), SourceTimingVersion = request.ExpectedTimingVersion };
             db.StartLists.Add(list);
             foreach (var entry in plan.Entries)
             {
@@ -71,6 +77,7 @@ internal sealed partial class SqliteSeriesFileSession
             { throw new DomainValidationException("Only the current start list can be marked started, once."); }
             var list = await ReadListAsync(db, row, ct);
             await ValidateStartPlanAsync(db, list.Plan, ct);
+            await ValidateTimingSourceAsync(db, row, list.Plan, ct);
             row.StartedAt = at;
             row.StartedBy = operatorName.Trim();
             return list.Plan.CompetitionId;
@@ -86,7 +93,16 @@ internal sealed partial class SqliteSeriesFileSession
         return new(row.Id, row.Revision, row.CreatedAt, row.ApprovedAt, row.Operator, row.Reason,
             plan with { Entries = entries.Select(x => JsonSerializer.Deserialize<StartListEntry>(x.EntryJson)
                 ?? throw new SeriesFileException("Invalid saved start-list entry.")).ToArray() })
-            { StartedAt = row.StartedAt, StartedBy = row.StartedBy };
+            { StartedAt = row.StartedAt, StartedBy = row.StartedBy, SourceTimingVersion = row.SourceTimingVersion };
+    }
+
+    private async Task ValidateTimingSourceAsync(SeriesDbContext db, StartListRow row, StartListPlan plan, CancellationToken ct)
+    {
+        if (plan.SourceListId is { } id && await db.Captures.AnyAsync(x => x.ListId == id, ct))
+        {
+            if (row.SourceTimingVersion != TimingReplay.InputVersion(await ReadTimingAsync(id, ct)))
+            { throw new DomainValidationException("Run 1 timing changed. Recreate the next start list before starting this run."); }
+        }
     }
 
     private static async Task ValidateStartPlanAsync(SeriesDbContext db, StartListPlan plan, CancellationToken ct)
