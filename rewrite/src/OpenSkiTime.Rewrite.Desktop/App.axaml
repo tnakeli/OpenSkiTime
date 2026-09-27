@@ -1,8 +1,10 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:OpenSkiTime.Rewrite.Desktop"
              x:Class="OpenSkiTime.Rewrite.Desktop.App"
              RequestedThemeVariant="Light">
   <Application.Resources>
+    <local:GenderLabelConverter x:Key="GenderLabelConverter" />
     <SolidColorBrush x:Key="CanvasBrush">#EAF0F2</SolidColorBrush>
     <SolidColorBrush x:Key="SurfaceBrush">#FFFFFF</SolidColorBrush>
     <SolidColorBrush x:Key="SubtleSurfaceBrush">#F5F8F9</SolidColorBrush>

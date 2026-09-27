@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
@@ -26,7 +27,7 @@ public sealed partial class CompetitorGridRow : ObservableObject
     public bool HasDraftChanges => SavedValues is { } saved
         ? Surname != saved.Surname || FirstName != saved.FirstName
           || BirthYearText != (saved.BirthYear?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)
-          || GenderText != (saved.Gender?.ToString() ?? string.Empty)
+          || GenderText != GenderLabels.Format(saved.Gender)
           || FederationCode != (saved.FederationCode ?? string.Empty)
           || Nation != (saved.Nation ?? string.Empty) || Club != (saved.Club ?? string.Empty)
           || IsParticipating != SavedParticipation
@@ -83,7 +84,7 @@ public sealed partial class CompetitorGridRow : ObservableObject
         Surname = values.Surname;
         FirstName = values.FirstName;
         BirthYearText = values.BirthYear?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
-        GenderText = values.Gender?.ToString() ?? string.Empty;
+        GenderText = GenderLabels.Format(values.Gender);
         FederationCode = values.FederationCode ?? string.Empty;
         Nation = values.Nation ?? string.Empty;
         Club = values.Club ?? string.Empty;
@@ -152,10 +153,10 @@ public sealed partial class CompetitorGridRow : ObservableObject
         if (string.IsNullOrWhiteSpace(text)) { return null; }
         return text.Trim().ToUpperInvariant() switch
         {
-            "F" or "FEMALE" => Gender.Female,
-            "M" or "MALE" => Gender.Male,
+            "F" or "FEMALE" or "WOMAN" or "WOMEN" => Gender.Female,
+            "M" or "MALE" or "MAN" or "MEN" => Gender.Male,
             "O" or "OTHER" => Gender.Other,
-            _ => throw new DomainValidationException("Gender must be Female, Male or Other."),
+            _ => throw new DomainValidationException("Gender must be Women, Men or Other."),
         };
     }
 }

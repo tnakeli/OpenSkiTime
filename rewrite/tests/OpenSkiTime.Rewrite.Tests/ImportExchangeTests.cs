@@ -57,6 +57,7 @@ public sealed class ImportExchangeTests
             Assert.Null(oldSl.ImportedBib);
             Assert.True(saved.Participations.Single(x => x.CompetitorId == existing.Value.Id && x.CompetitionId == gs).Participates);
             var added = saved.Competitors.Single(x => x.Values.Surname == "KORHONEN");
+            Assert.Equal(Gender.Male, added.Values.Gender);
             Assert.Equal("New Club", added.Values.Club);
             Assert.Equal(13, saved.Participations.Single(x => x.CompetitorId == added.Id && x.CompetitionId == sl).ImportedBib);
         }
@@ -77,6 +78,7 @@ public sealed class ImportExchangeTests
             var desk = await workspace.ReadCompetitorDeskAsync();
             var exported = TsvExchange.Export(await workspace.ReadAsync(), desk, [existing.Value.Id]);
             var parsed = TsvExchange.Parse(exported);
+            Assert.Equal("Women", parsed[1][3]);
             Assert.Equal("North\tClub \"A\"\nLane", parsed[1][5]);
             Assert.Equal(string.Empty, parsed[1][7]); // false participation exports blank
             Assert.Equal("27", parsed[1][8]);

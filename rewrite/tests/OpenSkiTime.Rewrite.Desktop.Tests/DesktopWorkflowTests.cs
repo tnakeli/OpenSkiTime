@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Desktop;
+using OpenSkiTime.Rewrite.Domain;
 using OpenSkiTime.Rewrite.Persistence;
 using Xunit;
 
@@ -96,7 +97,7 @@ public class DesktopWorkflowTests
             competitorRow.Surname = "Mäkelä";
             competitorRow.FirstName = "Aino";
             competitorRow.BirthYearText = "2010";
-            competitorRow.GenderText = "Female";
+            competitorRow.GenderText = "Women";
             competitorRow.Nation = "fin";
             competitorRow.ImportedBibText = "27";
             competitorRow.IsParticipating = true;
@@ -105,6 +106,7 @@ public class DesktopWorkflowTests
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Same(competitorRow, vm.SelectedCompetitorRow);
             Assert.Equal("MÄKELÄ", competitorRow.Surname);
+            Assert.Equal("Women", competitorRow.GenderText);
             Assert.Equal(27, Assert.Single((await workspace.ReadCompetitorDeskAsync()).Participations).ImportedBib);
             Assert.Equal(2, vm.ParticipationChoices.Count);
             var firstRaceParticipation = vm.ParticipationChoices.Single(x => x.Label == "3.1 SL");
@@ -158,11 +160,17 @@ public class DesktopWorkflowTests
             vm.CategoryLabel = "Girls U16";
             vm.CategoryMinYearText = "2010";
             vm.CategoryMaxYearText = "2011";
-            vm.CategoryGenderText = "Female";
+            vm.CategoryGenderText = "Women";
             window.GetVisualDescendants().OfType<Expander>()
                 .Single(x => Equals(x.Header, "Category rules · birth-year range and gender")).IsExpanded = true;
             Click(window, "Save rule");
             await vm.SaveCategoryRuleCommand.ExecutionTask!;
+            Assert.Equal("Women", vm.CategoryGenderText);
+            window.UpdateLayout();
+            var categoryGrid = window.GetVisualDescendants().OfType<DataGrid>()
+                .Single(grid => ReferenceEquals(grid.ItemsSource, vm.CategoryRules));
+            Assert.Contains(categoryGrid.GetVisualDescendants().OfType<TextBlock>(),
+                block => block.Text == "Women");
             Assert.Equal("Girls U16", Assert.Single(vm.VisibleCompetitors).Category);
             vm.CompetitorFilterText = "NO MATCH";
             Assert.Empty(vm.VisibleCompetitors);
@@ -170,9 +178,9 @@ public class DesktopWorkflowTests
             Assert.Single(vm.VisibleCompetitors);
             vm.CompetitorFilterText = string.Empty;
 
-            exchange.ClipboardText = "Surname\tFirst name\tYear\tClub\t3.1 SL\tBib:3.1 SL\t3.2 GS\n"
-                + "Mäkelä\tAino\t2010\tReview Club\tX\t11\t0\n"
-                + "Laine\tLea\t2011\tNew Club\tX\t\t\n";
+            exchange.ClipboardText = "Surname\tFirst name\tYear\tGender\tClub\t3.1 SL\tBib:3.1 SL\t3.2 GS\n"
+                + "Mäkelä\tAino\t2010\tWomen\tReview Club\tX\t11\t0\n"
+                + "Laine\tLea\t2011\tMen\tNew Club\tX\t\t\n";
             Click(window, "Paste from Excel");
             await vm.PasteFromExcelCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
@@ -225,6 +233,7 @@ public class DesktopWorkflowTests
                 x.CompetitorId == importedAthlete.Id
                 && x.CompetitionId == vm.Competitions.Single(c => c.Values.ShortLabel == "3.1 SL").Id).ImportedBib);
             var importedNew = importedDesk.Competitors.Single(x => x.Values.Surname == "LAINE");
+            Assert.Equal(Gender.Male, importedNew.Values.Gender);
             Assert.True(importedDesk.Participations.Single(x => x.CompetitorId == importedNew.Id
                 && x.CompetitionId == vm.Competitions.Single(c => c.Values.ShortLabel == "3.2 GS").Id).Participates);
             vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "MÄKELÄ");

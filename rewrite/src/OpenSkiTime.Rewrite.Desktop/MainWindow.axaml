@@ -368,7 +368,7 @@
                     <DataGridTextColumn Header="CATEGORY" Binding="{Binding Values.Label}" Width="*" />
                     <DataGridTextColumn Header="FROM YEAR" Binding="{Binding Values.BirthYearMin}" Width="110" />
                     <DataGridTextColumn Header="TO YEAR" Binding="{Binding Values.BirthYearMax}" Width="110" />
-                    <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Gender}" Width="110" />
+                    <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Gender, Converter={StaticResource GenderLabelConverter}}" Width="110" />
                     <DataGridTextColumn Header="ORDER" Binding="{Binding Values.DisplayOrder}" Width="90" />
                   </DataGrid.Columns>
                 </DataGrid>
@@ -376,7 +376,7 @@
                   <StackPanel Grid.Column="0" Classes="field"><TextBlock Text="LABEL" Classes="fieldLabel" /><TextBox Text="{Binding CategoryLabel}" /></StackPanel>
                   <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="FROM YEAR" Classes="fieldLabel" /><TextBox Text="{Binding CategoryMinYearText}" /></StackPanel>
                   <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="TO YEAR" Classes="fieldLabel" /><TextBox Text="{Binding CategoryMaxYearText}" /></StackPanel>
-                  <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="GENDER · F/M/O" Classes="fieldLabel" /><TextBox Text="{Binding CategoryGenderText}" /></StackPanel>
+                  <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="GENDER · MEN / WOMEN" Classes="fieldLabel" /><TextBox Text="{Binding CategoryGenderText}" /></StackPanel>
                   <StackPanel Grid.Column="8" Classes="field"><TextBlock Text="ORDER" Classes="fieldLabel" /><TextBox Text="{Binding CategoryOrderText}" /></StackPanel>
                 </Grid>
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -409,7 +409,7 @@
                       <DataGridTextColumn Header="SURNAME" Binding="{Binding Values.Surname}" Width="*" />
                       <DataGridTextColumn Header="FIRST NAME" Binding="{Binding Values.FirstName}" Width="*" />
                       <DataGridTextColumn Header="YEAR" Binding="{Binding Values.BirthYear}" Width="80" />
-                      <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Gender}" Width="100" />
+                      <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Gender, Converter={StaticResource GenderLabelConverter}}" Width="100" />
                       <DataGridTextColumn Header="LEGACY BIB" Binding="{Binding SeriesBibReference}" Width="110" />
                       <DataGridTextColumn Header="CODE" Binding="{Binding Values.FederationCode}" Width="120" />
                     </DataGrid.Columns>
