@@ -43,6 +43,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(IsCompetitorsSection))]
     [NotifyPropertyChangedFor(nameof(IsSettingsSection))]
     [NotifyPropertyChangedFor(nameof(IsDrawSection))]
+    [NotifyPropertyChangedFor(nameof(DrawNavigationLabel))]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private WorkspaceSection _activeSection = WorkspaceSection.Series;
     public bool IsSeriesSection => ActiveSection == WorkspaceSection.Series;
@@ -80,7 +81,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     private string _fileLabel = "No series file open";
     public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime"
         : IsDrawSection && DrawCompetition is { } c
-            ? $"{FileLabel} · {c.Values.FisCode ?? c.Values.LocalRaceCode ?? c.Values.ShortLabel} · {DrawGender} · Run {DrawRun}"
+            ? $"{FileLabel} · {c.Values.FisCode ?? c.Values.LocalRaceCode ?? c.Values.ShortLabel} · Run {DrawRun}"
             : FileLabel;
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";
     [ObservableProperty] private bool _isError;

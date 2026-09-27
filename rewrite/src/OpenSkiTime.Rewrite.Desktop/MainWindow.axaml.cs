@@ -57,6 +57,26 @@ public partial class MainWindow : Window
     private void OnRecentFilesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         => RebuildRecentMenu();
 
+    private async void DrawMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel vm || vm.IsDrawBusy) { return; }
+        await vm.RefreshDrawMenuCommand.ExecuteAsync(null);
+        var menu = new MenuFlyout { Placement = Avalonia.Controls.PlacementMode.Bottom };
+        foreach (var competition in vm.DrawMenu)
+        {
+            var item = new MenuItem { Header = $"{competition.Competition.Values.ShortLabel} · {competition.Competition.Values.Name}" };
+            foreach (var run in competition.Runs)
+            {
+                item.Items.Add(new MenuItem { Header = $"Run {run}", Command = vm.OpenDrawRunCommand,
+                    CommandParameter = new DrawDestination(competition.Competition, run) });
+            }
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count == 0) { menu.Items.Add(new MenuItem { Header = "Add a competition first", IsEnabled = false }); }
+        button.Flyout = menu;
+        menu.ShowAt(button);
+    }
+
     private void RebuildRecentMenu()
     {
         if (this.FindControl<SplitButton>("OpenFileButton")?.Flyout is not MenuFlyout flyout) { return; }

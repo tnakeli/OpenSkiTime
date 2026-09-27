@@ -17,6 +17,8 @@ public sealed record StartListPlan(Guid CompetitionId, CompetitionValues Competi
 public sealed record StartListRevision(Guid Id, int Revision, DateTimeOffset CreatedAt, DateTimeOffset? ApprovedAt,
     string Operator, string Reason, StartListPlan Plan)
 {
+    public DateTimeOffset? StartedAt { get; init; }
+    public string? StartedBy { get; init; }
     public bool IsApproved => ApprovedAt is not null;
     public string Display => $"v{Revision} · {(IsApproved ? "Approved" : "Draft")} · {CreatedAt:yyyy-MM-dd HH:mm}";
 }

@@ -117,7 +117,12 @@ public sealed class StartListTests
             plan.Competition with { RunCount = 1 }, approvedDesk.SeriesRevision));
         var results = first.Plan.Entries.Select((x, i) => new RunFinish(x.Entrant.CompetitorId, FinishStatus.Finished, 6000 + i)).ToArray();
         var secondPlan = FisStartOrder.SecondRun(first, results);
-        var secondDesk = await workspace.SaveStartListAsync(new(secondPlan, approvedDesk.SeriesRevision, "Operator", "External Run 1 results", s_at));
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(secondPlan, approvedDesk.SeriesRevision, "Operator", "Not started", s_at)));
+        var started = await workspace.MarkRunStartedAsync(first.Id, approvedDesk.SeriesRevision, "Starter", s_at);
+        Assert.Equal(s_at, Assert.Single(started.Revisions).StartedAt);
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.MarkRunStartedAsync(first.Id, started.SeriesRevision, "Starter", s_at));
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(plan, started.SeriesRevision, "Operator", "Unsafe redraw", s_at)));
+        var secondDesk = await workspace.SaveStartListAsync(new(secondPlan, started.SeriesRevision, "Operator", "External Run 1 results", s_at));
         var second = secondDesk.Revisions.Single(x => x.Plan.RunNumber == 2);
         var final = await workspace.ApproveStartListAsync(second.Id, secondDesk.SeriesRevision, s_at);
         await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(plan, final.SeriesRevision, "Operator", "Redraw", s_at)));
@@ -127,6 +132,7 @@ public sealed class StartListTests
         var reopened = await workspace.ReadStartListsAsync(plan.CompetitionId);
         Assert.Equal(2, reopened.Revisions.Count);
         Assert.All(reopened.Revisions, x => Assert.True(x.IsApproved));
+        Assert.Equal("Starter", reopened.Revisions.Single(x => x.Plan.RunNumber == 1).StartedBy);
         Assert.Equal(secondPlan.Entries, reopened.Revisions.Single(x => x.Plan.RunNumber == 2).Plan.Entries);
         Assert.Equal(plan.Entries, FisStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender,
             plan.Entries.Select(x => x.Entrant).ToArray(), plan.PointsList, plan.Options, plan.Seed).Entries);
@@ -153,7 +159,7 @@ public sealed class StartListTests
     }
 
     [Fact]
-    public async Task MenAndWomenCannotReserveTheSameBibsWithinACompetition()
+    public async Task FisDrawCannotSilentlyOmitTheOtherGenderFromACompetition()
     {
         using var folder = new TestFolder();
         await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
@@ -166,9 +172,34 @@ public sealed class StartListTests
         var conflicting = FisStartOrder.FirstRun(women.CompetitionId, s_race, Gender.Male, entrants, s_points, new(), "men-seed");
         await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(conflicting, added.Revision, "Operator", "Men", s_at)));
         var separate = FisStartOrder.FirstRun(women.CompetitionId, s_race, Gender.Male, entrants, s_points, new(FirstBib: 5), "men-seed");
-        var result = await workspace.SaveStartListAsync(new(separate, added.Revision, "Operator", "Men", s_at));
-        Assert.Equal(2, result.Revisions.Count);
-        Assert.Equal(5, result.Revisions.SelectMany(x => x.Plan.Entries).Select(x => x.Bib).Distinct().Count());
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(separate, added.Revision, "Operator", "Men", s_at)));
+        Assert.Single((await workspace.ReadStartListsAsync(women.CompetitionId)).Revisions);
+    }
+
+    [Fact]
+    public async Task M4UpgradePreservesApprovedListsWithoutInventingAStart()
+    {
+        using var folder = new TestFolder();
+        var path = folder.PathFor("m4.ost");
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        var plan = await SeedAsync(workspace, path);
+        var series = await workspace.ReadAsync();
+        var draft = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Before upgrade", s_at));
+        var id = Assert.Single(draft.Revisions).Id;
+        await workspace.ApproveStartListAsync(id, draft.SeriesRevision, s_at);
+        await workspace.CloseAsync();
+        var options = new DbContextOptionsBuilder<SeriesDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options;
+        await using (var db = new SeriesDbContext(options))
+        {
+            await db.GetService<IMigrator>().MigrateAsync("20260927144413_StartLists");
+        }
+        await workspace.OpenAsync(path);
+        var reopened = Assert.Single((await workspace.ReadStartListsAsync(plan.CompetitionId)).Revisions);
+        Assert.Equal(id, reopened.Id);
+        Assert.True(reopened.IsApproved);
+        Assert.Null(reopened.StartedAt);
+        Assert.Equal(plan.Entries, reopened.Plan.Entries);
+        Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "m4.ost.before-upgrade-*.ost"));
     }
 
     [Fact]
