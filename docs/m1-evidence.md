@@ -2,6 +2,8 @@
 
 The new application is isolated in `rewrite/OpenSkiTime.Rewrite.slnx`. It does not reference the legacy projects or open/migrate the legacy database. Its `.ost` file contains one event series and its competitions; file selection, edits, close/reopen and backup are reachable from the desktop window. Each write uses a short-lived EF Core context, a transaction, a revision check and SQLite constraints. New files and older new-format files use EF migrations. An upgrade makes a SQLite backup before changing schema; unknown newer migrations and non-new-format files are rejected.
 
+The Open file control keeps the picker as its primary action and lists up to ten recently opened existing `.ost` files in its drop-down. This convenience list lives in the current user's local application data, outside portable event files. A successful create or open moves the file to the top; a missing file is omitted on the next load. A desktop workflow test opens a file from the list, and a store test covers ordering, deduplication and the ten-file limit.
+
 Run with the .NET 10 SDK:
 
 ```powershell

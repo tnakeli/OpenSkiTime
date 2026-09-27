@@ -24,6 +24,15 @@ public sealed partial class MainViewModel
     public IReadOnlyList<string> CompetitorGroupings { get; } = ["Surname", "Category"];
     public IReadOnlyList<string> CategoryGenderOptions { get; } = ["Any", "Women", "Men"];
     public bool HasDeskChangeLog => DeskChangeLog.Count > 0;
+    public string UnsavedChangesText => DeskChangeLog.Count is 0 ? "All changes saved"
+        : $"{DeskChangeLog.Count} unsaved change{(DeskChangeLog.Count == 1 ? "" : "s")}";
+    public string ChangeReviewButtonText => IsChangeReviewOpen ? "Hide changes" : "Review changes";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ChangeReviewButtonText))]
+    private bool _isChangeReviewOpen;
+
+    [RelayCommand]
+    private void ToggleChangeReview() => IsChangeReviewOpen = !IsChangeReviewOpen;
 
     private CompetitionDetails? _deskCompetition;
     public CompetitionDetails? DeskCompetition
@@ -33,7 +42,7 @@ public sealed partial class MainViewModel
         {
             if (_deskCompetition?.Id != value?.Id && HasDeskDrafts)
             {
-                SetStatus("Commit or restore competitor changes before switching competitions.", error: true);
+                SetStatus("Save or discard unsaved changes before switching competitions.", error: true);
                 OnPropertyChanged(nameof(DeskCompetition));
                 return;
             }
@@ -67,7 +76,7 @@ public sealed partial class MainViewModel
     {
         if (HasDeskDrafts)
         {
-            throw new DomainValidationException("Commit or restore competitor changes before changing the event file or competitions.");
+            throw new DomainValidationException("Save or discard unsaved changes before changing the event file or competitions.");
         }
     }
 
@@ -286,7 +295,9 @@ public sealed partial class MainViewModel
                     + (choice.IsParticipating ? "entered" : "not entered")));
             }
         }
+        if (!HasDeskChangeLog) { IsChangeReviewOpen = false; }
         OnPropertyChanged(nameof(HasDeskChangeLog));
+        OnPropertyChanged(nameof(UnsavedChangesText));
     }
 
     private void AddFieldChange(CompetitorGridRow row, string field, bool changed, string title, string label)
@@ -336,12 +347,15 @@ public sealed partial class MainViewModel
         }
         RebuildChangeLog();
         if (!HasDeskChangeLog) { ImportWarnings.Clear(); }
-        SetStatus("Change restored. No event-file data was written.");
+        SetStatus("Change undone. Saved data was not changed.");
     }
 
     [RelayCommand]
-    private void DiscardDeskChanges()
+    private async Task DiscardDeskChangesAsync()
     {
+        if (!HasDeskChangeLog) { return; }
+        var count = DeskChangeLog.Count;
+        if (!await dialogs.ConfirmDiscardChangesAsync(count)) { return; }
         foreach (var row in _allCompetitorRows.ToArray())
         {
             if (row.Id is null && !row.IsPlaceholder) { _allCompetitorRows.Remove(row); }
@@ -350,7 +364,7 @@ public sealed partial class MainViewModel
         ImportWarnings.Clear();
         RefreshVisibleCompetitors();
         RebuildChangeLog();
-        SetStatus("Uncommitted competitor changes discarded.");
+        SetStatus($"Discarded {count} unsaved change{(count == 1 ? "" : "s")}.");
     }
 
     [RelayCommand]
@@ -377,7 +391,7 @@ public sealed partial class MainViewModel
         finally { _suspendDeskChangeLog = false; }
         RefreshVisibleCompetitors();
         RebuildChangeLog();
-        SetStatus($"{rows.Length} competitor row(s) marked for deletion. Commit or restore the changes.");
+        SetStatus($"{rows.Length} competitor row(s) marked for deletion. Save changes or undo the deletion.");
     }
 
     [RelayCommand]
@@ -432,7 +446,7 @@ public sealed partial class MainViewModel
                 var unapproved = _allCompetitorRows.FirstOrDefault(x => x.NeedsApproval && !x.WarningApproved);
                 if (unapproved is not null)
                 {
-                    throw new DomainValidationException($"Confirm the matching warning for {unapproved.Surname} before Commit.");
+                    throw new DomainValidationException($"Confirm the matching warning for {unapproved.Surname} before saving.");
                 }
                 var changedRows = _allCompetitorRows.Where(x => x.HasPendingChanges && !x.IsPendingDelete).ToArray();
                 var rows = changedRows.Select(row => new DeskBatchRow(row.Id, row.Draft(),
@@ -444,7 +458,7 @@ public sealed partial class MainViewModel
                 _current = series with { Revision = result.Revision };
                 await LoadCompetitorDeskAsync();
                 ImportWarnings.Clear();
-                SetStatus($"Committed {result.Created} new, {result.Updated} changed and {result.Deleted} deleted competitors.");
+                SetStatus($"Saved {result.Created} new, {result.Updated} changed and {result.Deleted} deleted competitors.");
             });
         }
         finally { _deskCommitGate.Release(); }

@@ -228,7 +228,7 @@ public sealed partial class MainViewModel
         finally { _suspendDeskChangeLog = false; }
         RefreshVisibleCompetitors();
         RebuildChangeLog();
-        SetStatus($"FIS: {staged} updates staged for Commit; {skipped} pending edits and {ambiguous} duplicate Codes skipped.");
+        SetStatus($"FIS: {staged} updates ready to save; {skipped} unsaved edits and {ambiguous} duplicate Codes skipped.");
     }
 
     [RelayCommand]
@@ -263,7 +263,7 @@ public sealed partial class MainViewModel
         finally { _suspendDeskChangeLog = false; }
         RefreshVisibleCompetitors();
         RebuildChangeLog();
-        SetStatus($"FIS: {added} competitor(s) staged for Commit; {skipped} existing Codes skipped.");
+        SetStatus($"FIS: {added} competitor(s) ready to save; {skipped} existing Codes skipped.");
     }
 
     private bool ApplyFisValues(CompetitorGridRow row, FisAthlete athlete)

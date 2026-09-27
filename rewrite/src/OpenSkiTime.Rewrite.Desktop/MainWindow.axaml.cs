@@ -35,25 +35,60 @@ public partial class MainWindow : Window
         if (_gridViewModel is not null)
         {
             _gridViewModel.Competitions.CollectionChanged -= OnCompetitionsChanged;
+            _gridViewModel.RecentFiles.CollectionChanged -= OnRecentFilesChanged;
             _gridViewModel.PropertyChanged -= OnGridViewModelPropertyChanged;
         }
         _gridViewModel = DataContext as MainViewModel;
         if (_gridViewModel is not null)
         {
             _gridViewModel.Competitions.CollectionChanged += OnCompetitionsChanged;
+            _gridViewModel.RecentFiles.CollectionChanged += OnRecentFilesChanged;
             _gridViewModel.PropertyChanged += OnGridViewModelPropertyChanged;
         }
         RebuildCompetitionColumns();
+        RebuildRecentMenu();
         UpdateCompetitorGridHeight();
     }
 
     private void OnCompetitionsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         => RebuildCompetitionColumns();
 
+    private void OnRecentFilesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        => RebuildRecentMenu();
+
+    private void RebuildRecentMenu()
+    {
+        if (this.FindControl<SplitButton>("OpenFileButton")?.Flyout is not MenuFlyout flyout) { return; }
+        flyout.Items.Clear();
+        if (_gridViewModel is null || _gridViewModel.RecentFiles.Count == 0)
+        {
+            flyout.Items.Add(new MenuItem { Header = "No recent files", IsEnabled = false });
+            return;
+        }
+        foreach (var path in _gridViewModel.RecentFiles)
+        {
+            var header = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 10 };
+            header.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontWeight = Avalonia.Media.FontWeight.SemiBold });
+            var directory = new TextBlock
+            {
+                Text = Path.GetDirectoryName(path), MaxWidth = 300,
+                TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+            };
+            directory.Classes.Add("supportingText");
+            header.Children.Add(directory);
+            var item = new MenuItem
+            {
+                Header = header, Command = _gridViewModel.OpenRecentSeriesCommand, CommandParameter = path,
+            };
+            ToolTip.SetTip(item, path);
+            flyout.Items.Add(item);
+        }
+    }
+
     private void OnGridViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.CompetitorGrouping)) { ClearCompetitorSortHeader(); }
-        if (e.PropertyName == nameof(MainViewModel.HasDeskChangeLog)) { UpdateCompetitorGridHeight(); }
+        if (e.PropertyName == nameof(MainViewModel.IsChangeReviewOpen)) { UpdateCompetitorGridHeight(); }
     }
 
     private void ClearCompetitorSortHeader()
@@ -134,7 +169,7 @@ public partial class MainWindow : Window
     {
         if (this.FindControl<DataGrid>("CompetitorGrid") is { } grid)
         {
-            grid.Height = Math.Clamp(Bounds.Height - 560 - (_gridViewModel?.HasDeskChangeLog == true ? 145 : 0),
+            grid.Height = Math.Clamp(Bounds.Height - 545 - (_gridViewModel?.IsChangeReviewOpen == true ? 155 : 0),
                 260, 760);
         }
     }

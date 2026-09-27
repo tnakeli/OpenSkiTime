@@ -41,7 +41,7 @@ public sealed partial class MainViewModel
             foreach (var item in preview.Rows) { StagePastedRow(item); }
             RefreshVisibleCompetitors();
             RebuildChangeLog();
-            SetStatus($"Pasted {preview.Rows.Count} rows into the pending change list. Review yellow cells, then Commit Changes.");
+            SetStatus($"Pasted {preview.Rows.Count} rows. Review the highlighted cells, then choose Save changes.");
         });
     }
 
