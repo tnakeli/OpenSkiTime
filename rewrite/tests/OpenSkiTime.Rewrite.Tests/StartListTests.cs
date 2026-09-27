@@ -19,7 +19,7 @@ public sealed class StartListTests
         new Guid(i, 0, 0, new byte[8]), new($"TEST{i}", "Athlete", 2000, $"{100000 + i}", "FIN", "Synthetic", Gender.Female), i)).ToArray();
     private static StartListPlan Draw(DrawEntrant[] entrants, DrawOptions? options = null)
         => FisStartOrder.FirstRun(Guid.Parse("10000000-0000-0000-0000-000000000001"), s_race, Gender.Female, entrants, s_points, options ?? new(), "fixed-test-seed");
-    private static StartListRevision Approved(StartListPlan plan) => new(Guid.NewGuid(), 1, s_at, s_at, "Test operator", "Fixture", plan);
+    private static StartListRevision Stored(StartListPlan plan) => new(Guid.NewGuid(), 1, s_at, null, "Test operator", "Fixture", plan);
 
     [Fact]
     public void DrawReplaysRegardlessOfInputOrderAndExpandsTiedFirstGroup()
@@ -41,7 +41,7 @@ public sealed class StartListTests
     [Fact]
     public void SecondRunIncludesBoundaryTiesAndKeepsBibsAndResultOrderAfterReversal()
     {
-        var first = Approved(Draw(Entrants(36)));
+        var first = Stored(Draw(Entrants(36)));
         var results = first.Plan.Entries.Select((x, i) => new RunFinish(x.Entrant.CompetitorId, FinishStatus.Finished,
             i is 30 ? 6029 : i is 33 ? 6032 : 6000 + i)).ToArray();
         results[35] = results[35] with { Status = FinishStatus.DNF, Hundredths = null };
@@ -58,14 +58,15 @@ public sealed class StartListTests
     [Fact]
     public void FifteenReversalAndSmallFieldsExcludeAllNonFinishers()
     {
-        var first = Approved(Draw(Entrants(19), new(15, 15, 101)));
+        var first = Stored(Draw(Entrants(19), new(15, 15, 101)));
         var results = first.Plan.Entries.Select((x, i) => new RunFinish(x.Entrant.CompetitorId,
             i >= 15 ? new[] { FinishStatus.DNS, FinishStatus.DNF, FinishStatus.DSQ, FinishStatus.NPS }[i - 15] : FinishStatus.Finished,
             i >= 15 ? null : 4000 + i)).ToArray();
         var second = FisStartOrder.SecondRun(first, results);
         Assert.Equal(Enumerable.Range(101, 15).Reverse(), second.Entries.Select(x => x.Bib));
         Assert.Throws<DomainValidationException>(() => FisStartOrder.SecondRun(first, results.Skip(1).ToArray()));
-        Assert.Throws<DomainValidationException>(() => FisStartOrder.SecondRun(first with { ApprovedAt = null }, results));
+        Assert.Throws<DomainValidationException>(() => FisStartOrder.SecondRun(first, results, 16));
+        Assert.Equal(second.Entries, FisStartOrder.SecondRun(first with { ApprovedAt = s_at }, results).Entries);
     }
 
     [Fact]
@@ -83,7 +84,7 @@ public sealed class StartListTests
     {
         var entries = Entrants(3);
         entries[0] = entries[0] with { Athlete = entries[0].Athlete with { Surname = "<script> & \"TEST\"" } };
-        var first = Approved(Draw(entries));
+        var first = Stored(Draw(entries));
         Assert.Throws<DomainValidationException>(() => RunResultInput.ParseTime("79228162514264337593543950335"));
         Assert.Throws<DomainValidationException>(() => Draw(entries, new(FirstBib: int.MaxValue)));
         var parsed = RunResultInput.ParseTsv("Bib\tTime\tStatus\n1\t1:02.34\tFinished\n2\t\tDNF\n3\tDNS", first);
@@ -95,11 +96,11 @@ public sealed class StartListTests
         Assert.Contains("&lt;script&gt; &amp;", html, StringComparison.Ordinal);
         Assert.DoesNotContain("<script>", html, StringComparison.Ordinal);
         Assert.Contains("\"\"TEST\"\"", StartListExchange.ToTsv(first), StringComparison.Ordinal);
-        Assert.Throws<DomainValidationException>(() => StartListExchange.ToTsv(first with { ApprovedAt = null }));
+        Assert.Equal(StartListExchange.ToTsv(first), StartListExchange.ToTsv(first with { ApprovedAt = s_at }));
     }
 
     [Fact]
-    public async Task DraftApprovalRevisionAndTransferPreserveDrawInputsAndHistory()
+    public async Task SaveAndTransferPreserveDrawInputsWithoutAnApprovalStep()
     {
         using var folder = new TestFolder();
         var path = folder.PathFor("draw.ost");
@@ -107,31 +108,31 @@ public sealed class StartListTests
         var plan = await SeedAsync(workspace, path);
         var series = await workspace.ReadAsync();
         var desk = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Initial draw", s_at));
-        var draft = Assert.Single(desk.Revisions);
-        Assert.False(draft.IsApproved);
-        var approvedDesk = await workspace.ApproveStartListAsync(draft.Id, desk.SeriesRevision, s_at);
-        var first = Assert.Single(approvedDesk.Revisions);
-        Assert.True(first.IsApproved);
-        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.RemoveCompetitionAsync(plan.CompetitionId, approvedDesk.SeriesRevision));
+        var first = Assert.Single(desk.Revisions);
+        Assert.Null(first.ApprovedAt);
+        Assert.NotEmpty(StartListExchange.ToTsv(first));
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.RemoveCompetitionAsync(plan.CompetitionId, desk.SeriesRevision));
         await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveCompetitionAsync(plan.CompetitionId,
-            plan.Competition with { RunCount = 1 }, approvedDesk.SeriesRevision));
+            plan.Competition with { RunCount = 1 }, desk.SeriesRevision));
         var results = first.Plan.Entries.Select((x, i) => new RunFinish(x.Entrant.CompetitorId, FinishStatus.Finished, 6000 + i)).ToArray();
         var secondPlan = FisStartOrder.SecondRun(first, results);
-        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(secondPlan, approvedDesk.SeriesRevision, "Operator", "Not started", s_at)));
-        var started = await workspace.MarkRunStartedAsync(first.Id, approvedDesk.SeriesRevision, "Starter", s_at);
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(secondPlan, desk.SeriesRevision, "Operator", "Not started", s_at)));
+        var renamed = plan.Competition with { Name = "Corrected race", ShortLabel = "SL NEW", FisCode = "5678", CourseName = "Corrected slope" };
+        var updated = await workspace.SaveCompetitionAsync(plan.CompetitionId, renamed, desk.SeriesRevision);
+        var started = await workspace.MarkRunStartedAsync(first.Id, updated.Revision, "Starter", s_at);
         Assert.Equal(s_at, Assert.Single(started.Revisions).StartedAt);
         await Assert.ThrowsAsync<DomainValidationException>(() => workspace.MarkRunStartedAsync(first.Id, started.SeriesRevision, "Starter", s_at));
         await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(plan, started.SeriesRevision, "Operator", "Unsafe redraw", s_at)));
         var secondDesk = await workspace.SaveStartListAsync(new(secondPlan, started.SeriesRevision, "Operator", "External Run 1 results", s_at));
-        var second = secondDesk.Revisions.Single(x => x.Plan.RunNumber == 2);
-        var final = await workspace.ApproveStartListAsync(second.Id, secondDesk.SeriesRevision, s_at);
-        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(plan, final.SeriesRevision, "Operator", "Redraw", s_at)));
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(plan, secondDesk.SeriesRevision, "Operator", "Redraw", s_at)));
         var backup = folder.PathFor("transfer.ost");
         await workspace.BackupAsync(backup);
         await workspace.OpenAsync(backup);
         var reopened = await workspace.ReadStartListsAsync(plan.CompetitionId);
         Assert.Equal(2, reopened.Revisions.Count);
-        Assert.All(reopened.Revisions, x => Assert.True(x.IsApproved));
+        Assert.All(reopened.Revisions, x => Assert.Null(x.ApprovedAt));
+        Assert.Equal(renamed, Assert.Single((await workspace.ReadAsync()).Competitions).Values);
+        Assert.Equal(plan.Competition, reopened.Revisions.Single(x => x.Plan.RunNumber == 1).Plan.Competition);
         Assert.Equal("Starter", reopened.Revisions.Single(x => x.Plan.RunNumber == 1).StartedBy);
         Assert.Equal(secondPlan.Entries, reopened.Revisions.Single(x => x.Plan.RunNumber == 2).Plan.Entries);
         Assert.Equal(plan.Entries, FisStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender,
@@ -139,7 +140,7 @@ public sealed class StartListTests
     }
 
     [Fact]
-    public async Task InvalidOrStalePlansCannotWriteOrApproveAndOldDraftsRemain()
+    public async Task InvalidOrStalePlansCannotWriteOrStartAndHistoryRemains()
     {
         using var folder = new TestFolder();
         await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
@@ -151,11 +152,11 @@ public sealed class StartListTests
         var saved = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Initial", s_at));
         await Assert.ThrowsAsync<SeriesConflictException>(() => workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Stale", s_at)));
         var second = await workspace.SaveStartListAsync(new(plan, saved.SeriesRevision, "Operator", "Review again", s_at));
-        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApproveStartListAsync(saved.Revisions[0].Id, second.SeriesRevision, s_at));
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.MarkRunStartedAsync(saved.Revisions[0].Id, second.SeriesRevision, "Starter", s_at));
         var entry = plan.Entries[0].Entrant;
         var changed = await workspace.SaveDeskRowAsync(entry.CompetitorId, entry.Athlete with { Club = "Changed" }, null, false, null, second.SeriesRevision);
-        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApproveStartListAsync(second.Revisions[^1].Id, changed.Revision, s_at));
-        Assert.All((await workspace.ReadStartListsAsync(plan.CompetitionId)).Revisions, x => Assert.False(x.IsApproved));
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.MarkRunStartedAsync(second.Revisions[^1].Id, changed.Revision, "Starter", s_at));
+        Assert.All((await workspace.ReadStartListsAsync(plan.CompetitionId)).Revisions, x => Assert.Null(x.StartedAt));
     }
 
     [Fact]
@@ -186,17 +187,17 @@ public sealed class StartListTests
         var series = await workspace.ReadAsync();
         var draft = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Before upgrade", s_at));
         var id = Assert.Single(draft.Revisions).Id;
-        await workspace.ApproveStartListAsync(id, draft.SeriesRevision, s_at);
         await workspace.CloseAsync();
         var options = new DbContextOptionsBuilder<SeriesDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options;
         await using (var db = new SeriesDbContext(options))
         {
             await db.GetService<IMigrator>().MigrateAsync("20260927144413_StartLists");
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE StartLists SET ApprovedAt = {s_at} WHERE Id = {id}");
         }
         await workspace.OpenAsync(path);
         var reopened = Assert.Single((await workspace.ReadStartListsAsync(plan.CompetitionId)).Revisions);
         Assert.Equal(id, reopened.Id);
-        Assert.True(reopened.IsApproved);
+        Assert.Equal(s_at, reopened.ApprovedAt);
         Assert.Null(reopened.StartedAt);
         Assert.Equal(plan.Entries, reopened.Plan.Entries);
         Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "m4.ost.before-upgrade-*.ost"));

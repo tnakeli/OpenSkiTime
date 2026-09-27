@@ -19,8 +19,6 @@ public sealed record StartListRevision(Guid Id, int Revision, DateTimeOffset Cre
 {
     public DateTimeOffset? StartedAt { get; init; }
     public string? StartedBy { get; init; }
-    public bool IsApproved => ApprovedAt is not null;
-    public string Display => $"v{Revision} · {(IsApproved ? "Approved" : "Draft")} · {CreatedAt:yyyy-MM-dd HH:mm}";
 }
 
 public static class FisStartOrder
@@ -71,14 +69,16 @@ public static class FisStartOrder
             ordered.Select((x, i) => new StartListEntry(i + 1, options.FirstBib + i, x.Entrant, x.Group)).ToArray());
     }
 
-    public static StartListPlan SecondRun(StartListRevision first, IReadOnlyList<RunFinish> results)
+    public static StartListPlan SecondRun(StartListRevision first, IReadOnlyList<RunFinish> results, int? reverseCount = null)
     {
         ArgumentNullException.ThrowIfNull(first);
         ArgumentNullException.ThrowIfNull(results);
         var plan = first.Plan;
         ValidateProfile(plan.Competition);
-        if (!first.IsApproved || plan.RunNumber != 1 || plan.Competition.RunCount != 2)
-        { throw new DomainValidationException("Approve Run 1 of a two-run competition first."); }
+        if (plan.RunNumber != 1 || plan.Competition.RunCount != 2)
+        { throw new DomainValidationException("Prepare Run 1 of a two-run competition first."); }
+        var reversal = reverseCount ?? plan.Options.ReverseCount;
+        if (reversal is not (15 or 30)) { throw new DomainValidationException("Choose a reversal of 15 or 30."); }
         if (results.Count != plan.Entries.Count || results.Select(x => x.CompetitorId).Distinct().Count() != results.Count
             || results.Any(x => !plan.Entries.Any(e => e.Entrant.CompetitorId == x.CompetitorId)))
         { throw new DomainValidationException("Provide one result or status for every Run 1 starter."); }
@@ -92,11 +92,12 @@ public static class FisStartOrder
         var ranked = plan.Entries.Where(x => times.ContainsKey(x.Entrant.CompetitorId))
             .OrderBy(x => times[x.Entrant.CompetitorId]).ThenByDescending(x => x.Bib).ToArray();
         if (ranked.Length == 0) { throw new DomainValidationException("There are no classified competitors for Run 2."); }
-        var count = Math.Min(plan.Options.ReverseCount, ranked.Length);
+        var count = Math.Min(reversal, ranked.Length);
         while (count < ranked.Length && times[ranked[count].Entrant.CompetitorId] == times[ranked[count - 1].Entrant.CompetitorId]) { count++; }
         var reversed = ranked.Take(count).OrderByDescending(x => times[x.Entrant.CompetitorId]).ThenBy(x => x.Bib);
         var rest = ranked.Skip(count).OrderBy(x => times[x.Entrant.CompetitorId]).ThenByDescending(x => x.Bib);
         return plan with { RunNumber = 2, SourceListId = first.Id, SourceResults = results.ToArray(),
+            Options = plan.Options with { ReverseCount = reversal },
             Entries = reversed.Concat(rest).Select((x, i) => x with { Position = i + 1,
                 Group = i < count ? "Reversed group" : "Result order" }).ToArray() };
     }

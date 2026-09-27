@@ -10,7 +10,7 @@ OpenSkiTime is a desktop application for managing alpine ski competitions. It is
 - Define category rules by birth year and gender, save a reusable rule set, and apply category updates.
 - Optionally download an alpine FIS points list, search it locally, and use a competitor's FIS Code to fill or update details and points. Configure the API key in Settings if the FIS download requires one. The key is stored in the Windows credential store, outside event files.
 - Reopen one of the ten most recently used event files from the Open file menu.
-- Prepare competition-specific bib draws and versioned start lists from the **Draw / Start lists** dropdown: choose a competition, then its run. Review and approve a list before exporting TSV or saving a printable HTML view. Mark the run started when racing begins to lock its order and make the next run available.
+- Prepare competition-specific bib draws from the **Draw / Start lists** dropdown: choose a competition, then its run. **Draw** saves the start list immediately, ready for TSV export or a printable HTML view. Choose the reversal when preparing Run 2. Mark the run started when racing begins to lock its order and make the next run available. Competition names, codes and course details remain editable after drawing.
 
 The initial draw profile supports standard FIS two-run SL/GS and single-run DH/SG, with separate competitions for Men and Women. Run 2 uses entered or pasted classified Run 1 times/statuses, with the original bibs retained. Download the appropriate points list before drawing; subsequent preparation works offline. Local category draws, special Cup, youth, snow-seed and three-run formats are not supported.
 

@@ -35,7 +35,6 @@ public sealed partial class MainViewModel
     private int _drawLoad;
     private bool _settingDraw;
     public ObservableCollection<DrawMenuCompetition> DrawMenu { get; } = [];
-    public ObservableCollection<StartListRevision> DrawRevisions { get; } = [];
     public ObservableCollection<StartListEntry> DrawEntries { get; } = [];
     public ObservableCollection<ResultInputRow> DrawResults { get; } = [];
     public IReadOnlyList<int> ReverseChoices { get; } = [30, 15];
@@ -75,9 +74,6 @@ public sealed partial class MainViewModel
     [ObservableProperty] private int _firstDrawGroup = 15;
     [ObservableProperty] private int _drawReverseCount = 30;
     [ObservableProperty] private int _drawFirstBib = 1;
-    [ObservableProperty] private string _drawOperator = Environment.UserName;
-    [ObservableProperty] private string _drawReason = "Initial draw";
-    [ObservableProperty] private bool _drawJuryConfirmed;
     [ObservableProperty] private string _drawState = "Choose a competition";
     [ObservableProperty] private string _drawHelp = "Choose a competition and run from the Draw / Start lists menu.";
     [ObservableProperty] private string _drawListInfo = string.Empty;
@@ -89,13 +85,11 @@ public sealed partial class MainViewModel
     public bool IsLaterDrawRun => DrawRun > 1;
     public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && !DrawRunStarted
         && DrawEntryIssue.Length == 0 && (DrawRun == 1 || (DrawRun == 2 && _sourceRun is not null));
-    public bool CanApproveDraw => DrawRevision is { IsApproved: false } && !IsDrawBusy && !DrawHasChangedEntries && !HasUnsavedRunInput && DrawEntryIssue.Length == 0
-        && DrawRevision == DrawRevisions.FirstOrDefault() && DrawJuryConfirmed;
-    public bool CanExportDraw => DrawRevision is { IsApproved: true } && !IsDrawBusy && !HasUnsavedRunInput;
+    public bool CanExportDraw => DrawRevision is not null && !IsDrawBusy && !HasUnsavedRunInput;
     public bool HasDrawSource => _sourceRun is not null;
     public bool CanEditDrawResults => HasDrawSource && !DrawRunStarted && !IsDrawBusy;
-    public bool CanMarkRunStarted => CanExportDraw && !DrawRunStarted && !DrawHasChangedEntries
-        && DrawRevision == DrawRevisions.FirstOrDefault() && DrawEntryIssue.Length == 0;
+    public bool CanMarkRunStarted => CanExportDraw && !DrawRunStarted && !DrawHasChangedEntries && DrawEntryIssue.Length == 0;
+    public string DrawActionLabel => IsFirstDrawRun ? DrawRevision is null ? "Draw" : "Draw again" : "Create start list";
     public string DrawNavigationLabel => IsDrawSection && DrawCompetition is { } c
         ? $"4  Draw / Start lists · {c.Values.ShortLabel} / Run {DrawRun}  ▾" : "4  Draw / Start lists  ▾";
     [RelayCommand] private void ShowDrawList() => IsResultInputOpen = false;
@@ -141,13 +135,16 @@ public sealed partial class MainViewModel
 
     partial void OnDrawRevisionChanged(StartListRevision? value) => ShowDrawRevision();
     partial void OnIsDrawBusyChanged(bool value) => NotifyDraw();
-    partial void OnDrawJuryConfirmedChanged(bool value) => NotifyDraw();
+    partial void OnDrawReverseCountChanged(int value)
+    {
+        if (!IsDrawBusy && IsLaterDrawRun && _sourceRun is not null) { HasUnsavedRunInput = true; }
+    }
     partial void OnHasUnsavedRunInputChanged(bool value) => NotifyDraw();
 
     public bool CanLeaveDrawInput()
     {
         if (!HasUnsavedRunInput) { return true; }
-        SetStatus("Prepare a start-list draft to save the Run 1 input, or discard the input before leaving this run.", error: true);
+        SetStatus("Create the start list to save the Run 1 input and reversal setting, or discard changes before leaving this run.", error: true);
         return false;
     }
 
@@ -166,10 +163,8 @@ public sealed partial class MainViewModel
         var competition = DrawCompetition;
         DrawEntries.Clear();
         DrawResults.Clear();
-        DrawRevisions.Clear();
         DrawRevision = null;
         _sourceRun = null;
-        DrawJuryConfirmed = false;
         DrawHasChangedEntries = false;
         DrawRunStarted = false;
         DrawEntryIssue = string.Empty;
@@ -195,19 +190,16 @@ public sealed partial class MainViewModel
                 : string.Empty;
             if (!IsRunAvailable(desk, DrawRun)) { _settingDraw = true; DrawRun = 1; _settingDraw = false; }
             if (_current is not null) { _current = _current with { Revision = competitors.Revision }; }
-            DrawRevisions.Clear();
-            foreach (var revision in desk.Revisions.Where(x => x.Plan.RunNumber == DrawRun)
-                .OrderByDescending(x => x.Revision)) { DrawRevisions.Add(revision); }
+            var lists = desk.Revisions.Where(x => x.Plan.RunNumber == DrawRun).OrderByDescending(x => x.Revision).ToArray();
             var first = desk.Revisions.Where(x => x.Plan.RunNumber == 1)
                 .OrderByDescending(x => x.Revision).FirstOrDefault();
-            _sourceRun = first is { IsApproved: true } ? first : null;
+            _sourceRun = first;
             FirstDrawGroup = first?.Plan.Options.FirstGroup ?? 15;
-            DrawReverseCount = first?.Plan.Options.ReverseCount ?? 30;
+            DrawReverseCount = lists.FirstOrDefault()?.Plan.Options.ReverseCount ?? first?.Plan.Options.ReverseCount ?? 30;
             DrawFirstBib = first?.Plan.Options.FirstBib ?? 1;
-            DrawRunStarted = DrawRevisions.Any(x => x.StartedAt is not null)
+            DrawRunStarted = lists.Any(x => x.StartedAt is not null)
                 || desk.Revisions.Any(x => x.Plan.RunNumber > DrawRun);
-            DrawRevision = DrawRevisions.FirstOrDefault();
-            DrawReason = DrawRevision is null ? "Initial draw" : string.Empty;
+            DrawRevision = lists.FirstOrDefault();
             ShowDrawRevision();
             IsResultInputOpen = DrawRun > 1 && DrawRevision is null;
         });
@@ -224,7 +216,7 @@ public sealed partial class MainViewModel
                 var row = new ResultInputRow(entry);
                 var result = DrawRevision?.Plan.SourceResults.FirstOrDefault(x => x.CompetitorId == row.CompetitorId);
                 if (result is not null) { row.Time = RunResultInput.FormatTime(result.Hundredths); row.Status = result.Status.ToString(); }
-                row.PropertyChanged += (_, _) => { HasUnsavedRunInput = true; DrawJuryConfirmed = false; };
+                row.PropertyChanged += (_, _) => HasUnsavedRunInput = true;
                 DrawResults.Add(row);
             }
         }
@@ -232,23 +224,22 @@ public sealed partial class MainViewModel
         if (DrawRevision is { } revision)
         {
             foreach (var entry in revision.Plan.Entries) { DrawEntries.Add(entry); }
-            DrawState = DrawRunStarted ? "Run started" : revision.IsApproved ? "Approved" : "Draft · review before approval";
-            DrawListInfo = $"v{revision.Revision} · {revision.Plan.Entries.Count} starters · FIS list {revision.Plan.PointsList.Code} · {revision.Operator} · {revision.Reason}";
+            DrawState = DrawRunStarted ? "Run started" : "Start list ready";
+            DrawListInfo = $"{revision.Plan.Entries.Count} starters · FIS list {revision.Plan.PointsList.Code}";
             DrawHelp = DrawRunStarted ? "Run started. Starting order is locked; select the next run from the Draw / Start lists menu."
-                : revision.IsApproved ? "Approved start list. Mark the run started when racing begins; this locks the starting order."
-                : "Check the starting order and bibs, then approve this list for use at the start.";
+                : "Start list saved. Mark the run started when racing begins.";
             var reference = revision.Plan.RunNumber == 1 ? revision.Plan.Entries : _sourceRun?.Plan.Entries ?? revision.Plan.Entries;
             var entered = _desk?.Participations.Where(x => x.CompetitionId == revision.Plan.CompetitionId && x.Participates)
                 .Select(x => x.CompetitorId).ToHashSet() ?? [];
             var athletes = _desk?.Competitors.Where(x => entered.Contains(x.Id)).ToArray() ?? [];
             DrawHasChangedEntries = athletes.Length != reference.Count || reference.Any(x => !athletes.Any(a => a.Id == x.Entrant.CompetitorId && a.Values == x.Entrant.Athlete));
-            if (DrawHasChangedEntries) { DrawHelp = "Registration changed after this list was prepared. This is a saved snapshot; review the entries and create a new revision."; }
+            if (DrawHasChangedEntries) { DrawHelp = "Registration changed after this list was prepared. Check the entries before using the list."; }
         }
         else
         {
             DrawState = DrawRun == 1 ? "Waiting for draw" : "Waiting for Run 1 results";
             DrawHelp = DrawRun == 1 ? "FIS standard draw: first group, points order, then competitors without points."
-                : _sourceRun is null ? "Approve Run 1 before preparing the next run." : "Enter the classified Run 1 times/statuses below, then prepare Run 2. Bibs stay unchanged.";
+                : _sourceRun is null ? "Draw Run 1 before preparing the next run." : "Enter Run 1 times/statuses and choose the reversal, then create the start list. Bibs stay unchanged.";
             DrawListInfo = string.Empty;
         }
         if (DrawEntryIssue.Length > 0) { DrawHelp = DrawEntryIssue; }
@@ -261,7 +252,7 @@ public sealed partial class MainViewModel
     private void NotifyDraw()
     {
         OnPropertyChanged(nameof(IsFirstDrawRun)); OnPropertyChanged(nameof(IsLaterDrawRun));
-        OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(CanApproveDraw));
+        OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(DrawActionLabel));
         OnPropertyChanged(nameof(CanExportDraw)); OnPropertyChanged(nameof(HasDrawSource));
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(DrawNavigationLabel)); OnPropertyChanged(nameof(CanMarkRunStarted));
@@ -276,7 +267,6 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             EnsureDeskClean(includeDrawInput: false);
-            if (!DrawJuryConfirmed) { throw new DomainValidationException("Confirm the entry list and Jury draw settings first."); }
             StartListPlan plan;
             if (DrawRun == 1)
             {
@@ -294,31 +284,18 @@ public sealed partial class MainViewModel
                     return new DrawEntrant(x.Id, x.Values, points);
                 }).ToArray();
                 plan = FisStartOrder.FirstRun(competition.Id, competition.Values, _drawGender!.Value, entrants,
-                    new(list.ListCode, list.ValidFrom, list.ValidTo), new(FirstDrawGroup, DrawReverseCount, DrawFirstBib),
+                    new(list.ListCode, list.ValidFrom, list.ValidTo), new(FirstDrawGroup, 30, DrawFirstBib),
                     Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
             }
             else
             {
                 if (DrawRun != 2 || _sourceRun is null) { throw new DomainValidationException("This profile currently supports Run 2 only."); }
-                plan = FisStartOrder.SecondRun(_sourceRun, DrawResults.Select(x => x.Read()).ToArray());
+                plan = FisStartOrder.SecondRun(_sourceRun, DrawResults.Select(x => x.Read()).ToArray(), DrawReverseCount);
             }
-            await workspace.SaveStartListAsync(new(plan, _drawDesk.SeriesRevision, DrawOperator, DrawReason, DateTimeOffset.UtcNow));
+            await workspace.SaveStartListAsync(new(plan, _drawDesk.SeriesRevision, Environment.UserName,
+                DrawRun == 1 ? "Draw" : "Run 2 start order", DateTimeOffset.UtcNow));
             await LoadDrawAsync();
-            SetStatus("Draft start list saved. Review it, then approve it.");
-        });
-        IsDrawBusy = false;
-    }
-
-    [RelayCommand]
-    private async Task ApproveDrawAsync()
-    {
-        if (!CanApproveDraw || DrawRevision is not { } revision || _drawDesk is null) { return; }
-        IsDrawBusy = true;
-        await GuardAsync(async () =>
-        {
-            await workspace.ApproveStartListAsync(revision.Id, _drawDesk.SeriesRevision, DateTimeOffset.UtcNow);
-            await LoadDrawAsync();
-            SetStatus($"Run {DrawRun} start list approved. Export or print the approved version.");
+            SetStatus("Start list saved.");
         });
         IsDrawBusy = false;
     }
@@ -330,7 +307,7 @@ public sealed partial class MainViewModel
         IsDrawBusy = true;
         await GuardAsync(async () =>
         {
-            await workspace.MarkRunStartedAsync(revision.Id, _drawDesk.SeriesRevision, DrawOperator, DateTimeOffset.UtcNow);
+            await workspace.MarkRunStartedAsync(revision.Id, _drawDesk.SeriesRevision, Environment.UserName, DateTimeOffset.UtcNow);
             await LoadDrawAsync();
             SetStatus($"Run {DrawRun} marked started. This records run progress; it does not start timing capture.");
         });
@@ -358,10 +335,10 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             if (!CanExportDraw || DrawRevision is not { } revision) { return; }
-            var path = await dialogs.ChooseStartListExportAsync($"{SafeFileName(revision.Plan.Competition.ShortLabel)}-run{DrawRun}-v{revision.Revision}", false);
+            var path = await dialogs.ChooseStartListExportAsync($"{SafeFileName(DrawCompetition!.Values.ShortLabel)}-run{DrawRun}", false);
             if (path is null) { return; }
             await File.WriteAllTextAsync(path, StartListExchange.ToTsv(revision));
-            SetStatus("Approved start list exported as TSV.");
+            SetStatus("Start list exported as TSV.");
         });
     }
 
@@ -371,9 +348,10 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             if (!CanExportDraw || DrawRevision is not { } revision) { return; }
-            var path = await dialogs.ChooseStartListExportAsync($"{SafeFileName(revision.Plan.Competition.ShortLabel)}-run{DrawRun}-v{revision.Revision}", true);
+            var path = await dialogs.ChooseStartListExportAsync($"{SafeFileName(DrawCompetition!.Values.ShortLabel)}-run{DrawRun}", true);
             if (path is null) { return; }
-            await File.WriteAllTextAsync(path, StartListExchange.ToPrintHtml(revision));
+            var display = revision with { Plan = revision.Plan with { Competition = DrawCompetition.Values } };
+            await File.WriteAllTextAsync(path, StartListExchange.ToPrintHtml(display));
             SetStatus($"Print-ready start list saved to {path}. Open it in a browser and print with Ctrl+P.");
         });
     }
