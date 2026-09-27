@@ -21,7 +21,9 @@ Timing changes save immediately, independently of competitor-grid Save changes. 
 - The main application remains .NET 10. ALGE's current mixed-mode library requires a small, isolated .NET Framework 4.8 Windows helper, included in the build. It forwards original byte events to the application. No PowerShell execution-policy changes are needed. The helper currently requires x64 Windows.
 - Driver and vendor libraries are not redistributed in the repository/installer. Bundling them requires redistribution terms to be confirmed. Do not disable application control or antivirus to make them run; resolve a blocked component with a trusted signed vendor package/deployment.
 
-Native USB helper startup has been verified. Physical impulses, firmware variants and cable reconnection still need a hardware rehearsal; the development computer currently reports a missing Timy USB driver.
+Timy3 USB connection and device-keyboard C0M/C1M reception have been verified with driver 2.80.0.0. These button events had hundredth precision and remain flagged as manual; they do not verify start-gate/photocell accuracy. Electrical impulses, firmware variants and cable reconnection still need rehearsal.
+
+The current ALGE USB SDK supplies a defective byte-array field alongside its untrimmed ASCII text. OpenSkiTime preserves both SDK fields in each captured message and decodes the text only after storage. Unknown/non-ASCII content requires review. The stored SDK envelope is retained unchanged for replay and diagnostics.
 
 ## ALGE MT1
 

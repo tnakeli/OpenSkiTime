@@ -16,10 +16,42 @@ public sealed class AlgeDecoderFactory : ITimingDecoderFactory
         return protocol switch
         {
             "alge-ascii/v1" => new AlgeAsciiDecoder(session, source, stream),
+            "alge-timy-sdk/v1" => new AlgeTimySdkDecoder(session, source, stream),
             "alge-results/v1" => new AlgeResultsDecoder(session),
             _ => new DiagnosticDecoder(session)
         };
     }
+}
+
+// The journal retains the complete SDK envelope before this conversion. Never use the
+// vendor byte-array contents as an ASCII fallback: the current x64 SDK copies them incorrectly.
+public sealed class AlgeTimySdkDecoder(CaptureSession session, string source, string stream) : ITimingDecoder
+{
+    private readonly AlgeAsciiDecoder _ascii = new(session, source, stream);
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+
+    public IReadOnlyList<TimingObservation> Feed(RawTimingPacket packet)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+        try
+        {
+            using var json = JsonDocument.Parse(packet.Bytes);
+            _ = Convert.FromBase64String(json.RootElement.GetProperty("sdkBytes").GetString()!);
+            var text = StrictUtf8.GetString(Convert.FromBase64String(json.RootElement.GetProperty("sdkTextUtf8").GetString()!));
+            if (text.Any(c => c > 127)) { throw new FormatException("Non-ASCII SDK text."); }
+            return _ascii.Feed(packet with { Bytes = Encoding.ASCII.GetBytes(text) });
+        }
+        catch (Exception ex) when (ex is JsonException or FormatException or InvalidOperationException or KeyNotFoundException or ArgumentException)
+        {
+            var incomplete = _ascii.Complete(); // Do not join a later chunk onto a damaged/omitted fragment.
+            TimingObservation invalid = new($"{session.Id:N}:{packet.Sequence}:sdk-error", session.Id, packet.Sequence, source,
+                $"{session.Id:N}:{packet.Sequence}:sdk-error", ObservationKind.Invalid, null, null, 0, null, false, "",
+                "Invalid/non-ASCII Timy USB SDK input; both original SDK representations are retained.");
+            return incomplete.Append(invalid).ToArray();
+        }
+    }
+
+    public IReadOnlyList<TimingObservation> Complete() => _ascii.Complete();
 }
 
 internal sealed class DiagnosticDecoder(CaptureSession session) : ITimingDecoder
@@ -67,7 +99,7 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
 
     public IReadOnlyList<TimingObservation> Complete()
     {
-        if (_line.Count == 0 && !_oversized) { return []; }
+        if (!_oversized && _line.All(b => b is 32 or 9)) { _line.Clear(); return []; }
         var observation = Make(ObservationKind.Invalid, "Incomplete device line at end of stream; original bytes retained.");
         _line.Clear(); _oversized = false;
         return [observation];

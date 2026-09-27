@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace OpenSkiTime.TimyUsbHost;
 
-// No race rules, database access or credentials. ALGE byte events go unchanged over stdout.
+// No race rules, database access or credentials. Unchanged SDK byte/text fields go over stdout.
 // The optional vendor library is loaded at runtime; no vendor binaries are distributed in the repository.
 internal static class Program
 {
@@ -35,18 +35,21 @@ internal static class Program
                 var usb = Activator.CreateInstance(type, control)!;
                 Subscribe(type, usb, "BytesReceived", (_, e) =>
                 {
-                    var id = DeviceId(e);
-                    if (s_selected == id) { Emit("B", id, Convert.ToBase64String((byte[])Property(e, "Data"))); }
+                    var id = TimySdkEvent.DeviceId(e);
+                    if (s_selected == id)
+                    {
+                        Emit("T", id, Convert.ToBase64String(TimySdkEvent.Capture(e)));
+                    }
                 });
                 Subscribe(type, usb, "DeviceConnected", (_, e) =>
                 {
-                    var id = DeviceId(e);
+                    var id = TimySdkEvent.DeviceId(e);
                     if (s_selected.Length == 0) { s_selected = id; }
                     if (s_selected == id) { Emit("C", id, "Connected"); }
                     else { Emit("S", id, "Additional Timy detected; receiving only Timy " + s_selected); }
                 });
                 Subscribe(type, usb, "DeviceDisconnected", (_, e) =>
-                { if (s_selected == DeviceId(e)) { Emit("D", s_selected, "Disconnected"); } });
+                { if (s_selected == TimySdkEvent.DeviceId(e)) { Emit("D", s_selected, "Disconnected"); } });
                 Emit("S", "", "Waiting for Timy USB - check cable and installed ALGE driver");
                 type.GetMethod("Start", Type.EmptyTypes)!.Invoke(usb, null);
                 try { while (!s_stopped) { Application.DoEvents(); Thread.Sleep(5); } }
@@ -62,8 +65,6 @@ internal static class Program
         }
     }
 
-    private static object Property(object value, string name) => value.GetType().GetProperty(name)!.GetValue(value, null)!;
-    private static string DeviceId(object e) => Property(Property(e, "Device"), "Id").ToString()!;
     private static void Subscribe(Type type, object instance, string name, Action<object, object> callback)
     {
         var info = type.GetEvent(name)!;
