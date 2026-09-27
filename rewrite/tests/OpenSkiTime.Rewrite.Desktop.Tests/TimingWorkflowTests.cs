@@ -62,6 +62,7 @@ public partial class DesktopWorkflowTests
             Assert.Contains("1234", vm.WindowTitle, StringComparison.Ordinal);
             CaptureDraw(window, output, "timing-device.png");
             vm.TimingSource = "Simulator";
+            vm.FollowTimingOrder = false; // This reference scenario deliberately operates with manual bib selection.
             Click(window, "Connect");
             await vm.ConnectTimingCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
@@ -70,7 +71,7 @@ public partial class DesktopWorkflowTests
             var view = window.FindControl<TimingView>("TimingWorkspace")!;
             view.FindControl<DataGrid>("TimingResultsGrid")!.Focus();
             window.KeyPressQwerty(PhysicalKey.F5, RawInputModifiers.None);
-            if (vm.ArmStartCommand.ExecutionTask is { } arming) { await arming; }
+            if (vm.ExpectSelectedCommand.ExecutionTask is { } arming) { await arming; }
             Assert.Equal(firstBib, workspace.Timing!.ArmedStart);
             vm.SimulationTime = "12:00:00.9999999";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
@@ -90,6 +91,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned"));
             vm.SelectedTimingObservation = vm.TimingObservations.Single(x => x.State == "Unassigned");
+            vm.ShowTimingReview = true;
             vm.ObservationBibText = vm.TimingRows[1].Bib.ToString(System.Globalization.CultureInfo.InvariantCulture);
             Click(window, "Assign"); await vm.ChangeObservationCommand.ExecutionTask!;
             Assert.Equal("1:05.00", vm.TimingRows[1].Time);
@@ -103,6 +105,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Undo selected change"); await vm.UndoTimingChangeCommand.ExecutionTask!;
             Assert.Equal("1:01.99", vm.TimingRows[0].Time);
             vm.ShowTimingHistory = false;
+            vm.ShowTimingReview = false;
             vm.ShowAllTimingObservations = true;
             Assert.Contains(vm.TimingObservations, x => x.Time == "12:00:00.9999999");
             Assert.Contains(vm.TimingObservations, x => x.Time == "12:01:02.9999998");
@@ -147,6 +150,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingRows[0].Status == "Finished");
             Assert.Equal("2:08.00", vm.TimingRows[0].TotalTime);
+            Assert.True(view.FindControl<DataGrid>("FinishedGrid")!.Columns.Single(x => Equals(x.Header, "TOTAL")).IsVisible);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             Assert.False(vm.HasTimingRun);

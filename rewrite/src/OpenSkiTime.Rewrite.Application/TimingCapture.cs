@@ -11,6 +11,7 @@ public sealed record CaptureOptions(string Device, string Endpoint, DateOnly Dev
 {
     public string Operator { get; init; } = string.Empty;
     public int BaudRate { get; init; } = 38400;
+    public int[] IntermediateChannels { get; init; } = [];
 
     public void Validate()
     {
@@ -20,6 +21,9 @@ public sealed record CaptureOptions(string Device, string Endpoint, DateOnly Dev
             || StartChannel is < 0 or > 8 || FinishChannel is < 0 or > 8
             || (StartChannel == FinishChannel && (StartDeviceId is null || StartDeviceId == FinishDeviceId)))
         { throw new DomainValidationException("Choose a device and two different start/finish channels (0–8)."); }
+        if (IntermediateChannels is null || IntermediateChannels.Any(x => x is < 0 or > 8 || x == StartChannel || x == FinishChannel)
+            || IntermediateChannels.Distinct().Count() != IntermediateChannels.Length)
+        { throw new DomainValidationException("Intermediate channels must be distinct (0–8), separate from start and finish."); }
     }
 }
 
@@ -78,8 +82,9 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private string _connection = "Disconnected";
     private int _pending;
     private long _saved;
-    private int? _armedStart;
-    private int? _armedFinish;
+    private readonly int[] _expected = new int[22];
+    private readonly bool[] _held = new bool[22];
+    private bool _followOrder;
     public bool IsActive => _producer is not null;
     public string Connection => Volatile.Read(ref _connection);
     public string? Fault => Volatile.Read(ref _fault);
@@ -90,8 +95,10 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     public bool HasCaptureHistory => _sessions.Count != 0;
     public CaptureOptions? LastCaptureOptions => _sessions.LastOrDefault()?.Options;
     public Guid? ListId => _list?.Id;
-    public int? ArmedStart => _armedStart;
-    public int? ArmedFinish => _armedFinish;
+    public int? ArmedStart => ExpectedBib(0);
+    public int? ArmedFinish => ExpectedBib(1);
+    public int? ExpectedBib(int channel) => _expected[channel] is > 0 and var bib ? bib : null;
+    public bool IsHeld(int channel) => _held[channel];
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public async Task SelectRunAsync(Guid listId, CancellationToken ct = default)
@@ -116,7 +123,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                         string.Empty, "Capture ended unexpectedly. Recover missing impulses from device memory/backup and review before continuing."));
                 }
             }
-            _armedStart = _armedFinish = null;
+            Array.Clear(_expected); Array.Clear(_held); _followOrder = false;
             Interlocked.Exchange(ref _saved, data.Packets.Count);
             Rebuild();
         }
@@ -245,18 +252,19 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     {
         var review = _snapshot!.Observations.FirstOrDefault(x => x.Observation.Key == observation.Key);
         if (review?.State != "Unassigned" || observation.Kind != ObservationKind.Impulse) { return; }
+        if (observation.Channel is { } paused && IsHeld(paused)) { return; }
         var bib = observation.SuggestedBib;
         var reason = "Explicit device bib";
         if (bib is null)
         {
-            bib = observation.Channel == 0 ? _armedStart : _armedFinish;
-            reason = "Operator armed bib";
+            bib = observation.Channel is { } channel && channel < _expected.Length ? ExpectedBib(channel) : null;
+            reason = _followOrder ? "Race queue: expected bib" : "Operator armed bib";
         }
         if (bib is null || !_snapshot.Results.Any(x => x.Bib == bib)) { return; }
         var operatorName = _sessions.Single(x => x.Id == observation.SessionId).Options.Operator;
         await AppendDecisionAsync(new(DecisionKind.Assignment, observation.Key, Bib: bib), operatorName, reason);
-        if (observation.Channel == 0 && _armedStart == bib) { _armedStart = null; }
-        if (observation.Channel == 1 && _armedFinish == bib) { _armedFinish = null; }
+        if (observation.Channel is { } consumed && ExpectedBib(consumed) == bib) { _expected[consumed] = 0; }
+        AdvanceQueues();
     }
 
     public async Task ArmAsync(int? startBib, int? finishBib, CancellationToken ct = default)
@@ -266,15 +274,21 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         {
             foreach (var bib in new[] { startBib, finishBib }.OfType<int>())
             { if (_snapshot is null || !_snapshot.Results.Any(x => x.Bib == bib)) { throw new DomainValidationException("Choose a bib on this start list."); } }
-            _armedStart = startBib; _armedFinish = finishBib;
+            _expected[0] = startBib ?? 0; _expected[1] = finishBib ?? 0;
         }
         finally { _state.Release(); }
     }
 
     public async Task CorrectAsync(TimingDecision decision, string operatorName, string reason, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(decision);
         await _state.WaitAsync(ct);
-        try { await AppendDecisionAsync(decision, operatorName, reason); }
+        try
+        {
+            var before = TimingEngine.CurrentDecision(decision, _audit);
+            await AppendDecisionAsync(decision, operatorName, reason);
+            ReconcileCorrectedQueue(before, decision);
+        }
         finally { _state.Release(); }
     }
 
@@ -298,8 +312,53 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             if (TimingEngine.CurrentDecision(action.After, _audit) != action.After)
             { throw new DomainValidationException("A later change affects the same value. Undo the later change first."); }
             await AppendDecisionAsync(action.Before, operatorName, reason, action.Id);
+            ReconcileCorrectedQueue(action.After, action.Before);
         }
         finally { _state.Release(); }
+    }
+
+    public async Task FollowStartOrderAsync(bool enabled, CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try { _followOrder = enabled; if (enabled) { AdvanceQueues(); } }
+        finally { _state.Release(); }
+    }
+
+    public async Task ExpectAsync(int channel, int? bib, bool held = false, CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot is null || channel < 0 || channel >= 2 + _list!.Plan.Competition.IntermediateCount)
+            { throw new DomainValidationException("Choose a timing position in this run."); }
+            if (bib is not null && !RaceFlow.Expected(_snapshot, channel).Any(x => x.Bib == bib))
+            { throw new DomainValidationException("Choose a competitor waiting at this timing position."); }
+            _expected[channel] = held ? 0 : bib ?? 0; _held[channel] = held;
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
+    private void ReconcileCorrectedQueue(TimingDecision before, TimingDecision after)
+    {
+        if (_followOrder && _snapshot is not null && before.Kind == DecisionKind.Assignment && before.Bib is { } bib && after.Bib != bib)
+        {
+            var observation = _snapshot.Observations.FirstOrDefault(x => x.Observation.Key == before.ObservationKey)?.Observation;
+            if (observation?.Channel is { } channel && channel < _expected.Length && !_held[channel]
+                && RaceFlow.Expected(_snapshot, channel).Any(x => x.Bib == bib)) { _expected[channel] = bib; }
+        }
+        AdvanceQueues();
+    }
+
+    private void AdvanceQueues()
+    {
+        if (!_followOrder || _snapshot is null) { return; }
+        for (var channel = 0; channel < 2 + _list!.Plan.Competition.IntermediateCount; channel++)
+        {
+            if (_held[channel]) { _expected[channel] = 0; continue; }
+            var queue = RaceFlow.Expected(_snapshot, channel);
+            if (!queue.Any(x => x.Bib == _expected[channel])) { _expected[channel] = queue.Count == 0 ? 0 : queue[0].Bib; }
+        }
     }
 
     public async Task StopAsync()

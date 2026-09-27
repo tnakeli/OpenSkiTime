@@ -1,5 +1,7 @@
 # M5 — Timing workstation
 
+The subsequent operator-requested race-board redesign and its verification are recorded in [Timing race control](timing-race-control.md). The original M5 evidence below describes the earlier capture-first UI.
+
 Implemented on `rewrite/codex`, 2026-09-27. Scope was explicitly expanded to bring Timy 2/3 USB, MT1 USB/serial and ALGE Results adapters forward from M6. Software implementation is ready for operator testing; physical-device acceptance is still open. M7 publication has not started.
 
 Follow-up: [FIS precision review](fis-timing-review.md) against Timing Booklet 2.67 and the supplied Data Booklet 1.15. Simulator/display now retain seven digits, additional precision/transfer tests pass (66 rewrite tests), and remaining EET/FIS acceptance gaps are explicit. The 53-test count below describes the original M5 run.

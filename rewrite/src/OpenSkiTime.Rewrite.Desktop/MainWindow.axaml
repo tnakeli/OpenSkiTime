@@ -370,6 +370,7 @@
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSettingsSection}">
           <StackPanel Spacing="12">
             <StackPanel Spacing="1"><TextBlock Text="APPLICATION / SETTINGS" Classes="eyebrow" /><TextBlock Text="Settings" Classes="sectionTitle" /></StackPanel>
+            <Border Classes="subtleSurface" Padding="12"><local:TimingSettingsView /></Border>
             <Border Classes="subtleSurface" Padding="12"><StackPanel Spacing="8">
               <TextBlock Text="FIS API access" FontWeight="SemiBold" />
               <TextBlock Text="Create an API key in FIS Member Section → API Access." Classes="supportingText" />

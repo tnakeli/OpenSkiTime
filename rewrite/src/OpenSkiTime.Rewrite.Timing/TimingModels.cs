@@ -21,9 +21,15 @@ public sealed record TimingAudit(long Id, Guid ListId, DateTimeOffset At, string
 public sealed record TimingResult(StartListEntry Entry, TimingStatus Status, long? Hundredths,
     int? Rank, string? StartKey, string? FinishKey, string Detail)
 {
+    public IReadOnlyList<TimingSplit> Splits { get; init; } = [];
     public int Bib => Entry.Bib;
     public Guid CompetitorId => Entry.Entrant.CompetitorId;
     public string Name => Entry.Entrant.Athlete.Surname + " " + Entry.Entrant.Athlete.FirstName;
+    public string Time => TimingTime.Format(Hundredths);
+}
+
+public sealed record TimingSplit(int Number, string? ObservationKey, long? Hundredths, string Detail)
+{
     public string Time => TimingTime.Format(Hundredths);
 }
 

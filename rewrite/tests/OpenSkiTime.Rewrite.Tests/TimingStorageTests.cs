@@ -189,9 +189,10 @@ public sealed class TimingStorageTests
         Assert.Equal("partial", Encoding.ASCII.GetString(Assert.Single((await reopened.ReadTimingAsync(list.Id)).Packets).Bytes));
     }
 
-    internal static async Task<StartListRevision> SeedAsync(SeriesWorkspace workspace, string path, int count)
+    internal static async Task<StartListRevision> SeedAsync(SeriesWorkspace workspace, string path, int count, int intermediates = 0)
     {
         var model = TimingRulesTests.List(count);
+        model = model with { Plan = model.Plan with { Competition = model.Plan.Competition with { IntermediateCount = intermediates } } };
         var series = await workspace.CreateAsync(path, new("Synthetic timing", "Test", "Test", TimingRulesTests.Date, TimingRulesTests.Date, "FIN", "2026/27"));
         series = await workspace.SaveCompetitionAsync(null, model.Plan.Competition, series.Revision);
         var competition = series.Competitions[0].Id;

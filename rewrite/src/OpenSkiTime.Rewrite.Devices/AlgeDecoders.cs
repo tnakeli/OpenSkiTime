@@ -130,7 +130,9 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
         var kind = flag is "c" or "C" or "d" or "D" or "i" or "n" ? ObservationKind.DeviceCorrection : ObservationKind.Impulse;
         if (!clockOk) { kind = ObservationKind.Invalid; }
         var explicitBib = (flag == "*" || match.Groups["star"].Success) && number > 0 ? (int?)number : null;
-        var normalizedChannel = channel == session.Options.StartChannel ? 0 : channel == session.Options.FinishChannel ? 1 : channel + 10;
+        var intermediate = Array.IndexOf(session.Options.IntermediateChannels, channel);
+        var normalizedChannel = channel == session.Options.StartChannel ? 0 : channel == session.Options.FinishChannel ? 1
+            : intermediate >= 0 ? intermediate + 2 : channel + 100;
         return Make(kind, clockOk ? text : "Device clock moved backwards/reset. Review clock setup: " + text) with
         {
             Fingerprint = $"{source}:{session.Options.DeviceDate:yyyyMMdd}:{_currentClock}:{flag}:{number}:{channel}:{_clockEpoch}",
