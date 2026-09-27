@@ -85,7 +85,7 @@ public static class TsvExchange
             var cells = new List<string?>
             {
                 values.Surname, values.FirstName, values.BirthYear?.ToString(CultureInfo.InvariantCulture),
-                values.Gender?.ToString(), values.Nation, values.Club, values.FederationCode,
+                GenderLabels.Format(values.Gender), values.Nation, values.Club, values.FederationCode,
             };
             foreach (var competition in series.Competitions)
             {
@@ -296,7 +296,7 @@ public static class TsvExchange
         "f" or "female" or "woman" or "women" => Gender.Female,
         "m" or "male" or "man" or "men" => Gender.Male,
         "o" or "other" => Gender.Other,
-        _ => throw new DomainValidationException($"Row {row}: gender must be Female, Male or Other."),
+        _ => throw new DomainValidationException($"Row {row}: gender must be Women, Men or Other."),
     };
 
     private static (string Surname, string? FirstName, bool NeedsReview) SplitFullName(string fullName)

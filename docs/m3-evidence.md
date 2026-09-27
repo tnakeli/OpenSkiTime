@@ -11,3 +11,5 @@ Release build and all rewrite tests pass. Tests cover a reachable headless paste
 Native Windows clipboard, save-picker and operator keyboard rehearsal remain open. The Release executable starts on this machine; the desktop workflow test uses a clipboard/file-dialog stub. Excel paste is TSV; `.xlsx` file import is outside this milestone. Actual legacy-database conversion, Draw and timing are not part of M3. Existing NU1903 dependency advisories remain.
 
 Legacy-style Change Log: saved row and participation edits appear in the log, while deletions stay marked DEL until Commit Changes. Restore reverses an individual edit or staged deletion. As in legacy, ordinary edits are already saved before Commit Changes; paste preview uses its separate atomic Commit import action. The headless workflow verifies deletion restore and finalization.
+
+The UI and TSV export label gender values **Women** and **Men**. The database keeps its existing `Female`/`Male` enum values, and import accepts both label pairs so existing series files and TSV data remain readable.

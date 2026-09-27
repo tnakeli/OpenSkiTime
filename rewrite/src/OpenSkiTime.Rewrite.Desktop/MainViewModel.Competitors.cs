@@ -111,7 +111,7 @@ public sealed partial class MainViewModel
         CategoryLabel = value.Values.Label;
         CategoryMinYearText = value.Values.BirthYearMin.ToString(CultureInfo.InvariantCulture);
         CategoryMaxYearText = value.Values.BirthYearMax.ToString(CultureInfo.InvariantCulture);
-        CategoryGenderText = value.Values.Gender?.ToString() ?? string.Empty;
+        CategoryGenderText = GenderLabels.Format(value.Values.Gender);
         CategoryOrderText = value.Values.DisplayOrder.ToString(CultureInfo.InvariantCulture);
     }
 
@@ -572,10 +572,10 @@ public sealed partial class MainViewModel
     private static Gender? ParseCategoryGender(string text) => text.Trim().ToUpperInvariant() switch
     {
         "" => null,
-        "F" or "FEMALE" => Gender.Female,
-        "M" or "MALE" => Gender.Male,
+        "F" or "FEMALE" or "WOMAN" or "WOMEN" => Gender.Female,
+        "M" or "MALE" or "MAN" or "MEN" => Gender.Male,
         "O" or "OTHER" => Gender.Other,
-        _ => throw new DomainValidationException("Category gender must be Female, Male or Other."),
+        _ => throw new DomainValidationException("Category gender must be Women, Men or Other."),
     };
 
     [RelayCommand]

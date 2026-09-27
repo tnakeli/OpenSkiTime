@@ -29,7 +29,7 @@ public sealed partial class ImportReviewGridRow : ObservableObject
     public bool IsSurnameChanged => IsNew || !string.Equals(Surname, _before?.Surname, StringComparison.Ordinal);
     public bool IsFirstNameChanged => IsNew || !string.Equals(FirstName, _before?.FirstName, StringComparison.Ordinal);
     public bool IsYearChanged => IsNew || BirthYearText != (_before?.BirthYear?.ToString(CultureInfo.InvariantCulture) ?? string.Empty);
-    public bool IsGenderChanged => IsNew || GenderText != (_before?.Gender?.ToString() ?? string.Empty);
+    public bool IsGenderChanged => IsNew || GenderText != GenderLabels.Format(_before?.Gender);
     public bool IsNationChanged => IsNew || Nation != (_before?.Nation ?? string.Empty);
     public bool IsClubChanged => IsNew || Club != (_before?.Club ?? string.Empty);
     public bool IsCodeChanged => IsNew || FederationCode != (_before?.FederationCode ?? string.Empty);
@@ -49,7 +49,7 @@ public sealed partial class ImportReviewGridRow : ObservableObject
         Surname = item.Values.Surname;
         FirstName = item.Values.FirstName;
         BirthYearText = item.Values.BirthYear?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
-        GenderText = item.Values.Gender?.ToString() ?? string.Empty;
+        GenderText = GenderLabels.Format(item.Values.Gender);
         Nation = item.Values.Nation ?? string.Empty;
         Club = item.Values.Club ?? string.Empty;
         FederationCode = item.Values.FederationCode ?? string.Empty;
@@ -82,10 +82,10 @@ public sealed partial class ImportReviewGridRow : ObservableObject
         var gender = GenderText.Trim().ToUpperInvariant() switch
         {
             "" => (Gender?)null,
-            "F" or "FEMALE" => Gender.Female,
-            "M" or "MALE" => Gender.Male,
+            "F" or "FEMALE" or "WOMAN" or "WOMEN" => Gender.Female,
+            "M" or "MALE" or "MAN" or "MEN" => Gender.Male,
             "O" or "OTHER" => Gender.Other,
-            _ => throw new DomainValidationException($"Review row {SourceRow}: gender must be Female, Male or Other."),
+            _ => throw new DomainValidationException($"Review row {SourceRow}: gender must be Women, Men or Other."),
         };
         var values = new CompetitorValues(Surname, FirstName, year, FederationCode,
             Nation, Club, gender).Validated(eventYear);
