@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Threading.Channels;
 using OpenSkiTime.Rewrite.Application;
+using OpenSkiTime.Rewrite.Timing;
 
 namespace OpenSkiTime.Rewrite.Devices;
 
@@ -51,8 +52,9 @@ public sealed class SimulatorTimingSource : ITimingSource
     public ValueTask PulseAsync(int channel, long ticks, int? explicitBib = null)
     {
         var number = explicitBib ?? Interlocked.Increment(ref _sequence);
+        var time = new TimeOnly(ticks).ToString(TimingTime.TimeOfDayFormat, CultureInfo.InvariantCulture);
         var text = string.Create(CultureInfo.InvariantCulture,
-            $" {number:0000}{(explicitBib is not null ? "*" : "")} C{channel} {new TimeOnly(ticks):HH:mm:ss.ffff}\r");
+            $" {number:0000}{(explicitBib is not null ? "*" : "")} C{channel} {time}\r");
         return _input.Writer.WriteAsync(Encoding.ASCII.GetBytes(text));
     }
     public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)

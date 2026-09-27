@@ -2,6 +2,8 @@
 
 Implemented on `rewrite/codex`, 2026-09-27. Scope was explicitly expanded to bring Timy 2/3 USB, MT1 USB/serial and ALGE Results adapters forward from M6. Software implementation is ready for operator testing; physical-device acceptance is still open. M7 publication has not started.
 
+Follow-up: [FIS precision review](fis-timing-review.md) against Timing Booklet 2.67 and the supplied Data Booklet 1.15. Simulator/display now retain seven digits, additional precision/transfer tests pass (66 rewrite tests), and remaining EET/FIS acceptance gaps are explicit. The 53-test count below describes the original M5 run.
+
 ## Delivered
 
 - Competition/run Timing dropdown, compact start-list/results and observations, F5/F6 arming, several athletes on course, assignments, ignored input, classifications, elapsed corrections and append-only undo/history. Active short name/codex/run remain visible. Live row updates retain selection and edited correction text.

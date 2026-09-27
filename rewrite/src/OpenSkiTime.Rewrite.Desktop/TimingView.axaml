@@ -149,9 +149,9 @@
           <DataGrid Grid.Row="1" Name="TimingObservationsGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimingObservations}" SelectedItem="{Binding SelectedTimingObservation}"
                     AutoGenerateColumns="False" IsReadOnly="True" RowHeight="30" GridLinesVisibility="Horizontal">
             <DataGrid.Columns>
-              <DataGridTextColumn Header="DEVICE TIME" Binding="{Binding Time}" SortMemberPath="Review.Observation.DeviceTicks" Width="125" />
-              <DataGridTextColumn Header="CH." Binding="{Binding Channel}" Width="46" />
-              <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="46" />
+              <DataGridTextColumn Header="DEVICE TIME" Binding="{Binding Time}" SortMemberPath="Review.Observation.DeviceTicks" Width="130" />
+              <DataGridTextColumn Header="CH." Binding="{Binding Channel}" Width="43" />
+              <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="43" />
               <DataGridTextColumn Header="STATE" Binding="{Binding State}" Width="*" MinWidth="76" />
             </DataGrid.Columns>
           </DataGrid>

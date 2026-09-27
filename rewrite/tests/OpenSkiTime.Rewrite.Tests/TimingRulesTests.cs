@@ -105,10 +105,11 @@ public sealed class TimingRulesTests
         var list = List();
         var session = Session(list);
         var decoder = new AlgeResultsDecoder(session);
-        var stamp = (At.UtcTicks - DateTime.UnixEpoch.Ticks) + 1234500;
+        var stamp = (At.UtcTicks - DateTime.UnixEpoch.Ticks) + 1234567;
         var json = $$"""{"status":0,"data":[{"deviceId":"100","timestamp":{{stamp}},"timingChannel":"C0","fallingEdge":true,"valid":true,"blocked":false,"type":"StartNumberTrigger","startNumber":{"startNumber":1,"type":"SEQUENTIAL"},"timeOffset":0}]}""";
         var first = Assert.Single(decoder.Feed(Packet(session, 1, json, "alge-results/v1")));
-        Assert.Equal(At.UtcTicks + 1234500, first.DeviceTicks);
+        Assert.Equal(At.UtcTicks + 1234567, first.DeviceTicks);
+        Assert.Contains("12:00:00.1234567", first.Message, StringComparison.Ordinal);
         Assert.Equal(5, first.Precision);
         Assert.Null(first.SuggestedBib);
         var duplicate = Assert.Single(decoder.Feed(Packet(session, 2, json.Replace(",", ", ", StringComparison.Ordinal), "alge-results/v1")));

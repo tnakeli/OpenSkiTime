@@ -26,7 +26,7 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
 public sealed record TimingObservationRow(ObservationReview Review)
 {
     public string Key => Review.Observation.Key;
-    public string Time => Review.Observation.DeviceTicks is { } ticks ? new DateTime(ticks).ToString("HH:mm:ss.fffff", CultureInfo.InvariantCulture) : "—";
+    public string Time => TimingTime.FormatTimeOfDay(Review.Observation.DeviceTicks);
     public string Channel => Review.Observation.Channel switch { 0 => "S", 1 => "F", _ => "?" };
     public string Bib => Review.Bib?.ToString(CultureInfo.InvariantCulture) ?? "—";
     public string State => Review.State;
@@ -325,7 +325,7 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             if (_simulator is null || !IsTimingConnected) { throw new DomainValidationException("Connect the simulator first."); }
-            if (!TimingTime.TryTimeOfDay(SimulationTime, out var ticks, out _)) { throw new DomainValidationException("Enter simulator time as HH:mm:ss.ffff."); }
+            if (!TimingTime.TryTimeOfDay(SimulationTime, out var ticks, out _)) { throw new DomainValidationException("Enter simulator time as HH:mm:ss with 1–7 decimal places (for example 12:00:00.1234567)."); }
             await _simulator.PulseAsync(channel == "start" ? TimingStartChannel : TimingFinishChannel, ticks);
         });
     }

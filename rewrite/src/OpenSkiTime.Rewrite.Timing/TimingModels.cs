@@ -46,7 +46,13 @@ public sealed record TimingSnapshot(Guid ListId, long AuditVersion, IReadOnlyLis
 
 public static class TimingTime
 {
+    // One lossless representation for all sources, including hundredth-resolution hand clocks.
+    // Trailing zeroes do not imply better device accuracy; TimingObservation.Precision retains the source resolution.
+    public const string TimeOfDayFormat = "HH:mm:ss.fffffff";
     public const long TicksPerHundredth = TimeSpan.TicksPerSecond / 100;
+    public static string FormatTimeOfDay(long? ticks) => ticks is { } value
+        ? new DateTime(value).ToString(TimeOfDayFormat, CultureInfo.InvariantCulture) : "—";
+
     public static string Format(long? hundredths) => hundredths is not { } value ? "—"
         : string.Create(CultureInfo.InvariantCulture, $"{value / 6000}:{value / 100 % 60:00}.{value % 100:00}");
 
