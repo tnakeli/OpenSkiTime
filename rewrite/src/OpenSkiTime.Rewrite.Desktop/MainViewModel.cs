@@ -6,7 +6,7 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
-public enum WorkspaceSection { Series, Competitions, Competitors, Settings }
+public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Settings }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
@@ -42,11 +42,14 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(IsCompetitionsSection))]
     [NotifyPropertyChangedFor(nameof(IsCompetitorsSection))]
     [NotifyPropertyChangedFor(nameof(IsSettingsSection))]
+    [NotifyPropertyChangedFor(nameof(IsDrawSection))]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private WorkspaceSection _activeSection = WorkspaceSection.Series;
     public bool IsSeriesSection => ActiveSection == WorkspaceSection.Series;
     public bool IsCompetitionsSection => ActiveSection == WorkspaceSection.Competitions;
     public bool IsCompetitorsSection => ActiveSection == WorkspaceSection.Competitors;
     public bool IsSettingsSection => ActiveSection == WorkspaceSection.Settings;
+    public bool IsDrawSection => ActiveSection == WorkspaceSection.Draw;
 
     [RelayCommand] private void ShowSeries() => SwitchSection(WorkspaceSection.Series);
     [RelayCommand] private void ShowCompetitions() => SwitchSection(WorkspaceSection.Competitions);
@@ -59,7 +62,9 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     private void SwitchSection(WorkspaceSection section)
     {
-        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors) && !CanEditCompetitions) { return; }
+        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors or WorkspaceSection.Draw) && !CanEditCompetitions) { return; }
+        if (IsDrawBusy) { return; }
+        if (section != ActiveSection && !CanLeaveDrawInput()) { return; }
         if (section != ActiveSection && HasDeskDrafts
             && section != WorkspaceSection.Settings
             && !(ActiveSection == WorkspaceSection.Settings && section == WorkspaceSection.Competitors))
@@ -73,7 +78,10 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private string _fileLabel = "No series file open";
-    public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime" : FileLabel;
+    public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime"
+        : IsDrawSection && DrawCompetition is { } c
+            ? $"{FileLabel} · {c.Values.FisCode ?? c.Values.LocalRaceCode ?? c.Values.ShortLabel} · {DrawGender} · Run {DrawRun}"
+            : FileLabel;
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";
     [ObservableProperty] private bool _isError;
     [ObservableProperty] private string _name = string.Empty;
@@ -127,6 +135,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [RelayCommand]
     private void NewSeries()
     {
+        if (!CanLeaveDrawInput()) { return; }
         if (HasDeskDrafts)
         {
             SetStatus("Save or discard unsaved changes before starting a new series.", error: true);
@@ -242,6 +251,15 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             EnsureDeskClean();
             await workspace.CloseAsync();
             _current = null;
+            _settingDraw = true;
+            DrawCompetition = null;
+            DrawRevision = null;
+            DrawEntries.Clear();
+            DrawResults.Clear();
+            _drawDesk = null;
+            _sourceRun = null;
+            _drawLoad++;
+            _settingDraw = false;
             ClearCompetitorDesk();
             Competitions.Clear();
             SelectedCompetition = null;
@@ -387,6 +405,13 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         if (_current?.Id != details.Id)
         {
+            _settingDraw = true;
+            DrawCompetition = null;
+            DrawRevision = null;
+            _drawDesk = null;
+            _sourceRun = null;
+            _drawLoad++;
+            _settingDraw = false;
             IsFisPanelOpen = false;
             FisEffectiveDateText = string.Empty;
         }

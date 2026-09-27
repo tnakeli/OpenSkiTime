@@ -72,8 +72,10 @@ public sealed partial class MainViewModel
 
     private bool HasDeskDrafts => _allCompetitorRows.Any(x => x.HasPendingChanges);
 
-    private void EnsureDeskClean()
+    private void EnsureDeskClean(bool includeDrawInput = true)
     {
+        if (includeDrawInput && HasUnsavedRunInput)
+        { throw new DomainValidationException("Save the Run 1 input in a start-list draft or discard it before changing the event file."); }
         if (HasDeskDrafts)
         {
             throw new DomainValidationException("Save or discard unsaved changes before changing the event file or competitions.");

@@ -10,6 +10,7 @@ public interface IFileDialogs
     Task<string?> ChooseBackupAsync(string suggestedName);
     Task<bool> ConfirmRemoveAsync(string competitionName);
     Task<bool> ConfirmDiscardChangesAsync(int changeCount);
+    Task<string?> ChooseStartListExportAsync(string suggestedName, bool print);
 }
 
 public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
@@ -52,6 +53,18 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
     public Task<bool> ConfirmRemoveAsync(string competitionName)
         => ConfirmAsync("Remove competition", $"Remove competition '{competitionName}' from this series?",
             "Remove", "Cancel");
+
+    public async Task<string?> ChooseStartListExportAsync(string suggestedName, bool print)
+    {
+        var extension = print ? "html" : "tsv";
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = print ? "Save printable start list (open in a browser to print)" : "Export start list",
+            SuggestedFileName = suggestedName + "." + extension, DefaultExtension = extension,
+            FileTypeChoices = [new FilePickerFileType(print ? "Printable HTML" : "Tab-separated values") { Patterns = ["*." + extension] }],
+        });
+        return file?.TryGetLocalPath();
+    }
 
     public Task<bool> ConfirmDiscardChangesAsync(int changeCount)
         => ConfirmAsync("Discard all changes",

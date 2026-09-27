@@ -60,3 +60,9 @@ DNS, DNF, DSQ, missing finish, rerun and penalty are explicit states/decisions, 
 Never edit/delete raw timing input to correct results. Correction and audit commit together; reversal adds history. Protect referenced entries/runs from destructive deletion once timing exists. Auditable history is not a claim of tamper-proof certification.
 
 No existing algorithm defines timing precision/rounding, tie ranking, multi-run aggregation, second-run reversal, penalties or FIS eligibility. Obtain approved examples and applicable rule editions before implementation. FIS XML/API, ALGE protocols and official reports require authoritative samples/validation; legacy labels are insufficient evidence.
+
+## M4 implementation
+
+Runs are scoped to competition, Men/Women field and run number. Start-list revisions freeze athlete details, discipline points/list validity, competition settings, rule version, seed, bibs, positions and operator/reason. Approval is one-way; preparing again appends a revision. Bibs are competition-specific and retained into Run 2; positions change. See [M4 evidence](m4-evidence.md) for the exact supported rule profile.
+
+Run 2 currently accepts externally classified integer-hundredth times or explicit DNS/DNF/DSQ/NPS statuses. These are inputs to a start-list revision, not captured timing observations or an official results engine. Every source starter must be accounted for. Referenced competitions cannot be deleted or changed; Run 1 cannot be redrawn after Run 2 exists. Registration changes invalidate approval until reconciled, while historical snapshots remain readable/exportable.

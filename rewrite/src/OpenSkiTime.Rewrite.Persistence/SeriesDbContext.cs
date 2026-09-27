@@ -13,6 +13,9 @@ public sealed class SeriesDbContext(DbContextOptions<SeriesDbContext> options) :
     internal DbSet<ParticipationRow> Participations => Set<ParticipationRow>();
     internal DbSet<CategoryRuleRow> CategoryRules => Set<CategoryRuleRow>();
     internal DbSet<ImportReceiptRow> ImportReceipts => Set<ImportReceiptRow>();
+    internal DbSet<RunRow> Runs => Set<RunRow>();
+    internal DbSet<StartListRow> StartLists => Set<StartListRow>();
+    internal DbSet<StartListEntryRow> StartListEntries => Set<StartListEntryRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -101,6 +104,30 @@ public sealed class SeriesDbContext(DbContextOptions<SeriesDbContext> options) :
         receipt.HasOne<SeriesRow>().WithMany().HasForeignKey(x => x.SeriesId)
             .HasPrincipalKey(x => x.Id).OnDelete(DeleteBehavior.Cascade);
         receipt.Property(x => x.SourceHash).HasMaxLength(64);
+
+        var run = modelBuilder.Entity<RunRow>();
+        run.ToTable("Runs", t => t.HasCheckConstraint("CK_Run_Number", "Number BETWEEN 1 AND 9"));
+        run.HasKey(x => x.Id);
+        run.Property(x => x.Id).ValueGeneratedNever();
+        run.HasOne<CompetitionRow>().WithMany().HasForeignKey(x => x.CompetitionId).OnDelete(DeleteBehavior.Restrict);
+        run.HasIndex(x => new { x.CompetitionId, x.Gender, x.Number }).IsUnique();
+        run.Property(x => x.Gender).HasConversion<string>();
+        var list = modelBuilder.Entity<StartListRow>();
+        list.ToTable("StartLists");
+        list.HasKey(x => x.Id);
+        list.Property(x => x.Id).ValueGeneratedNever();
+        list.HasOne<RunRow>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Restrict);
+        list.HasIndex(x => new { x.RunId, x.Revision }).IsUnique();
+        var start = modelBuilder.Entity<StartListEntryRow>();
+        start.ToTable("StartListEntries", t =>
+        {
+            t.HasCheckConstraint("CK_Start_Position", "Position > 0");
+            t.HasCheckConstraint("CK_Start_Bib", "Bib BETWEEN 1 AND 99999");
+        });
+        start.HasKey(x => new { x.ListId, x.Position });
+        start.HasIndex(x => new { x.ListId, x.Bib }).IsUnique();
+        start.HasIndex(x => new { x.ListId, x.CompetitorId }).IsUnique();
+        start.HasOne<StartListRow>().WithMany().HasForeignKey(x => x.ListId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -183,6 +210,35 @@ internal sealed class ImportReceiptRow
     public long Revision { get; set; }
     public int Created { get; set; }
     public int Updated { get; set; }
+}
+
+internal sealed class RunRow
+{
+    public Guid Id { get; set; }
+    public Guid CompetitionId { get; set; }
+    public Gender Gender { get; set; }
+    public int Number { get; set; }
+}
+
+internal sealed class StartListRow
+{
+    public Guid Id { get; set; }
+    public Guid RunId { get; set; }
+    public int Revision { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? ApprovedAt { get; set; }
+    public string Operator { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public string PlanJson { get; set; } = string.Empty;
+}
+
+internal sealed class StartListEntryRow
+{
+    public Guid ListId { get; set; }
+    public int Position { get; set; }
+    public int Bib { get; set; }
+    public Guid CompetitorId { get; set; }
+    public string EntryJson { get; set; } = string.Empty;
 }
 
 public sealed class SeriesDbContextFactory : IDesignTimeDbContextFactory<SeriesDbContext>
