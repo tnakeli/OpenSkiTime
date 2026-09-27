@@ -10,6 +10,37 @@ namespace OpenSkiTime.Rewrite.Tests;
 
 public sealed class TimyUsbContractTests
 {
+    [Fact]
+    public void AutomaticSelectionResumesWithNewSdkIdOnlyAfterSelectedDeviceDisconnects()
+    {
+        var selection = new TimyUsbSelection("");
+        Assert.True(selection.Connect("1"));
+        Assert.False(selection.Connect("2"));
+        Assert.False(selection.Disconnect("2"));
+        Assert.True(selection.Accepts("1"));
+        Assert.False(selection.Accepts("2"));
+        Assert.True(selection.Disconnect("1"));
+        Assert.False(selection.Accepts("1"));
+        Assert.True(selection.Connect("3"));
+        Assert.True(selection.Accepts("3"));
+        Assert.False(selection.Accepts("1"));
+        Assert.False(selection.Accepts("2"));
+    }
+
+    [Fact]
+    public void ExplicitSelectionNeverSilentlySwitchesToAnotherSdkId()
+    {
+        var selection = new TimyUsbSelection("2");
+        Assert.False(selection.Connect("1"));
+        Assert.True(selection.Connect("2"));
+        Assert.True(selection.Disconnect("2"));
+        Assert.False(selection.Connect("3"));
+        Assert.False(selection.Accepts("3"));
+        Assert.False(selection.Accepts("2"));
+        Assert.True(selection.Connect("2"));
+        Assert.True(selection.Accepts("2"));
+    }
+
     // Synthetic SDK contract, not vendor binaries or a personal timing trace.
     public sealed class Device
     {

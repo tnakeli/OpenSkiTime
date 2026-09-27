@@ -14,7 +14,6 @@ internal static class Program
 {
     private static volatile bool s_stopped;
     private static readonly object s_output = new object();
-    private static string s_selected = "";
 
     [STAThread]
     private static int Main(string[] args)
@@ -24,7 +23,7 @@ internal static class Program
             if (args.Length < 1) { throw new ArgumentException("SDK directory required."); }
             var folder = Path.GetFullPath(args[0]);
             Environment.SetEnvironmentVariable("PATH", folder + ";" + Environment.GetEnvironmentVariable("PATH"));
-            s_selected = args.Length > 1 ? args[1] : "";
+            var selection = new TimyUsbSelection(args.Length > 1 ? args[1] : "");
             var assembly = Assembly.LoadFrom(Path.Combine(folder, "AlgeTimyUsb.x64.dll"));
             var type = assembly.GetType("Alge.TimyUsb", throwOnError: true)!;
             var reader = new Thread(() => { Console.ReadLine(); s_stopped = true; }) { IsBackground = true };
@@ -36,7 +35,7 @@ internal static class Program
                 Subscribe(type, usb, "BytesReceived", (_, e) =>
                 {
                     var id = TimySdkEvent.DeviceId(e);
-                    if (s_selected == id)
+                    if (selection.Accepts(id))
                     {
                         Emit("T", id, Convert.ToBase64String(TimySdkEvent.Capture(e)));
                     }
@@ -44,12 +43,16 @@ internal static class Program
                 Subscribe(type, usb, "DeviceConnected", (_, e) =>
                 {
                     var id = TimySdkEvent.DeviceId(e);
-                    if (s_selected.Length == 0) { s_selected = id; }
-                    if (s_selected == id) { Emit("C", id, "Connected"); }
-                    else { Emit("S", id, "Additional Timy detected; receiving only Timy " + s_selected); }
+                    if (selection.Connect(id)) { Emit("C", id, "Connected"); }
+                    else if (selection.SelectedId.Length != 0)
+                    { Emit("S", id, "Additional Timy detected; receiving only Timy " + selection.SelectedId); }
+                    else { Emit("S", id, "Timy " + id + " detected; waiting for " + selection.WaitingFor + ". Reconnect capture with the current USB ID if needed."); }
                 });
                 Subscribe(type, usb, "DeviceDisconnected", (_, e) =>
-                { if (s_selected == TimySdkEvent.DeviceId(e)) { Emit("D", s_selected, "Disconnected"); } });
+                {
+                    var id = TimySdkEvent.DeviceId(e);
+                    if (selection.Disconnect(id)) { Emit("D", id, "Disconnected"); }
+                });
                 Emit("S", "", "Waiting for Timy USB - check cable and installed ALGE driver");
                 type.GetMethod("Start", Type.EmptyTypes)!.Invoke(usb, null);
                 try { while (!s_stopped) { Application.DoEvents(); Thread.Sleep(5); } }
