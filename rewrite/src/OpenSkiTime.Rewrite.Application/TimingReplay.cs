@@ -30,9 +30,9 @@ public static class TimingReplay
         return TimingEngine.Replay(data.List, observations, data.Audit, 0, 1);
     }
 
-    internal static IReadOnlyList<TimingObservation> Decode(ITimingDecoder decoder, RawTimingPacket packet)
+    internal static IReadOnlyList<TimingObservation> Decode(ITimingDecoder decoder, RawTimingPacket packet, bool includeInformation = false)
     {
-        try { return decoder.Feed(packet).Where(x => x.Kind != ObservationKind.Information).ToArray(); }
+        try { return decoder.Feed(packet).Where(x => includeInformation || x.Kind != ObservationKind.Information).ToArray(); }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return [new($"{packet.SessionId:N}:{packet.Sequence}:decoder-error", packet.SessionId, packet.Sequence, packet.Source,
@@ -44,7 +44,16 @@ public static class TimingReplay
     public static string InputVersion(TimingReplayData data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        return string.Join(";", data.Sessions.OrderBy(x => x.Id).Select(s => $"{s.Id:N}:{data.Packets.Count(p => p.SessionId == s.Id)}:{s.CleanStop}"))
-            + ":audit=" + (data.Audit.Count == 0 ? 0 : data.Audit[^1].Id).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Every result assignment/change is audited. Heartbeats and unassigned gate noise
+        // must not invalidate Run 2 while the device remains connected.
+        return "results/v2:audit=" + (data.Audit.Count == 0 ? 0 : data.Audit[^1].Id).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    public static bool InputVersionMatches(string? saved, string current)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        // Older lists included raw packet counts/session closure before the audit suffix.
+        return saved == current || (saved is not null && current.StartsWith("results/v2:audit=", StringComparison.Ordinal) && !saved.StartsWith("results/", StringComparison.Ordinal)
+            && saved.EndsWith(current["results/v2".Length..], StringComparison.Ordinal));
     }
 }

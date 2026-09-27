@@ -50,14 +50,24 @@ public partial class DesktopWorkflowTests
             Assert.Equal("2", preferences.Load()!.IntermediateChannels);
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR");
             CaptureDraw(window, output, "race-settings.png");
-            Click(window, "Back to timing");
             Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
+            Click(window, "Back to timing");
             Assert.False(vm.IsError, vm.StatusMessage);
             var a = vm.TimingRows[0].Bib; var b = vm.TimingRows[1].Bib; var c = vm.TimingRows[2].Bib; var d = vm.TimingRows[3].Bib;
             Assert.StartsWith(a + " ·", vm.NextStartLabel, StringComparison.Ordinal);
             vm.SimulationTime = "12:00:00.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 1);
+            var runningRow = Assert.Single(vm.OnCourseRows);
+            var initialRunningTime = runningRow.Clock.Time;
+            await WaitTimingAsync(vm, () => runningRow.Clock.Time != initialRunningTime);
+            Assert.Same(runningRow, Assert.Single(vm.OnCourseRows)); // clock ticks must not replace/select grid rows
+            Assert.Equal(runningRow.Clock.Time, vm.ExpectedFinishTime);
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Settings") || Equals(x.Content, "Connect") || Equals(x.Content, "Disconnect"));
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<DataGrid>(), x => x.Name == "TimingObservationsGrid");
+            vm.ShowSettingsCommand.Execute(null);
+            Assert.True(vm.IsTimingConnected);
+            vm.ReturnToTimingCommand.Execute(null);
             Assert.StartsWith(b + " ·", vm.NextStartLabel, StringComparison.Ordinal);
             Click(window, "Absent · DNS"); await vm.NextStartDnsCommand.ExecutionTask!;
             Assert.Equal("DNS", vm.TimingRows.Single(x => x.Bib == b).Status);
@@ -89,6 +99,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.FinishedTimingRows.Count == 1);
             Assert.Equal("0:42.12", vm.FinishedTimingRows[0].Time);
+            Assert.False(vm.ShowTimingCorrection); // a valid finish is displayed immediately without an approval step
             vm.SimulationTime = "12:00:44.0000";
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned"));
@@ -106,16 +117,18 @@ public partial class DesktopWorkflowTests
             Assert.True(view.FindControl<DataGrid>("TimingResultsGrid")!.Bounds.Height > 100);
             Assert.True(view.FindControl<DataGrid>("OnCourseGrid")!.Bounds.Height > 80);
             Assert.True(view.FindControl<DataGrid>("IntermediateGrid")!.Bounds.Height >= 60);
-            vm.ShowTimingReview = true; vm.ShowAllTimingObservations = true;
-            CaptureDraw(window, output, "race-review-980.png");
+            Assert.True(view.FindControl<DataGrid>("FinishedGrid")!.Bounds.Height >= 65);
+            vm.CorrectLastFinishCommand.Execute(null); vm.ShowAllTimingObservations = true;
+            CaptureDraw(window, output, "race-correction-980.png");
             Assert.Contains(vm.TimingObservations, x => x.State == "Ignored");
-            vm.ShowTimingReview = false;
+            vm.ShowTimingCorrection = false;
             // Each queue exposes the same contextual classification actions.
             foreach (var name in new[] { "TimingResultsGrid", "OnCourseGrid", "IntermediateGrid", "FinishedGrid" })
             {
                 var grid = view.FindControl<DataGrid>(name)!;
                 Assert.Contains(grid.ContextMenu!.Items.OfType<MenuItem>(), x => Equals(x.Header, "DSQ · disqualified"));
             }
+            vm.ShowSettingsCommand.Execute(null);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
             if (!string.IsNullOrEmpty(output))
             {

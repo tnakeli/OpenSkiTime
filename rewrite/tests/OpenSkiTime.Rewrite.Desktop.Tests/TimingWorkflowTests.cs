@@ -63,8 +63,10 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "timing-device.png");
             vm.TimingSource = "Simulator";
             vm.FollowTimingOrder = false; // This reference scenario deliberately operates with manual bib selection.
+            vm.ShowSettingsCommand.Execute(null);
             Click(window, "Connect");
             await vm.ConnectTimingCommand.ExecutionTask!;
+            vm.ReturnToTimingCommand.Execute(null);
             Assert.False(vm.IsError, vm.StatusMessage);
             vm.SelectedTimingRow = vm.TimingRows[0];
             var firstBib = vm.SelectedTimingRow.Bib;
@@ -91,9 +93,9 @@ public partial class DesktopWorkflowTests
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned"));
             vm.SelectedTimingObservation = vm.TimingObservations.Single(x => x.State == "Unassigned");
-            vm.ShowTimingReview = true;
+            vm.CorrectLastFinishCommand.Execute(null);
             vm.ObservationBibText = vm.TimingRows[1].Bib.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            Click(window, "Assign"); await vm.ChangeObservationCommand.ExecutionTask!;
+            Click(window, "Assign finish"); await vm.ChangeObservationCommand.ExecutionTask!;
             Assert.Equal("1:05.00", vm.TimingRows[1].Time);
             vm.SelectedTimingRow = vm.TimingRows[0];
             vm.CorrectedTimeText = "1:02.00"; vm.TimingReason = "Verified backup timing";
@@ -102,10 +104,10 @@ public partial class DesktopWorkflowTests
             vm.ShowTimingHistory = true;
             vm.SelectedTimingHistory = vm.TimingHistory[0];
             CaptureDraw(window, output, "timing-history.png");
-            Click(window, "Undo selected change"); await vm.UndoTimingChangeCommand.ExecutionTask!;
+            Click(window, "Undo last change"); await vm.UndoLastTimingChangeCommand.ExecutionTask!;
             Assert.Equal("1:01.99", vm.TimingRows[0].Time);
             vm.ShowTimingHistory = false;
-            vm.ShowTimingReview = false;
+            vm.ShowTimingCorrection = false;
             vm.ShowAllTimingObservations = true;
             Assert.Contains(vm.TimingObservations, x => x.Time == "12:00:00.9999999");
             Assert.Contains(vm.TimingObservations, x => x.Time == "12:01:02.9999998");
@@ -118,14 +120,9 @@ public partial class DesktopWorkflowTests
                 vm.SelectedTimingRow = vm.TimingRows[i]; vm.TimingReason = "Synthetic no start";
                 Click(window, "DNS"); await vm.ClassifyTimingCommand.ExecutionTask!;
             }
-            Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
-            Assert.False(vm.IsTimingConnected);
+            Assert.True(vm.IsTimingConnected);
             Assert.True(vm.CanPrepareNextTimedRun);
-            if (!string.IsNullOrEmpty(output))
-            {
-                Directory.CreateDirectory(output);
-                await workspace.BackupAsync(Path.Combine(output, "Synthetic-M5-" + Guid.NewGuid().ToString("N") + ".ost"));
-            }
+            // Capture intentionally remains connected through Run 2 preparation.
             Click(window, "Prepare Run 2"); await vm.PrepareNextTimedRunCommand.ExecutionTask!;
             Assert.True(vm.HasCapturedRunInput);
             Assert.True(vm.CanPrepareDraw);
@@ -136,7 +133,7 @@ public partial class DesktopWorkflowTests
             Assert.NotNull(second.SourceTimingVersion);
             await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 2));
             Assert.Contains("Run 2", vm.TimingContext, StringComparison.Ordinal);
-            Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
+            Assert.True(vm.IsTimingConnected);
             Assert.False(vm.IsError, vm.StatusMessage);
             var bib = vm.TimingRows[0].Bib;
             vm.StartBibText = bib.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -151,6 +148,7 @@ public partial class DesktopWorkflowTests
             await WaitTimingAsync(vm, () => vm.TimingRows[0].Status == "Finished");
             Assert.Equal("2:08.00", vm.TimingRows[0].TotalTime);
             Assert.True(view.FindControl<DataGrid>("FinishedGrid")!.Columns.Single(x => Equals(x.Header, "TOTAL")).IsVisible);
+            vm.ShowSettingsCommand.Execute(null);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             Assert.False(vm.HasTimingRun);

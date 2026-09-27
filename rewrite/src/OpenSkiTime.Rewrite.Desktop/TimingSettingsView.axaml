@@ -4,7 +4,12 @@
   <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="4"><TextBlock Text="Timing devices &amp; clocks" Classes="sectionTitle" />
    <TextBlock Text="Set up once here. Operate the race in Timing." Classes="supportingText" /></StackPanel>
    <Button Grid.Column="1" Content="Back to timing" Command="{Binding ReturnToTimingCommand}" IsVisible="{Binding HasTimingRun}" Classes="secondaryAction" /></Grid>
-  <TextBlock IsVisible="{Binding IsTimingConnected}" Text="Capture is running. Disconnect in Timing before changing the device or clock settings." Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
+  <StackPanel Orientation="Horizontal" Spacing="8">
+   <TextBlock Text="{Binding TimingConnection}" VerticalAlignment="Center" />
+   <Button Content="Connect" Command="{Binding ConnectTimingCommand}" IsEnabled="{Binding CanConnectTiming}" IsVisible="{Binding !IsTimingConnected}" Classes="primaryAction" />
+   <Button Content="Disconnect" Command="{Binding DisconnectTimingCommand}" IsVisible="{Binding IsTimingConnected}" IsEnabled="{Binding !IsTimingBusy}" Classes="secondaryAction" />
+  </StackPanel>
+  <TextBlock IsVisible="{Binding IsTimingConnected}" Text="Connected. Capture continues when you leave Settings or change views." Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
             <StackPanel Spacing="12" IsEnabled="{Binding CanChangeTimingDevice}">
               <Grid ColumnDefinitions="2*,10,130,10,110,10,110,10,*">
                 <StackPanel Classes="field"><TextBlock Text="SOURCE" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding TimingSources}" SelectedItem="{Binding TimingSource}" HorizontalAlignment="Stretch" /></StackPanel>

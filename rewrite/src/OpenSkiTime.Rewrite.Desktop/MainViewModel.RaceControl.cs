@@ -18,13 +18,13 @@ public sealed partial class MainViewModel
     [ObservableProperty] private int _selectedTimingCheckpoint = 1;
     [ObservableProperty] private string _timingIntermediateChannels = "";
     [ObservableProperty] private bool _followTimingOrder = true;
-    [ObservableProperty] private bool _showTimingReview;
+    [ObservableProperty] private bool _showTimingCorrection;
+    [ObservableProperty] private string _expectedFinishTime = "—";
     [ObservableProperty] private string _nextStartLabel = "No competitor waiting";
     [ObservableProperty] private string _expectedFinishLabel = "No competitor on course";
     [ObservableProperty] private string _expectedIntermediateLabel = "No competitor approaching";
     [ObservableProperty] private string _onCourseLabel = "ON COURSE · 0";
     [ObservableProperty] private string _finishListLabel = "FINISHED · 0";
-    [ObservableProperty] private string _timingReviewLabel = "Impulses & corrections";
     [ObservableProperty] private string _startHoldLabel = "Hold start";
     [ObservableProperty] private string _finishHoldLabel = "Hold finish";
     [ObservableProperty] private string _intermediateHoldLabel = "Hold intermediate";
@@ -34,8 +34,18 @@ public sealed partial class MainViewModel
     private ObservationReview? LastFinishObservation => workspace.Timing?.Snapshot?.Observations.LastOrDefault(x =>
         x.Observation.Channel == 1 && x.State is "Assigned" or "Unassigned");
     public bool CanIgnoreLastFinish => LastFinishObservation is not null;
+    public bool HasUnassignedFinish => LastFinishObservation?.Bib is null && CanIgnoreLastFinish;
     public string LastFinishLabel => LastFinishObservation is { } finish
-        ? $"Last finish: {(finish.Bib is { } bib ? "Bib " + bib : "unassigned")} · {TimingTime.FormatTimeOfDay(finish.Observation.DeviceTicks)}" : "No finish received";
+        ? finish.Bib is { } bib ? $"Last finish · Bib {bib} · {workspace.Timing?.Snapshot?.Results.FirstOrDefault(x => x.Bib == bib)?.Time}"
+            : "Finish received · choose a competitor" : "No finish received";
+
+    private void RefreshRunningTimes()
+    {
+        var timing = workspace.Timing;
+        foreach (var row in TimingRows.Concat(OnCourseRows).Concat(IntermediateTimingRows))
+        { row.Clock.Time = TimingTime.Format(row.Result.Status == TimingStatus.OnCourse ? timing?.RunningHundredths(row.Result.StartKey) : row.Result.Hundredths); }
+        ExpectedFinishTime = OnCourseRows.FirstOrDefault(x => x.Bib == timing?.ArmedFinish)?.Clock.Time ?? "—";
+    }
 
     public void LoadTimingPreferences()
     {
@@ -104,10 +114,10 @@ public sealed partial class MainViewModel
             SyncTimingRows(FinishedTimingRows, snapshot.Results.Where(x => x.FinishKey is not null || x.Status == TimingStatus.Finished)
                 .OrderByDescending(x => x.FinishKey is null ? -1 : finishOrder.GetValueOrDefault(x.FinishKey)).Select(Map).ToArray());
             OnCourseLabel = $"ON COURSE · {onCourse.Length}";
-            FinishListLabel = $"FINISHED / REVIEW · {FinishedTimingRows.Count}";
-            TimingReviewLabel = snapshot.Unresolved > 0 ? $"Impulses & corrections · {snapshot.Unresolved} to review" : "Impulses & corrections";
+            FinishListLabel = $"FINISHED · {FinishedTimingRows.Count}";
             OnPropertyChanged(nameof(LastFinishLabel));
             OnPropertyChanged(nameof(CanIgnoreLastFinish));
+            OnPropertyChanged(nameof(HasUnassignedFinish));
         }
         string Expected(int channel, string empty) => timing!.IsHeld(channel) ? "HOLD · impulses kept unassigned"
             : snapshot.Results.FirstOrDefault(x => x.Bib == timing.ExpectedBib(channel)) is { } row ? $"{row.Bib} · {row.Name}" : empty;
@@ -152,9 +162,25 @@ public sealed partial class MainViewModel
             : "Unassigned false finish ignored. Original pulse retained; existing competitor results unchanged.");
     });
 
-    [RelayCommand] private void ReviewCompetitorFinish()
+    [RelayCommand] private void CorrectCompetitorFinish()
     {
-        ShowTimingReview = true; ShowTimingHistory = false; ShowAllTimingObservations = true;
+        ShowTimingCorrection = true; ShowAllTimingObservations = true;
         SelectedTimingObservation = TimingObservations.FirstOrDefault(x => x.Key == SelectedTimingRow?.Result.FinishKey);
+        SelectedTimingHistory = TimingHistory.FirstOrDefault();
+    }
+
+    [RelayCommand] private void CorrectLastFinish()
+    {
+        ShowTimingCorrection = true; ShowAllTimingObservations = true;
+        SelectedTimingObservation = TimingObservations.FirstOrDefault(x => x.Key == LastFinishObservation?.Observation.Key);
+        if (LastFinishObservation?.Bib is { } bib) { SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == bib); }
+    }
+
+    [RelayCommand] private void CloseTimingCorrection() => ShowTimingCorrection = false;
+
+    [RelayCommand] private async Task UndoLastTimingChangeAsync()
+    {
+        SelectedTimingHistory = TimingHistory.FirstOrDefault();
+        await UndoTimingChangeAsync();
     }
 }

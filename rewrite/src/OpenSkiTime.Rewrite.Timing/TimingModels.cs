@@ -41,11 +41,11 @@ public sealed record TimingSnapshot(Guid ListId, long AuditVersion, IReadOnlyLis
 {
     public int Unresolved => Observations.Count(x => x.State == "Unassigned" || x.State == "Review");
     public bool Complete => Results.Count > 0 && Results.All(x => x.Status is TimingStatus.Finished
-        or TimingStatus.DNS or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS) && Unresolved == 0;
+        or TimingStatus.DNS or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS);
 
     public IReadOnlyList<RunFinish> ToRunFinishes()
     {
-        if (!Complete) { throw new DomainValidationException("Resolve timing observations and classify every starter before preparing the next run."); }
+        if (!Complete) { throw new DomainValidationException("Finish or classify every starter before preparing the next run."); }
         return Results.Select(x => new RunFinish(x.CompetitorId, Enum.Parse<FinishStatus>(x.Status.ToString()), x.Hundredths)).ToArray();
     }
 }

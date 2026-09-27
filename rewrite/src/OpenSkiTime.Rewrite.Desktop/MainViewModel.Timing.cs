@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.ComponentModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -12,11 +13,12 @@ namespace OpenSkiTime.Rewrite.Desktop;
 
 public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalRank)
 {
+    public RunningTimeDisplay Clock { get; } = new();
     public int Position => Result.Entry.Position;
     public int Bib => Result.Bib;
     public string Code => Result.Entry.Entrant.Athlete.FederationCode ?? "";
     public string Name => Result.Name;
-    public string Status => Result.Status == TimingStatus.OnCourse ? "On course" : Result.Status.ToString();
+    public string Status => Result.Status switch { TimingStatus.OnCourse => "On course", TimingStatus.Review => "No time", _ => Result.Status.ToString() };
     public string Time => Result.Time;
     public string DisplayTime => Result.Status == TimingStatus.Finished ? Time : Status;
     public string TotalTime => TimingTime.Format(Total);
@@ -24,6 +26,14 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public string Detail => Result.Detail;
     public string Label => $"{Bib} · {Name}";
     public string SplitTimes => string.Join("  ·  ", Result.Splits.Where(x => x.ObservationKey is not null).Select(x => $"I{x.Number} {x.Time}"));
+    public bool HasSplits => Result.Splits.Any(x => x.ObservationKey is not null);
+}
+
+public sealed class RunningTimeDisplay : INotifyPropertyChanged
+{
+    private string _time = "—";
+    public string Time { get => _time; set { if (_time != value) { _time = value; PropertyChanged?.Invoke(this, new(nameof(Time))); } } }
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 public sealed record TimingObservationRow(ObservationReview Review)
@@ -100,7 +110,7 @@ public sealed partial class MainViewModel
     public bool CanChangeTimingDevice => !IsTimingConnected && !IsTimingBusy;
     public bool HasTimingRun => _timingList is not null;
     public bool ShowTimingTotal => TimingRun > 1;
-    public bool CanPrepareNextTimedRun => _shownTiming?.Complete == true && !IsTimingConnected && TimingRun == 1 && TimingCompetition?.Values.RunCount == 2;
+    public bool CanPrepareNextTimedRun => _shownTiming?.Complete == true && TimingRun == 1 && TimingCompetition?.Values.RunCount == 2;
     public string TimingContext => TimingCompetition is { } c
         ? $"{c.Values.ShortLabel}  /  Run {TimingRun} of {c.Values.RunCount}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
         : "Timing · choose a competition and run";
@@ -157,19 +167,17 @@ public sealed partial class MainViewModel
         {
             EnsureDeskClean();
             var timing = workspace.Timing ?? throw new SeriesFileException("Timing is unavailable in this workspace.");
-            if (timing.IsActive && (TimingCompetition?.Id != destination.Competition.Id || TimingRun != destination.Run))
-            { throw new DomainValidationException("Disconnect the device before changing the active timing run."); }
             SwitchSection(WorkspaceSection.Timing);
             if (!IsTimingSection) { return; }
             var lists = await workspace.ReadStartListsAsync(destination.Competition.Id);
             var list = lists.Revisions.Where(x => x.Plan.RunNumber == destination.Run).MaxBy(x => x.Revision)
                 ?? throw new DomainValidationException("Draw and save this run's start list first.");
+            if (timing.ListId != list.Id) { await timing.SelectRunAsync(list.Id); }
             TimingCompetition = Competitions.Single(x => x.Id == destination.Competition.Id);
             TimingRun = destination.Run;
             _timingList = list;
             if (!timing.IsActive)
             {
-                await Task.Run(() => timing.SelectRunAsync(list.Id));
                 SelectedTimingRow = null; StartBibText = FinishBibText = "";
                 if (timing.LastCaptureOptions is { } last)
                 {
@@ -206,10 +214,12 @@ public sealed partial class MainViewModel
             ConfigureTimingCheckpoints();
             RefreshTiming();
             RefreshTimingPorts();
-            _timingTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshTiming());
+            _timingTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) => RefreshTiming());
             _timingTimer.Start();
             NotifyTiming();
             SetStatus("Timing changes save automatically. Original device data and correction history are retained.");
+            if (!timing.IsActive && timingPreferencesStore?.Load() is not null && !IsTimingSimulator && !IsTimingReplay)
+            { await ConnectTimingAsync(); }
         });
     }
 
@@ -414,7 +424,7 @@ public sealed partial class MainViewModel
         var refreshing = IsRefreshingTimingUi;
         IsRefreshingTimingUi = true;
         try { RefreshTimingCore(); }
-        finally { IsRefreshingTimingUi = refreshing; if (!refreshing) { OnPropertyChanged(nameof(IsRefreshingTimingUi)); } }
+        finally { RefreshRunningTimes(); IsRefreshingTimingUi = refreshing; if (!refreshing) { OnPropertyChanged(nameof(IsRefreshingTimingUi)); } }
     }
 
     private void RefreshTimingCore()
@@ -455,8 +465,8 @@ public sealed partial class MainViewModel
         SelectedTimingHistory = TimingHistory.FirstOrDefault(x => x.Id == selectedHistory);
         var prefix = timing!.IsSimulation ? "TRAINING / REPLAY · " : "";
         TimingSummary = $"{prefix}{snapshot.Results.Count} starters · {snapshot.Results.Count(x => x.Status == TimingStatus.OnCourse)} on course · "
-            + $"{snapshot.Results.Count(x => x.Status == TimingStatus.Finished)} finished · {snapshot.Unresolved} to review"
-            + (snapshot.Complete ? " · Run classified" : " · Provisional");
+            + $"{snapshot.Results.Count(x => x.Status == TimingStatus.Finished)} finished"
+            + (snapshot.Complete ? " · Run complete" : "");
         NotifyTiming();
         RefreshRaceQueues();
     }
@@ -475,10 +485,9 @@ public sealed partial class MainViewModel
         for (var i = 0; i < rows.Length; i++)
         {
             if (i == target.Count) { target.Add(rows[i]); }
-            else if (target[i] != rows[i]
-                && (target[i].Result.Splits.Count != rows[i].Result.Splits.Count
-                    || !target[i].Result.Splits.SequenceEqual(rows[i].Result.Splits)
-                    || target[i] != (rows[i] with { Result = rows[i].Result with { Splits = target[i].Result.Splits } })))
+            else if (target[i].Total != rows[i].Total || target[i].TotalRank != rows[i].TotalRank
+                || !target[i].Result.Splits.SequenceEqual(rows[i].Result.Splits)
+                || target[i].Result != (rows[i].Result with { Splits = target[i].Result.Splits }))
             { target[i] = rows[i]; }
         }
     }
@@ -487,7 +496,7 @@ public sealed partial class MainViewModel
     {
         _timingTimer?.Stop(); _timingList = null; _shownTiming = null; _previousTiming = null;
         TimingCompetition = null; TimingRows.Clear(); TimingObservations.Clear(); TimingHistory.Clear();
-        TimingCheckpoints.Clear(); ShowTimingReview = false;
+        TimingCheckpoints.Clear(); ShowTimingCorrection = false;
         SelectedTimingRow = null; SelectedTimingObservation = null; SelectedTimingHistory = null;
         StartBibText = FinishBibText = TimingReason = CorrectedTimeText = "";
         IsTimingConnected = false; RefreshRaceQueues(); NotifyTiming();
