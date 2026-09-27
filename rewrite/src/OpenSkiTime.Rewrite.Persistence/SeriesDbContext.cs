@@ -4,7 +4,7 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Persistence;
 
-public sealed class SeriesDbContext(DbContextOptions<SeriesDbContext> options) : DbContext(options)
+public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> options) : DbContext(options)
 {
     internal const string Format = "OpenSkiTime.New/1";
     internal DbSet<SeriesRow> Series => Set<SeriesRow>();
@@ -128,6 +128,7 @@ public sealed class SeriesDbContext(DbContextOptions<SeriesDbContext> options) :
         start.HasIndex(x => new { x.ListId, x.Bib }).IsUnique();
         start.HasIndex(x => new { x.ListId, x.CompetitorId }).IsUnique();
         start.HasOne<StartListRow>().WithMany().HasForeignKey(x => x.ListId).OnDelete(DeleteBehavior.Restrict);
+        ConfigureTiming(modelBuilder);
     }
 }
 
@@ -229,6 +230,7 @@ internal sealed class StartListRow
     public DateTimeOffset? ApprovedAt { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public string? StartedBy { get; set; }
+    public string? SourceTimingVersion { get; set; }
     public string Operator { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public string PlanJson { get; set; } = string.Empty;

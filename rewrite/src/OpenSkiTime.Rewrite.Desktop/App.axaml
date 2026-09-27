@@ -213,6 +213,12 @@
     <Style Selector="DataGrid.raceGrid DataGridRow:pointerover">
       <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
     </Style>
+    <Style Selector="DataGrid.timingGrid DataGridColumnHeader">
+      <Setter Property="Padding" Value="6,0" />
+    </Style>
+    <Style Selector="DataGrid.timingGrid DataGridCell">
+      <Setter Property="FontSize" Value="14" />
+    </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:selected">
       <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />

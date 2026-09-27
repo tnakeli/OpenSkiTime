@@ -6,7 +6,7 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
-public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Settings }
+public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Settings }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
@@ -43,6 +43,9 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(IsCompetitorsSection))]
     [NotifyPropertyChangedFor(nameof(IsSettingsSection))]
     [NotifyPropertyChangedFor(nameof(IsDrawSection))]
+    [NotifyPropertyChangedFor(nameof(IsTimingSection))]
+    [NotifyPropertyChangedFor(nameof(IsFormSection))]
+    [NotifyPropertyChangedFor(nameof(TimingNavigationLabel))]
     [NotifyPropertyChangedFor(nameof(DrawNavigationLabel))]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private WorkspaceSection _activeSection = WorkspaceSection.Series;
@@ -51,6 +54,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public bool IsCompetitorsSection => ActiveSection == WorkspaceSection.Competitors;
     public bool IsSettingsSection => ActiveSection == WorkspaceSection.Settings;
     public bool IsDrawSection => ActiveSection == WorkspaceSection.Draw;
+    public bool IsTimingSection => ActiveSection == WorkspaceSection.Timing;
+    public bool IsFormSection => !IsDrawSection && !IsTimingSection;
 
     [RelayCommand] private void ShowSeries() => SwitchSection(WorkspaceSection.Series);
     [RelayCommand] private void ShowCompetitions() => SwitchSection(WorkspaceSection.Competitions);
@@ -63,7 +68,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     private void SwitchSection(WorkspaceSection section)
     {
-        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors or WorkspaceSection.Draw) && !CanEditCompetitions) { return; }
+        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors or WorkspaceSection.Draw or WorkspaceSection.Timing) && !CanEditCompetitions) { return; }
         if (IsDrawBusy) { return; }
         if (section != ActiveSection && !CanLeaveDrawInput()) { return; }
         if (section != ActiveSection && HasDeskDrafts
@@ -80,6 +85,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private string _fileLabel = "No series file open";
     public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime"
+        : IsTimingSection ? $"{FileLabel} · {TimingContext}"
         : IsDrawSection && DrawCompetition is { } c
             ? $"{FileLabel} · {c.Values.ShortLabel} · Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"} · Run {DrawRun}"
             : FileLabel;
@@ -136,6 +142,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [RelayCommand]
     private void NewSeries()
     {
+        if (workspace.Timing?.IsActive == true) { SetStatus("Disconnect timing before starting a new event file.", true); return; }
         if (!CanLeaveDrawInput()) { return; }
         if (HasDeskDrafts)
         {
@@ -215,6 +222,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     private async Task OpenPathAsync(string path)
     {
         var details = await workspace.OpenAsync(path);
+        ResetTimingUi();
         Apply(details);
         IsOpen = true;
         IsCreatingNew = false;
@@ -251,6 +259,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             EnsureDeskClean();
             await workspace.CloseAsync();
+            ResetTimingUi();
             _current = null;
             _settingDraw = true;
             DrawCompetition = null;
@@ -406,6 +415,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         if (_current?.Id != details.Id)
         {
+            ResetTimingUi();
             _settingDraw = true;
             DrawCompetition = null;
             DrawRevision = null;

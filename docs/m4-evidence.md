@@ -1,6 +1,6 @@
 # M4 — Prepare runs
 
-Implemented on `rewrite/codex`, 2026-09-27. Operator acceptance is pending; M5 timing capture has not started.
+Implemented on `rewrite/codex`, 2026-09-27. The following records the M4 verification boundary. Timing capture and its Run 2 integration were subsequently added in [M5](m5-evidence.md); hardware/operator acceptance is recorded separately.
 
 ## Workflow and boundaries
 

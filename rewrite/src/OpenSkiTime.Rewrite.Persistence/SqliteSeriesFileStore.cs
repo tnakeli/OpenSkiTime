@@ -307,6 +307,7 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
     private async Task<SeriesDetails> WriteAsync(Func<SeriesDbContext, Task> change, CancellationToken ct)
     {
         CheckOpen();
+        using var idleLease = AcquireIdleWriteLease();
         await _write.WaitAsync(ct);
         try
         {
@@ -366,6 +367,7 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
 
     public ValueTask DisposeAsync()
     {
+        if (_captureLease is not null) { throw new SeriesFileException("Timing capture must drain before closing this series."); }
         _disposed = true;
         _write.Dispose();
         return ValueTask.CompletedTask;

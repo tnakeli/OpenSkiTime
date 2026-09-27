@@ -51,11 +51,11 @@
         </DataGrid>
         <Grid Grid.Row="1" RowDefinitions="Auto,*" IsVisible="{Binding IsResultInputOpen}" IsEnabled="{Binding CanEditDrawResults}">
           <Grid ColumnDefinitions="*,Auto,8,Auto" Margin="0,0,0,8">
-            <TextBlock Text="Enter every starter's time (1:12.34) or DNS / DNF / DSQ / NPS. Create the start list to save." TextWrapping="Wrap" Classes="supportingText" Margin="0,0,12,0" />
-            <Button Grid.Column="1" Content="Paste results (Bib / Time / Status)" Command="{Binding PasteDrawResultsCommand}" Classes="secondaryAction" />
+            <TextBlock Text="{Binding RunInputHelp}" TextWrapping="Wrap" Classes="supportingText" Margin="0,0,12,0" />
+            <Button Grid.Column="1" Content="Paste results (Bib / Time / Status)" Command="{Binding PasteDrawResultsCommand}" IsVisible="{Binding !HasCapturedRunInput}" Classes="secondaryAction" />
             <Button Grid.Column="3" Content="Discard input" Command="{Binding DiscardRunInputCommand}" IsEnabled="{Binding HasUnsavedRunInput}" Classes="dangerAction" />
           </Grid>
-          <DataGrid Grid.Row="1" Name="DrawResultsGrid" Classes="raceGrid" ItemsSource="{Binding DrawResults}" AutoGenerateColumns="False" IsReadOnly="False" RowHeight="30" GridLinesVisibility="Horizontal">
+          <DataGrid Grid.Row="1" Name="DrawResultsGrid" Classes="raceGrid" ItemsSource="{Binding DrawResults}" AutoGenerateColumns="False" IsReadOnly="{Binding HasCapturedRunInput}" RowHeight="30" GridLinesVisibility="Horizontal">
             <DataGrid.Columns>
               <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" IsReadOnly="True" Width="65" />
               <DataGridTextColumn Header="CODE" Binding="{Binding Code}" IsReadOnly="True" Width="95" />

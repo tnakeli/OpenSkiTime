@@ -38,12 +38,13 @@
         <Button Content="2  Competitions" Command="{Binding ShowCompetitionsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitionsSection}" />
         <Button Content="3  Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
         <Button Name="DrawMenuButton" Content="{Binding DrawNavigationLabel}" Click="DrawMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsDrawSection}" />
+        <Button Name="TimingMenuButton" Content="{Binding TimingNavigationLabel}" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
       </StackPanel>
         <TextBlock Grid.Column="1" Text="{Binding FileLabel}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FileLabel}"
                    Classes="supportingText" VerticalAlignment="Center" Margin="16,0,0,0" />
       </Grid>
     </Border>
-    <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !IsDrawSection}">
+    <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsFormSection}">
       <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" HorizontalAlignment="Stretch">
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSeriesSection}">
           <StackPanel Spacing="14">
@@ -385,6 +386,7 @@
       </StackPanel>
     </ScrollViewer>
     <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />
+    <local:TimingView Name="TimingWorkspace" Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsTimingSection}" />
     <Border Grid.Row="3" Classes="statusBar" Classes.error="{Binding IsError}"
             BorderThickness="0,1,0,0" Padding="22,8">
       <StackPanel Orientation="Horizontal" Spacing="8">
@@ -392,6 +394,7 @@
         <TextBlock Text="!" FontWeight="Bold" Foreground="{DynamicResource ErrorBrush}" IsVisible="{Binding IsError}" />
         <TextBlock Text="{Binding StatusMessage}" Classes="statusText" Classes.error="{Binding IsError}"
                    FontSize="11" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding TimingCaptureLabel}" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="560" IsVisible="{Binding IsTimingConnected}" />
       </StackPanel>
     </Border>
   </Grid>

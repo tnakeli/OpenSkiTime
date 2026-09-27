@@ -175,6 +175,7 @@ internal sealed partial class SqliteSeriesFileSession
         Func<SeriesDbContext, SeriesRow, Task<T>> change, long expectedRevision, CancellationToken ct)
     {
         CheckOpen();
+        using var idleLease = AcquireIdleWriteLease();
         await _write.WaitAsync(ct);
         try
         {

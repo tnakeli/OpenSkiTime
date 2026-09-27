@@ -25,7 +25,7 @@ public sealed class HeadlessAppBuilder
         .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }
 
-public class DesktopWorkflowTests
+public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
     public async Task CompetitionDrawUsesAllMenAndRejectsMixedEntriesWithoutFiltering()
