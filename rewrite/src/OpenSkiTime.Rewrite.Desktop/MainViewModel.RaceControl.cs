@@ -33,6 +33,7 @@ public sealed partial class MainViewModel
     public string SelectedTimingIdentity => SelectedTimingRow?.Label ?? "Select a competitor";
     public string SelectedTimingProblem => SelectedTimingRow?.Result.Status == TimingStatus.Review ? SelectedTimingRow.Detail : "";
     public bool HasSelectedTimingProblem => SelectedTimingProblem.Length > 0;
+    public bool CanReturnToStart => RaceFlow.CanReturnToStart(SelectedTimingRow?.Result);
     private ObservationReview? LastFinishObservation => workspace.Timing?.Snapshot?.Observations.LastOrDefault(x =>
         x.Observation.Channel == 1 && x.State is "Assigned" or "Unassigned");
     public bool CanIgnoreLastFinish => LastFinishObservation is not null;
@@ -151,6 +152,16 @@ public sealed partial class MainViewModel
         SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == bib);
         await ClassifyTimingAsync("DNS");
     }
+
+    [RelayCommand(CanExecute = nameof(CanReturnToStart))]
+    private async Task ReturnToStartAsync() => await GuardAsync(async () =>
+    {
+        if (SelectedTimingRow?.Result is not { StartKey: { } key } row || workspace.Timing is not { } timing) { return; }
+        await timing.ReturnToStartAsync(row.Bib, key, TimingOperator);
+        RefreshTiming();
+        SetStatus($"Bib {row.Bib} returned to start. Original pulse retained."
+            + (timing.IsHeld(0) ? " Start is still on hold." : " Ready for the next start impulse."));
+    });
 
     [RelayCommand] private async Task IgnoreLastFinishAsync() => await GuardAsync(async () =>
     {
