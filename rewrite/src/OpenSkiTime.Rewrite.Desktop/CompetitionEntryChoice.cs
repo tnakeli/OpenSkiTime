@@ -8,7 +8,6 @@ public sealed partial class CompetitionEntryChoice(CompetitionDetails competitio
 {
     public Guid CompetitionId => competition.Id;
     public string Label => competition.Values.ShortLabel;
-    public string Name => competition.Values.Name;
     public int? ImportedBib => importedBib;
     public bool SavedParticipation { get; private set; } = participates;
     public bool IsChanged => IsParticipating != SavedParticipation;

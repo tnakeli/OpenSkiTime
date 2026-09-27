@@ -64,7 +64,7 @@ public partial class MainWindow : Window
         var menu = new MenuFlyout { Placement = Avalonia.Controls.PlacementMode.Bottom };
         foreach (var competition in vm.DrawMenu)
         {
-            var item = new MenuItem { Header = $"{competition.Competition.Values.ShortLabel} · {competition.Competition.Values.Name}" };
+            var item = new MenuItem { Header = competition.Competition.Values.ShortLabel };
             foreach (var run in competition.Runs)
             {
                 item.Items.Add(new MenuItem { Header = $"Run {run}", Command = vm.OpenDrawRunCommand,

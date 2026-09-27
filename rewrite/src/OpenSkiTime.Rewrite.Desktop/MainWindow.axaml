@@ -139,8 +139,7 @@
               <DataGrid.Columns>
                 <DataGridTextColumn Header="" Binding="{Binding ImportMarker}" IsReadOnly="True" Width="48" />
                 <DataGridTextColumn Header="DATE" Binding="{Binding Values.Date}" Width="130" />
-                <DataGridTextColumn Header="ID" Binding="{Binding Values.ShortLabel}" Width="150" />
-                <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.Name}" Width="*" />
+                <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.ShortLabel}" Width="*" />
                 <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Values.Discipline}" Width="135" />
                 <DataGridTextColumn Header="RUNS" Binding="{Binding Values.RunCount}" Width="80" />
               </DataGrid.Columns>
@@ -157,14 +156,14 @@
                   </Border>
                 </Grid>
                 <StackPanel Spacing="12">
-                  <Grid ColumnDefinitions="2*,12,*,12,232">
+                  <Grid ColumnDefinitions="160,12,*,12,232">
                     <StackPanel Grid.Column="0" Classes="field">
-                      <TextBlock Text="NAME *" Classes="fieldLabel" />
-                      <TextBox Text="{Binding CompetitionName}" />
+                      <TextBlock Text="SHORT NAME *" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionShortLabel}" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" Classes="field">
-                      <TextBlock Text="SHORT LABEL *" Classes="fieldLabel" />
-                      <TextBox Text="{Binding CompetitionShortLabel}" />
+                      <TextBlock Text="PUBLIC NAME *" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionName}" ToolTip.Tip="Long name reserved for future public-facing views." />
                     </StackPanel>
                     <StackPanel Grid.Column="4" Classes="field">
                       <TextBlock Text="DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
