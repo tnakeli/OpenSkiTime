@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.Rewrite.Domain;
@@ -11,6 +12,12 @@ public sealed partial class MainViewModel
 {
     private TimingSnapshot? _queueSnapshot;
     private int _queueCheckpoint;
+    private DataGridCollectionView? _rankingView;
+    public ObservableCollection<TimingGridRow> AtStartRows { get; } = [];
+    public ObservableCollection<TimingGridRow> RunningRows { get; } = [];
+    public ObservableCollection<TimingGridRow> RankingRows { get; } = [];
+    public DataGridCollectionView RankingView => _rankingView ??= new(RankingRows);
+    public bool HasTimingCategories => _desk?.Categories.Count > 0;
     public ObservableCollection<TimingGridRow> OnCourseRows { get; } = [];
     public ObservableCollection<TimingGridRow> FinishedTimingRows { get; } = [];
     public ObservableCollection<TimingGridRow> IntermediateTimingRows { get; } = [];
@@ -29,7 +36,6 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _finishHoldLabel = "Hold finish";
     [ObservableProperty] private string _intermediateHoldLabel = "Hold intermediate";
     public bool HasTimingIntermediates => TimingCheckpoints.Count > 0;
-    public Avalonia.Controls.GridLength IntermediatePaneHeight => HasTimingIntermediates ? new(1.4, Avalonia.Controls.GridUnitType.Star) : new(0);
     public string SelectedTimingIdentity => SelectedTimingRow?.Label ?? "Select a competitor";
     public string SelectedTimingProblem => SelectedTimingRow?.Result.Status == TimingStatus.Review ? SelectedTimingRow.Detail : "";
     public bool HasSelectedTimingProblem => SelectedTimingProblem.Length > 0;
@@ -45,8 +51,14 @@ public sealed partial class MainViewModel
     private void RefreshRunningTimes()
     {
         var timing = workspace.Timing;
-        foreach (var row in TimingRows.Concat(OnCourseRows).Concat(IntermediateTimingRows))
+        foreach (var row in TimingRows.Concat(OnCourseRows).Concat(IntermediateTimingRows).Concat(RunningRows))
         { row.Clock.Time = TimingTime.Format(row.Result.Status == TimingStatus.OnCourse ? timing?.RunningHundredths(row.Result.StartKey) : row.Result.Hundredths); }
+        foreach (var row in AtStartRows) { row.Clock.Marker = row.Bib == timing?.ArmedStart ? "▶" : ""; }
+        foreach (var row in RunningRows)
+        {
+            row.Clock.Marker = row.IsLatestFinish ? "◆" : row.Bib == timing?.ArmedFinish ? "▶" : "";
+            if (row.Result.Status == TimingStatus.Finished) { row.Clock.Time = ""; }
+        }
         ExpectedFinishTime = OnCourseRows.FirstOrDefault(x => x.Bib == timing?.ArmedFinish)?.Clock.Time ?? "—";
     }
 
@@ -93,8 +105,9 @@ public sealed partial class MainViewModel
         TimingCheckpoints.Clear();
         for (var i = 1; i <= _timingList!.Plan.Competition.IntermediateCount; i++) { TimingCheckpoints.Add(i); }
         SelectedTimingCheckpoint = 1;
+        _queueSnapshot = null;
         OnPropertyChanged(nameof(HasTimingIntermediates));
-        OnPropertyChanged(nameof(IntermediatePaneHeight));
+        OnPropertyChanged(nameof(HasTimingCategories));
     }
 
     private void RefreshRaceQueues()
@@ -102,7 +115,7 @@ public sealed partial class MainViewModel
         var timing = workspace.Timing;
         var snapshot = timing?.Snapshot;
         if (snapshot is null || !HasTimingRun)
-        { OnCourseRows.Clear(); FinishedTimingRows.Clear(); IntermediateTimingRows.Clear(); _queueSnapshot = null; return; }
+        { OnCourseRows.Clear(); FinishedTimingRows.Clear(); IntermediateTimingRows.Clear(); AtStartRows.Clear(); RunningRows.Clear(); RankingRows.Clear(); _queueSnapshot = null; return; }
         if (!ReferenceEquals(snapshot, _queueSnapshot) || _queueCheckpoint != SelectedTimingCheckpoint)
         {
             _queueSnapshot = snapshot; _queueCheckpoint = SelectedTimingCheckpoint;
@@ -116,6 +129,25 @@ public sealed partial class MainViewModel
             var finishOrder = snapshot.Observations.Select((x, i) => (x.Observation.Key, i)).ToDictionary(x => x.Key, x => x.i);
             SyncTimingRows(FinishedTimingRows, snapshot.Results.Where(x => x.FinishKey is not null || x.Status == TimingStatus.Finished)
                 .OrderByDescending(x => x.FinishKey is null ? -1 : finishOrder.GetValueOrDefault(x.FinishKey)).Select(Map).ToArray());
+            var latest = FinishedTimingRows.FirstOrDefault(x => x.Result.FinishKey is not null)?.Bib;
+            TimingGridRow Present(TimingGridRow row) => row with
+            {
+                IsLatestFinish = row.Bib == latest,
+                Category = HasTimingCategories ? CategoryResolver.Resolve(row.Result.Entry.Entrant.Athlete, _desk!.Categories) : ""
+            };
+            SyncTimingRows(AtStartRows, RaceFlow.Waiting(snapshot).Select(Map).ToArray());
+            SyncTimingRows(RunningRows, onCourse.Concat(FinishedTimingRows.Take(3)).Select(Present).ToArray());
+            var ranked = currentRows.Values.Where(x => x.Result.Status != TimingStatus.Ready && x.Result.Status != TimingStatus.OnCourse)
+                .Where(x => x.Result.Status != TimingStatus.Review || x.Result.FinishKey is not null).Select(Present).ToArray();
+            long? RankedTime(TimingGridRow row) => row.Result.Status == TimingStatus.Finished ? ShowTimingTotal ? row.Total : row.Result.Hundredths : null;
+            var categoryOrder = _desk?.Categories.GroupBy(x => x.Values.Label).ToDictionary(x => x.Key, x => x.Min(r => r.Values.DisplayOrder)) ?? [];
+            if (HasTimingCategories && RankingView.GroupDescriptions.Count == 0)
+            { RankingView.GroupDescriptions.Add(new DataGridPathGroupDescription(nameof(TimingGridRow.Category))); }
+            else if (!HasTimingCategories && RankingView.GroupDescriptions.Count > 0) { RankingView.GroupDescriptions.Clear(); }
+            SyncTimingRows(RankingRows, ranked.OrderBy(x => categoryOrder.GetValueOrDefault(x.Category, int.MaxValue))
+                .ThenBy(x => x.Category, StringComparer.Ordinal).ThenBy(x => RankedTime(x) ?? long.MaxValue).ThenBy(x => x.Position)
+                .Select(x => x with { DisplayRank = RankedTime(x) is { } time
+                    ? ranked.Count(y => y.Category == x.Category && RankedTime(y) is { } other && other < time) + 1 : null }).ToArray());
             OnCourseLabel = $"ON COURSE · {onCourse.Length}";
             FinishListLabel = $"FINISHED · {FinishedTimingRows.Count}";
             OnPropertyChanged(nameof(LastFinishLabel));
@@ -124,7 +156,7 @@ public sealed partial class MainViewModel
         }
         string Expected(int channel, string empty) => timing!.IsHeld(channel) ? "HOLD · impulses kept unassigned"
             : snapshot.Results.FirstOrDefault(x => x.Bib == timing.ExpectedBib(channel)) is { } row ? $"{row.Bib} · {row.Name}" : empty;
-        NextStartLabel = Expected(0, "Choose a starter / connect to follow order");
+        NextStartLabel = Expected(0, "No starter selected");
         ExpectedFinishLabel = Expected(1, "No competitor expected");
         ExpectedIntermediateLabel = Expected(SelectedTimingCheckpoint + 1, "No competitor approaching");
         StartHoldLabel = timing!.IsHeld(0) ? "Resume start" : "Hold start";

@@ -13,6 +13,11 @@ namespace OpenSkiTime.Rewrite.Desktop;
 
 public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalRank)
 {
+    public string Category { get; init; } = "";
+    public int? DisplayRank { get; init; }
+    public bool IsLatestFinish { get; init; }
+    public string FinishMarker => IsLatestFinish ? "◆" : "";
+    public IReadOnlyList<string> Intermediates => Result.Splits.Select(x => x.Time).ToArray();
     public RunningTimeDisplay Clock { get; } = new();
     public int Position => Result.Entry.Position;
     public int Bib => Result.Bib;
@@ -31,6 +36,8 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
 
 public sealed class RunningTimeDisplay : INotifyPropertyChanged
 {
+    private string _marker = "";
+    public string Marker { get => _marker; set { if (_marker != value) { _marker = value; PropertyChanged?.Invoke(this, new(nameof(Marker))); } } }
     private string _time = "—";
     public string Time { get => _time; set { if (_time != value) { _time = value; PropertyChanged?.Invoke(this, new(nameof(Time))); } } }
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -489,6 +496,7 @@ public sealed partial class MainViewModel
         {
             if (i == target.Count) { target.Add(rows[i]); }
             else if (target[i].Total != rows[i].Total || target[i].TotalRank != rows[i].TotalRank
+                || target[i].Category != rows[i].Category || target[i].DisplayRank != rows[i].DisplayRank || target[i].IsLatestFinish != rows[i].IsLatestFinish
                 || !target[i].Result.Splits.SequenceEqual(rows[i].Result.Splits)
                 || target[i].Result != (rows[i].Result with { Splits = target[i].Result.Splits }))
             { target[i] = rows[i]; }
