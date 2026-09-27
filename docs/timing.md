@@ -12,6 +12,8 @@
 
 Timing changes save immediately, independently of competitor-grid Save changes. The race board keeps the start list on the left, competitors on course/intermediate arrivals in the middle, and expected/recent finishes on the right. **CURRENT** shows each racer's running time, with a larger clock for the expected finisher. This display estimate follows received device time and a monotonic local clock; final results use only recorded device impulses. It cannot reconstruct a live clock from an old event file without a new matching device clock reference. Run 2 includes combined totals. Conflicting/missing impulses do not produce an invented result: use the competitor's correction action when no valid time exists.
 
+Timy's START/STOP keyboard impulses (`C0M`/`C1M`) can arrive in hundredths. They calculate and display immediately, with their original precision and manual-input marker retained. For a **No time** result, select the competitor to see the specific cause beneath the quick actions.
+
 For USB/serial intermediates, configure the competition's intermediate count before drawing, then enter the physical channels in course order in Settings (for example `2,3` for I1/I2). Each must differ from start/finish; one local adapter has channels 0–8. Select the checkpoint in the middle pane to inspect its approaching racers or override its next bib. Split times subtract the full-precision start timestamp and truncate to hundredths; incompatible clocks, duplicate assignments and low source precision require review. ALGE Results currently supports start/finish only. Physical intermediate inputs still require hardware rehearsal.
 
 ## ALGE Timy 2 / Timy 3 native USB — Windows x64

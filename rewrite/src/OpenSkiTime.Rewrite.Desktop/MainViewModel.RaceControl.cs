@@ -31,6 +31,8 @@ public sealed partial class MainViewModel
     public bool HasTimingIntermediates => TimingCheckpoints.Count > 0;
     public Avalonia.Controls.GridLength IntermediatePaneHeight => HasTimingIntermediates ? new(1.4, Avalonia.Controls.GridUnitType.Star) : new(0);
     public string SelectedTimingIdentity => SelectedTimingRow?.Label ?? "Select a competitor";
+    public string SelectedTimingProblem => SelectedTimingRow?.Result.Status == TimingStatus.Review ? SelectedTimingRow.Detail : "";
+    public bool HasSelectedTimingProblem => SelectedTimingProblem.Length > 0;
     private ObservationReview? LastFinishObservation => workspace.Timing?.Snapshot?.Observations.LastOrDefault(x =>
         x.Observation.Channel == 1 && x.State is "Assigned" or "Unassigned");
     public bool CanIgnoreLastFinish => LastFinishObservation is not null;

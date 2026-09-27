@@ -51,9 +51,14 @@ public static class TimingEngine
             else if (starts.Length == 1 && finishes.Length == 1)
             {
                 var elapsed = finishes[0].DeviceTicks!.Value - starts[0].DeviceTicks!.Value;
-                if (starts[0].ClockId != finishes[0].ClockId || elapsed < TimingTime.TicksPerHundredth || elapsed > TimeSpan.FromHours(2).Ticks
-                    || starts[0].Precision < 3 || finishes[0].Precision < 3)
-                { status = TimingStatus.Review; detail = "Check clock continuity and start/finish times. Use an audited time correction if necessary."; }
+                if (starts[0].ClockId != finishes[0].ClockId)
+                { status = TimingStatus.Review; detail = "Start and finish belong to different device clock sessions. Correct the time using verified timing."; }
+                else if (elapsed < TimingTime.TicksPerHundredth)
+                { status = TimingStatus.Review; detail = "Finish is not at least one hundredth after start. Check the assigned competitor and device clock."; }
+                else if (elapsed > TimeSpan.FromHours(2).Ticks)
+                { status = TimingStatus.Review; detail = "Elapsed time exceeds two hours. Check the device date or correct the time."; }
+                else if (!HasUsablePrecision(starts[0]) || !HasUsablePrecision(finishes[0]))
+                { status = TimingStatus.Review; detail = "Device output precision is too low. Gate inputs need at least milliseconds; device keyboard inputs need at least hundredths."; }
                 else
                 {
                     status = TimingStatus.Finished;
@@ -71,7 +76,7 @@ public static class TimingEngine
                 var pulse = pulses.FirstOrDefault();
                 if (pulse is null) { return new TimingSplit(number, null, null, "Awaiting intermediate"); }
                 var valid = pulses.Length == 1 && starts.Length == 1 && pulse.ClockId == starts[0].ClockId
-                    && pulse.Precision >= 3 && starts[0].Precision >= 3 && pulse.DeviceTicks > starts[0].DeviceTicks
+                    && HasUsablePrecision(pulse) && HasUsablePrecision(starts[0]) && pulse.DeviceTicks > starts[0].DeviceTicks
                     && pulse.DeviceTicks - starts[0].DeviceTicks <= TimeSpan.FromHours(2).Ticks
                     && (finishes.Length == 0 || pulse.DeviceTicks < finishes[0].DeviceTicks);
                 return new TimingSplit(number, pulse.Key, valid ? (pulse.DeviceTicks - starts[0].DeviceTicks) / TimingTime.TicksPerHundredth : null,
@@ -88,6 +93,10 @@ public static class TimingEngine
             rows.Select(x => x with { Rank = ranks.TryGetValue(x.CompetitorId, out var rank) ? rank : null }).ToArray(),
             reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray());
     }
+
+    // Timy keyboard impulses carry the manual marker and may contain only hundredths.
+    // They use the same exact scale/calculation; this does not claim automatic gate timing or verified EET.
+    private static bool HasUsablePrecision(TimingObservation observation) => observation.Precision >= (observation.Manual ? 2 : 3);
 
     public static string DecisionKey(TimingDecision decision)
     {
