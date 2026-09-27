@@ -17,7 +17,11 @@
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="toolbarAction" />
-          <Button Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="toolbarAction" />
+          <SplitButton Name="OpenFileButton" Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="toolbarAction">
+            <SplitButton.Flyout>
+              <MenuFlyout Placement="Bottom" />
+            </SplitButton.Flyout>
+          </SplitButton>
           <Border Width="1" Background="#42606A" Margin="4,6" />
           <Button Content="Backup / transfer" Command="{Binding BackupCommand}" IsEnabled="{Binding IsOpen}" Classes="toolbarAction" />
           <Button Content="Close file" Command="{Binding CloseSeriesCommand}" IsEnabled="{Binding IsOpen}" Classes="toolbarAction" />
@@ -237,12 +241,34 @@
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsCompetitorsSection}">
           <StackPanel Spacing="10">
             <StackPanel Spacing="1"><TextBlock Text="SERIES / REGISTRATION" Classes="eyebrow" /><TextBlock Text="Competitors" Classes="sectionTitle" /></StackPanel>
-            <Grid ColumnDefinitions="*,10,150,10,Auto">
+            <Grid ColumnDefinitions="*,10,150">
               <TextBox Name="CompetitorFilterInput" Text="{Binding CompetitorFilterText}" Watermark="Filter name, club, code or category" />
               <ComboBox Grid.Column="2" ItemsSource="{Binding CompetitorGroupings}" SelectedItem="{Binding CompetitorGrouping}" />
-              <Button Grid.Column="4" Content="Commit Changes" Command="{Binding CommitDeskChangesCommand}" IsEnabled="{Binding HasDeskChangeLog}" Classes="primaryAction" />
             </Grid>
             <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+            <Border Classes="subtleSurface" Padding="10,7">
+              <Grid ColumnDefinitions="Auto,8,*,Auto,8,Auto" VerticalAlignment="Center">
+                <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center" IsVisible="{Binding HasDeskChangeLog}" />
+                <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding !HasDeskChangeLog}" />
+                <TextBlock Grid.Column="2" Text="{Binding UnsavedChangesText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <Button Grid.Column="3" Content="{Binding ChangeReviewButtonText}" Command="{Binding ToggleChangeReviewCommand}"
+                        IsEnabled="{Binding HasDeskChangeLog}" Classes="secondaryAction" />
+                <Button Grid.Column="5" Content="Save changes" Command="{Binding CommitDeskChangesCommand}"
+                        IsEnabled="{Binding HasDeskChangeLog}" Classes="primaryAction" />
+              </Grid>
+            </Border>
+            <Border Name="ChangeReviewPanel" Classes="subtleSurface" Padding="10,8" IsVisible="{Binding IsChangeReviewOpen}">
+              <StackPanel Spacing="5">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="UNSAVED CHANGES" Classes="fieldLabel" VerticalAlignment="Center" />
+                  <Button Grid.Column="1" Content="Discard all changes" Command="{Binding DiscardDeskChangesCommand}"
+                          Classes="dangerAction" />
+                </Grid>
+                <ScrollViewer MaxHeight="135"><ItemsControl ItemsSource="{Binding DeskChangeLog}"><ItemsControl.ItemTemplate><DataTemplate>
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,2"><TextBlock Text="{Binding DisplayLabel}" ToolTip.Tip="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Undo" Click="RestoreDeskChange_Click" Classes="secondaryAction" /></Grid>
+                </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+              </StackPanel>
+            </Border>
             <DataGrid Name="CompetitorGrid" Classes="raceGrid" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
                       SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
                       MinHeight="300" RowHeight="34" ColumnHeaderHeight="30" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
@@ -252,7 +278,7 @@
                 <MenuItem Header="Copy selected" InputGesture="Ctrl+C" Click="CopyContext_Click" />
                 <Separator />
                 <MenuItem Header="Delete selected rows" InputGesture="Delete" Click="DeleteContext_Click" />
-                <MenuItem Header="Restore selected row" InputGesture="Ctrl+R" Click="RestoreRowContext_Click" />
+                <MenuItem Header="Undo changes to selected row" InputGesture="Ctrl+R" Click="RestoreRowContext_Click" />
               </ContextMenu></DataGrid.ContextMenu>
               <DataGrid.Columns>
                 <DataGridTextColumn Header="" Binding="{Binding ChangeMarker}" IsReadOnly="True" CanUserSort="False" Width="58" />
@@ -274,12 +300,6 @@
             <Border Classes="subtleSurface" Padding="10,8" IsVisible="{Binding SelectedCompetitorRow.NeedsApproval}"><StackPanel Orientation="Horizontal" Spacing="12">
               <TextBlock Text="{Binding SelectedCompetitorRow.WarningText}" Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center" />
               <CheckBox Content="Match checked" IsChecked="{Binding SelectedCompetitorRow.WarningApproved}" VerticalAlignment="Center" />
-            </StackPanel></Border>
-            <Border Classes="subtleSurface" Padding="10,8" IsVisible="{Binding HasDeskChangeLog}"><StackPanel Spacing="5">
-              <TextBlock Text="PENDING CHANGES" Classes="fieldLabel" />
-              <ScrollViewer MaxHeight="135"><ItemsControl ItemsSource="{Binding DeskChangeLog}"><ItemsControl.ItemTemplate><DataTemplate>
-                <Grid ColumnDefinitions="*,Auto" Margin="0,2"><TextBlock Text="{Binding DisplayLabel}" ToolTip.Tip="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Restore" Click="RestoreDeskChange_Click" Classes="secondaryAction" /></Grid>
-              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
             </StackPanel></Border>
             <Expander Header="Update from FIS" IsExpanded="{Binding IsFisPanelOpen}" HorizontalAlignment="Stretch">
               <Border Classes="subtleSurface" Padding="12,10" Margin="0,8,0,0">
@@ -305,7 +325,7 @@
                   <ListBox Name="FisSearchResultsList" ItemsSource="{Binding FisSearchResults}" SelectionMode="Multiple" SelectionChanged="FisSearchResults_SelectionChanged" MaxHeight="150">
                     <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" FontSize="12" /></DataTemplate></ListBox.ItemTemplate>
                   </ListBox>
-                  <TextBlock Text="Changes appear in the grid for review and are saved only with Commit Changes." Classes="supportingText" />
+                  <TextBlock Text="Review highlighted changes, then choose Save changes above the grid." Classes="supportingText" />
                 </StackPanel>
               </Border>
             </Expander>

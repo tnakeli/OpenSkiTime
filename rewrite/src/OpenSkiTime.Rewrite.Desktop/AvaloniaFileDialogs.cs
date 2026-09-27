@@ -9,6 +9,7 @@ public interface IFileDialogs
     Task<string?> ChooseOpenAsync();
     Task<string?> ChooseBackupAsync(string suggestedName);
     Task<bool> ConfirmRemoveAsync(string competitionName);
+    Task<bool> ConfirmDiscardChangesAsync(int changeCount);
 }
 
 public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
@@ -49,28 +50,34 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
     }
 
     public Task<bool> ConfirmRemoveAsync(string competitionName)
-        => ConfirmAsync("competition", competitionName);
+        => ConfirmAsync("Remove competition", $"Remove competition '{competitionName}' from this series?",
+            "Remove", "Cancel");
 
-    private async Task<bool> ConfirmAsync(string kind, string name)
+    public Task<bool> ConfirmDiscardChangesAsync(int changeCount)
+        => ConfirmAsync("Discard all changes",
+            $"Discard all {changeCount} unsaved changes? This includes edits and pasted data made since the last save.",
+            "Discard all", "Keep changes");
+
+    private async Task<bool> ConfirmAsync(string title, string message, string actionLabel, string cancelLabel)
     {
         var prompt = new Window
         {
-            Title = $"Remove {kind}", Width = 360, Height = 150,
+            Title = title, Width = 440, Height = 170,
             CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
         };
-        var remove = new Button { Content = "Remove", Classes = { "dangerAction" } };
-        var cancel = new Button { Content = "Cancel", Classes = { "secondaryAction" } };
-        remove.Click += (_, _) => prompt.Close(true);
+        var action = new Button { Content = actionLabel, Classes = { "dangerAction" } };
+        var cancel = new Button { Content = cancelLabel, Classes = { "secondaryAction" } };
+        action.Click += (_, _) => prompt.Close(true);
         cancel.Click += (_, _) => prompt.Close(false);
         prompt.Content = new StackPanel
         {
             Margin = new Avalonia.Thickness(18), Spacing = 16,
             Children =
             {
-                new TextBlock { Text = $"Remove {kind} '{name}' from this series?", TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
                 new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8,
                     HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-                    Children = { cancel, remove } },
+                    Children = { cancel, action } },
             },
         };
         return await prompt.ShowDialog<bool>(owner);

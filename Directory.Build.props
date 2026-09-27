@@ -8,9 +8,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!--
       NU1903 = transitive package has a known vulnerability. Keep it as a
-      warning so it stays visible, but do not fail the build for upstream
-      issues we cannot fix from this repository. Update upstream packages
-      (EF Core, Avalonia) when fixed versions are available.
+      warning so it stays visible while affected transitive packages are
+      upgraded in Directory.Packages.props. Do not suppress the audit result.
     -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>

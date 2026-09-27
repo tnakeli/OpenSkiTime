@@ -10,9 +10,13 @@ public enum WorkspaceSection { Series, Competitions, Competitors, Settings }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
-    CategoryRulePresetStore? categoryRulePresetStore = null) : ObservableObject, IDisposable
+    CategoryRulePresetStore? categoryRulePresetStore = null,
+    RecentSeriesStore? recentSeriesStore = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
+    private readonly RecentSeriesStore _recentSeriesStore = recentSeriesStore ?? new();
+    private ObservableCollection<string>? _recentFiles;
+    public ObservableCollection<string> RecentFiles => _recentFiles ??= new(_recentSeriesStore.Load());
     private SeriesDetails? _current;
     private Guid? _editingCompetitionId;
 
@@ -60,7 +64,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             && section != WorkspaceSection.Settings
             && !(ActiveSection == WorkspaceSection.Settings && section == WorkspaceSection.Competitors))
         {
-            SetStatus("Commit or restore competitor changes before leaving this view.", error: true);
+            SetStatus("Save or discard unsaved changes before leaving this view.", error: true);
             return;
         }
         ActiveSection = section;
@@ -125,7 +129,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         if (HasDeskDrafts)
         {
-            SetStatus("Commit or restore competitor changes before starting a new series.", error: true);
+            SetStatus("Save or discard unsaved changes before starting a new series.", error: true);
             return;
         }
         IsCreatingNew = true;
@@ -166,6 +170,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             IsCreatingNew = false;
             await LoadCompetitorDeskAsync();
             ActiveSection = WorkspaceSection.Competitions;
+            RememberCurrentFile();
             SetStatus("Event series created and saved.");
         });
     }
@@ -178,14 +183,55 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             EnsureDeskClean();
             var path = await dialogs.ChooseOpenAsync();
             if (path is null) { return; }
-            var details = await workspace.OpenAsync(path);
-            Apply(details);
-            IsOpen = true;
-            IsCreatingNew = false;
-            await LoadCompetitorDeskAsync();
-            ActiveSection = WorkspaceSection.Competitions;
-            SetStatus("Event series opened.");
+            await OpenPathAsync(path);
         });
+    }
+
+    [RelayCommand]
+    private async Task OpenRecentSeriesAsync(string path)
+    {
+        await GuardAsync(async () =>
+        {
+            EnsureDeskClean();
+            if (!File.Exists(path))
+            {
+                RecentFiles.Remove(path);
+                throw new SeriesFileException("That recent event file was not found. Use Open file to locate it.");
+            }
+            await OpenPathAsync(path);
+        });
+    }
+
+    private async Task OpenPathAsync(string path)
+    {
+        var details = await workspace.OpenAsync(path);
+        Apply(details);
+        IsOpen = true;
+        IsCreatingNew = false;
+        await LoadCompetitorDeskAsync();
+        ActiveSection = WorkspaceSection.Competitions;
+        RememberCurrentFile();
+        SetStatus("Event series opened.");
+    }
+
+    private void RememberCurrentFile()
+    {
+        if (workspace.FilePath is not { } path) { return; }
+        for (var index = RecentFiles.Count - 1; index >= 0; index--)
+        {
+            if (string.Equals(RecentFiles[index], path, OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            {
+                RecentFiles.RemoveAt(index);
+            }
+        }
+        RecentFiles.Insert(0, path);
+        while (RecentFiles.Count > 10) { RecentFiles.RemoveAt(RecentFiles.Count - 1); }
+        try { _recentSeriesStore.Record(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A failed convenience-list write must not invalidate an opened event file.
+        }
     }
 
     [RelayCommand]

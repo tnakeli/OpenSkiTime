@@ -28,6 +28,30 @@ public sealed class HeadlessAppBuilder
 public class DesktopWorkflowTests
 {
     [Fact]
+    public void RecentSeriesStoreKeepsTenExistingFilesInOpenOrder()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-recent-ui", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var store = new RecentSeriesStore(folder);
+            var files = Enumerable.Range(0, 12).Select(index => Path.Combine(folder, $"series-{index}.ost")).ToArray();
+            foreach (var file in files)
+            {
+                File.WriteAllText(file, string.Empty);
+                store.Record(file);
+            }
+            Assert.Equal(files.Reverse().Take(10), new RecentSeriesStore(folder).Load());
+            store.Record(files[5]);
+            Assert.Equal(files[5], store.Load()[0]);
+            Assert.Equal(10, store.Load().Count);
+            File.Delete(files[5]);
+            Assert.DoesNotContain(files[5], store.Load());
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
     public async Task CategoryRulePresetCanBeSavedAndLoadedLocally()
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-rules-ui", Guid.NewGuid().ToString("N"));
@@ -65,7 +89,7 @@ public class DesktopWorkflowTests
             {
                 NewPath = file, OpenPath = file, BackupPath = file + ".bak"
             },
-                categoryRulePresetStore: preset);
+                categoryRulePresetStore: preset, recentSeriesStore: new RecentSeriesStore(folder));
             vm.OpenSeriesCommand.Execute(null);
             await vm.OpenSeriesCommand.ExecutionTask!;
             vm.LoadCategoryRulesPresetCommand.Execute(null);
@@ -114,7 +138,7 @@ public class DesktopWorkflowTests
             var vm = new MainViewModel(workspace, new FileDialogsStub
             {
                 NewPath = file, OpenPath = file, BackupPath = file + ".bak"
-            }, fisStore: cache);
+            }, fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
             vm.OpenSeriesCommand.Execute(null);
             await vm.OpenSeriesCommand.ExecutionTask!;
             vm.StageFisUpdatesCommand.Execute(null);
@@ -148,7 +172,8 @@ public class DesktopWorkflowTests
             }
             await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
             var dialogs = new FileDialogsStub { NewPath = file, OpenPath = file, BackupPath = file + ".bak" };
-            var vm = new MainViewModel(workspace, dialogs, fisStore: cache);
+            var vm = new MainViewModel(workspace, dialogs, fisStore: cache,
+                recentSeriesStore: new RecentSeriesStore(root));
             var window = new MainWindow { DataContext = vm };
             window.WindowState = WindowState.Normal;
             window.Width = 1200;
@@ -206,7 +231,7 @@ public class DesktopWorkflowTests
             window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(3, grid.SelectedItems.OfType<CompetitorGridRow>().Count(x => !x.IsPlaceholder));
-            Click(window, "Commit Changes");
+            Click(window, "Save changes");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             var saved = (await workspace.ReadCompetitorDeskAsync()).Competitors;
             Assert.Equal(3, saved.Count);
@@ -237,7 +262,7 @@ public class DesktopWorkflowTests
             window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(3, vm.DeskChangeLog.Count(x => x.Kind == DeskChangeKind.Delete));
-            Click(window, "Commit Changes");
+            Click(window, "Save changes");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.Empty((await workspace.ReadCompetitorDeskAsync()).Competitors);
             window.Close();
@@ -297,7 +322,8 @@ public class DesktopWorkflowTests
             var dialogs = new FileDialogsStub { NewPath = file, OpenPath = backup, BackupPath = backup };
             var exchange = new EntryExchangeStub();
             await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
-            var vm = new MainViewModel(workspace, dialogs, entryExchange: exchange);
+            var vm = new MainViewModel(workspace, dialogs, entryExchange: exchange,
+                recentSeriesStore: new RecentSeriesStore(root));
             var window = new MainWindow { DataContext = vm };
             window.Show();
 
@@ -388,7 +414,7 @@ public class DesktopWorkflowTests
             Assert.Single(vm.DeskChangeLog);
             Assert.Equal(DeskChangeKind.Add, vm.DeskChangeLog.Single().Kind);
             Assert.Empty((await workspace.ReadCompetitorDeskAsync()).Competitors);
-            Click(window, "Commit Changes");
+            Click(window, "Save changes");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
@@ -463,7 +489,7 @@ public class DesktopWorkflowTests
             Assert.False(row.IsClubChanged);
             Assert.True(row.GridEntries.Single(x => x.Label == "3.2 GS").IsChanged);
             row.Club = "Reviewed club";
-            Click(window, "Commit Changes");
+            Click(window, "Save changes");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             var desk = await workspace.ReadCompetitorDeskAsync();
@@ -498,7 +524,7 @@ public class DesktopWorkflowTests
             await vm.PasteFromExcelCommand.ExecutionTask!;
             Assert.False(vm.VisibleCompetitors.Single(x => x.FederationCode == "FIN123")
                 .GridEntries.Single(x => x.Label == "3.1 SL").IsParticipating);
-            Click(window, "Commit Changes");
+            Click(window, "Save changes");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             var pastedRemoval = await workspace.ReadCompetitorDeskAsync();
             var removedEntryCompetitor = pastedRemoval.Competitors.Single(x => x.Values.FederationCode == "FIN123");
@@ -510,7 +536,7 @@ public class DesktopWorkflowTests
             await vm.PasteFromExcelCommand.ExecutionTask!;
             var uncertain = vm.VisibleCompetitors.Single(x => x.Surname == "UNKNOWN");
             Assert.True(uncertain.NeedsApproval);
-            Click(window, "Commit Changes");
+            Click(window, "Save changes");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.True(vm.IsError);
             Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
@@ -568,10 +594,41 @@ public class DesktopWorkflowTests
                 cell.Background is ISolidColorBrush brush && brush.Color == selectedColor);
             vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "LAINE");
             vm.RemoveCompetitorCommand.Execute(null);
-            Click(window, "Commit Changes");
+            Click(window, "Save changes");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
             Assert.Empty(vm.DeskChangeLog);
+            var savedRow = vm.VisibleCompetitors.Single(x => !x.IsPlaceholder);
+            var savedClub = savedRow.Club;
+            savedRow.Club = "Unsaved club";
+            vm.VisibleCompetitors.Single(x => x.IsPlaceholder).FederationCode = "DRAFT999";
+            Assert.Equal("2 unsaved changes", vm.UnsavedChangesText);
+            var reviewPanel = window.FindControl<Border>("ChangeReviewPanel")!;
+            Assert.False(reviewPanel.IsVisible);
+            Click(window, "Review changes");
+            Assert.True(reviewPanel.IsVisible);
+            Click(window, "Discard all changes");
+            await vm.DiscardDeskChangesCommand.ExecutionTask!;
+            Assert.Equal(2, dialogs.RequestedDiscardCount);
+            Assert.Equal(2, vm.DeskChangeLog.Count);
+            dialogs.ConfirmDiscardResult = true;
+            Click(window, "Discard all changes");
+            await vm.DiscardDeskChangesCommand.ExecutionTask!;
+            Assert.Empty(vm.DeskChangeLog);
+            Assert.Equal("All changes saved", vm.UnsavedChangesText);
+            Assert.False(reviewPanel.IsVisible);
+            Assert.Equal(savedClub, vm.VisibleCompetitors.Single(x => !x.IsPlaceholder).Club);
+            Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
+            var openButton = window.FindControl<SplitButton>("OpenFileButton")!;
+            var recentMenu = Assert.IsType<MenuFlyout>(openButton.Flyout);
+            Assert.Equal(2, recentMenu.Items.Count);
+            var mostRecent = Assert.IsType<MenuItem>(recentMenu.Items[0]);
+            Assert.Equal(backup, mostRecent.CommandParameter);
+            Click(window, "Close file");
+            await vm.CloseSeriesCommand.ExecutionTask!;
+            mostRecent.Command!.Execute(mostRecent.CommandParameter);
+            await vm.OpenRecentSeriesCommand.ExecutionTask!;
+            Assert.Equal(backup, vm.FileLabel);
             window.Close();
         }
         finally { Directory.Delete(root, recursive: true); }
@@ -580,6 +637,14 @@ public class DesktopWorkflowTests
     private static void Click(Window window, string label)
     {
         window.UpdateLayout();
+        var split = window.GetVisualDescendants().OfType<SplitButton>()
+            .SingleOrDefault(button => Equals(button.Content, label) && button.IsVisible);
+        if (split is not null)
+        {
+            Assert.True(split.IsEnabled, $"{label} was disabled");
+            split.Command?.Execute(split.CommandParameter);
+            return;
+        }
         var button = window.GetVisualDescendants().OfType<Button>()
             .Single(b => Equals(b.Content, label) && b.IsVisible);
         Assert.True(button.IsEnabled, $"{label} was disabled");
@@ -631,10 +696,17 @@ public class DesktopWorkflowTests
         public required string NewPath { get; init; }
         public required string OpenPath { get; init; }
         public required string BackupPath { get; init; }
+        public bool ConfirmDiscardResult { get; set; }
+        public int? RequestedDiscardCount { get; private set; }
         public Task<string?> ChooseNewAsync(string suggestedName) => Task.FromResult<string?>(NewPath);
         public Task<string?> ChooseOpenAsync() => Task.FromResult<string?>(OpenPath);
         public Task<string?> ChooseBackupAsync(string suggestedName) => Task.FromResult<string?>(BackupPath);
         public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(true);
+        public Task<bool> ConfirmDiscardChangesAsync(int changeCount)
+        {
+            RequestedDiscardCount = changeCount;
+            return Task.FromResult(ConfirmDiscardResult);
+        }
     }
 
     private sealed class EntryExchangeStub : IEntryExchange
