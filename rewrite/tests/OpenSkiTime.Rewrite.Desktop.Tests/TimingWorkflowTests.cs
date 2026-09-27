@@ -72,7 +72,7 @@ public partial class DesktopWorkflowTests
             window.KeyPressQwerty(PhysicalKey.F5, RawInputModifiers.None);
             if (vm.ArmStartCommand.ExecutionTask is { } arming) { await arming; }
             Assert.Equal(firstBib, workspace.Timing!.ArmedStart);
-            vm.SimulationTime = "12:00:00.9999";
+            vm.SimulationTime = "12:00:00.9999999";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingRows[0].Status == "On course");
             vm.SelectedTimingRow = vm.TimingRows[1];
@@ -82,7 +82,7 @@ public partial class DesktopWorkflowTests
             await WaitTimingAsync(vm, () => vm.TimingRows[1].Status == "On course");
             vm.SelectedTimingRow = vm.TimingRows[0];
             await vm.ArmFinishCommand.ExecuteAsync(null);
-            vm.SimulationTime = "12:01:02.9998";
+            vm.SimulationTime = "12:01:02.9999998";
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingRows[0].Status == "Finished");
             Assert.Equal("1:01.99", vm.TimingRows[0].Time);
@@ -104,6 +104,8 @@ public partial class DesktopWorkflowTests
             Assert.Equal("1:01.99", vm.TimingRows[0].Time);
             vm.ShowTimingHistory = false;
             vm.ShowAllTimingObservations = true;
+            Assert.Contains(vm.TimingObservations, x => x.Time == "12:00:00.9999999");
+            Assert.Contains(vm.TimingObservations, x => x.Time == "12:01:02.9999998");
             CaptureDraw(window, output, "timing-live.png");
             window.Width = 980; window.Height = 680;
             CaptureDraw(window, output, "timing-compact.png");

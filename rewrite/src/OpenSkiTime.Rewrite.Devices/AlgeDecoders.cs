@@ -191,7 +191,7 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
             "mt1:" + fingerprint, kind,
             channel == session.Options.StartChannel && (session.Options.StartDeviceId is null || device == session.Options.StartDeviceId) ? 0
                 : channel == session.Options.FinishChannel && (session.Options.FinishDeviceId is null || device == session.Options.FinishDeviceId) ? 1 : channel + 10,
-            ticks, 5, bib, false, "UTC", $"{device} {channelText} · {new DateTime(ticks, DateTimeKind.Utc):HH:mm:ss.fffff} UTC · {type}");
+            ticks, 5, bib, false, "UTC", $"{device} {channelText} · {TimingTime.FormatTimeOfDay(ticks)} UTC · {type}");
     }
 
     private static TimingObservation Invalid(RawTimingPacket packet, string message, int index = 0) => new(

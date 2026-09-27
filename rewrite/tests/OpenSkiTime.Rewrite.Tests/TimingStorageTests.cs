@@ -25,11 +25,11 @@ public sealed class TimingStorageTests
         var source = new SimulatorTimingSource();
         await timing.StartAsync(source, Options(), "Synthetic operator");
         await timing.ArmAsync(1, null);
-        await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks + 9999000);
+        await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks + 9999999);
         await UntilAsync(() => timing.Snapshot!.Results[0].Status == TimingStatus.OnCourse);
         await timing.ArmAsync(2, 1);
         await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks + TimeSpan.FromSeconds(30).Ticks);
-        await source.PulseAsync(1, TimeSpan.FromHours(12).Ticks + TimeSpan.FromSeconds(63).Ticks + 9998000);
+        await source.PulseAsync(1, TimeSpan.FromHours(12).Ticks + TimeSpan.FromSeconds(63).Ticks + 9999998);
         await UntilAsync(() => timing.Snapshot!.Results[0].Status == TimingStatus.Finished);
         await timing.ArmAsync(null, 2);
         await source.PulseAsync(1, TimeSpan.FromHours(12).Ticks + TimeSpan.FromSeconds(95).Ticks);
@@ -39,6 +39,7 @@ public sealed class TimingStorageTests
         Assert.Equal(6500, timing.Snapshot.Results[1].Hundredths);
         var before = await workspace.ReadTimingAsync(list.Id);
         Assert.Equal(4, before.Packets.Count);
+        Assert.Contains("12:00:00.9999999", Encoding.ASCII.GetString(before.Packets.Single(x => x.Sequence == 1).Bytes), StringComparison.Ordinal);
         Assert.All(before.Sessions, x => Assert.True(x.CleanStop));
         Assert.All(before.Packets, x => Assert.EndsWith("\r", Encoding.ASCII.GetString(x.Bytes), StringComparison.Ordinal));
         var id = timing.Snapshot.Results[0].CompetitorId;
@@ -57,6 +58,7 @@ public sealed class TimingStorageTests
         Assert.Equal(6299, replay.Results[0].Hundredths);
         Assert.Equal(6, replay.Audit.Count);
         Assert.True(replay.Complete);
+        Assert.Contains(replay.Observations, x => x.Observation.DeviceTicks == TimingRulesTests.Date.ToDateTime(new TimeOnly(12, 0)).Ticks + 9999999);
         var after = await workspace.ReadTimingAsync(list.Id);
         Assert.Equal(before.Packets.Select(x => Convert.ToHexString(x.Bytes)), after.Packets.Select(x => Convert.ToHexString(x.Bytes)));
         await Assert.ThrowsAsync<DomainValidationException>(() => workspace.Timing.StartAsync(new SimulatorTimingSource(),
