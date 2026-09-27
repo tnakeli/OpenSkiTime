@@ -37,7 +37,7 @@ internal sealed partial class SqliteSeriesFileSession
             if (plan.SourceListId is { } timingSourceId && await db.Captures.AnyAsync(x => x.ListId == timingSourceId, ct))
             {
                 var timing = await ReadTimingAsync(timingSourceId, ct);
-                if (request.ExpectedTimingVersion != TimingReplay.InputVersion(timing))
+                if (!TimingReplay.InputVersionMatches(request.ExpectedTimingVersion, TimingReplay.InputVersion(timing)))
                 { throw new DomainValidationException("Run 1 timing changed. Reload its results before creating the next start list."); }
             }
             if (await db.StartLists.AnyAsync(x => x.StartedAt != null && db.Runs.Any(r => r.Id == x.RunId
@@ -61,7 +61,7 @@ internal sealed partial class SqliteSeriesFileSession
                     Bib = entry.Bib, CompetitorId = entry.Entrant.CompetitorId, EntryJson = JsonSerializer.Serialize(entry) });
             }
             return true;
-        }, request.ExpectedRevision, ct);
+        }, request.ExpectedRevision, ct, allowCaptureOwner: true);
         return await ReadStartListsAsync(plan.CompetitionId, ct);
     }
 
@@ -100,7 +100,7 @@ internal sealed partial class SqliteSeriesFileSession
     {
         if (plan.SourceListId is { } id && await db.Captures.AnyAsync(x => x.ListId == id, ct))
         {
-            if (row.SourceTimingVersion != TimingReplay.InputVersion(await ReadTimingAsync(id, ct)))
+            if (!TimingReplay.InputVersionMatches(row.SourceTimingVersion, TimingReplay.InputVersion(await ReadTimingAsync(id, ct))))
             { throw new DomainValidationException("Run 1 timing changed. Recreate the next start list before starting this run."); }
         }
     }

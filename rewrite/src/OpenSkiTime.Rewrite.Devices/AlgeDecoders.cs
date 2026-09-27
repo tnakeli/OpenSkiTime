@@ -29,6 +29,7 @@ public sealed class AlgeTimySdkDecoder(CaptureSession session, string source, st
 {
     private readonly AlgeAsciiDecoder _ascii = new(session, source, stream);
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    public bool HasPendingInput => _ascii.HasPendingInput;
 
     public IReadOnlyList<TimingObservation> Feed(RawTimingPacket packet)
     {
@@ -71,6 +72,7 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
     private long _currentClock;
     private int _clockEpoch;
     private bool _oversized;
+    public bool HasPendingInput => _oversized || _line.Any(b => b is not (32 or 9));
 
     [GeneratedRegex(@"^\s*(?<flag>[?mMcCdDinxXtT*])?\s*(?<number>\d{1,5})(?<star>\*)?\s+[cC](?<channel>[0-8])(?<manual>[mM])?\s+(?<time>\d{2}:\d{2}:\d{2}[.:]\d{1,7})(?:\s+\d{2}(?:\s*\d{1,4})?)?\s*$", RegexOptions.CultureInvariant)]
     private static partial Regex ImpulsePattern();
@@ -111,7 +113,9 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
         var text = line.Trim();
         if (TimingTime.TryTimeOfDay(text, out var heartbeat, out _))
         {
-            return AdvanceClock(heartbeat) ? Make(ObservationKind.Information, text)
+            return AdvanceClock(heartbeat) ? Make(ObservationKind.Information, text) with
+                { DeviceTicks = session.Options.DeviceDate.ToDateTime(TimeOnly.MinValue).Ticks + _currentClock,
+                  ClockId = $"{session.Id:N}:{source}:{stream}:{_clockEpoch}" }
                 : Make(ObservationKind.Invalid, "Device clock moved backwards/reset: " + text);
         }
         if (text.StartsWith("TIMY:", StringComparison.Ordinal) || text.StartsWith("NSFV", StringComparison.Ordinal)

@@ -51,14 +51,26 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
     }
 
     public async Task<CaptureSession> BeginCaptureAsync(Guid listId, CaptureOptions options, string operatorName, DateTimeOffset at, CancellationToken ct = default)
+        => await BeginCaptureCoreAsync(listId, options, operatorName, at, null, ct);
+
+    public async Task<CaptureSession> SwitchCaptureAsync(Guid previousSessionId, Guid listId, CaptureOptions options, string operatorName, DateTimeOffset at, CancellationToken ct = default)
+    {
+        RequireCaptureOwner(previousSessionId);
+        return await BeginCaptureCoreAsync(listId, options, operatorName, at, previousSessionId, ct);
+    }
+
+    private async Task<CaptureSession> BeginCaptureCoreAsync(Guid listId, CaptureOptions options, string operatorName, DateTimeOffset at, Guid? previousSessionId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         if (string.IsNullOrWhiteSpace(operatorName)) { throw new DomainValidationException("An operator identity is required."); }
         options = options with { Operator = operatorName.Trim() };
-        RequireIdleCapture();
-        try { _captureLease = new(FilePath + ".capture.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read); }
-        catch (IOException ex) { throw new SeriesFileException("Another instance is capturing this event file.", ex); }
+        if (previousSessionId is null)
+        {
+            RequireIdleCapture();
+            try { _captureLease = new(FilePath + ".capture.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read); }
+            catch (IOException ex) { throw new SeriesFileException("Another instance is capturing this event file.", ex); }
+        }
         try
         {
             var capture = await TimingWriteAsync(async db =>
@@ -79,6 +91,11 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                     var series = await db.Series.SingleAsync(ct); series.Revision++;
                 }
                 var row = new CaptureRow { Id = Guid.NewGuid(), ListId = listId, OptionsJson = JsonSerializer.Serialize(options), StartedAt = at };
+                if (previousSessionId is { } previousId)
+                {
+                    var previous = await db.Captures.SingleAsync(x => x.Id == previousId, ct);
+                    previous.StoppedAt = at; previous.CleanStop = true;
+                }
                 db.Captures.Add(row);
                 return ToCapture(row);
             }, ct);
@@ -87,7 +104,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
         }
         catch
         {
-            _captureLease.Dispose(); _captureLease = null;
+            if (previousSessionId is null) { _captureLease!.Dispose(); _captureLease = null; }
             throw;
         }
     }

@@ -93,7 +93,7 @@ public sealed partial class MainViewModel
     public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && !DrawRunStarted
         && DrawEntryIssue.Length == 0 && (DrawRun == 1 || (DrawRun == 2 && _sourceRun is not null && (_sourceTiming is null || _sourceTiming.Complete)));
     public bool CanExportDraw => DrawRevision is not null && !IsDrawBusy && !HasUnsavedRunInput
-        && (_sourceTiming is null || (_sourceTiming.Complete && DrawRevision.SourceTimingVersion == _sourceTimingVersion));
+        && (_sourceTiming is null || (_sourceTiming.Complete && _sourceTimingVersion is not null && TimingReplay.InputVersionMatches(DrawRevision.SourceTimingVersion, _sourceTimingVersion)));
     public bool HasDrawSource => _sourceRun is not null;
     public bool CanEditDrawResults => HasDrawSource && !DrawRunStarted && !IsDrawBusy;
     public bool CanMarkRunStarted => CanExportDraw && !DrawRunStarted && !DrawHasChangedEntries && DrawEntryIssue.Length == 0;
@@ -266,7 +266,7 @@ public sealed partial class MainViewModel
         if (DrawEntryIssue.Length > 0) { DrawHelp = DrawEntryIssue; }
         if (DrawRun > 1 && _sourceTiming is { } measuredSource)
         {
-            DrawHelp = !measuredSource.Complete ? "Run 1 timing is incomplete. Resolve observations and classify every starter in Timing."
+            DrawHelp = !measuredSource.Complete ? "Run 1 is incomplete. Finish or classify every starter in Timing."
                 : DrawRevision is { } saved && !saved.Plan.SourceResults.SequenceEqual(measuredSource.ToRunFinishes())
                     ? "Run 1 timing changed after this starting order was created. Recreate the start list before racing."
                     : "Run 1 results loaded from Timing. Choose the reversal and create the start list.";

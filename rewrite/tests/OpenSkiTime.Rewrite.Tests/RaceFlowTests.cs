@@ -29,7 +29,8 @@ public sealed class RaceFlowTests
         result = TimingEngine.Replay(list, observations, audit, 0, 1);
         Assert.Null(result.Results[0].Splits[0].Hundredths);
         Assert.Equal("Review", result.Observations[1].State);
-        Assert.False(result.Complete);
+        Assert.True(result.Complete); // an invalid optional split must not hold a valid finish/result for approval
+        Assert.Equal(2000, result.Results[0].Hundredths);
         Assert.Equal(1, result.Unresolved);
         TimingEngine.ValidateDecision(new(DecisionKind.Assignment, observations[1].Key, Bib: 1), result);
     }

@@ -39,6 +39,8 @@ public interface ITimingStore
 {
     Task<TimingReplayData> ReadTimingAsync(Guid listId, CancellationToken ct = default);
     Task<CaptureSession> BeginCaptureAsync(Guid listId, CaptureOptions options, string operatorName, DateTimeOffset at, CancellationToken ct = default);
+    Task<CaptureSession> SwitchCaptureAsync(Guid previousSessionId, Guid listId, CaptureOptions options, string operatorName, DateTimeOffset at, CancellationToken ct = default)
+        => throw new NotSupportedException("This timing store cannot switch runs during capture.");
     Task AppendRawAsync(RawTimingPacket packet, CancellationToken ct = default);
     Task EndCaptureAsync(Guid sessionId, DateTimeOffset at, CancellationToken ct = default);
     Task<TimingAudit> AppendTimingAuditAsync(Guid listId, long expectedVersion, TimingDecision before,
@@ -52,6 +54,7 @@ public interface ITimingSource : IAsyncDisposable
 
 public interface ITimingDecoder
 {
+    bool HasPendingInput => false;
     IReadOnlyList<TimingObservation> Feed(RawTimingPacket packet);
     IReadOnlyList<TimingObservation> Complete();
 }
@@ -64,6 +67,9 @@ public interface ITimingDecoderFactory
 // This object belongs to exactly one series session. Device work never uses the UI synchronization context.
 public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory decoders) : IAsyncDisposable
 {
+    private sealed record CaptureInput(TransportPacket? Packet = null, RunChange? Change = null);
+    private sealed record RunChange(Guid ListId, TaskCompletionSource Completion);
+    private readonly RunningTimingClock _runningClock = new();
     private readonly SemaphoreSlim _state = new(1, 1);
     private readonly List<TimingObservation> _observations = [];
     private readonly List<TimingAudit> _audit = [];
@@ -73,7 +79,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private TimingSnapshot? _snapshot;
     private ITimingSource? _source;
     private CancellationTokenSource? _readCancellation;
-    private Channel<TransportPacket>? _queue;
+    private Channel<CaptureInput>? _queue;
     private Task? _producer;
     private Task? _writer;
     private TaskCompletionSource _retry = NewSignal();
@@ -99,11 +105,28 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     public int? ArmedFinish => ExpectedBib(1);
     public int? ExpectedBib(int channel) => _expected[channel] is > 0 and var bib ? bib : null;
     public bool IsHeld(int channel) => _held[channel];
+    public long? RunningHundredths(string? startKey)
+    {
+        var start = Snapshot?.Observations.FirstOrDefault(x => x.Observation.Key == startKey)?.Observation;
+        return start is null ? null : _runningClock.ElapsedHundredths(start);
+    }
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public async Task SelectRunAsync(Guid listId, CancellationToken ct = default)
     {
-        if (IsActive) { throw new DomainValidationException("Disconnect the timing device before changing the active run."); }
+        if (IsActive)
+        {
+            if (ListId == listId) { return; }
+            if (_producer!.IsCompleted || Fault is not null)
+            { throw new SeriesFileException("The timing source needs attention in Settings before changing runs."); }
+            var change = new RunChange(listId, NewSignal());
+            try { await _queue!.Writer.WriteAsync(new(Change: change), ct); }
+            catch (ChannelClosedException ex) { throw new SeriesFileException("The timing source stopped before the run could be changed.", ex); }
+            if (await Task.WhenAny(change.Completion.Task, _writer!) != change.Completion.Task)
+            { throw new SeriesFileException("The timing source stopped before the run could be changed. Check Settings."); }
+            await change.Completion.Task;
+            return;
+        }
         var data = await store.ReadTimingAsync(listId, ct);
         await _state.WaitAsync(ct);
         try
@@ -139,7 +162,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         var session = await store.BeginCaptureAsync(_list.Id, options, operatorName, DateTimeOffset.UtcNow, ct);
         _sessions.Add(session);
         _source = source;
-        _queue = Channel.CreateBounded<TransportPacket>(new BoundedChannelOptions(2048) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true });
+        _queue = Channel.CreateBounded<CaptureInput>(new BoundedChannelOptions(2048) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true });
+        _runningClock.Clear();
         _readCancellation = new();
         _fault = null; _failed = NewSignal(); _connection = "Connecting…";
         var queue = _queue;
@@ -164,7 +188,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     if (packet.Bytes.Length > 4_000_000) { throw new IOException("Device frame exceeds the capture size limit."); }
                     Interlocked.Increment(ref _pending);
                     // Once delivered, this packet must drain even if the operator stops capture.
-                    await queue.Writer.WriteAsync(packet with { Bytes = packet.Bytes.ToArray(), ReceivedAt = packet.ReceivedAt ?? DateTimeOffset.UtcNow });
+                    await queue.Writer.WriteAsync(new(Packet: packet with { Bytes = packet.Bytes.ToArray(), ReceivedAt = packet.ReceivedAt ?? DateTimeOffset.UtcNow }));
                 }, text => Volatile.Write(ref _connection, text), token);
                 if (!token.IsCancellationRequested) { _connection = "Source completed · disconnect to finish capture"; }
             }
@@ -173,34 +197,69 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             {
                 _connection = "Disconnected · " + ex.Message;
                 Interlocked.Increment(ref _pending);
-                await queue.Writer.WriteAsync(new("transport-status", options.Endpoint, "failure", System.Text.Encoding.UTF8.GetBytes(_connection)));
+                await queue.Writer.WriteAsync(new(Packet: new("transport-status", options.Endpoint, "failure", System.Text.Encoding.UTF8.GetBytes(_connection))));
             }
             finally { queue.Writer.TryComplete(); }
         }, CancellationToken.None);
     }
 
-    private async Task WriteLoopAsync(CaptureSession session, Channel<TransportPacket> queue)
+    private async Task WriteLoopAsync(CaptureSession session, Channel<CaptureInput> queue)
     {
         long sequence = 0;
+        RunChange? change = null;
         await foreach (var input in queue.Reader.ReadAllAsync())
         {
-            var raw = new RawTimingPacket(session.Id, ++sequence, input.ReceivedAt ?? DateTimeOffset.UtcNow, input.Protocol, input.Source, input.Stream, input.Bytes);
-            await RetryDurableAsync(() => store.AppendRawAsync(raw));
-            Interlocked.Increment(ref _saved);
-            Interlocked.Decrement(ref _pending);
-            await _state.WaitAsync();
-            try
+            if (input.Change is { } requested)
             {
-                var before = _observations.Count;
-                Decode(session, raw);
-                if (_observations.Count != before)
-                {
-                    Rebuild();
-                    foreach (var observation in _observations.Skip(before).ToArray()) { await RetryDurableAsync(() => AutoAssignAsync(observation)); }
-                }
+                if (change is not null) { requested.Completion.TrySetException(new DomainValidationException("A run change is already waiting for the current device message.")); }
+                else { change = requested; }
             }
-            finally { _state.Release(); }
+            if (input.Packet is { } packet)
+            {
+                var raw = new RawTimingPacket(session.Id, ++sequence, packet.ReceivedAt ?? DateTimeOffset.UtcNow, packet.Protocol, packet.Source, packet.Stream, packet.Bytes);
+                await RetryDurableAsync(() => store.AppendRawAsync(raw));
+                Interlocked.Increment(ref _saved);
+                Interlocked.Decrement(ref _pending);
+                await _state.WaitAsync();
+                try
+                {
+                    var before = _observations.Count;
+                    Decode(session, raw, live: true);
+                    if (_observations.Count != before)
+                    {
+                        Rebuild();
+                        foreach (var observation in _observations.Skip(before).ToArray()) { await RetryDurableAsync(() => AutoAssignAsync(observation)); }
+                    }
+                }
+                finally { _state.Release(); }
+            }
+            // Finish a fragmented device line in its original run before moving the routing boundary.
+            if (change is not null && !_decoders.Values.Any(x => x.HasPendingInput))
+            {
+                await _state.WaitAsync();
+                try
+                {
+                    if (RaceFlow.OnCourse(_snapshot!).Count > 0)
+                    { throw new DomainValidationException("Competitors are still on course. Finish or classify them before switching the active timing run."); }
+                    var data = await store.ReadTimingAsync(change.ListId);
+                    if (data.List.Plan.Competition.IntermediateCount != session.Options.IntermediateChannels.Length)
+                    { throw new DomainValidationException("The next competition needs different intermediate channels. Configure them in Settings."); }
+                    var restored = TimingReplay.Restore(data, decoders);
+                    var next = await store.SwitchCaptureAsync(session.Id, change.ListId, session.Options, session.Options.Operator, DateTimeOffset.UtcNow);
+                    _list = data.List; _observations.Clear(); _audit.Clear(); _sessions.Clear(); _decoders.Clear();
+                    _observations.AddRange(restored.Observations.Select(x => x.Observation)); _audit.AddRange(data.Audit);
+                    _sessions.AddRange(data.Sessions); _sessions.Add(next);
+                    Array.Clear(_expected); Array.Clear(_held);
+                    session = next; sequence = 0;
+                    Interlocked.Exchange(ref _saved, data.Packets.Count);
+                    Rebuild(); AdvanceQueues();
+                    change.Completion.TrySetResult();
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException) { change.Completion.TrySetException(ex); }
+                finally { change = null; _state.Release(); }
+            }
         }
+        change?.Completion.TrySetException(new SeriesFileException("The device stopped partway through a message; the active run was not changed."));
         await _state.WaitAsync();
         try { FinishDecoders(); Rebuild(); }
         finally { _state.Release(); }
@@ -229,12 +288,14 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         _retry.TrySetResult();
     }
 
-    private void Decode(CaptureSession session, RawTimingPacket packet)
+    private void Decode(CaptureSession session, RawTimingPacket packet, bool live = false)
     {
         var key = $"{session.Id:N}:{packet.Protocol}:{packet.Source}:{packet.Stream}";
         if (!_decoders.TryGetValue(key, out var decoder))
         { decoder = decoders.Create(session, packet.Protocol, packet.Source, packet.Stream); _decoders.Add(key, decoder); }
-        _observations.AddRange(TimingReplay.Decode(decoder, packet));
+        var decoded = TimingReplay.Decode(decoder, packet, includeInformation: live);
+        if (live) { foreach (var observation in decoded) { _runningClock.Observe(observation, packet.ReceivedAt); } }
+        _observations.AddRange(decoded.Where(x => x.Kind != ObservationKind.Information));
     }
 
     private void FinishDecoders()
@@ -374,6 +435,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         _source = null; _producer = _writer = null;
         _readCancellation.Dispose(); _readCancellation = null;
         _connection = "Disconnected · received data saved";
+        _runningClock.Clear();
     }
 
     public async ValueTask DisposeAsync()
