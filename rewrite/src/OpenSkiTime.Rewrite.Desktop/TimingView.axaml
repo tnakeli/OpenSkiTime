@@ -27,6 +27,7 @@
     </StackPanel></Border>
     <Border Grid.Row="2"><DataGrid Name="TimingResultsGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimingRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
  AutoGenerateColumns="False" IsReadOnly="True" RowHeight="30" GridLinesVisibility="Horizontal"><DataGrid.ContextMenu><ContextMenu>
+ <MenuItem Header="Back to start" Command="{Binding ReturnToStartCommand}" />
  <MenuItem Header="Next at start" InputGesture="F5" Command="{Binding ExpectSelectedCommand}" CommandParameter="start" />
  <MenuItem Header="Next at finish" InputGesture="F6" Command="{Binding ExpectSelectedCommand}" CommandParameter="finish" />
  <MenuItem Header="Next at intermediate" Command="{Binding ExpectSelectedCommand}" CommandParameter="intermediate" IsVisible="{Binding HasTimingIntermediates}" />
@@ -46,6 +47,7 @@
     <TextBlock Text="{Binding OnCourseLabel}" Classes="raceHeading" />
     <Border Grid.Row="1"><DataGrid Name="OnCourseGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding OnCourseRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
  AutoGenerateColumns="False" IsReadOnly="True" RowHeight="30" GridLinesVisibility="Horizontal"><DataGrid.ContextMenu><ContextMenu>
+ <MenuItem Header="Back to start" Command="{Binding ReturnToStartCommand}" />
  <MenuItem Header="Next at start" InputGesture="F5" Command="{Binding ExpectSelectedCommand}" CommandParameter="start" />
  <MenuItem Header="Next at finish" InputGesture="F6" Command="{Binding ExpectSelectedCommand}" CommandParameter="finish" />
  <MenuItem Header="Next at intermediate" Command="{Binding ExpectSelectedCommand}" CommandParameter="intermediate" IsVisible="{Binding HasTimingIntermediates}" />
@@ -62,6 +64,7 @@
      <TextBlock Grid.Row="1" Text="{Binding ExpectedIntermediateLabel}" Classes="raceIdentity" FontSize="12" Margin="0,3" />
      <Border Grid.Row="2"><DataGrid Name="IntermediateGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding IntermediateTimingRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
  AutoGenerateColumns="False" IsReadOnly="True" RowHeight="30" GridLinesVisibility="Horizontal"><DataGrid.ContextMenu><ContextMenu>
+ <MenuItem Header="Back to start" Command="{Binding ReturnToStartCommand}" />
  <MenuItem Header="Next at start" InputGesture="F5" Command="{Binding ExpectSelectedCommand}" CommandParameter="start" />
  <MenuItem Header="Next at finish" InputGesture="F6" Command="{Binding ExpectSelectedCommand}" CommandParameter="finish" />
  <MenuItem Header="Next at intermediate" Command="{Binding ExpectSelectedCommand}" CommandParameter="intermediate" IsVisible="{Binding HasTimingIntermediates}" />
@@ -84,6 +87,7 @@
     </StackPanel></Border>
     <Grid Grid.Row="2" RowDefinitions="Auto,*"><TextBlock Text="{Binding FinishListLabel}" Classes="raceHeading" /><Border Grid.Row="1"><DataGrid Name="FinishedGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding FinishedTimingRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
  AutoGenerateColumns="False" IsReadOnly="True" RowHeight="30" GridLinesVisibility="Horizontal"><DataGrid.ContextMenu><ContextMenu>
+ <MenuItem Header="Back to start" Command="{Binding ReturnToStartCommand}" />
  <MenuItem Header="Next at start" InputGesture="F5" Command="{Binding ExpectSelectedCommand}" CommandParameter="start" />
  <MenuItem Header="Next at finish" InputGesture="F6" Command="{Binding ExpectSelectedCommand}" CommandParameter="finish" />
  <MenuItem Header="Next at intermediate" Command="{Binding ExpectSelectedCommand}" CommandParameter="intermediate" IsVisible="{Binding HasTimingIntermediates}" />
@@ -104,6 +108,7 @@
   <Grid Grid.Row="3" RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
    <WrapPanel VerticalAlignment="Center">
     <TextBlock Text="{Binding SelectedTimingIdentity}" MaxWidth="230" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" />
+    <Button Content="Back to start" Command="{Binding ReturnToStartCommand}" Classes="secondaryAction" Margin="0,0,4,0" ToolTip.Tip="Ignore an accidental start impulse and return this competitor to the start queue. Original input is retained." />
     <Button Content="DNS" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNS" Classes="secondaryAction" Margin="0,0,4,0" />
     <Button Content="DNF" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNF" Classes="secondaryAction" Margin="0,0,4,0" />
     <Button Content="DSQ" Command="{Binding ClassifyTimingCommand}" CommandParameter="DSQ" Classes="secondaryAction" Margin="0,0,4,0" />

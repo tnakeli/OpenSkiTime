@@ -78,6 +78,21 @@ public partial class DesktopWorkflowTests
             vm.SimulationTime = "12:00:05.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 2);
+            view.FindControl<DataGrid>("OnCourseGrid")!.SelectedItem = vm.OnCourseRows.Single(x => x.Bib == d);
+            Assert.True(vm.ReturnToStartCommand.CanExecute(null));
+            CaptureDraw(window, output, "race-false-start-selected.png");
+            Click(window, "Back to start"); await vm.ReturnToStartCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(d, vm.SelectedTimingRow!.Bib);
+            Assert.Equal("Ready", vm.SelectedTimingRow.Status);
+            Assert.False(vm.ReturnToStartCommand.CanExecute(null));
+            Assert.Equal(a, Assert.Single(vm.OnCourseRows).Bib);
+            Assert.StartsWith(d + " ·", vm.NextStartLabel, StringComparison.Ordinal);
+            CaptureDraw(window, output, "race-returned-to-start.png");
+            vm.SimulationTime = "12:00:06.0000";
+            Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
+            await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 2);
+            Assert.True(vm.ReturnToStartCommand.CanExecute(null));
             vm.SimulationTime = "12:00:20.0000";
             Click(window, "Test intermediate"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.IntermediateTimingRows.Count == 1);
@@ -126,7 +141,11 @@ public partial class DesktopWorkflowTests
             foreach (var name in new[] { "TimingResultsGrid", "OnCourseGrid", "IntermediateGrid", "FinishedGrid" })
             {
                 var grid = view.FindControl<DataGrid>(name)!;
+                grid.ContextMenu!.Open(grid);
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.Contains(grid.ContextMenu!.Items.OfType<MenuItem>(), x => Equals(x.Header, "DSQ · disqualified"));
+                Assert.Contains(grid.ContextMenu.Items.OfType<MenuItem>(), x => Equals(x.Header, "Back to start") && x.Command == vm.ReturnToStartCommand);
+                grid.ContextMenu.Close();
             }
             vm.ShowSettingsCommand.Execute(null);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;

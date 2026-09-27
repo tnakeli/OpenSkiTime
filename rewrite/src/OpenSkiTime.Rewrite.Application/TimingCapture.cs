@@ -353,6 +353,25 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
+    public async Task ReturnToStartAsync(int bib, string startKey, string operatorName, CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try
+        {
+            var result = _snapshot?.Results.SingleOrDefault(x => x.Bib == bib);
+            if (!RaceFlow.CanReturnToStart(result) || result!.StartKey != startKey)
+            { throw new DomainValidationException("Select a competitor on course with only a start impulse. Their timing may have changed; check the current row."); }
+            await AppendDecisionAsync(new(DecisionKind.Assignment, startKey, Ignored: true), operatorName,
+                "False start impulse — competitor returned to start");
+            // Publish queue changes only after the correction is durable. Preserve operator holds.
+            for (var channel = 1; channel < _expected.Length; channel++)
+            { if (_expected[channel] == bib) { _expected[channel] = 0; } }
+            _expected[0] = _held[0] ? 0 : bib;
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
     private async Task AppendDecisionAsync(TimingDecision decision, string operatorName, string reason, long? reversesId = null)
     {
         if (_snapshot is null) { throw new DomainValidationException("Choose a run first."); }
@@ -402,6 +421,12 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void ReconcileCorrectedQueue(TimingDecision before, TimingDecision after)
     {
+        if (!_followOrder && _snapshot is not null)
+        {
+            // Undoing a return-to-start can make the armed starter ineligible again.
+            for (var channel = 0; channel < _expected.Length; channel++)
+            { if (_expected[channel] != 0 && !RaceFlow.Expected(_snapshot, channel).Any(x => x.Bib == _expected[channel])) { _expected[channel] = 0; } }
+        }
         if (_followOrder && _snapshot is not null && before.Kind == DecisionKind.Assignment && before.Bib is { } bib && after.Bib != bib)
         {
             var observation = _snapshot.Observations.FirstOrDefault(x => x.Observation.Key == before.ObservationKey)?.Observation;

@@ -3,6 +3,10 @@ namespace OpenSkiTime.Rewrite.Timing;
 // Queues are projections of saved timing, never a second mutable result store.
 public static class RaceFlow
 {
+    public static bool CanReturnToStart(TimingResult? result) => result is
+        { Status: TimingStatus.OnCourse, StartKey: not null, FinishKey: null }
+        && result.Splits.All(x => x.ObservationKey is null);
+
     public static IReadOnlyList<TimingResult> Waiting(TimingSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
