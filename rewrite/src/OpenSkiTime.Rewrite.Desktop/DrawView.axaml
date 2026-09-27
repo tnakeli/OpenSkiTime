@@ -2,36 +2,32 @@
              x:Class="OpenSkiTime.Rewrite.Desktop.DrawView" x:CompileBindings="False">
   <Border Classes="workSurface" Padding="16">
     <Grid RowDefinitions="Auto,Auto,*">
-      <Grid ColumnDefinitions="*,12,Auto,12,230" Margin="0,0,0,10">
+      <Grid ColumnDefinitions="*,12,Auto" Margin="0,0,0,10">
         <StackPanel Spacing="3" VerticalAlignment="Center">
           <TextBlock Text="{Binding DrawContext}" Classes="sectionTitle" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DrawContext}" />
           <TextBlock Text="{Binding DrawState}" Classes="supportingText" />
         </StackPanel>
         <Button Grid.Column="2" Content="Mark run started" Command="{Binding MarkRunStartedCommand}" IsVisible="{Binding CanMarkRunStarted}" Classes="secondaryAction" ToolTip.Tip="Record that racing has begun and lock this start list. This does not start timing capture." />
-        <ComboBox Grid.Column="4" ItemsSource="{Binding DrawRevisions}" SelectedItem="{Binding DrawRevision}" IsEnabled="{Binding !HasUnsavedRunInput}" HorizontalAlignment="Stretch" VerticalAlignment="Center" PlaceholderText="Saved versions" ToolTip.Tip="Saved start-list versions">
-          <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" /></DataTemplate></ComboBox.ItemTemplate>
-        </ComboBox>
       </Grid>
       <StackPanel Grid.Row="1" Spacing="8" Margin="0,0,0,10">
         <TextBlock Text="{Binding DrawHelp}" Classes="supportingText" TextWrapping="Wrap" />
-        <Expander Header="Draw settings · FIS standard" HorizontalAlignment="Stretch">
+        <Expander Header="Draw settings · FIS standard" HorizontalAlignment="Stretch" IsVisible="{Binding IsFirstDrawRun}">
           <StackPanel Spacing="8" Margin="0,8,0,0" IsEnabled="{Binding !IsDrawBusy}">
-            <Grid ColumnDefinitions="110,12,110,12,150,16,160,12,*">
+            <Grid ColumnDefinitions="110,12,110,*">
               <StackPanel Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="FIRST BIB" Classes="fieldLabel" /><NumericUpDown Value="{Binding DrawFirstBib}" Minimum="1" Maximum="99999" FormatString="0" /></StackPanel>
               <StackPanel Grid.Column="2" Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="FIRST GROUP" Classes="fieldLabel" /><NumericUpDown Value="{Binding FirstDrawGroup}" Minimum="1" Maximum="15" FormatString="0" /></StackPanel>
-              <StackPanel Grid.Column="4" Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="REVERSE IN RUN 2" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding ReverseChoices}" SelectedItem="{Binding DrawReverseCount}" HorizontalAlignment="Stretch" /></StackPanel>
-              <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="OPERATOR" Classes="fieldLabel" /><TextBox Text="{Binding DrawOperator}" /></StackPanel>
-              <StackPanel Grid.Column="8" Classes="field"><TextBlock Text="REASON / JURY DECISION" Classes="fieldLabel" /><TextBox Text="{Binding DrawReason}" Watermark="Required for every new revision" /></StackPanel>
             </Grid>
-            <TextBlock Text="SL/GS: 2 runs · DH/SG: 1 run. Standard FIS profile; special Cup, youth and snow-seed rules are not included. Reversal of 15 must be decided before Run 1." Classes="supportingText" TextWrapping="Wrap" />
+            <TextBlock Text="SL/GS: 2 runs · DH/SG: 1 run. Standard FIS profile; special Cup, youth and snow-seed rules are not included." Classes="supportingText" TextWrapping="Wrap" />
           </StackPanel>
         </Expander>
-        <Grid ColumnDefinitions="*,Auto,8,Auto,8,Auto,8,Auto">
-          <CheckBox Content="Entries and Jury settings checked" IsChecked="{Binding DrawJuryConfirmed}" VerticalAlignment="Center" />
-          <Button Grid.Column="1" Content="Prepare start list" Command="{Binding PrepareDrawCommand}" IsEnabled="{Binding CanPrepareDraw}" Classes="secondaryAction" />
-          <Button Grid.Column="3" Content="Approve list" Command="{Binding ApproveDrawCommand}" IsEnabled="{Binding CanApproveDraw}" Classes="primaryAction" />
-          <Button Grid.Column="5" Content="Export TSV" Command="{Binding ExportDrawCommand}" IsEnabled="{Binding CanExportDraw}" Classes="secondaryAction" />
-          <Button Grid.Column="7" Content="Print view…" Command="{Binding PrintDrawCommand}" IsEnabled="{Binding CanExportDraw}" Classes="secondaryAction" ToolTip.Tip="Save a printable HTML file. Open it in a browser to print or save as PDF." />
+        <Grid ColumnDefinitions="*,Auto,8,Auto,8,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsLaterDrawRun}" IsEnabled="{Binding CanEditDrawResults}">
+            <TextBlock Text="Reverse fastest" VerticalAlignment="Center" />
+            <ComboBox Name="DrawReversePicker" ItemsSource="{Binding ReverseChoices}" SelectedItem="{Binding DrawReverseCount}" Width="90" />
+          </StackPanel>
+          <Button Grid.Column="1" Content="{Binding DrawActionLabel}" Command="{Binding PrepareDrawCommand}" IsEnabled="{Binding CanPrepareDraw}" Classes="primaryAction" />
+          <Button Grid.Column="3" Content="Export TSV" Command="{Binding ExportDrawCommand}" IsEnabled="{Binding CanExportDraw}" Classes="secondaryAction" />
+          <Button Grid.Column="5" Content="Print view…" Command="{Binding PrintDrawCommand}" IsEnabled="{Binding CanExportDraw}" Classes="secondaryAction" ToolTip.Tip="Save a printable HTML file. Open it in a browser to print or save as PDF." />
         </Grid>
       </StackPanel>
       <Grid Grid.Row="2" RowDefinitions="Auto,*">
@@ -55,7 +51,7 @@
         </DataGrid>
         <Grid Grid.Row="1" RowDefinitions="Auto,*" IsVisible="{Binding IsResultInputOpen}" IsEnabled="{Binding CanEditDrawResults}">
           <Grid ColumnDefinitions="*,Auto,8,Auto" Margin="0,0,0,8">
-            <TextBlock Text="Enter every starter's time (1:12.34) or DNS / DNF / DSQ / NPS. These inputs are saved with the new start-list revision." TextWrapping="Wrap" Classes="supportingText" Margin="0,0,12,0" />
+            <TextBlock Text="Enter every starter's time (1:12.34) or DNS / DNF / DSQ / NPS. Create the start list to save." TextWrapping="Wrap" Classes="supportingText" Margin="0,0,12,0" />
             <Button Grid.Column="1" Content="Paste results (Bib / Time / Status)" Command="{Binding PasteDrawResultsCommand}" Classes="secondaryAction" />
             <Button Grid.Column="3" Content="Discard input" Command="{Binding DiscardRunInputCommand}" IsEnabled="{Binding HasUnsavedRunInput}" Classes="dangerAction" />
           </Grid>

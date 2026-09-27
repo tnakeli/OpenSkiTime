@@ -28,7 +28,6 @@ public interface ISeriesFileSession : IAsyncDisposable
     Task BackupAsync(string destinationPath, CancellationToken ct = default);
     Task<StartListDesk> ReadStartListsAsync(Guid competitionId, CancellationToken ct = default);
     Task<StartListDesk> SaveStartListAsync(SaveStartList request, CancellationToken ct = default);
-    Task<StartListDesk> ApproveStartListAsync(Guid id, long expectedRevision, DateTimeOffset at, CancellationToken ct = default);
     Task<StartListDesk> MarkRunStartedAsync(Guid listId, long expectedRevision, string operatorName, DateTimeOffset at, CancellationToken ct = default);
 }
 
@@ -129,8 +128,6 @@ public sealed class SeriesWorkspace(ISeriesFileStore store) : IAsyncDisposable
         => WithSessionAsync(s => s.ReadStartListsAsync(competitionId, ct), ct);
     public Task<StartListDesk> SaveStartListAsync(SaveStartList request, CancellationToken ct = default)
         => WithSessionAsync(s => s.SaveStartListAsync(request, ct), ct);
-    public Task<StartListDesk> ApproveStartListAsync(Guid id, long expectedRevision, DateTimeOffset at, CancellationToken ct = default)
-        => WithSessionAsync(s => s.ApproveStartListAsync(id, expectedRevision, at, ct), ct);
     public Task<StartListDesk> MarkRunStartedAsync(Guid listId, long expectedRevision, string operatorName, DateTimeOffset at, CancellationToken ct = default)
         => WithSessionAsync(s => s.MarkRunStartedAsync(listId, expectedRevision, operatorName, at, ct), ct);
 

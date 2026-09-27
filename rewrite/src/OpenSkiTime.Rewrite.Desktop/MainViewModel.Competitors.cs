@@ -75,7 +75,7 @@ public sealed partial class MainViewModel
     private void EnsureDeskClean(bool includeDrawInput = true)
     {
         if (includeDrawInput && HasUnsavedRunInput)
-        { throw new DomainValidationException("Save the Run 1 input in a start-list draft or discard it before changing the event file."); }
+        { throw new DomainValidationException("Create the start list to save the Run 1 input, or discard changes before changing the event file."); }
         if (HasDeskDrafts)
         {
             throw new DomainValidationException("Save or discard unsaved changes before changing the event file or competitions.");

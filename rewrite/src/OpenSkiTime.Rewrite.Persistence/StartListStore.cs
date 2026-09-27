@@ -59,23 +59,6 @@ internal sealed partial class SqliteSeriesFileSession
         return await ReadStartListsAsync(plan.CompetitionId, ct);
     }
 
-    public async Task<StartListDesk> ApproveStartListAsync(Guid id, long expectedRevision, DateTimeOffset at, CancellationToken ct = default)
-    {
-        var result = await WriteDeskAsync(async (db, _) =>
-        {
-            var row = await db.StartLists.SingleOrDefaultAsync(x => x.Id == id, ct)
-                ?? throw new DomainValidationException("The start-list revision no longer exists.");
-            if (row.ApprovedAt is not null) { throw new DomainValidationException("This revision is already approved."); }
-            if (await db.StartLists.AnyAsync(x => x.RunId == row.RunId && x.Revision > row.Revision, ct))
-            { throw new DomainValidationException("Approve the latest revision, not an older draft."); }
-            var list = await ReadListAsync(db, row, ct);
-            await ValidateStartPlanAsync(db, list.Plan, ct);
-            row.ApprovedAt = at;
-            return list.Plan.CompetitionId;
-        }, expectedRevision, ct);
-        return await ReadStartListsAsync(result.Value, ct);
-    }
-
     public async Task<StartListDesk> MarkRunStartedAsync(Guid listId, long expectedRevision, string operatorName, DateTimeOffset at, CancellationToken ct = default)
     {
         var result = await WriteDeskAsync(async (db, _) =>
@@ -83,9 +66,9 @@ internal sealed partial class SqliteSeriesFileSession
             if (string.IsNullOrWhiteSpace(operatorName)) { throw new DomainValidationException("Enter the operator before marking the run started."); }
             var row = await db.StartLists.SingleOrDefaultAsync(x => x.Id == listId, ct)
                 ?? throw new DomainValidationException("The start list no longer exists.");
-            if (row.ApprovedAt is null || row.StartedAt is not null
+            if (row.StartedAt is not null
                 || await db.StartLists.AnyAsync(x => x.RunId == row.RunId && x.Revision > row.Revision, ct))
-            { throw new DomainValidationException("Only the latest approved list can be marked started, once."); }
+            { throw new DomainValidationException("Only the current start list can be marked started, once."); }
             var list = await ReadListAsync(db, row, ct);
             await ValidateStartPlanAsync(db, list.Plan, ct);
             row.StartedAt = at;
@@ -110,7 +93,7 @@ internal sealed partial class SqliteSeriesFileSession
     {
         var competition = await db.Competitions.SingleOrDefaultAsync(x => x.Id == plan.CompetitionId, ct)
             ?? throw new DomainValidationException("Select an existing competition.");
-        if (Values(competition) != plan.Competition) { throw new DomainValidationException("Competition details changed. Prepare a new start list."); }
+        if (!Values(competition).HasSameStartOrderRules(plan.Competition)) { throw new DomainValidationException("Competition rules changed. Prepare a new start list."); }
         StartListPlan expected;
         if (plan.RunNumber == 1)
         {
@@ -133,7 +116,7 @@ internal sealed partial class SqliteSeriesFileSession
         else
         {
             var source = await db.StartLists.SingleOrDefaultAsync(x => x.Id == plan.SourceListId, ct)
-                ?? throw new DomainValidationException("The approved source start list is missing.");
+                ?? throw new DomainValidationException("The source start list is missing.");
             var first = await ReadListAsync(db, source, ct);
             if (first.StartedAt is null && !await db.Runs.AnyAsync(x => x.CompetitionId == plan.CompetitionId && x.Number == 2, ct))
             { throw new DomainValidationException("Mark Run 1 started before preparing Run 2."); }
@@ -141,7 +124,7 @@ internal sealed partial class SqliteSeriesFileSession
             { throw new DomainValidationException("The source list belongs to a different competition or gender."); }
             if (await db.StartLists.AnyAsync(x => x.RunId == source.RunId && x.Revision > source.Revision, ct))
             { throw new DomainValidationException("A newer Run 1 revision exists. Use that revision first."); }
-            expected = FisStartOrder.SecondRun(first, plan.SourceResults);
+            expected = FisStartOrder.SecondRun(first, plan.SourceResults, plan.Options.ReverseCount);
         }
         if (JsonSerializer.Serialize(expected) != JsonSerializer.Serialize(plan))
         { throw new DomainValidationException("Start-list order does not match the recorded draw rules and inputs."); }
@@ -161,6 +144,6 @@ internal sealed partial class SqliteSeriesFileSession
         }
         if (scoped.Count != referenceEntries.Count || referenceEntries.Any(x => !scoped.TryGetValue(x.Entrant.CompetitorId, out var a)
             || Values(a) != x.Entrant.Athlete))
-        { throw new DomainValidationException("Entries or competitor details changed. Review the draw before approval."); }
+        { throw new DomainValidationException("Entries or competitor details changed. Prepare the start list again."); }
     }
 }

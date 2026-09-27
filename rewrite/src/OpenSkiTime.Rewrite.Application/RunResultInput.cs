@@ -37,7 +37,7 @@ public static class RunResultInput
             if (results.Count == 0 && fields[0].Equals("Bib", StringComparison.OrdinalIgnoreCase)) { continue; }
             if (fields.Length is < 2 or > 3 || !int.TryParse(fields[0], NumberStyles.None, CultureInfo.InvariantCulture, out var bib)
                 || !entries.TryGetValue(bib, out var entry))
-            { throw new DomainValidationException("Paste columns Bib, Time, optional Status. Every bib must exist in the approved Run 1 list."); }
+            { throw new DomainValidationException("Paste columns Bib, Time, optional Status. Every bib must exist in the Run 1 list."); }
             var statusText = fields.Length == 3 && fields[2].Length > 0 ? fields[2] : fields[1];
             var status = statusText.ToUpperInvariant() switch
             {
