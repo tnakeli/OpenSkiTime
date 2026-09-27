@@ -131,6 +131,8 @@ public sealed partial class MainViewModel
     partial void OnSelectedTimingRowChanged(TimingGridRow? value)
     {
         OnPropertyChanged(nameof(SelectedTimingIdentity));
+        OnPropertyChanged(nameof(SelectedTimingProblem));
+        OnPropertyChanged(nameof(HasSelectedTimingProblem));
         if (value is null) { return; }
         ObservationBibText = value.Bib.ToString(CultureInfo.InvariantCulture);
         CorrectedTimeText = value.Result.Hundredths is null ? "" : value.Time;

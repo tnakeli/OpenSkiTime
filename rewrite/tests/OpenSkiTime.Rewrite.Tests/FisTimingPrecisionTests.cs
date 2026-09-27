@@ -71,4 +71,31 @@ public sealed class FisTimingPrecisionTests
             new(DecisionKind.Assignment, o.Key, Bib: 1))).ToArray();
         return TimingEngine.Replay(list, observations, audit, 0, 1);
     }
+
+    [Theory]
+    [InlineData("C0M", "12:00:00.98", "C1M", "12:00:06.00", 502L)]
+    [InlineData("C0", "12:00:00.9999999", "C1M", "12:00:06.00", 500L)]
+    [InlineData("C0M", "12:00:00.98", "C1", "12:00:06.0099", 502L)]
+    public void TimyKeyboardHundredthsProduceImmediateTimesWithoutInventingSourcePrecision(
+        string startChannel, string start, string finishChannel, string finish, long expected)
+    {
+        var list = TimingRulesTests.List(1);
+        var session = TimingRulesTests.Session(list);
+        var decoded = new AlgeAsciiDecoder(session, "Synthetic", "1").Feed(TimingRulesTests.Packet(session, 1,
+            $" *0001 {startChannel} {start}\r *0001 {finishChannel} {finish}\r")).ToArray();
+        var audit = decoded.Select((o, i) => new TimingAudit(i + 1, list.Id, TimingRulesTests.At,
+            "Test operator", "Synthetic assignment", new(DecisionKind.Assignment, o.Key),
+            new(DecisionKind.Assignment, o.Key, Bib: 1))).ToArray();
+        var snapshot = TimingEngine.Replay(list, decoded, audit, 0, 1);
+        Assert.Equal(TimingStatus.Finished, snapshot.Results[0].Status);
+        Assert.Equal(expected, snapshot.Results[0].Hundredths);
+        Assert.True(snapshot.Complete);
+        Assert.Contains("keyboard", snapshot.Results[0].Detail, StringComparison.Ordinal);
+        Assert.All(decoded.Where(x => x.Manual), x => Assert.Equal(2, x.Precision));
+        // Manual input is not permission to combine unrelated clocks.
+        decoded[1] = decoded[1] with { ClockId = "reconnected" };
+        var interrupted = TimingEngine.Replay(list, decoded, audit, 0, 1);
+        Assert.Null(interrupted.Results[0].Hundredths);
+        Assert.False(interrupted.Complete);
+    }
 }

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Devices;
+using OpenSkiTime.Rewrite.Persistence;
 using OpenSkiTime.Rewrite.Timing;
 using OpenSkiTime.TimyUsbHost;
 using Xunit;
@@ -96,4 +97,58 @@ public sealed class TimyUsbContractTests
     private static RawTimingPacket Packet(CaptureSession session, long sequence, string text) =>
         new(session.Id, sequence, TimingRulesTests.At, "alge-timy-sdk/v1", "Timy:1", "1",
             TimySdkEvent.Capture(new Received { Text = text }));
+
+    [Fact]
+    public async Task KeyboardStartIntermediateAndFinishCaptureCalculateAndReopenWithoutManualApproval()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-keyboard-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "synthetic.ost");
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var list = await TimingStorageTests.SeedAsync(workspace, file, 2, 1);
+            var timing = workspace.Timing!;
+            await timing.SelectRunAsync(list.Id);
+            await timing.FollowStartOrderAsync(true);
+            var source = new KeyboardUsbSource();
+            await timing.StartAsync(source, new("Timy 2/3 · USB", "Synthetic", TimingRulesTests.Date)
+                { IntermediateChannels = [2] }, "Synthetic operator");
+            await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Complete);
+            Assert.Equal(new long?[] { 502, 798 }, timing.Snapshot!.Results.Select(x => x.Hundredths));
+            Assert.Equal(201, timing.Snapshot.Results[0].Splits[0].Hundredths);
+            Assert.All(timing.Snapshot.Observations, x => { Assert.True(x.Observation.Manual); Assert.Equal(2, x.Observation.Precision); });
+            Assert.All(timing.Snapshot.Audit, x => Assert.Equal(DecisionKind.Assignment, x.After.Kind));
+            await timing.StopAsync();
+            var stored = await workspace.ReadTimingAsync(list.Id);
+            Assert.Equal(source.Frames.Select(Convert.ToHexString), stored.Packets.OrderBy(x => x.Sequence).Select(x => Convert.ToHexString(x.Bytes)));
+            await workspace.CloseAsync(); await workspace.OpenAsync(file);
+            await workspace.Timing!.SelectRunAsync(list.Id);
+            Assert.Equal(new long?[] { 502, 798 }, workspace.Timing.Snapshot!.Results.Select(x => x.Hundredths));
+            Assert.True(workspace.Timing.Snapshot.Complete);
+        }
+        finally
+        {
+            if (Path.GetFullPath(root).StartsWith(Path.Combine(Path.GetTempPath(), "openskitime-keyboard-tests") + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            { Directory.Delete(root, true); }
+        }
+    }
+
+    private sealed class KeyboardUsbSource : ITimingSource
+    {
+        public byte[][] Frames { get; } = new[]
+        {
+            "13:15:00.0\r    0101 C0M 13:15:",
+            "00.98   00\r    0102 C2M 13:15:02.99   00\r   ",
+            " 0103 C1M 13:15:06.00   00\r    0104 C0M 13:15:10.01   00\r",
+            "    0105 C1M 13:15:17.99   00\r   "
+        }.Select(text => TimySdkEvent.Capture(new Received { Text = text })).ToArray();
+
+        public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
+        {
+            status("Synthetic Timy keyboard input");
+            foreach (var bytes in Frames) { await receive(new("alge-timy-sdk/v1", "Timy:Synthetic", "1", bytes)); }
+        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }
