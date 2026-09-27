@@ -6,7 +6,7 @@ using OpenSkiTime.Rewrite.Application;
 namespace OpenSkiTime.Rewrite.Devices;
 
 // The vendor's mixed-mode .NET Framework DLL cannot load in .NET 10. A small isolated Windows host
-// forwards original byte events, not parsed timing lines. No vendor binary is redistributed with this repository.
+// forwards both original SDK byte/text fields, not parsed timing lines. No vendor binary is redistributed with this repository.
 public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory = null) : ITimingSource
 {
     public static string SdkDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime", "timy-usb");
@@ -88,8 +88,8 @@ public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory 
             {
                 var parts = line.Split('\t', 3);
                 if (parts.Length != 3) { continue; }
-                if (parts[0] == "B")
-                { await receive(new("alge-ascii/v1", "Timy:" + parts[1], stream.ToString(System.Globalization.CultureInfo.InvariantCulture), Convert.FromBase64String(parts[2]))); }
+                if (parts[0] == "T")
+                { await receive(new("alge-timy-sdk/v1", "Timy:" + parts[1], stream.ToString(System.Globalization.CultureInfo.InvariantCulture), Convert.FromBase64String(parts[2]))); }
                 else if (parts[0] == "S") { status(parts[2]); }
                 else if (parts[0] == "C") { stream++; status("Connected · Timy " + parts[1]); }
                 else if (parts[0] == "D")
