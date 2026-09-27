@@ -81,7 +81,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     private string _fileLabel = "No series file open";
     public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime"
         : IsDrawSection && DrawCompetition is { } c
-            ? $"{FileLabel} · {c.Values.FisCode ?? c.Values.LocalRaceCode ?? c.Values.ShortLabel} · Run {DrawRun}"
+            ? $"{FileLabel} · {c.Values.ShortLabel} · Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"} · Run {DrawRun}"
             : FileLabel;
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";
     [ObservableProperty] private bool _isError;
@@ -347,7 +347,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             {
                 throw new SeriesFileException("Select a saved competition first.");
             }
-            if (!await dialogs.ConfirmRemoveAsync(CompetitionName)) { return; }
+            if (!await dialogs.ConfirmRemoveAsync(CompetitionShortLabel)) { return; }
             var details = await workspace.RemoveCompetitionAsync(id, _current.Revision);
             Apply(details);
             SelectedCompetition = null;

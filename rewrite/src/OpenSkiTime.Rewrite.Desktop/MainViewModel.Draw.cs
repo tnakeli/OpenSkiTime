@@ -244,7 +244,7 @@ public sealed partial class MainViewModel
         }
         if (DrawEntryIssue.Length > 0) { DrawHelp = DrawEntryIssue; }
         DrawContext = DrawCompetition is { } c
-            ? $"{c.Values.ShortLabel} · {c.Values.Name}  /  Run {DrawRun} of {c.Values.RunCount}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
+            ? $"{c.Values.ShortLabel}  /  Run {DrawRun} of {c.Values.RunCount}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
             : "Choose a competition";
         NotifyDraw();
     }

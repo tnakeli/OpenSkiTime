@@ -97,6 +97,7 @@ public class DesktopWorkflowTests
             Dispatcher.UIThread.RunJobs();
             var menu = Assert.IsType<MenuFlyout>(drawButton.Flyout);
             var raceMenu = Assert.IsType<MenuItem>(Assert.Single(menu.Items));
+            Assert.Equal("SL1", raceMenu.Header);
             var runMenu = Assert.IsType<MenuItem>(Assert.Single(raceMenu.Items));
             Assert.Equal("Run 1", runMenu.Header);
             runMenu.Command!.Execute(runMenu.CommandParameter);
@@ -164,7 +165,9 @@ public class DesktopWorkflowTests
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(competition, vm.DrawCompetition);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == vm.DrawContext && x.Text.Contains("Corrected Slalom", StringComparison.Ordinal));
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == vm.DrawContext && x.Text.Contains("SL NEW", StringComparison.Ordinal));
+            Assert.DoesNotContain("Corrected Slalom", vm.DrawContext, StringComparison.Ordinal);
+            Assert.Contains("SL NEW", vm.WindowTitle, StringComparison.Ordinal);
             dialogs.ExportPath = Path.Combine(root, "start-list.tsv");
             Click(window, "Export TSV");
             await vm.ExportDrawCommand.ExecutionTask!;
@@ -173,7 +176,8 @@ public class DesktopWorkflowTests
             Click(window, "Print view…");
             await vm.PrintDrawCommand.ExecutionTask!;
             var printed = await File.ReadAllTextAsync(dialogs.ExportPath);
-            Assert.Contains("Corrected Slalom", printed, StringComparison.Ordinal);
+            Assert.Contains("SL NEW", printed, StringComparison.Ordinal);
+            Assert.DoesNotContain("Corrected Slalom", printed, StringComparison.Ordinal);
             Assert.DoesNotContain("Approved", printed, StringComparison.Ordinal);
             Assert.Equal(StartListExchange.ToPrintHtml(vm.DrawRevision! with { Plan = vm.DrawRevision.Plan with { Competition = competition.Values } }), printed);
             CaptureDraw(window, output, "run2.png");

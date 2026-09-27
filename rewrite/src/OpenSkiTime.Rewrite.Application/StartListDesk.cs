@@ -33,7 +33,7 @@ public static class StartListExchange
         var output = new StringBuilder("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>")
             .Append(WebUtility.HtmlEncode(heading)).Append("</title><style>body{font:12px system-ui;color:#142f3a;margin:24px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:5px 8px;border-bottom:1px solid #ccd7dc}th{background:#eef3f5}small{color:#526572}@media print{thead{display:table-header-group}tr{break-inside:avoid}}</style><h1>")
             .Append(WebUtility.HtmlEncode(heading)).Append(" — Start list</h1><p>")
-            .Append(WebUtility.HtmlEncode($"{p.Competition.Name} · {p.Competition.Date:yyyy-MM-dd} · Codex {p.Competition.FisCode ?? p.Competition.LocalRaceCode ?? "—"}"))
+            .Append(WebUtility.HtmlEncode($"{p.Competition.Date:yyyy-MM-dd} · Codex {p.Competition.FisCode ?? p.Competition.LocalRaceCode ?? "—"}"))
             .Append("</p><table><thead><tr><th>Pos</th><th>Bib</th><th>Code</th><th>Surname</th><th>First name</th><th>Year</th><th>Nation</th><th>Points</th></tr></thead><tbody>");
         foreach (var e in p.Entries)
         {
