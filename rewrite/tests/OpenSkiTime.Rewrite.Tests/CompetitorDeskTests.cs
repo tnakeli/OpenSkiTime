@@ -16,6 +16,48 @@ public class CompetitorDeskTests
         "fin", "Ski Club", Gender.Female);
 
     [Fact]
+    public async Task DeskBatchIsAtomicAcrossEditsEntriesAndDeletion()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-batch", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var series = await workspace.CreateAsync(Path.Combine(folder, "series.ost"), s_series);
+            var race = await workspace.SaveCompetitionAsync(null, s_race, series.Revision);
+            var raceId = Assert.Single(race.Competitions).Id;
+            var existing = await workspace.SaveDeskRowAsync(null, s_athlete, null, false, null, race.Revision);
+            var revision = existing.Revision;
+            var first = new DeskBatchRow(null, s_athlete with
+            {
+                Surname = "Laine", FirstName = "Lea", FederationCode = "FIN456"
+            }, [new ImportEntryPatch(raceId, true, false, null)]);
+            var invalid = new DeskBatchRow(null, s_athlete with
+            {
+                Surname = "Korhonen", FirstName = "Kai", FederationCode = "FIN456"
+            }, []);
+            await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApplyDeskBatchAsync(
+                new DeskBatch(series.Id, revision, [first, invalid], [existing.Value.Id])));
+            var unchanged = await workspace.ReadCompetitorDeskAsync();
+            Assert.Equal(revision, unchanged.Revision);
+            Assert.Equal(existing.Value.Id, Assert.Single(unchanged.Competitors).Id);
+            Assert.Empty(unchanged.Participations);
+
+            var result = await workspace.ApplyDeskBatchAsync(new DeskBatch(series.Id, revision,
+                [first], [existing.Value.Id]));
+            Assert.Equal((1, 0, 1), (result.Created, result.Updated, result.Deleted));
+            var committed = await workspace.ReadCompetitorDeskAsync();
+            Assert.Equal(result.Revision, committed.Revision);
+            var competitor = Assert.Single(committed.Competitors);
+            Assert.Equal("LAINE", competitor.Values.Surname);
+            Assert.True(Assert.Single(committed.Participations).Participates);
+            await Assert.ThrowsAsync<SeriesConflictException>(() => workspace.ApplyDeskBatchAsync(
+                new DeskBatch(series.Id, revision, [first], [])));
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
     public async Task DeskPersistsEditsAndEntriesWithCompetitionScopedImportedBibs()
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-m2", Guid.NewGuid().ToString("N"));
@@ -79,6 +121,35 @@ public class CompetitorDeskTests
             Assert.Equal("Not entered", s_athlete.Readiness(false));
             await workspace.RemoveCategoryRuleAsync(overlapping.Value.Id, overlapping.Revision);
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Categories);
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ReplacingSavedCategoryRulesIsAtomicAndSurvivesReopen()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-category-rules", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var path = Path.Combine(folder, "series.ost");
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var series = await workspace.CreateAsync(path, s_series);
+            var original = await workspace.SaveCategoryRuleAsync(null,
+                new CategoryRuleValues("Old", 2010, 2011, Gender.Female, 0), series.Revision);
+            var replacement = new CategoryRuleValues("Women U16", 2010, 2011, Gender.Female, 1);
+            await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ReplaceCategoryRulesAsync(
+                [replacement, replacement with { Label = "women u16" }], original.Revision));
+            var unchanged = await workspace.ReadCompetitorDeskAsync();
+            Assert.Equal(original.Revision, unchanged.Revision);
+            Assert.Equal("Old", Assert.Single(unchanged.Categories).Values.Label);
+            var revision = await workspace.ReplaceCategoryRulesAsync([replacement], original.Revision);
+            await workspace.CloseAsync();
+            await workspace.OpenAsync(path);
+            var reopened = await workspace.ReadCompetitorDeskAsync();
+            Assert.Equal(revision, reopened.Revision);
+            Assert.Equal("Women U16", Assert.Single(reopened.Categories).Values.Label);
+            Assert.Equal("Women U16", CategoryResolver.Resolve(s_athlete, reopened.Categories));
         }
         finally { Directory.Delete(folder, recursive: true); }
     }

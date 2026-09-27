@@ -19,6 +19,7 @@
     <SolidColorBrush x:Key="AccentTintBrush">#E1F1EF</SolidColorBrush>
     <SolidColorBrush x:Key="SuccessBrush">#238067</SolidColorBrush>
     <SolidColorBrush x:Key="WarningBrush">#A96A20</SolidColorBrush>
+    <SolidColorBrush x:Key="PendingCellBrush">#FFF0B8</SolidColorBrush>
     <SolidColorBrush x:Key="ErrorBrush">#A63D3D</SolidColorBrush>
     <SolidColorBrush x:Key="ErrorTintBrush">#FCEDEC</SolidColorBrush>
     <SolidColorBrush x:Key="SelectionBrush">#D8ECE9</SolidColorBrush>
@@ -108,24 +109,17 @@
       <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     </Style>
-    <Style Selector="TextBox.importCell">
-      <Setter Property="MinHeight" Value="29" />
-      <Setter Property="Padding" Value="5,3" />
-      <Setter Property="BorderThickness" Value="0,0,0,1" />
-      <Setter Property="CornerRadius" Value="0" />
-    </Style>
-    <Style Selector="TextBox.importCell.changed">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    </Style>
-    <Style Selector="TextBlock.importPreviewCell">
+    <Style Selector="TextBlock.gridCell">
       <Setter Property="Padding" Value="6,5" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="TextBlock.importPreviewCell.changed">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Style Selector="TextBlock.gridCell.changed">
+      <Setter Property="Background" Value="{DynamicResource PendingCellBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
       <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="CheckBox.entryCell.changed">
+      <Setter Property="Background" Value="{DynamicResource PendingCellBrush}" />
     </Style>
     <Style Selector="ComboBox, NumericUpDown">
       <Setter Property="MinHeight" Value="34" />
@@ -218,7 +212,7 @@
       <Setter Property="Opacity" Value="1" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridCell:selected">
-      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
     <Style Selector="Border.statusBar">

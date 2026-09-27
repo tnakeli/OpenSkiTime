@@ -77,15 +77,16 @@ public static class TsvExchange
         if (series.Id != desk.SeriesId) { throw new SeriesConflictException(); }
         var ids = competitorIds.ToHashSet();
         var rows = new List<IReadOnlyList<string?>>();
-        rows.Add(["Surname", "First name", "Year", "Gender", "Nation", "Club", "Fed ID",
+        rows.Add(["Code", "Surname", "First name", "Year", "Gender", "Nation", "Club",
             .. series.Competitions.SelectMany(x => new[] { x.Values.ShortLabel, $"Bib:{x.Values.ShortLabel}" })]);
         foreach (var competitor in desk.Competitors.Where(x => ids.Contains(x.Id)))
         {
             var values = competitor.Values;
             var cells = new List<string?>
             {
-                values.Surname, values.FirstName, values.BirthYear?.ToString(CultureInfo.InvariantCulture),
-                GenderLabels.Format(values.Gender), values.Nation, values.Club, values.FederationCode,
+                values.FederationCode, values.Surname, values.FirstName,
+                values.BirthYear?.ToString(CultureInfo.InvariantCulture), GenderLabels.Format(values.Gender),
+                values.Nation, values.Club,
             };
             foreach (var competition in series.Competitions)
             {
@@ -119,7 +120,7 @@ public static class TsvExchange
             .ToArray();
         if (columns.All(x => x.Key is not "Surname" and not "FullName" and not "FederationCode"))
         {
-            throw new DomainValidationException("Include a Surname, Name or Fed ID column to identify competitors.");
+            throw new DomainValidationException("Include a Code, Surname or Name column to identify competitors.");
         }
         var repeated = columns.Where(x => x.Key is not null).GroupBy(x => x.Key!, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(x => x.Count() > 1);
@@ -172,7 +173,7 @@ public static class TsvExchange
                 && byName[0].Values.FederationCode is { } oldCode
                 && !oldCode.Equals(code, StringComparison.OrdinalIgnoreCase))
             {
-                rowWarnings.Add($"Federation code changes from {oldCode} to {code}; confirm this match.");
+                rowWarnings.Add($"Code changes from {oldCode} to {code}; confirm this match.");
             }
             var identity = match is null ? $"new:{code ?? $"{surname}|{firstName}|{year}"}" : match.Id.ToString();
             if (!sourceIdentity.Add(identity)) { throw new DomainValidationException($"Row {rowIndex + 1} repeats a competitor in this paste."); }
@@ -184,7 +185,8 @@ public static class TsvExchange
                 Scalar(values, "FederationCode", before?.FederationCode),
                 Scalar(values, "Nation", before?.Nation),
                 Scalar(values, "Club", before?.Club),
-                GenderValue(Scalar(values, "Gender", before?.Gender?.ToString()), rowIndex + 1)).Validated(series.Values.EndDate.Year);
+                values.TryGetValue("Gender", out var genderText) && genderText.Length > 0
+                    ? GenderValue(genderText, rowIndex + 1) : before?.Gender).Validated(series.Values.EndDate.Year);
             var patches = new List<ImportEntryPatch>();
             foreach (var competition in series.Competitions)
             {
@@ -208,7 +210,7 @@ public static class TsvExchange
                 if (before.Gender != next.Gender) { changed.Add("Gender"); }
                 if (before.Nation != next.Nation) { changed.Add("Nation"); }
                 if (before.Club != next.Club) { changed.Add("Club"); }
-                if (before.FederationCode != next.FederationCode) { changed.Add("Fed ID"); }
+                if (before.FederationCode != next.FederationCode) { changed.Add("Code"); }
             }
             foreach (var patch in patches)
             {
@@ -284,7 +286,7 @@ public static class TsvExchange
 
     private static bool? Participation(string text, int row, string label) => text.Trim().ToLowerInvariant() switch
     {
-        "" => null,
+        "" => false,
         "x" or "1" or "yes" or "y" or "true" or "kyllä" or "kylla" or "joo" or "k" => true,
         "0" or "no" or "n" or "false" or "ei" or "-" => false,
         _ => throw new DomainValidationException($"Row {row}: participation in {label} must be X, 0 or blank."),
@@ -295,8 +297,7 @@ public static class TsvExchange
         null or "" or "~" => null,
         "f" or "female" or "woman" or "women" => Gender.Female,
         "m" or "male" or "man" or "men" => Gender.Male,
-        "o" or "other" => Gender.Other,
-        _ => throw new DomainValidationException($"Row {row}: gender must be Women, Men or Other."),
+        _ => throw new DomainValidationException($"Row {row}: gender must be Women or Men."),
     };
 
     private static (string Surname, string? FirstName, bool NeedsReview) SplitFullName(string fullName)

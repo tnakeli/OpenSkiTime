@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="OpenSkiTime.Rewrite.Desktop.MainWindow" x:CompileBindings="False"
-        Title="OpenSkiTime" Width="1280" Height="820" MinWidth="980" MinHeight="680"
+        Title="{Binding WindowTitle}" Width="1280" Height="820" MinWidth="980" MinHeight="680" WindowState="Maximized"
         Background="{DynamicResource CanvasBrush}">
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <Border Grid.Row="0" Background="{DynamicResource NavyBrush}" Padding="22,11">
@@ -21,6 +21,8 @@
           <Border Width="1" Background="#42606A" Margin="4,6" />
           <Button Content="Backup / transfer" Command="{Binding BackupCommand}" IsEnabled="{Binding IsOpen}" Classes="toolbarAction" />
           <Button Content="Close file" Command="{Binding CloseSeriesCommand}" IsEnabled="{Binding IsOpen}" Classes="toolbarAction" />
+          <Border Width="1" Background="#42606A" Margin="4,6" />
+          <Button Content="Settings" Command="{Binding ShowSettingsCommand}" Classes="toolbarAction" />
         </StackPanel>
       </Grid>
     </Border>
@@ -34,7 +36,7 @@
       </StackPanel>
     </Border>
     <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" MaxWidth="1280" HorizontalAlignment="Center">
+      <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" HorizontalAlignment="Stretch">
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSeriesSection}">
           <StackPanel Spacing="14">
             <Grid ColumnDefinitions="*,Auto">
@@ -233,132 +235,80 @@
           </StackPanel>
         </Border>
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsCompetitorsSection}">
-          <StackPanel Spacing="12">
-            <Grid ColumnDefinitions="*,Auto">
-              <StackPanel Spacing="1">
-                <TextBlock Text="SERIES / REGISTRATION" Classes="eyebrow" />
-                <TextBlock Text="{Binding CompetitorSectionTitle}" Classes="sectionTitle" />
-              </StackPanel>
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsEnabled="{Binding !IsImportReviewOpen}">
-                <Button Content="Add competitor" Command="{Binding AddCompetitorCommand}" Classes="primaryAction" />
-                <Button Content="Save row" Command="{Binding SaveSelectedCompetitorCommand}" Classes="secondaryAction" />
-                <Button Content="Discard draft" Command="{Binding DiscardCompetitorDraftCommand}" Classes="secondaryAction" />
-                <Button Content="Undo saved" Command="{Binding UndoDeskEditCommand}" IsEnabled="{Binding CanUndoDeskEdit}" Classes="secondaryAction" />
-                <Button Content="Remove competitor" Command="{Binding RemoveCompetitorCommand}" IsEnabled="{Binding SelectedCompetitorRow}" Classes="dangerAction" />
-              </StackPanel>
-            </Grid>
-            <StackPanel Spacing="12">
-            <Grid ColumnDefinitions="*,12,170,12,190">
-              <TextBox Name="CompetitorFilterInput" Text="{Binding CompetitorFilterText}" Watermark="Filter names, club, code or category" />
+          <StackPanel Spacing="10">
+            <StackPanel Spacing="1"><TextBlock Text="SERIES / REGISTRATION" Classes="eyebrow" /><TextBlock Text="Competitors" Classes="sectionTitle" /></StackPanel>
+            <Grid ColumnDefinitions="*,10,150,10,Auto">
+              <TextBox Name="CompetitorFilterInput" Text="{Binding CompetitorFilterText}" Watermark="Filter name, club, code or category" />
               <ComboBox Grid.Column="2" ItemsSource="{Binding CompetitorGroupings}" SelectedItem="{Binding CompetitorGrouping}" />
-              <ComboBox Grid.Column="4" ItemsSource="{Binding Competitions}" SelectedItem="{Binding DeskCompetition}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate><TextBlock Text="{Binding Values.ShortLabel}" /></DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
+              <Button Grid.Column="4" Content="Commit Changes" Command="{Binding CommitDeskChangesCommand}" IsEnabled="{Binding HasDeskChangeLog}" Classes="primaryAction" />
             </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="6" IsEnabled="{Binding !IsImportReviewOpen}">
-              <Button Content="Paste from Excel" Command="{Binding PasteFromExcelCommand}" Classes="secondaryAction" />
-              <Button Content="Copy selection" Command="{Binding CopySelectedCompetitorCommand}" Classes="secondaryAction" />
-              <Button Content="Export selection TSV" Command="{Binding ExportSelectedTsvCommand}" Classes="secondaryAction" />
-              <TextBlock Text="Ctrl+V previews pasted changes in this grid; Commit writes them to the event file."
-                         Classes="supportingText" VerticalAlignment="Center" Margin="8,0,0,0" />
-            </StackPanel>
-            <Border Classes="subtleSurface" Padding="12,8" BorderBrush="{DynamicResource AccentBrush}"
-                    BorderThickness="3,0,0,0" IsVisible="{Binding IsImportReviewOpen}">
-              <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Spacing="2" VerticalAlignment="Center">
-                  <TextBlock Text="PASTE PREVIEW · REVIEW HIGHLIGHTED ROWS" Classes="fieldLabel" />
-                  <TextBlock Text="{Binding ImportReviewSummary}" Classes="supportingText" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                  <Button Content="Discard import" Command="{Binding CloseImportReviewCommand}" Classes="secondaryAction" />
-                  <Button Content="Commit import" Command="{Binding CommitImportCommand}" Classes="primaryAction" />
-                </StackPanel>
-              </Grid>
-            </Border>
-            <ItemsControl ItemsSource="{Binding ImportWarnings}">
-              <ItemsControl.ItemTemplate><DataTemplate>
-                <TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
-              </DataTemplate></ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <TextBlock Text="Entry and imported bib refer to the selected competition. Birth year and gender suggest a category; drawing race bibs comes later."
-                       Classes="supportingText" FontSize="11" />
-            <DataGrid Name="CompetitorGrid" Classes="raceGrid" ItemsSource="{Binding VisibleCompetitors}"
-                      SelectedItem="{Binding SelectedCompetitorRow}" SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged"
-                      AutoGenerateColumns="False" IsReadOnly="False"
-                      MinHeight="160" MaxHeight="420" RowHeight="34" ColumnHeaderHeight="30"
-                      RowEditEnded="CompetitorGrid_RowEditEnded" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+            <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+            <DataGrid Name="CompetitorGrid" Classes="raceGrid" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
+                      SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
+                      MinHeight="300" RowHeight="34" ColumnHeaderHeight="30" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+              <DataGrid.ContextMenu><ContextMenu>
+                <MenuItem Header="Select all" InputGesture="Ctrl+A" Click="SelectAllContext_Click" />
+                <MenuItem Header="Paste from Excel" InputGesture="Ctrl+V" Click="PasteContext_Click" />
+                <MenuItem Header="Copy selected" InputGesture="Ctrl+C" Click="CopyContext_Click" />
+                <Separator />
+                <MenuItem Header="Delete selected rows" InputGesture="Delete" Click="DeleteContext_Click" />
+                <MenuItem Header="Restore selected row" InputGesture="Ctrl+R" Click="RestoreRowContext_Click" />
+              </ContextMenu></DataGrid.ContextMenu>
               <DataGrid.Columns>
-                <DataGridTextColumn Header="" Binding="{Binding ImportMarker}" IsReadOnly="True" Width="58" />
-                <DataGridTemplateColumn Header="SURNAME" Width="130"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Surname}" Classes="importPreviewCell" Classes.changed="{Binding IsSurnameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Surname}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="FIRST NAME" Width="100"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FirstName}" Classes="importPreviewCell" Classes.changed="{Binding IsFirstNameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FirstName}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="YEAR" Width="75"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding BirthYearText}" Classes="importPreviewCell" Classes.changed="{Binding IsYearChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding BirthYearText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="GENDER" Width="95"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding GenderText}" Classes="importPreviewCell" Classes.changed="{Binding IsGenderChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding GenderText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="NAT" Width="70"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Nation}" Classes="importPreviewCell" Classes.changed="{Binding IsNationChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Nation}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="CLUB" Width="110"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Club}" Classes="importPreviewCell" Classes.changed="{Binding IsClubChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Club}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="FED ID" Width="85"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FederationCode}" Classes="importPreviewCell" Classes.changed="{Binding IsCodeChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FederationCode}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTextColumn Header="BIB REF" Binding="{Binding ImportedBibText}" Width="85" />
-                <DataGridTextColumn Header="CATEGORY" Binding="{Binding Category}" IsReadOnly="True" Width="100" />
-                <DataGridTextColumn Header="STATUS" Binding="{Binding Readiness}" IsReadOnly="True" Width="120" />
+                <DataGridTextColumn Header="" Binding="{Binding ChangeMarker}" IsReadOnly="True" CanUserSort="False" Width="58" />
+                <DataGridTemplateColumn Header="CODE" SortMemberPath="FederationCode" Width="100"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FederationCode}" Classes="gridCell" Classes.changed="{Binding IsCodeChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FederationCode}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="SURNAME" SortMemberPath="Surname" Width="1.2*" MinWidth="130"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Surname}" Classes="gridCell" Classes.changed="{Binding IsSurnameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Surname}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="FIRST NAME" SortMemberPath="FirstName" Width="1*" MinWidth="110"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FirstName}" Classes="gridCell" Classes.changed="{Binding IsFirstNameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FirstName}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="YEAR" SortMemberPath="BirthYearText" Width="75"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding BirthYearText}" Classes="gridCell" Classes.changed="{Binding IsYearChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding BirthYearText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="GENDER" SortMemberPath="GenderText" Width="105"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding GenderText}" Classes="gridCell" Classes.changed="{Binding IsGenderChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><ComboBox ItemsSource="{Binding AvailableGenders}" SelectedItem="{Binding GenderText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="NAT" SortMemberPath="Nation" Width="72"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Nation}" Classes="gridCell" Classes.changed="{Binding IsNationChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Nation}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="CLUB" SortMemberPath="Club" Width="1.2*" MinWidth="130"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Club}" Classes="gridCell" Classes.changed="{Binding IsClubChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Club}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTextColumn Header="DH PTS" Binding="{Binding FisDhText}" SortMemberPath="FisDh" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Header="SG PTS" Binding="{Binding FisSgText}" SortMemberPath="FisSg" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Header="SL PTS" Binding="{Binding FisSlText}" SortMemberPath="FisSl" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Header="GS PTS" Binding="{Binding FisGsText}" SortMemberPath="FisGs" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Header="AC PTS" Binding="{Binding FisAcText}" SortMemberPath="FisAc" IsReadOnly="True" Width="90" />
+                <DataGridTextColumn Header="CATEGORY" Binding="{Binding Category}" SortMemberPath="Category" IsReadOnly="True" Width="1*" MinWidth="120" />
               </DataGrid.Columns>
             </DataGrid>
-            <Border Classes="subtleSurface" Padding="12,10" IsVisible="{Binding SelectedCompetitorRow}">
-              <StackPanel Spacing="7">
-                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding !IsImportReviewOpen}">
-                  <TextBlock Text="Selected competitor · competitions entered" Classes="fieldLabel" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" Text="Tick to save participation" Classes="supportingText" FontSize="11" />
-                </Grid>
-                <ScrollViewer MaxHeight="144" IsVisible="{Binding !IsImportReviewOpen}">
-                  <ItemsControl Name="ParticipationChoicesList" ItemsSource="{Binding ParticipationChoices}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate>
-                        <Grid ColumnDefinitions="32,100,*,120" Margin="0,2">
-                          <CheckBox IsChecked="{Binding IsParticipating}" IsEnabled="{Binding !IsSaving}" Click="Participation_Click" VerticalAlignment="Center" />
-                          <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                          <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" />
-                          <TextBlock Grid.Column="3" Text="{Binding ImportedBib, StringFormat='Bib ref: {0}'}"
-                                     Classes="supportingText" VerticalAlignment="Center" />
-                        </Grid>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </ScrollViewer>
-                <StackPanel Spacing="6" IsVisible="{Binding IsImportReviewOpen}">
-                  <TextBlock Text="Selected pasted row · competition entries" Classes="fieldLabel" />
-                  <TextBlock Text="{Binding SelectedImportReviewRow.WarningText}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
-                  <CheckBox Content="I checked this uncertain match or name" IsChecked="{Binding SelectedImportReviewRow.Approved}"
-                            IsVisible="{Binding SelectedImportReviewRow.NeedsApproval}" />
-                  <ScrollViewer MaxHeight="145"><ItemsControl ItemsSource="{Binding SelectedImportReviewRow.Entries}">
-                    <ItemsControl.ItemTemplate><DataTemplate>
-                      <Grid ColumnDefinitions="100,*,85,100,90" Margin="0,2">
-                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1" Text="{Binding Current}" Classes="supportingText" VerticalAlignment="Center" />
-                        <TextBox Grid.Column="2" Text="{Binding ParticipationText}" Watermark="X / 0" />
-                        <TextBlock Grid.Column="3" Text="Bib reference" Classes="supportingText" VerticalAlignment="Center" Margin="8,0,0,0" />
-                        <TextBox Grid.Column="4" Text="{Binding BibText}" Watermark="blank" />
-                      </Grid>
-                    </DataTemplate></ItemsControl.ItemTemplate>
-                  </ItemsControl></ScrollViewer>
+            <Border Classes="subtleSurface" Padding="10,8" IsVisible="{Binding SelectedCompetitorRow.NeedsApproval}"><StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="{Binding SelectedCompetitorRow.WarningText}" Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center" />
+              <CheckBox Content="Match checked" IsChecked="{Binding SelectedCompetitorRow.WarningApproved}" VerticalAlignment="Center" />
+            </StackPanel></Border>
+            <Border Classes="subtleSurface" Padding="10,8" IsVisible="{Binding HasDeskChangeLog}"><StackPanel Spacing="5">
+              <TextBlock Text="PENDING CHANGES" Classes="fieldLabel" />
+              <ScrollViewer MaxHeight="135"><ItemsControl ItemsSource="{Binding DeskChangeLog}"><ItemsControl.ItemTemplate><DataTemplate>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,2"><TextBlock Text="{Binding DisplayLabel}" ToolTip.Tip="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Restore" Click="RestoreDeskChange_Click" Classes="secondaryAction" /></Grid>
+              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+            </StackPanel></Border>
+            <Expander Header="Update from FIS" IsExpanded="{Binding IsFisPanelOpen}" HorizontalAlignment="Stretch">
+              <Border Classes="subtleSurface" Padding="12,10" Margin="0,8,0,0">
+                <StackPanel Spacing="8">
+                  <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="2">
+                    <TextBlock Text="{Binding FisListDisplay}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding FisListValidityText}" Classes="supportingText" />
+                  </StackPanel><Button Grid.Column="1" Content="Stage updates for existing competitors" Command="{Binding StageFisUpdatesCommand}" Classes="secondaryAction" /></Grid>
+                  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="Download FIS point list" Command="{Binding DownloadFisListCommand}" IsEnabled="{Binding !IsFisBusy}" Classes="secondaryAction" />
+                    <TextBlock Text="Date the list must be effective on" VerticalAlignment="Center" Classes="fieldLabel" />
+                    <TextBox Name="FisEffectiveDateInput" Width="128" Text="{Binding FisEffectiveDateText}" Watermark="YYYY-MM-DD" />
+                    <Button Name="FisDatePickerButton" ToolTip.Tip="Choose effective date" Click="DatePickerButton_Click" Classes="dateAction">
+                      <Path Width="15" Height="15" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.5"
+                            Data="M2,4 L13,4 13,13 2,13 Z M2,7 L13,7 M5,2 L5,5 M10,2 L10,5" />
+                    </Button>
+                  </StackPanel>
+                  <Grid ColumnDefinitions="*,6,34,8,Auto">
+                    <TextBox Name="FisSearchInput" Text="{Binding FisSearchText}" Watermark="Search FIS by Code, name, nation or club (2+ characters)" />
+                    <Button Grid.Column="2" Content="×" ToolTip.Tip="Clear search" Command="{Binding ClearFisSearchCommand}" Click="FocusFisSearch_Click" Classes="secondaryAction" Padding="0" />
+                    <Button Grid.Column="4" Content="Add selected competitors" Command="{Binding StageSelectedFisAthleteCommand}" Classes="secondaryAction" />
+                  </Grid>
+                  <ListBox Name="FisSearchResultsList" ItemsSource="{Binding FisSearchResults}" SelectionMode="Multiple" SelectionChanged="FisSearchResults_SelectionChanged" MaxHeight="150">
+                    <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" FontSize="12" /></DataTemplate></ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBlock Text="Changes appear in the grid for review and are saved only with Commit Changes." Classes="supportingText" />
                 </StackPanel>
-              </StackPanel>
-            </Border>
-            <Border Classes="subtleSurface" Padding="12,8" IsVisible="{Binding IsDeskChangeLogVisible}">
-              <StackPanel Spacing="6">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="CHANGE LOG · SAVED EDITS AND PENDING DELETIONS" Classes="fieldLabel" VerticalAlignment="Center" />
-                  <Button Grid.Column="1" Content="Commit Changes" Command="{Binding CommitDeskChangesCommand}" Classes="primaryAction" />
-                </Grid>
-                <ScrollViewer MaxHeight="112"><ItemsControl ItemsSource="{Binding DeskChangeLog}">
-                  <ItemsControl.ItemTemplate><DataTemplate>
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,2">
-                      <TextBlock Text="{Binding DisplayLabel}" VerticalAlignment="Center" />
-                      <Button Grid.Column="1" Content="Restore" Click="RestoreDeskChange_Click" Classes="secondaryAction" />
-                    </Grid>
-                  </DataTemplate></ItemsControl.ItemTemplate>
-                </ItemsControl></ScrollViewer>
-              </StackPanel>
-            </Border>
+              </Border>
+            </Expander>
             <Expander Header="Category rules · birth-year range and gender" HorizontalAlignment="Stretch">
               <StackPanel Margin="0,10,0,2" Spacing="10">
                 <DataGrid Classes="raceGrid" ItemsSource="{Binding CategoryRules}" SelectedItem="{Binding SelectedCategoryRule}"
@@ -376,7 +326,7 @@
                   <StackPanel Grid.Column="0" Classes="field"><TextBlock Text="LABEL" Classes="fieldLabel" /><TextBox Text="{Binding CategoryLabel}" /></StackPanel>
                   <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="FROM YEAR" Classes="fieldLabel" /><TextBox Text="{Binding CategoryMinYearText}" /></StackPanel>
                   <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="TO YEAR" Classes="fieldLabel" /><TextBox Text="{Binding CategoryMaxYearText}" /></StackPanel>
-                  <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="GENDER · MEN / WOMEN" Classes="fieldLabel" /><TextBox Text="{Binding CategoryGenderText}" /></StackPanel>
+                  <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="GENDER" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding CategoryGenderOptions}" SelectedItem="{Binding CategoryGenderText}" /></StackPanel>
                   <StackPanel Grid.Column="8" Classes="field"><TextBlock Text="ORDER" Classes="fieldLabel" /><TextBox Text="{Binding CategoryOrderText}" /></StackPanel>
                 </Grid>
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -384,60 +334,29 @@
                   <Button Content="Save rule" Command="{Binding SaveCategoryRuleCommand}" Classes="primaryAction" />
                   <Button Content="Remove rule" Command="{Binding RemoveCategoryRuleCommand}" IsEnabled="{Binding SelectedCategoryRule}" Classes="dangerAction" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Button Content="Save rules for reuse" Command="{Binding SaveCategoryRulesPresetCommand}" Classes="secondaryAction" />
+                  <Button Content="Load saved rules (replace)" Command="{Binding LoadCategoryRulesPresetCommand}" Classes="secondaryAction" />
+                  <Button Content="Update categories" Command="{Binding UpdateCategoriesCommand}" Classes="secondaryAction" />
+                </StackPanel>
               </StackPanel>
             </Expander>
             </StackPanel>
-            <Expander Header="Legacy conversion preview · read only" HorizontalAlignment="Stretch">
-              <StackPanel Margin="0,10,0,2" Spacing="10">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                  <Button Content="Preview legacy file" Command="{Binding PreviewLegacyCommand}" Classes="secondaryAction" />
-                  <TextBlock Text="{Binding LegacySnapshotLabel}" Classes="supportingText" TextTrimming="CharacterEllipsis"
-                             MaxWidth="760" VerticalAlignment="Center" ToolTip.Tip="{Binding LegacySnapshotLabel}" />
-                </StackPanel>
-                <StackPanel Spacing="10" IsVisible="{Binding SelectedLegacySeries}">
-                  <Grid ColumnDefinitions="300,12,*">
-                    <ComboBox ItemsSource="{Binding LegacySeriesPreviews}" SelectedItem="{Binding SelectedLegacySeries}">
-                      <ComboBox.ItemTemplate>
-                        <DataTemplate><TextBlock Text="{Binding Values.Name}" /></DataTemplate>
-                      </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <TextBlock Grid.Column="2" Text="{Binding LegacyPreviewSummary}" Classes="supportingText" VerticalAlignment="Center" />
-                  </Grid>
-                  <DataGrid Classes="raceGrid" ItemsSource="{Binding SelectedLegacySeries.Competitors}" IsReadOnly="True"
-                            AutoGenerateColumns="False" MinHeight="70" MaxHeight="170" RowHeight="30" ColumnHeaderHeight="28">
-                    <DataGrid.Columns>
-                      <DataGridTextColumn Header="SURNAME" Binding="{Binding Values.Surname}" Width="*" />
-                      <DataGridTextColumn Header="FIRST NAME" Binding="{Binding Values.FirstName}" Width="*" />
-                      <DataGridTextColumn Header="YEAR" Binding="{Binding Values.BirthYear}" Width="80" />
-                      <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Gender, Converter={StaticResource GenderLabelConverter}}" Width="100" />
-                      <DataGridTextColumn Header="LEGACY BIB" Binding="{Binding SeriesBibReference}" Width="110" />
-                      <DataGridTextColumn Header="CODE" Binding="{Binding Values.FederationCode}" Width="120" />
-                    </DataGrid.Columns>
-                  </DataGrid>
-                  <DataGrid Classes="raceGrid" ItemsSource="{Binding SelectedLegacySeries.Competitions}" IsReadOnly="True"
-                            AutoGenerateColumns="False" MinHeight="65" MaxHeight="130" RowHeight="30" ColumnHeaderHeight="28">
-                    <DataGrid.Columns>
-                      <DataGridTextColumn Header="SHORT LABEL" Binding="{Binding Values.ShortLabel}" Width="120" />
-                      <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.Name}" Width="*" />
-                      <DataGridTextColumn Header="DATE" Binding="{Binding Values.Date}" Width="120" />
-                      <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Values.Discipline}" Width="130" />
-                    </DataGrid.Columns>
-                  </DataGrid>
-                  <ItemsControl ItemsSource="{Binding SelectedLegacySeries.Warnings}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" FontSize="11" /></DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  <ItemsControl ItemsSource="{Binding LegacySourceWarnings}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" FontSize="11" /></DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  <TextBlock Text="This preview does not change either database. Conversion is a later milestone."
-                             Classes="supportingText" />
-                </StackPanel>
-              </StackPanel>
-            </Expander>
+        </Border>
+        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSettingsSection}">
+          <StackPanel Spacing="12">
+            <StackPanel Spacing="1"><TextBlock Text="APPLICATION / SETTINGS" Classes="eyebrow" /><TextBlock Text="Settings" Classes="sectionTitle" /></StackPanel>
+            <Border Classes="subtleSurface" Padding="12"><StackPanel Spacing="8">
+              <TextBlock Text="FIS API access" FontWeight="SemiBold" />
+              <TextBlock Text="Create an API key in FIS Member Section → API Access." Classes="supportingText" />
+              <Grid ColumnDefinitions="340,8,Auto,8,Auto" HorizontalAlignment="Left">
+                <TextBox PasswordChar="•" Text="{Binding FisApiKeyInput}" Watermark="{Binding FisApiKeyWatermark}" MaxLength="1024" />
+                <Button Grid.Column="2" Content="Save key" Command="{Binding SaveFisApiKeyCommand}" Classes="primaryAction" />
+                <Button Grid.Column="4" Content="Remove key" Command="{Binding RemoveFisApiKeyCommand}" Classes="secondaryAction" />
+              </Grid>
+              <TextBlock Text="{Binding FisApiKeyStatus}" Classes="supportingText" />
+              <TextBlock Text="The key stays in this Windows account's credential store. Downloaded FIS lists stay in local application data." Classes="supportingText" />
+            </StackPanel></Border>
           </StackPanel>
         </Border>
       </StackPanel>

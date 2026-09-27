@@ -15,6 +15,41 @@ public sealed class ImportExchangeTests
         "FIN", "North\tClub \"A\"\nLane", Gender.Female);
 
     [Fact]
+    public async Task BlankCompetitionCellRemovesEntryAndCodeOnlyRowCanBeCompletedLater()
+    {
+        var root = NewRoot();
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var series = await workspace.CreateAsync(Path.Combine(root, "series.ost"), s_series);
+            series = await workspace.SaveCompetitionAsync(null, s_race, series.Revision);
+            var race = Assert.Single(series.Competitions).Id;
+            await workspace.SaveDeskRowAsync(null, s_athlete, race, true, null, series.Revision);
+            var before = await workspace.ReadCompetitorDeskAsync();
+            var preview = TsvExchange.Preview("Code\tSL\nFIN123\t", await workspace.ReadAsync(), before);
+            Assert.False(Assert.Single(Assert.Single(preview.Rows).Entries).Participates);
+            var codeOnly = TsvExchange.Preview("Code\nNEWCODE", await workspace.ReadAsync(), before);
+            Assert.Equal(string.Empty, Assert.Single(codeOnly.Rows).Values.Surname);
+            Assert.Equal("NEWCODE", codeOnly.Rows[0].Values.FederationCode);
+            var currentSeries = await workspace.ReadAsync();
+            Assert.Throws<DomainValidationException>(() => TsvExchange.Preview(
+                "Code\tGender\nNEWCODE\tOther", currentSeries, before));
+            var commit = new ImportCommit(preview.SeriesId, preview.Revision, preview.SourceHash,
+                preview.Rows.Select(x => new ImportCommitRow(x.CompetitorId, x.Values, x.Entries)).ToArray());
+            await workspace.ApplyImportAsync(commit);
+            Assert.False(Assert.Single((await workspace.ReadCompetitorDeskAsync()).Participations).Participates);
+            var newPreview = TsvExchange.Preview("Code\nNEWCODE", await workspace.ReadAsync(),
+                await workspace.ReadCompetitorDeskAsync());
+            await workspace.ApplyImportAsync(new ImportCommit(newPreview.SeriesId, newPreview.Revision,
+                newPreview.SourceHash, newPreview.Rows.Select(x =>
+                    new ImportCommitRow(x.CompetitorId, x.Values, x.Entries)).ToArray()));
+            Assert.Equal(string.Empty, (await workspace.ReadCompetitorDeskAsync()).Competitors
+                .Single(x => x.Values.FederationCode == "NEWCODE").Values.Surname);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public async Task PreviewAndCommitPreserveBlanksAndApplyAllFieldsAndEntries()
     {
         var root = NewRoot();
@@ -33,6 +68,11 @@ public sealed class ImportExchangeTests
                 + "Mäkelä\tAino\t2010\tFemale\t\tFIN123\t0\t~\tX\r\n"
                 + "Korhonen\tKai\t2011\tMale\tNew Club\tNEW2\tX\t13\t\r\n";
             var before = await workspace.ReadCompetitorDeskAsync();
+            var codeOnly = TsvExchange.Preview("Code\tClub\nFIN123\tUpdated club",
+                await workspace.ReadAsync(), before);
+            Assert.Equal(existing.Value.Id, Assert.Single(codeOnly.Rows).CompetitorId);
+            Assert.Equal("Updated club", codeOnly.Rows[0].Values.Club);
+            Assert.Equal(before.Competitors.Single().Values.Surname, codeOnly.Rows[0].Values.Surname);
             var preview = TsvExchange.Preview(source, await workspace.ReadAsync(), before);
             Assert.Equal(2, preview.Rows.Count);
             Assert.Equal("North\tClub \"A\"\nLane", preview.Rows[0].Values.Club);
@@ -78,8 +118,10 @@ public sealed class ImportExchangeTests
             var desk = await workspace.ReadCompetitorDeskAsync();
             var exported = TsvExchange.Export(await workspace.ReadAsync(), desk, [existing.Value.Id]);
             var parsed = TsvExchange.Parse(exported);
-            Assert.Equal("Women", parsed[1][3]);
-            Assert.Equal("North\tClub \"A\"\nLane", parsed[1][5]);
+            Assert.Equal("Code", parsed[0][0]);
+            Assert.Equal("FIN123", parsed[1][0]);
+            Assert.Equal("Women", parsed[1][4]);
+            Assert.Equal("North\tClub \"A\"\nLane", parsed[1][6]);
             Assert.Equal(string.Empty, parsed[1][7]); // false participation exports blank
             Assert.Equal("27", parsed[1][8]);
             var importSource = "Surname\tFirst name\tYear\tSL\tBib:SL\n"

@@ -8,9 +8,7 @@ public interface IFileDialogs
     Task<string?> ChooseNewAsync(string suggestedName);
     Task<string?> ChooseOpenAsync();
     Task<string?> ChooseBackupAsync(string suggestedName);
-    Task<string?> ChooseLegacyDatabaseAsync();
     Task<bool> ConfirmRemoveAsync(string competitionName);
-    Task<bool> ConfirmRemoveCompetitorAsync(string surname);
 }
 
 public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
@@ -50,24 +48,8 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
         return file?.TryGetLocalPath();
     }
 
-    public async Task<string?> ChooseLegacyDatabaseAsync()
-    {
-        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Preview legacy OpenSkiTime database", AllowMultiple = false,
-            FileTypeFilter = [new FilePickerFileType("SQLite database")
-            {
-                Patterns = ["*.db", "*.sqlite", "*.sqlite3", "*.ost"],
-            }],
-        });
-        return files.Count == 0 ? null : files[0].TryGetLocalPath();
-    }
-
     public Task<bool> ConfirmRemoveAsync(string competitionName)
         => ConfirmAsync("competition", competitionName);
-
-    public Task<bool> ConfirmRemoveCompetitorAsync(string surname)
-        => ConfirmAsync("competitor", surname);
 
     private async Task<bool> ConfirmAsync(string kind, string name)
     {
