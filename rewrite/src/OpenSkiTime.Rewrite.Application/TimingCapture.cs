@@ -160,6 +160,28 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
+    public async Task RefreshIntermediateCountAsync(CancellationToken ct = default)
+    {
+        var listId = _list?.Id ?? throw new DomainValidationException("Choose a timing run first.");
+        var current = (await store.ReadTimingAsync(listId, ct)).List.Plan.Competition.IntermediateCount;
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_list?.Id != listId || _list.Plan.Competition.IntermediateCount == current) { return; }
+            var previous = _list.Plan.Competition.IntermediateCount;
+            _list = _list with { Plan = _list.Plan with
+            { Competition = _list.Plan.Competition with { IntermediateCount = current } } };
+            for (var channel = 2 + Math.Min(previous, current); channel < 2 + Math.Max(previous, current); channel++)
+            {
+                _expected[channel] = 0;
+                _held[channel] = true;
+            }
+            Rebuild();
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
     public async Task StartAsync(ITimingSource source, CaptureOptions options, string operatorName, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(source);

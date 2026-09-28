@@ -153,8 +153,9 @@ public partial class DesktopWorkflowTests
             await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
             Assert.Equal(2, view.FindControl<DataGrid>("RunningGrid")!.Columns.Count(x => x.Tag is "intermediate" && x.IsVisible));
             await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
-            Assert.Single(view.FindControl<DataGrid>("RunningGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
-            Assert.Single(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+            Assert.Equal(2, view.FindControl<DataGrid>("RunningGrid")!.Columns.Count(x => x.Tag is "intermediate" && x.IsVisible));
+            Assert.Equal(2, view.FindControl<DataGrid>("TimestampsGrid")!.Columns.Count(x => x.Tag is "intermediate" && x.IsVisible));
+            Assert.True(workspace.Timing!.IsHeld(3));
             await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
             var a = vm.TimingRows[0].Bib; var b = vm.TimingRows[1].Bib; var c = vm.TimingRows[2].Bib; var d = vm.TimingRows[3].Bib;
             Assert.Equal(a, vm.AtStartRows[^1].Bib);
