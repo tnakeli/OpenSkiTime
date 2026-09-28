@@ -81,7 +81,12 @@ public sealed partial class MainViewModel
         ResultRows.Clear(); ResultBestClassified.Clear(); ResultBestStarted.Clear(); ResultApprovals.Clear();
         ResultsPenaltySummary = string.Empty;
         var competition = ResultsCompetition;
-        if (competition is null) { ResultsState = "Choose a FIS competition."; OnPropertyChanged(nameof(ResultsReady)); return; }
+        if (competition is null)
+        {
+            ResultsState = "No FIS competition in this series. Create one in Competitions with Race type Fis and a FIS code before drawing its start list.";
+            OnPropertyChanged(nameof(ResultsReady));
+            return;
+        }
         ResultsState = "Loading timing and approved revisions…";
         await GuardAsync(async () =>
         {
@@ -94,7 +99,7 @@ public sealed partial class MainViewModel
             }
             if (currentCompetition.Values.RaceType != RaceType.Fis)
             {
-                ResultsState = "FIS results are available for FIS competitions only.";
+                ResultsState = $"{competition.Values.ShortLabel} is a {competition.Values.RaceType} race, not a FIS competition. Select a FIS race in Competitions.";
                 return;
             }
             var desk = await workspace.ReadStartListsAsync(competition.Id);
