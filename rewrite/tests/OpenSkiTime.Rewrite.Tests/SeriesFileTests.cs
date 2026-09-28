@@ -101,7 +101,7 @@ public class SeriesFileTests
         await workspace.CloseAsync();
         await using (var db = new SeriesDbContext(options))
         {
-            Assert.Equal(7, (await db.Database.GetAppliedMigrationsAsync()).Count());
+            Assert.Equal(db.Database.GetMigrations().Count(), (await db.Database.GetAppliedMigrationsAsync()).Count());
         }
 
         await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
@@ -179,7 +179,7 @@ public class SeriesFileTests
         }
         await using (var upgraded = new SeriesDbContext(options))
         {
-            Assert.Equal(7, (await upgraded.Database.GetAppliedMigrationsAsync()).Count());
+            Assert.Equal(upgraded.Database.GetMigrations().Count(), (await upgraded.Database.GetAppliedMigrationsAsync()).Count());
         }
     }
 
@@ -214,7 +214,7 @@ public class SeriesFileTests
         }
         await using (var db = new SeriesDbContext(options))
         {
-            Assert.Equal(7, (await db.Database.GetAppliedMigrationsAsync()).Count());
+            Assert.Equal(db.Database.GetMigrations().Count(), (await db.Database.GetAppliedMigrationsAsync()).Count());
         }
     }
 

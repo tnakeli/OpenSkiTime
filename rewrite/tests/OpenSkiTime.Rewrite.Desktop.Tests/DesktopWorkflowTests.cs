@@ -932,6 +932,7 @@ public partial class DesktopWorkflowTests
         public Task<string?> ChooseBackupAsync(string suggestedName) => Task.FromResult<string?>(BackupPath);
         public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(true);
         public Task<string?> ChooseStartListExportAsync(string suggestedName, bool print) => Task.FromResult(ExportPath);
+        public Task<string?> ChooseResultXmlExportAsync(string suggestedName) => Task.FromResult(ExportPath);
         public Task<bool> ConfirmDiscardChangesAsync(int changeCount)
         {
             RequestedDiscardCount = changeCount;

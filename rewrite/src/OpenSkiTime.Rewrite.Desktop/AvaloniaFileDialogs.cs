@@ -11,6 +11,7 @@ public interface IFileDialogs
     Task<bool> ConfirmRemoveAsync(string competitionName);
     Task<bool> ConfirmDiscardChangesAsync(int changeCount);
     Task<string?> ChooseStartListExportAsync(string suggestedName, bool print);
+    Task<string?> ChooseResultXmlExportAsync(string suggestedName);
 }
 
 public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
@@ -62,6 +63,16 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
             Title = print ? "Save printable start list (open in a browser to print)" : "Export start list",
             SuggestedFileName = suggestedName + "." + extension, DefaultExtension = extension,
             FileTypeChoices = [new FilePickerFileType(print ? "Printable HTML" : "Tab-separated values") { Patterns = ["*." + extension] }],
+        });
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> ChooseResultXmlExportAsync(string suggestedName)
+    {
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export approved FIS Alpine results", SuggestedFileName = suggestedName,
+            DefaultExtension = "xml", FileTypeChoices = [new FilePickerFileType("FIS results XML") { Patterns = ["*.xml"] }],
         });
         return file?.TryGetLocalPath();
     }

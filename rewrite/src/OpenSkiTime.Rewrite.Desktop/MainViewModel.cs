@@ -6,7 +6,7 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
-public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Settings }
+public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Results, Settings }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
@@ -47,6 +47,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(IsSettingsSection))]
     [NotifyPropertyChangedFor(nameof(IsDrawSection))]
     [NotifyPropertyChangedFor(nameof(IsTimingSection))]
+    [NotifyPropertyChangedFor(nameof(IsResultsSection))]
     [NotifyPropertyChangedFor(nameof(IsFormSection))]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private WorkspaceSection _activeSection = WorkspaceSection.Series;
@@ -56,7 +57,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public bool IsSettingsSection => ActiveSection == WorkspaceSection.Settings;
     public bool IsDrawSection => ActiveSection == WorkspaceSection.Draw;
     public bool IsTimingSection => ActiveSection == WorkspaceSection.Timing;
-    public bool IsFormSection => !IsDrawSection && !IsTimingSection;
+    public bool IsResultsSection => ActiveSection == WorkspaceSection.Results;
+    public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection;
     public string ActiveRaceLabel => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
         ? $"{race.Values.ShortLabel}  /  Run {_activeRaceRun}  ▾" : "Choose competition  ▾";
     public bool ActiveRaceUsesTiming => IsTimingSection || (!IsDrawSection && _activeRaceSection == WorkspaceSection.Timing);
@@ -85,6 +87,15 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [RelayCommand] private void ShowSeries() => SwitchSection(WorkspaceSection.Series);
     [RelayCommand] private void ShowCompetitions() => SwitchSection(WorkspaceSection.Competitions);
     [RelayCommand] private void ShowCompetitors() => SwitchSection(WorkspaceSection.Competitors);
+    [RelayCommand] private async Task ShowResultsAsync()
+    {
+        SwitchSection(WorkspaceSection.Results);
+        if (!IsResultsSection) { return; }
+        var selected = Competitions.FirstOrDefault(x => x.Id == _activeRaceId && x.Values.RaceType == RaceType.Fis)
+            ?? Competitions.FirstOrDefault(x => x.Values.RaceType == RaceType.Fis);
+        if (Equals(ResultsCompetition, selected)) { await LoadResultsAsync(); }
+        else { ResultsCompetition = selected; }
+    }
     [RelayCommand] private void ShowSettings()
     {
         SwitchSection(WorkspaceSection.Settings);
@@ -93,7 +104,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     private void SwitchSection(WorkspaceSection section)
     {
-        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors or WorkspaceSection.Draw or WorkspaceSection.Timing) && !CanEditCompetitions) { return; }
+        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors or WorkspaceSection.Draw or WorkspaceSection.Timing or WorkspaceSection.Results) && !CanEditCompetitions) { return; }
         if (IsDrawBusy) { return; }
         if (section != ActiveSection && !CanLeaveDrawInput()) { return; }
         if (section != ActiveSection && HasDeskDrafts
@@ -113,6 +124,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         : IsTimingSection ? $"{FileLabel} · {TimingContext}"
         : IsDrawSection && DrawCompetition is { } c
             ? $"{FileLabel} · {c.Values.ShortLabel} · Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"} · Run {DrawRun}"
+            : IsResultsSection && ResultsCompetition is { } resultRace
+                ? $"{FileLabel} · {resultRace.Values.ShortLabel} · Codex {resultRace.Values.FisCode ?? "—"} · Results"
             : FileLabel;
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";
     [ObservableProperty] private bool _isError;

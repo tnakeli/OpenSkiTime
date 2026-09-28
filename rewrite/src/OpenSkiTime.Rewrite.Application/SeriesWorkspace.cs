@@ -42,6 +42,10 @@ public sealed class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactor
 
     public Task<TimingReplayData> ReadTimingAsync(Guid listId, CancellationToken ct = default)
         => WithSessionAsync(s => (s as ITimingStore ?? throw new SeriesFileException("Timing storage is unavailable.")).ReadTimingAsync(listId, ct), ct);
+    public Task<IReadOnlyList<ApprovedResult>> ReadApprovedResultsAsync(Guid competitionId, CancellationToken ct = default)
+        => WithSessionAsync(s => (s as IResultStore ?? throw new SeriesFileException("Result storage is unavailable.")).ReadApprovedResultsAsync(competitionId, ct), ct);
+    public Task<ApprovedResult> ApproveResultAsync(ApproveResultRequest request, CancellationToken ct = default)
+        => WithSessionAsync(s => (s as IResultStore ?? throw new SeriesFileException("Result storage is unavailable.")).ApproveResultAsync(request, ct), ct);
     public string? FilePath => _session?.FilePath;
     public bool IsOpen => _session is not null;
 
