@@ -78,11 +78,25 @@ public sealed class FisResultsTests
     }
 
     [Fact]
-    public void UnresolvedInputBlocksResultCreation()
+    public void StarterWithoutTimeOrClassificationBlocksResultCreation()
     {
         var (list, timing) = Fixture();
-        Assert.Throws<DomainValidationException>(() => FisRaceResults.Assemble(list,
-            timing with { Results = timing.Results.Take(1).ToArray() }));
+        var exception = Assert.Throws<DomainValidationException>(() => FisRaceResults.Assemble(list,
+            timing with { Results = timing.Results.Select((x, index) => index == 1
+                ? x with { Status = TimingStatus.Ready, Hundredths = null } : x).ToArray() }));
+        Assert.Contains("Bib 2", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CompleteTimesRemainPublishableWithAnExtraUnassignedPulse()
+    {
+        var (list, timing) = Fixture();
+        var extra = new TimingObservation("extra", Guid.NewGuid(), 11, "test", "extra",
+            ObservationKind.Impulse, 1, TimeSpan.FromHours(12).Ticks, 3, null, false, "clock", "False finish");
+        var withExtra = timing with { Observations = [new ObservationReview(extra, null, false, null, "Unassigned")] };
+        Assert.True(withExtra.Complete);
+        Assert.Equal(1, withExtra.Unresolved);
+        Assert.Equal(10, FisRaceResults.Assemble(list, withExtra).Rows.Count);
     }
 
     [Fact]
