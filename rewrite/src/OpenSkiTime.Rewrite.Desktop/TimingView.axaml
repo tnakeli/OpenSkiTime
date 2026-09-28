@@ -37,6 +37,7 @@
       <DataGridTextColumn Header="" Binding="{Binding Clock.Marker}" Width="26" />
       <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="46" />
       <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="100" />
+      <DataGridTextColumn Header="RUN 1" Binding="{Binding PreviousRunTime}" Width="78" IsVisible="{Binding ShowTimingTotal}" />
      </DataGrid.Columns>
     </DataGrid>
    </Grid></Border>

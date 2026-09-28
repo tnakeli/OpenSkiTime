@@ -9,6 +9,66 @@ namespace OpenSkiTime.Rewrite.Tests;
 public sealed class RaceFlowTests
 {
     [Fact]
+    public void ConfiguredButUnusedIntermediateIsIgnoredWithoutBlockingTheResult()
+    {
+        var list = TimingRulesTests.List(1); // Competition has no intermediate positions.
+        var capture = TimingRulesTests.Session(list);
+        capture = capture with { Options = capture.Options with { IntermediateChannels = [2] } };
+        var decoder = new AlgeAsciiDecoder(capture, "Synthetic", "1");
+        var observations = decoder.Feed(TimingRulesTests.Packet(capture, 1,
+            " *0001 C0 12:00:00.0000 00\r *0001 C2 12:00:10.0000 00\r *0001 C1 12:01:00.0000 00\r"));
+        var audit = new[] { observations[0], observations[2] }.Select((observation, index) =>
+            new TimingAudit(index + 1, list.Id, TimingRulesTests.At, "Test operator", "Identified bib",
+                new(DecisionKind.Assignment, observation.Key), new(DecisionKind.Assignment, observation.Key, Bib: 1))).ToArray();
+        var result = TimingEngine.Replay(list, observations, audit, 0, 1);
+        Assert.Equal(TimingStatus.Finished, result.Results[0].Status);
+        Assert.Equal(6000, result.Results[0].Hundredths);
+        Assert.True(result.Complete);
+        Assert.Equal("Ignored", result.Observations[1].State);
+        Assert.Equal(0, result.Unresolved);
+    }
+
+    [Fact]
+    public async Task UnusedConfiguredIntermediateStillPreservesTheOriginalPacket()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-unused-intermediate", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var file = Path.Combine(root, "synthetic.ost");
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var list = await TimingStorageTests.SeedAsync(workspace, file, 1);
+            var timing = workspace.Timing!;
+            await timing.SelectRunAsync(list.Id);
+            await timing.FollowStartOrderAsync(true);
+            var source = new SimulatorTimingSource();
+            await timing.StartAsync(source, new("Simulator", "Test", TimingRulesTests.Date, Simulation: true)
+                { IntermediateChannels = [2] }, "Test operator");
+            var noon = TimeSpan.FromHours(12).Ticks;
+            await source.PulseAsync(0, noon);
+            await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Results[0].Status == TimingStatus.OnCourse);
+            await source.PulseAsync(2, noon + TimeSpan.FromSeconds(10).Ticks);
+            await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Observations.Count == 2);
+            Assert.Equal("Ignored", timing.Snapshot!.Observations[1].State);
+            await source.PulseAsync(1, noon + TimeSpan.FromMinutes(1).Ticks);
+            await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Complete);
+            Assert.Equal(6000, timing.Snapshot!.Results[0].Hundredths);
+            await timing.StopAsync();
+            Assert.Equal(3, (await workspace.ReadTimingAsync(list.Id)).Packets.Count);
+            await workspace.CloseAsync();
+            await workspace.OpenAsync(file);
+            await workspace.Timing!.SelectRunAsync(list.Id);
+            Assert.Equal("Ignored", workspace.Timing.Snapshot!.Observations[1].State);
+            Assert.Equal(6000, workspace.Timing.Snapshot.Results[0].Hundredths);
+        }
+        finally
+        {
+            if (Path.GetFullPath(root).StartsWith(Path.Combine(Path.GetTempPath(), "openskitime-unused-intermediate") + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            { Directory.Delete(root, true); }
+        }
+    }
+
+    [Fact]
     public void IntermediateUsesFullPrecisionAndRequiresReviewAcrossClockContexts()
     {
         var original = TimingRulesTests.List(1);

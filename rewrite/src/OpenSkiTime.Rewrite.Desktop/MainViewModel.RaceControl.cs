@@ -11,6 +11,9 @@ namespace OpenSkiTime.Rewrite.Desktop;
 public sealed partial class MainViewModel
 {
     private TimingSnapshot? _queueSnapshot;
+    private int? _queueArmedStart;
+    private int? _queueArmedFinish;
+    public int RaceQueueVersion { get; private set; }
     private DataGridCollectionView? _rankingView;
     public ObservableCollection<TimingGridRow> AtStartRows { get; } = [];
     public ObservableCollection<TimingGridRow> RunningRows { get; } = [];
@@ -135,13 +138,17 @@ public sealed partial class MainViewModel
     {
         var timing = workspace.Timing;
         var snapshot = timing?.Snapshot;
-        if (snapshot is null || !HasTimingRun)
+        if (timing is null || snapshot is null || !HasTimingRun)
         { OnCourseRows.Clear(); FinishedTimingRows.Clear(); AtStartRows.Clear(); RunningRows.Clear(); RankingRows.Clear(); _queueSnapshot = null; return; }
-        if (!ReferenceEquals(snapshot, _queueSnapshot))
+        if (!ReferenceEquals(snapshot, _queueSnapshot) || _queueArmedStart != timing.ArmedStart || _queueArmedFinish != timing.ArmedFinish)
         {
             _queueSnapshot = snapshot;
+            _queueArmedStart = timing.ArmedStart;
+            _queueArmedFinish = timing.ArmedFinish;
+            var previousTimes = _previousTiming?.Results.ToDictionary(x => x.CompetitorId, x => x.Time);
             var currentRows = TimingEngine.Combined(snapshot, _previousTiming)
-                .ToDictionary(x => x.Result.Bib, x => new TimingGridRow(x.Result, x.Total, x.Rank));
+                .ToDictionary(x => x.Result.Bib, x => new TimingGridRow(x.Result, x.Total, x.Rank)
+                { PreviousRunTime = previousTimes?.GetValueOrDefault(x.Result.CompetitorId) ?? "" });
             TimingGridRow Map(TimingResult result) => currentRows[result.Bib];
             var onCourse = RaceFlow.OnCourse(snapshot).Select(Map).ToArray();
             SyncTimingRows(OnCourseRows, onCourse);
@@ -154,8 +161,13 @@ public sealed partial class MainViewModel
                 IsLatestFinish = row.Bib == latest,
                 Category = HasTimingCategories ? CategoryResolver.Resolve(row.Result.Entry.Entrant.Athlete, _desk!.Categories) : ""
             };
-            SyncTimingRows(AtStartRows, RaceFlow.Waiting(snapshot).Select(Map).ToArray());
-            SyncTimingRows(RunningRows, onCourse.Concat(FinishedTimingRows.Take(3)).Select(Present).ToArray());
+            SyncTimingRows(AtStartRows, RaceFlow.Waiting(snapshot)
+                .OrderBy(x => x.Bib == timing.ArmedStart ? 1 : 0).ThenByDescending(x => x.Entry.Position)
+                .Select(Map).ToArray());
+            var arrivalOrder = onCourse.OrderBy(x => x.Bib == timing.ArmedFinish ? 1 : 0)
+                .ThenByDescending(x => x.Result.StartKey is null ? long.MinValue : snapshot.Observations
+                    .First(y => y.Observation.Key == x.Result.StartKey).Observation.DeviceTicks ?? long.MinValue);
+            SyncTimingRows(RunningRows, FinishedTimingRows.Take(3).Reverse().Concat(arrivalOrder).Select(Present).ToArray());
             var ranked = currentRows.Values.Where(x => x.Result.Status != TimingStatus.Ready && x.Result.Status != TimingStatus.OnCourse)
                 .Where(x => x.Result.Status != TimingStatus.Review || x.Result.FinishKey is not null).Select(Present).ToArray();
             long? RankedTime(TimingGridRow row) => row.Result.Status == TimingStatus.Finished ? ShowTimingTotal ? row.Total : row.Result.Hundredths : null;
@@ -167,6 +179,8 @@ public sealed partial class MainViewModel
                 .ThenBy(x => x.Category, StringComparer.Ordinal).ThenBy(x => RankedTime(x) ?? long.MaxValue).ThenBy(x => x.Position)
                 .Select(x => x with { DisplayRank = RankedTime(x) is { } time
                     ? ranked.Count(y => y.Category == x.Category && RankedTime(y) is { } other && other < time) + 1 : null }).ToArray());
+            RaceQueueVersion++;
+            OnPropertyChanged(nameof(RaceQueueVersion));
             OnCourseLabel = $"ON COURSE · {onCourse.Length}";
             FinishListLabel = $"FINISHED · {FinishedTimingRows.Count}";
             OnPropertyChanged(nameof(LastFinishLabel));

@@ -247,8 +247,6 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     if (RaceFlow.OnCourse(_snapshot!).Count > 0)
                     { throw new DomainValidationException("Competitors are still on course. Finish or classify them before switching the active timing run."); }
                     var data = await store.ReadTimingAsync(change.ListId);
-                    if (data.List.Plan.Competition.IntermediateCount < session.Options.IntermediateChannels.Length)
-                    { throw new DomainValidationException("The next competition needs different intermediate channels. Configure them in Settings."); }
                     var restored = TimingReplay.Restore(data, decoders);
                     var next = await store.SwitchCaptureAsync(session.Id, change.ListId, session.Options, session.Options.Operator, DateTimeOffset.UtcNow);
                     _list = data.List; _observations.Clear(); _audit.Clear(); _sessions.Clear(); _decoders.Clear();

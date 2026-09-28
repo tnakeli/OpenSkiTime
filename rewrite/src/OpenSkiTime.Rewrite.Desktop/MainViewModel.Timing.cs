@@ -13,6 +13,7 @@ namespace OpenSkiTime.Rewrite.Desktop;
 
 public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalRank)
 {
+    public string PreviousRunTime { get; init; } = "";
     public string Category { get; init; } = "";
     public int? DisplayRank { get; init; }
     public bool IsLatestFinish { get; init; }
@@ -277,8 +278,6 @@ public sealed partial class MainViewModel
                 IsTimingSimulator || IsTimingReplay, TimingFirmware, Mt1StartDevice.Trim(), Mt1FinishDevice.Trim(), since)
                 { BaudRate = TimingBaud, IntermediateChannels = ReadIntermediateChannels() };
             options.Validate();
-            if (options.IntermediateChannels.Length > _timingList!.Plan.Competition.IntermediateCount)
-            { throw new DomainValidationException("Configured intermediate channels exceed this competition's intermediate count."); }
             if (IsAlgeResults && options.IntermediateChannels.Length > 0)
             { throw new DomainValidationException("ALGE Results supports start/finish only. Use USB/serial for intermediate capture."); }
             ITimingSource source;

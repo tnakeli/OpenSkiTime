@@ -30,8 +30,11 @@ public static class TimingEngine
                     || observation.Channel >= 2 && observation.Channel < 2 + list.Plan.Competition.IntermediateCount);
             var reviewedObservation = changedImpulse ? observation with { Kind = ObservationKind.DeviceCorrection,
                 Message = "Previously received impulse changed on the device/server. Review the original assignment: " + observation.Message } : observation;
-            reviewed.Add(new(reviewedObservation, bib, ignored, duplicate,
-                ignored ? "Ignored" : duplicate is not null ? "Duplicate" : !usable ? "Review" : bib is null ? "Unassigned" : "Assigned"));
+            var unusedIntermediate = !changedImpulse && duplicate is null && observation.Kind == ObservationKind.Impulse
+                && observation.Channel is >= 2 and <= 21
+                && observation.Channel >= 2 + list.Plan.Competition.IntermediateCount;
+            reviewed.Add(new(reviewedObservation, bib, ignored || unusedIntermediate, duplicate,
+                ignored || unusedIntermediate ? "Ignored" : duplicate is not null ? "Duplicate" : !usable ? "Review" : bib is null ? "Unassigned" : "Assigned"));
         }
         var rows = new List<TimingResult>();
         var assignedByBib = reviewed.Where(x => x.Bib is not null && x.State == "Assigned")
