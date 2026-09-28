@@ -212,7 +212,7 @@ public partial class DesktopWorkflowTests
                 Assert.All(AllTimingMenuItems(grid.ContextMenu.Items).Where(x => x.Command is not null), x => Assert.NotNull(x.InputGesture));
                 grid.ContextMenu.Close();
             }
-            // More than three arrivals: Running retains the latest three, Ranking retains everyone.
+            // Completed racers appear in Ranking, never in the on-course queue.
             async Task Finish(string at, int count)
             {
                 vm.SimulationTime = at;
@@ -229,8 +229,8 @@ public partial class DesktopWorkflowTests
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 1);
             await Finish("12:01:40.0000", 5);
-            Assert.Equal(3, vm.RunningRows.Count);
-            Assert.Equal(vm.FinishedTimingRows.Take(3).Reverse().Select(x => x.Bib), vm.RunningRows.Select(x => x.Bib));
+            Assert.Empty(vm.RunningRows);
+            Assert.Equal(5, vm.FinishedTimingRows.Count);
             Assert.Equal(7, vm.RankingRows.Count); // five finishers plus DNS and DNF
             Assert.Equal(vm.FinishedTimingRows[0].Bib, Assert.Single(vm.RankingRows, x => x.IsLatestFinish).Bib);
             Assert.Equal(2, vm.RankingView.Groups!.OfType<DataGridCollectionViewGroup>().Count());
@@ -266,7 +266,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal("0:42.12", vm.FinishedTimingRows.Single(x => x.Bib == a).Time);
             Assert.Equal(5, vm.FinishedTimingRows.Count);
             Assert.Empty(vm.OnCourseRows);
-            Assert.Equal(3, vm.RunningRows.Count);
+            Assert.Empty(vm.RunningRows);
             Assert.Empty(view.GetVisualDescendants().OfType<ComboBox>());
             await DropTimingRacer(view, vm.CreateTimingDrag(a)!);
             Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == a).Status);

@@ -56,10 +56,7 @@ public sealed partial class MainViewModel
         { row.Clock.Time = TimingTime.Format(row.Result.Status == TimingStatus.OnCourse ? timing?.RunningHundredths(row.Result.StartKey) : row.Result.Hundredths); }
         foreach (var row in AtStartRows) { row.Clock.Marker = row.Bib == timing?.ArmedStart ? "▶" : ""; }
         foreach (var row in RunningRows)
-        {
-            row.Clock.Marker = row.IsLatestFinish ? "◆" : row.Bib == timing?.ArmedFinish ? "▶" : "";
-            if (row.Result.Status == TimingStatus.Finished) { row.Clock.Time = ""; }
-        }
+        { row.Clock.Marker = row.Bib == timing?.ArmedFinish ? "▶" : ""; }
         ExpectedFinishTime = OnCourseRows.FirstOrDefault(x => x.Bib == timing?.ArmedFinish)?.Clock.Time ?? "—";
     }
 
@@ -167,7 +164,7 @@ public sealed partial class MainViewModel
             var arrivalOrder = onCourse.OrderBy(x => x.Bib == timing.ArmedFinish ? 1 : 0)
                 .ThenByDescending(x => x.Result.StartKey is null ? long.MinValue : snapshot.Observations
                     .First(y => y.Observation.Key == x.Result.StartKey).Observation.DeviceTicks ?? long.MinValue);
-            SyncTimingRows(RunningRows, FinishedTimingRows.Take(3).Reverse().Concat(arrivalOrder).Select(Present).ToArray());
+            SyncTimingRows(RunningRows, arrivalOrder.Select(Present).ToArray());
             var ranked = currentRows.Values.Where(x => x.Result.Status != TimingStatus.Ready && x.Result.Status != TimingStatus.OnCourse)
                 .Where(x => x.Result.Status != TimingStatus.Review || x.Result.FinishKey is not null).Select(Present).ToArray();
             long? RankedTime(TimingGridRow row) => row.Result.Status == TimingStatus.Finished ? ShowTimingTotal ? row.Total : row.Result.Hundredths : null;
