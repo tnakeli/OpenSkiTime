@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
 using Avalonia.Layout;
+using Avalonia.Threading;
 using Avalonia.Controls.Primitives;
 using System.ComponentModel;
 using System.Windows.Input;
@@ -29,6 +30,7 @@ public sealed partial class TimingView : UserControl
         DataContextChanged += (_, _) => BindViewModel(DataContext as MainViewModel);
         AttachedToVisualTree += (_, _) => BindViewModel(DataContext as MainViewModel);
         DetachedFromVisualTree += (_, _) => BindViewModel(null);
+        SizeChanged += (_, _) => Dispatcher.UIThread.Post(ScrollToNext, DispatcherPriority.Background);
         AddHandler(KeyDownEvent, OnTimingKey, RoutingStrategies.Tunnel);
         ConfigureDragging();
     }
@@ -45,6 +47,8 @@ public sealed partial class TimingView : UserControl
     {
         if (e.PropertyName == nameof(MainViewModel.HasTimingIntermediates)) { ConfigureColumns(); }
         if (e.PropertyName == nameof(MainViewModel.TimingChannelStates)) { UpdateChannelVisibility(); }
+        if (e.PropertyName == nameof(MainViewModel.RaceQueueVersion))
+        { Dispatcher.UIThread.Post(ScrollToNext, DispatcherPriority.Background); }
         if (e.PropertyName is nameof(MainViewModel.SelectedTimingRow) or nameof(MainViewModel.IsRefreshingTimingUi)
             && _viewModel?.IsRefreshingTimingUi == false) { SynchronizeSelection(); }
     }
@@ -65,6 +69,24 @@ public sealed partial class TimingView : UserControl
             }
         }
         finally { _synchronizingSelection = false; }
+    }
+
+    private void ScrollToNext()
+    {
+        if (_viewModel is not { } vm || !IsVisible) { return; }
+        ScrollLast("AtStartGrid", vm.AtStartRows.LastOrDefault());
+        ScrollLast("RunningGrid", vm.RunningRows.LastOrDefault());
+    }
+
+    private void ScrollLast(string name, object? item)
+    {
+        if (item is null) { return; }
+        var grid = this.FindControl<DataGrid>(name)!;
+        grid.ScrollIntoView(item, null);
+        var scroller = grid.GetVisualDescendants().OfType<ScrollViewer>()
+            .FirstOrDefault(x => x.Extent.Height > x.Viewport.Height);
+        if (scroller is not null)
+        { scroller.Offset = new(scroller.Offset.X, scroller.Extent.Height - scroller.Viewport.Height); }
     }
 
     private void ConfigureColumns()

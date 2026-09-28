@@ -214,6 +214,7 @@ public partial class DesktopWorkflowTests
     {
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout(); // Apply queued DataGrid scrolling before the headless screenshot.
         if (string.IsNullOrEmpty(directory)) { return; }
         Directory.CreateDirectory(directory);
         using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)window.Width, (int)window.Height), new Vector(96, 96));

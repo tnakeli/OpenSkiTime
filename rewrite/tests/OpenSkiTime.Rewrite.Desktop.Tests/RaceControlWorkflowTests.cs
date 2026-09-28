@@ -104,6 +104,7 @@ public partial class DesktopWorkflowTests
             Assert.Single(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
             await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
             var a = vm.TimingRows[0].Bib; var b = vm.TimingRows[1].Bib; var c = vm.TimingRows[2].Bib; var d = vm.TimingRows[3].Bib;
+            Assert.Equal(a, vm.AtStartRows[^1].Bib);
             Assert.StartsWith(a + " ·", vm.NextStartLabel, StringComparison.Ordinal);
             await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
             vm.SimulationTime = "11:59:50.0000";
@@ -131,10 +132,12 @@ public partial class DesktopWorkflowTests
             Assert.StartsWith(c + " ·", vm.NextStartLabel, StringComparison.Ordinal);
             view.FindControl<DataGrid>("AtStartGrid")!.SelectedItem = vm.AtStartRows.Single(x => x.Bib == d);
             TimingMenu(view, "AtStartGrid", "Next at start"); await vm.ExpectSelectedCommand.ExecutionTask!;
+            Assert.Equal(d, vm.AtStartRows[^1].Bib); // changing the next starter also moves that racer in the visible queue
             Assert.StartsWith(d + " ·", vm.NextStartLabel, StringComparison.Ordinal);
             vm.SimulationTime = "12:00:05.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 2);
+            Assert.Equal(a, vm.RunningRows[^1].Bib); // earliest expected finish stays at the bottom
             view.FindControl<DataGrid>("RunningGrid")!.SelectedItem = vm.RunningRows.Single(x => x.Bib == d);
             Assert.True(vm.ReturnToStartCommand.CanExecute(null));
             CaptureDraw(window, output, "race-false-start-selected.png");
@@ -227,7 +230,7 @@ public partial class DesktopWorkflowTests
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 1);
             await Finish("12:01:40.0000", 5);
             Assert.Equal(3, vm.RunningRows.Count);
-            Assert.Equal(vm.FinishedTimingRows.Take(3).Select(x => x.Bib), vm.RunningRows.Select(x => x.Bib));
+            Assert.Equal(vm.FinishedTimingRows.Take(3).Reverse().Select(x => x.Bib), vm.RunningRows.Select(x => x.Bib));
             Assert.Equal(7, vm.RankingRows.Count); // five finishers plus DNS and DNF
             Assert.Equal(vm.FinishedTimingRows[0].Bib, Assert.Single(vm.RankingRows, x => x.IsLatestFinish).Bib);
             Assert.Equal(2, vm.RankingView.Groups!.OfType<DataGridCollectionViewGroup>().Count());

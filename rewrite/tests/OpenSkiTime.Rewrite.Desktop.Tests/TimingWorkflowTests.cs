@@ -62,6 +62,7 @@ public partial class DesktopWorkflowTests
             Assert.Contains("1234", vm.WindowTitle, StringComparison.Ordinal);
             CaptureDraw(window, output, "timing-device.png");
             vm.TimingSource = "Simulator";
+            vm.TimingIntermediateChannels = "2"; // A configured Timy channel must not block a race with no intermediates.
             vm.FollowTimingOrder = false; // This reference scenario deliberately operates with manual bib selection.
             vm.ShowSettingsCommand.Execute(null);
             Click(window, "Connect");
@@ -134,6 +135,9 @@ public partial class DesktopWorkflowTests
             Assert.NotNull(second.SourceTimingVersion);
             await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 2));
             Assert.Contains("Run 2", vm.TimingContext, StringComparison.Ordinal);
+            Assert.Collection(vm.AtStartRows.Select(x => x.PreviousRunTime).Order(),
+                first => Assert.Equal("1:01.99", first), secondTime => Assert.Equal("1:05.00", secondTime));
+            Assert.True(view.FindControl<DataGrid>("AtStartGrid")!.Columns.Single(x => Equals(x.Header, "RUN 1")).IsVisible);
             Assert.True(vm.IsTimingConnected);
             Assert.False(vm.IsError, vm.StatusMessage);
             var bib = vm.TimingRows[0].Bib;
