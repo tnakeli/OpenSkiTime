@@ -28,6 +28,45 @@ public sealed class HeadlessAppBuilder
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
+    public async Task ResultsPickerOffersOnlyFisCompetitions()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-m7-picker", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var path = Path.Combine(root, "test.ost");
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var date = new DateOnly(2026, 9, 28);
+            var series = await workspace.CreateAsync(path, new("Test", "Test", "Test", date, date, "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null,
+                new("Club Slalom", "SL2", date, Discipline.Slalom, RaceType.Club, 2, 0), series.Revision);
+            var club = Assert.Single(series.Competitions);
+            using var vm = new MainViewModel(workspace, new FileDialogsStub
+                { NewPath = path, OpenPath = path, BackupPath = path + ".bak" },
+                recentSeriesStore: new RecentSeriesStore(root));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.ShowResultsCommand.ExecuteAsync(null);
+            Assert.Empty(vm.FisCompetitions);
+            Assert.Null(vm.ResultsCompetition);
+            Assert.Contains("No FIS competition", vm.ResultsState, StringComparison.Ordinal);
+
+            series = await workspace.ReadAsync();
+            series = await workspace.SaveCompetitionAsync(null,
+                new("FIS Slalom", "FIS", date, Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.ShowResultsCommand.ExecuteAsync(null);
+            Assert.Equal(2, vm.Competitions.Count);
+            Assert.Equal(RaceType.Fis, Assert.Single(vm.FisCompetitions).Values.RaceType);
+            Assert.Equal("FIS", vm.ResultsCompetition?.Values.ShortLabel);
+            Assert.NotEqual(club.Id, vm.ResultsCompetition?.Id);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task CompetitionDrawUsesAllMenAndRejectsMixedEntriesWithoutFiltering()
     {
         var root = Path.Combine(Path.GetTempPath(), "openskitime-draw-ui", Guid.NewGuid().ToString("N"));

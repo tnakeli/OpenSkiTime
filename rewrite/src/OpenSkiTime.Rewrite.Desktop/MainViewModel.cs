@@ -24,6 +24,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     private WorkspaceSection _activeRaceSection = WorkspaceSection.Draw;
 
     public ObservableCollection<CompetitionDetails> Competitions { get; } = [];
+    public ObservableCollection<CompetitionDetails> FisCompetitions { get; } = [];
     public IReadOnlyList<Discipline> Disciplines { get; } = Enum.GetValues<Discipline>();
     public IReadOnlyList<RaceType> RaceTypes { get; } = Enum.GetValues<RaceType>();
 
@@ -91,8 +92,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         SwitchSection(WorkspaceSection.Results);
         if (!IsResultsSection) { return; }
-        var selected = Competitions.FirstOrDefault(x => x.Id == _activeRaceId && x.Values.RaceType == RaceType.Fis)
-            ?? Competitions.FirstOrDefault(x => x.Values.RaceType == RaceType.Fis);
+        var selected = FisCompetitions.FirstOrDefault(x => x.Id == _activeRaceId)
+            ?? FisCompetitions.FirstOrDefault();
         if (Equals(ResultsCompetition, selected)) { await LoadResultsAsync(); }
         else { ResultsCompetition = selected; }
     }
@@ -313,6 +314,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             _settingDraw = false;
             ClearCompetitorDesk();
             Competitions.Clear();
+            FisCompetitions.Clear();
+            ResultsCompetition = null;
             SelectedCompetition = null;
             IsCompetitionEditing = false;
             IsOpen = false;
@@ -480,9 +483,11 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         Nation = details.Values.Nation;
         Season = details.Values.Season;
         Competitions.Clear();
+        FisCompetitions.Clear();
         foreach (var competition in details.Competitions)
         {
             Competitions.Add(competition);
+            if (competition.Values.RaceType == RaceType.Fis) { FisCompetitions.Add(competition); }
         }
         OnPropertyChanged(nameof(ActiveRaceLabel));
         DeskCompetition = Competitions.FirstOrDefault(x => x.Id == deskCompetitionId) ?? Competitions.FirstOrDefault();
