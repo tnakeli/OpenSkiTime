@@ -4,7 +4,7 @@
   <x:Double x:Key="DataGridSortIconMinWidth">14</x:Double>
   <ControlTheme x:Key="DataGridCellTextBlockTheme" TargetType="TextBlock"><Setter Property="Margin" Value="6,0" /><Setter Property="VerticalAlignment" Value="Center" /></ControlTheme>
  </UserControl.Resources>
- <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+ <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
   <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
    <StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Text="{Binding TimingContext}" Classes="sectionTitle" /><TextBlock Text="{Binding TimingSummary}" Classes="supportingText" VerticalAlignment="Center" /></StackPanel>
    <Button Grid.Column="1" Content="Prepare Run 2" Command="{Binding PrepareNextTimedRunCommand}" IsVisible="{Binding CanPrepareNextTimedRun}" Classes="secondaryAction" />
@@ -16,8 +16,8 @@
     <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
    </Border>
   </StackPanel>
-  <Grid Grid.Row="2" RowDefinitions="1.1*,8,1*" ColumnDefinitions="0.9*,8,2*">
-   <Border Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
+  <Grid Grid.Row="2" RowDefinitions="1.6*,6,1*,6,1*" ColumnDefinitions="0.9*,8,2*">
+   <Border Name="StartDropTarget" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
     <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource SubtleSurfaceBrush}">
      <TextBlock Text="AT START" Classes="raceHeading" />
      <CheckBox Grid.Column="1" Content="Follow order" IsChecked="{Binding FollowTimingOrder}" Command="{Binding ApplyFollowTimingOrderCommand}" FontSize="11" Margin="8,0" MinHeight="24" />
@@ -60,12 +60,26 @@
    <GridSplitter Grid.Row="1" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
    <Border Grid.Row="2" Grid.ColumnSpan="3" Classes="racePane"><Grid RowDefinitions="Auto,*">
     <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource SubtleSurfaceBrush}">
+     <TextBlock Text="TIMESTAMPS · TIME OF DAY" Classes="raceHeading" />
+     <CheckBox Grid.Column="1" Content="Show ignored" IsChecked="{Binding ShowIgnoredTimestamps}" FontSize="11" Margin="8,0" MinHeight="24" />
+    </Grid>
+    <DataGrid Grid.Row="1" Name="TimestampsGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimestampRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
+     AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="26" GridLinesVisibility="All">
+     <DataGrid.Columns>
+      <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="54" />
+      <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="160" />
+     </DataGrid.Columns>
+    </DataGrid>
+   </Grid></Border>
+   <GridSplitter Grid.Row="3" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
+   <Border Grid.Row="4" Grid.ColumnSpan="3" Classes="racePane"><Grid RowDefinitions="Auto,*">
+    <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource SubtleSurfaceBrush}">
      <TextBlock Text="RANKING" Classes="raceHeading" />
      <TextBlock Grid.Column="1" Text="◆ Latest finisher" Classes="supportingText" FontSize="11" Margin="8,0" VerticalAlignment="Center" />
     </Grid>
     <DataGrid Grid.Row="1" Name="RankingGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding RankingView}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRowGroup="DescribeCategory"
      AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
-     ToolTip.Tip="Results in rank order within each category. Right-click or Shift+F10 for corrections and classifications.">
+     ToolTip.Tip="Results in rank order within each category. Drag a competitor onto a timestamp to assign it. Right-click or Shift+F10 for status.">
      <DataGrid.Columns>
       <DataGridTextColumn Header="" Binding="{Binding FinishMarker}" Width="28" />
       <DataGridTextColumn Header="RK" Binding="{Binding DisplayRank}" Width="42" />
@@ -82,23 +96,12 @@
   <StackPanel Grid.Row="3" Spacing="3" Margin="0,5,0,0">
    <Grid ColumnDefinitions="*,Auto">
     <TextBlock Text="{Binding SelectedTimingIdentity}" Classes="supportingText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-    <TextBlock Grid.Column="1" Text="Right-click / Shift+F10 · F5 start · F6 finish · F8 back to start" Classes="supportingText" FontSize="10" />
+    <TextBlock Grid.Column="1" Text="{Binding TimingDropHint}" Classes="supportingText" FontSize="10" />
    </Grid>
    <TextBlock Text="{Binding SelectedTimingProblem}" IsVisible="{Binding HasSelectedTimingProblem}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
-   <TextBlock Text="Unassigned finish received · right-click → Assign latest finish…" IsVisible="{Binding HasUnassignedFinish}" Foreground="{DynamicResource WarningBrush}" />
+   <TextBlock Text="Unassigned finish · drag a competitor onto its finish timestamp." IsVisible="{Binding HasUnassignedFinish}" Foreground="{DynamicResource WarningBrush}" />
   </StackPanel>
-  <Border Grid.Row="4" Classes="workSurface" Padding="10" Margin="0,8,0,0" IsVisible="{Binding ShowTimingCorrection}">
-   <StackPanel Spacing="8">
-    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding SelectedTimingIdentity}" FontWeight="SemiBold" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Close correction" Command="{Binding CloseTimingCorrectionCommand}" Classes="secondaryAction" /></Grid>
-    <TextBlock Text="{Binding SelectedTimingRow.Detail}" Classes="supportingText" TextWrapping="Wrap" />
-    <Grid ColumnDefinitions="*,8,*">
-     <StackPanel Spacing="4"><TextBlock Text="FINISH BELONGS TO BIB" Classes="fieldLabel" /><Grid ColumnDefinitions="80,8,Auto"><TextBox Text="{Binding ObservationBibText}" Watermark="Bib" /><Button Grid.Column="2" Content="Assign finish" Command="{Binding ChangeObservationCommand}" CommandParameter="assign" Classes="secondaryAction" /></Grid></StackPanel>
-     <StackPanel Grid.Column="2" Spacing="4"><TextBlock Text="CORRECTED RUN TIME" Classes="fieldLabel" /><Grid ColumnDefinitions="100,8,Auto"><TextBox Text="{Binding CorrectedTimeText}" Watermark="1:12.34" /><Button Grid.Column="2" Content="Correct time" Command="{Binding CorrectTimingTimeCommand}" Classes="secondaryAction" /></Grid></StackPanel>
-    </Grid>
-    <Grid ColumnDefinitions="*,8,Auto"><TextBox Text="{Binding TimingReason}" Watermark="Reason for correction" /><Button Grid.Column="2" Content="Undo last change" Command="{Binding UndoLastTimingChangeCommand}" Classes="secondaryAction" /></Grid>
-   </StackPanel>
-  </Border>
-  <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding IsTimingSimulator}">
+  <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding IsTimingSimulator}">
    <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Text="{Binding SimulationTime}" Width="155" />
    <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
    <Button Content="Test intermediate" Command="{Binding SimulatePulseCommand}" CommandParameter="intermediate" IsVisible="{Binding HasTimingIntermediates}" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />

@@ -34,6 +34,7 @@ public sealed record RawTimingPacket(Guid SessionId, long Sequence, DateTimeOffs
     string Protocol, string Source, string Stream, byte[] Bytes);
 public sealed record TimingReplayData(StartListRevision List, IReadOnlyList<CaptureSession> Sessions,
     IReadOnlyList<RawTimingPacket> Packets, IReadOnlyList<TimingAudit> Audit);
+public sealed record TimingAuditChange(TimingDecision Before, TimingDecision After, long? ReversesId = null);
 
 public interface ITimingStore
 {
@@ -45,6 +46,9 @@ public interface ITimingStore
     Task EndCaptureAsync(Guid sessionId, DateTimeOffset at, CancellationToken ct = default);
     Task<TimingAudit> AppendTimingAuditAsync(Guid listId, long expectedVersion, TimingDecision before,
         TimingDecision after, string operatorName, string reason, DateTimeOffset at, long? reversesId = null, CancellationToken ct = default);
+    Task<IReadOnlyList<TimingAudit>> AppendTimingAuditBatchAsync(Guid listId, long expectedVersion,
+        IReadOnlyList<TimingAuditChange> changes, string operatorName, string reason, DateTimeOffset at, CancellationToken ct = default)
+        => throw new NotSupportedException("This timing store cannot save a timestamp transfer atomically.");
 }
 
 public interface ITimingSource : IAsyncDisposable
@@ -368,6 +372,60 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             { if (_expected[channel] == bib) { _expected[channel] = 0; } }
             _expected[0] = _held[0] ? 0 : bib;
             AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
+    public async Task MoveToStartAsync(Guid listId, int bib, string? expectedStart, string operatorName, CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot?.ListId != listId) { throw new DomainValidationException("The active run changed. Drag the competitor again."); }
+            var result = _snapshot.Results.SingleOrDefault(x => x.Bib == bib);
+            if (result is null || result.StartKey != expectedStart)
+            { throw new DomainValidationException("The competitor's start changed. Drag the competitor again."); }
+            if (RaceFlow.CanReturnToStart(result))
+            { await AppendDecisionAsync(new(DecisionKind.Assignment, result.StartKey, Ignored: true), operatorName, "Drag to start — false start impulse"); }
+            else if (result.Status != TimingStatus.Ready)
+            { throw new DomainValidationException("Only a waiting competitor or a false starter without splits or a finish can return to start."); }
+            for (var channel = 1; channel < _expected.Length; channel++)
+            { if (_expected[channel] == bib) { _expected[channel] = 0; } }
+            _expected[0] = _held[0] ? 0 : bib;
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
+    public async Task MoveTimestampAsync(Guid listId, int bib, string key, TimingDecision expectedTarget,
+        IReadOnlyList<string> expectedSourceKeys, string operatorName, CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot?.ListId != listId) { throw new DomainValidationException("The active run changed. Drag the competitor again."); }
+            var target = _snapshot.Observations.SingleOrDefault(x => x.Observation.Key == key)
+                ?? throw new DomainValidationException("Choose a recorded timestamp.");
+            var decision = new TimingDecision(DecisionKind.Assignment, key, Bib: bib);
+            TimingEngine.ValidateDecision(decision, _snapshot);
+            if (TimingEngine.CurrentDecision(decision, _audit) != expectedTarget)
+            { throw new DomainValidationException("The timestamp assignment changed. Check it and drag again."); }
+            var source = _snapshot.Observations.Where(x => x.Bib == bib && !x.Ignored && x.DuplicateOf is null
+                && x.Observation.Kind == ObservationKind.Impulse && x.Observation.Channel == target.Observation.Channel).ToArray();
+            var expectedKeys = _snapshot.Observations.Where(x => expectedSourceKeys.Contains(x.Observation.Key)
+                && x.Observation.Channel == target.Observation.Channel).Select(x => x.Observation.Key).Order().ToArray();
+            if (!source.Select(x => x.Observation.Key).Order().SequenceEqual(expectedKeys))
+            { throw new DomainValidationException("The competitor received new timing while dragging. Check it and drag again."); }
+            if (target.Bib == bib && !target.Ignored) { return; }
+            var changes = source.Where(x => x.Observation.Key != key).Select(x =>
+                new TimingAuditChange(TimingEngine.CurrentDecision(new(DecisionKind.Assignment, x.Observation.Key), _audit),
+                    new(DecisionKind.Assignment, x.Observation.Key))).ToList();
+            changes.Add(new(expectedTarget, decision));
+            foreach (var change in changes) { TimingEngine.ValidateDecision(change.After, _snapshot); }
+            var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName,
+                $"Drag timestamp to Bib {bib}; displaced timestamps remain unassigned", DateTimeOffset.UtcNow, ct);
+            _audit.AddRange(saved); Rebuild();
+            foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
         }
         finally { _state.Release(); }
     }

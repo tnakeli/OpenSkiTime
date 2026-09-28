@@ -1,9 +1,11 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
+using Avalonia.Layout;
 using System.ComponentModel;
 using System.Windows.Input;
 
@@ -13,7 +15,7 @@ public sealed partial class TimingView : UserControl
 {
     private MainViewModel? _viewModel;
     private bool _synchronizingSelection;
-    private static readonly string[] GridNames = ["AtStartGrid", "RunningGrid", "RankingGrid"];
+    private static readonly string[] GridNames = ["AtStartGrid", "RunningGrid", "TimestampsGrid", "RankingGrid"];
     private TimingAction[] _actions = [];
     private int _splitCount = -1;
     // One definition drives both the context menus and actual keyboard shortcuts.
@@ -27,6 +29,7 @@ public sealed partial class TimingView : UserControl
         AttachedToVisualTree += (_, _) => BindViewModel(DataContext as MainViewModel);
         DetachedFromVisualTree += (_, _) => BindViewModel(null);
         AddHandler(KeyDownEvent, OnTimingKey, RoutingStrategies.Tunnel);
+        ConfigureDragging();
     }
 
     private void BindViewModel(MainViewModel? vm)
@@ -53,7 +56,9 @@ public sealed partial class TimingView : UserControl
             foreach (var name in GridNames)
             {
                 var grid = this.FindControl<DataGrid>(name)!;
-                grid.SelectedItem = grid.ItemsSource?.OfType<TimingGridRow>().FirstOrDefault(x => x.Bib == _viewModel?.SelectedTimingRow?.Bib);
+                grid.SelectedItem = name == "TimestampsGrid"
+                    ? grid.ItemsSource?.OfType<TimingTimestampRow>().FirstOrDefault(x => x.Bib == _viewModel?.SelectedTimingRow?.Bib && x.Bib is not null)
+                    : grid.ItemsSource?.OfType<TimingGridRow>().FirstOrDefault(x => x.Bib == _viewModel?.SelectedTimingRow?.Bib);
             }
         }
         finally { _synchronizingSelection = false; }
@@ -70,6 +75,26 @@ public sealed partial class TimingView : UserControl
         {
             grid.Columns.Insert(4 + i, new DataGridTextColumn
             { Header = $"INTERM {i + 1}", Binding = new Binding($"Intermediates[{i}]"), Width = new DataGridLength(82), Tag = "intermediate" });
+        }
+        var timestamps = this.FindControl<DataGrid>("TimestampsGrid")!;
+        while (timestamps.Columns.Count > 2) { timestamps.Columns.RemoveAt(2); }
+        for (var i = 0; i < count + 2; i++)
+        {
+            var index = i;
+            timestamps.Columns.Add(new DataGridTemplateColumn
+            {
+                Header = i == 0 ? "START" : i == count + 1 ? "FINISH" : $"INTERM {i}", Width = new DataGridLength(150),
+                CellTemplate = new FuncDataTemplate<TimingTimestampRow>((row, _) =>
+                {
+                    var cell = row?.Cells.ElementAtOrDefault(index);
+                    var border = new Border { Tag = cell, Padding = new(6,0), Child = new TextBlock
+                    { Text = cell?.Time ?? "—", FontFamily = new("Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center } };
+                    border.Classes.Add("timestampCell");
+                    if (cell is not null) { DragDrop.SetAllowDrop(border, true); }
+                    if (cell is not null) { ToolTip.SetTip(border, cell.Hint); }
+                    return border;
+                })
+            });
         }
     }
 
@@ -95,23 +120,25 @@ public sealed partial class TimingView : UserControl
             new("Hold finish", "Ctrl+F6", vm.HoldTimingPositionCommand, "finish", DynamicHeader: nameof(vm.FinishHoldLabel)),
             new("Hold intermediate", "Ctrl+F7", vm.HoldTimingPositionCommand, "intermediate", Visible: nameof(vm.HasTimingIntermediates), DynamicHeader: nameof(vm.IntermediateHoldLabel)),
             new("False finish · not a racer", "Ctrl+Back", vm.IgnoreLastFinishCommand, Enabled: nameof(vm.CanIgnoreLastFinish)),
-            new("Correct competitor timing…", "Ctrl+E", vm.CorrectCompetitorFinishCommand),
-            new("Assign latest finish…", "Ctrl+L", vm.CorrectLastFinishCommand, Enabled: nameof(vm.CanIgnoreLastFinish)),
-            new("Undo last timing change", "Ctrl+Z", vm.UndoLastTimingChangeCommand)
         ];
         foreach (var name in GridNames)
         {
             var menu = new ContextMenu();
+            var status = new MenuItem { Header = "Status" };
+            var more = new MenuItem { Header = "More…" };
             for (var i = 0; i < _actions.Length; i++)
             {
-                if (i is 4 or 9 or 13) { menu.Items.Add(new Separator()); }
                 var action = _actions[i];
                 var item = new MenuItem { Header = action.Header, InputGesture = KeyGesture.Parse(action.Gesture), Command = action.Command, CommandParameter = action.Parameter };
                 if (action.Enabled is { } enabled) { item.Bind(IsEnabledProperty, new Binding(enabled) { Source = vm }); }
                 if (action.Visible is { } visible) { item.Bind(IsVisibleProperty, new Binding(visible) { Source = vm }); }
                 if (action.DynamicHeader is { } header) { item.Bind(MenuItem.HeaderProperty, new Binding(header) { Source = vm }); }
-                menu.Items.Add(item);
+                if (i is >= 4 and <= 8) { status.Items.Add(item); }
+                else if (i >= 9) { more.Items.Add(item); }
+                else if (name == "AtStartGrid" && i is 1 or 2) { more.Items.Add(item); }
+                else { menu.Items.Add(item); }
             }
+            menu.Items.Add(new Separator()); menu.Items.Add(status); menu.Items.Add(more);
             this.FindControl<DataGrid>(name)!.ContextMenu = menu;
         }
     }
@@ -119,7 +146,7 @@ public sealed partial class TimingView : UserControl
     private void OnTimingKey(object? sender, KeyEventArgs e)
     {
         if (e.Source is not Avalonia.Visual source) { return; }
-        // Never run race shortcuts while the operator is typing a correction or device setting.
+        // Never run race shortcuts while the operator is typing outside the race grids.
         var grid = source as DataGrid ?? source.GetVisualAncestors().OfType<DataGrid>().FirstOrDefault();
         if (grid is null || !GridNames.Contains(grid.Name)) { return; }
         if (e.Key == Key.F10 && e.KeyModifiers == KeyModifiers.Shift)
@@ -127,21 +154,32 @@ public sealed partial class TimingView : UserControl
         var action = _actions.FirstOrDefault(x => KeyGesture.Parse(x.Gesture).Matches(e));
         if (action is null) { return; }
         e.Handled = true;
-        var menuItem = grid.ContextMenu!.Items.OfType<MenuItem>().First(x => x.Command == action.Command && Equals(x.CommandParameter, action.Parameter));
+        var menuItem = MenuActions(grid.ContextMenu!.Items).First(x => x.Command == action.Command && Equals(x.CommandParameter, action.Parameter));
         if (menuItem.IsEnabled && menuItem.IsVisible && action.Command.CanExecute(action.Parameter)) { action.Command.Execute(action.Parameter); }
     }
 
+    private static IEnumerable<MenuItem> MenuActions(IEnumerable<object?> items) => items.OfType<MenuItem>()
+        .SelectMany(x => new[] { x }.Concat(MenuActions(x.Items)));
+
     private void SelectCompetitor(object? sender, SelectionChangedEventArgs e)
     {
-        if (!_synchronizingSelection && DataContext is MainViewModel { IsRefreshingTimingUi: false } vm && e.AddedItems.OfType<TimingGridRow>().FirstOrDefault() is { } row)
-        { vm.SelectedTimingRow = row; }
+        if (_synchronizingSelection || DataContext is not MainViewModel { IsRefreshingTimingUi: false } vm) { return; }
+        if (e.AddedItems.OfType<TimingGridRow>().FirstOrDefault() is { } row) { vm.SelectedTimingRow = row; }
+        else if (e.AddedItems.OfType<TimingTimestampRow>().FirstOrDefault() is { } timestamps)
+        { vm.SelectedTimingRow = vm.TimingRows.FirstOrDefault(x => x.Bib == timestamps.Bib); }
     }
 
     private void SelectContextCompetitor(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not DataGrid grid || !e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) { return; }
-        if (e.Source is Avalonia.Visual source && source.GetVisualAncestors().OfType<DataGridRow>().FirstOrDefault()?.DataContext is TimingGridRow row
-            && DataContext is MainViewModel vm)
-        { grid.SelectedItem = row; vm.SelectedTimingRow = row; }
+        if (DataContext is not MainViewModel vm) { return; }
+        var row = Ancestry(e.Source).OfType<DataGridRow>().FirstOrDefault()?.DataContext;
+        grid.SelectedItem = row;
+        vm.SelectedTimingRow = row switch
+        {
+            TimingGridRow racer => racer,
+            TimingTimestampRow timestamps => vm.TimingRows.FirstOrDefault(x => x.Bib == timestamps.Bib),
+            _ => null
+        };
     }
 }

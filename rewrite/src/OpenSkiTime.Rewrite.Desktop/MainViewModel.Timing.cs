@@ -434,7 +434,7 @@ public sealed partial class MainViewModel
         var refreshing = IsRefreshingTimingUi;
         IsRefreshingTimingUi = true;
         try { RefreshTimingCore(); }
-        finally { RefreshRunningTimes(); IsRefreshingTimingUi = refreshing; if (!refreshing) { OnPropertyChanged(nameof(IsRefreshingTimingUi)); } }
+        finally { RefreshRunningTimes(); RefreshTimestamps(); IsRefreshingTimingUi = refreshing; if (!refreshing) { OnPropertyChanged(nameof(IsRefreshingTimingUi)); } }
     }
 
     private void RefreshTimingCore()
@@ -505,6 +505,7 @@ public sealed partial class MainViewModel
 
     private void ResetTimingUi()
     {
+        _timingDragWorkspace = Guid.NewGuid(); _timestampSnapshot = null; TimestampRows.Clear();
         _timingTimer?.Stop(); _timingList = null; _shownTiming = null; _previousTiming = null;
         TimingCompetition = null; TimingRows.Clear(); TimingObservations.Clear(); TimingHistory.Clear();
         TimingCheckpoints.Clear(); ShowTimingCorrection = false;

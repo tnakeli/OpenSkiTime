@@ -20,11 +20,38 @@ public partial class DesktopWorkflowTests
         var grid = view.FindControl<DataGrid>(gridName)!;
         grid.ContextMenu!.Open(grid);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        var item = grid.ContextMenu.Items.OfType<MenuItem>().Single(x => Equals(x.Header, label));
+        var item = AllTimingMenuItems(grid.ContextMenu.Items).Single(x => Equals(x.Header, label));
         Assert.True(item.IsEnabled);
         Assert.True(item.IsVisible);
         item.Command!.Execute(item.CommandParameter);
         grid.ContextMenu.Close();
+    }
+
+    private static IEnumerable<MenuItem> AllTimingMenuItems(IEnumerable<object?> items) => items.OfType<MenuItem>()
+        .SelectMany(x => new[] { x }.Concat(AllTimingMenuItems(x.Items)));
+
+    private static async Task DropTimingRacer(TimingView view, TimingDragCompetitor racer, string? timestampKey = null)
+    {
+        var vm = Assert.IsType<MainViewModel>(view.DataContext);
+        if (timestampKey is not null)
+        {
+            var row = vm.TimestampRows.Single(x => x.Cells.Any(c => c?.Key == timestampKey));
+            view.FindControl<DataGrid>("TimestampsGrid")!.ScrollIntoView(row, null);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            ((Window)view.GetVisualRoot()!).UpdateLayout();
+        }
+        var target = timestampKey is null ? view.FindControl<Border>("StartDropTarget")!
+            : view.GetVisualDescendants().OfType<Border>().Single(x => x.Tag is TimingTimestampCell cell && cell.Key == timestampKey);
+        var data = new DataObject(); data.Set(TimingView.CompetitorDragFormat, racer);
+        var over = new DragEventArgs(DragDrop.DragOverEvent, data, target, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = target };
+        target.RaiseEvent(over);
+        Assert.Equal(DragDropEffects.Move, over.DragEffects);
+        Assert.Contains("timingDropTarget", target.Classes);
+        var drop = new DragEventArgs(DragDrop.DropEvent, data, target, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = target };
+        target.RaiseEvent(drop);
+        await view.PendingTimingDrop;
+        Assert.False(vm.IsError, vm.StatusMessage);
+        Assert.DoesNotContain("timingDropTarget", target.Classes);
     }
 
     [AvaloniaFact]
@@ -98,9 +125,7 @@ public partial class DesktopWorkflowTests
             view.FindControl<DataGrid>("RunningGrid")!.SelectedItem = vm.RunningRows.Single(x => x.Bib == d);
             Assert.True(vm.ReturnToStartCommand.CanExecute(null));
             CaptureDraw(window, output, "race-false-start-selected.png");
-            view.FindControl<DataGrid>("RunningGrid")!.Focus();
-            window.KeyPressQwerty(PhysicalKey.F8, RawInputModifiers.None);
-            await vm.ReturnToStartCommand.ExecutionTask!;
+            await DropTimingRacer(view, vm.CreateTimingDrag(d)!);
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(d, vm.SelectedTimingRow!.Bib);
             Assert.Equal("Ready", vm.SelectedTimingRow.Status);
@@ -152,21 +177,20 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "race-live-980.png");
             Assert.True(view.FindControl<DataGrid>("AtStartGrid")!.Bounds.Height > 100);
             Assert.True(view.FindControl<DataGrid>("RunningGrid")!.Bounds.Height > 80);
-            Assert.Equal(3, view.GetVisualDescendants().OfType<DataGrid>().Count());
+            Assert.Equal(4, view.GetVisualDescendants().OfType<DataGrid>().Count());
             Assert.True(view.FindControl<DataGrid>("RankingGrid")!.Bounds.Height >= 65);
-            vm.CorrectLastFinishCommand.Execute(null); vm.ShowAllTimingObservations = true;
-            CaptureDraw(window, output, "race-correction-980.png");
+            vm.ShowAllTimingObservations = true;
             Assert.Contains(vm.TimingObservations, x => x.State == "Ignored");
-            vm.ShowTimingCorrection = false;
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Correct time") || Equals(x.Content, "Assign finish"));
             // Each queue exposes the same contextual classification actions.
-            foreach (var name in new[] { "AtStartGrid", "RunningGrid", "RankingGrid" })
+            foreach (var name in new[] { "AtStartGrid", "RunningGrid", "TimestampsGrid", "RankingGrid" })
             {
                 var grid = view.FindControl<DataGrid>(name)!;
                 grid.ContextMenu!.Open(grid);
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                Assert.Contains(grid.ContextMenu!.Items.OfType<MenuItem>(), x => Equals(x.Header, "DSQ · disqualified"));
+                Assert.Contains(AllTimingMenuItems(grid.ContextMenu!.Items), x => Equals(x.Header, "DSQ · disqualified"));
                 Assert.Contains(grid.ContextMenu.Items.OfType<MenuItem>(), x => Equals(x.Header, "Back to start") && x.Command == vm.ReturnToStartCommand);
-                Assert.All(grid.ContextMenu.Items.OfType<MenuItem>(), x => Assert.NotNull(x.InputGesture));
+                Assert.All(AllTimingMenuItems(grid.ContextMenu.Items).Where(x => x.Command is not null), x => Assert.NotNull(x.InputGesture));
                 grid.ContextMenu.Close();
             }
             // More than three arrivals: Running retains the latest three, Ranking retains everyone.
