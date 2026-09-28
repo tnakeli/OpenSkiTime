@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ x:Class="OpenSkiTime.Rewrite.Desktop.TimingSettingsView" x:CompileBindings="False">
+ <StackPanel Spacing="12">
+  <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="4"><TextBlock Text="Timing devices &amp; clocks" Classes="sectionTitle" />
+   <TextBlock Text="Set up once here. Operate the race in Timing." Classes="supportingText" /></StackPanel>
+   <Button Grid.Column="1" Content="Back to timing" Command="{Binding ReturnToTimingCommand}" IsVisible="{Binding HasTimingRun}" Classes="secondaryAction" /></Grid>
+  <StackPanel Orientation="Horizontal" Spacing="8">
+   <TextBlock Text="{Binding TimingConnection}" VerticalAlignment="Center" />
+   <Button Content="Connect" Command="{Binding ConnectTimingCommand}" IsEnabled="{Binding CanConnectTiming}" IsVisible="{Binding !IsTimingConnected}" Classes="primaryAction" />
+   <Button Content="Disconnect" Command="{Binding DisconnectTimingCommand}" IsVisible="{Binding IsTimingConnected}" IsEnabled="{Binding !IsTimingBusy}" Classes="secondaryAction" />
+  </StackPanel>
+  <TextBlock IsVisible="{Binding IsTimingConnected}" Text="Connected. Capture continues when you leave Settings or change views." Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
+            <StackPanel Spacing="12" IsEnabled="{Binding CanChangeTimingDevice}">
+              <Grid ColumnDefinitions="2*,10,130,10,110,10,110,10,*">
+                <StackPanel Classes="field"><TextBlock Text="SOURCE" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding TimingSources}" SelectedItem="{Binding TimingSource}" HorizontalAlignment="Stretch" /></StackPanel>
+                <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="DEVICE DATE" Classes="fieldLabel" /><TextBox Text="{Binding TimingDeviceDate}" Watermark="YYYY-MM-DD" /></StackPanel>
+                <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="START CH." Classes="fieldLabel" /><NumericUpDown Value="{Binding TimingStartChannel}" Minimum="0" Maximum="8" FormatString="0" /></StackPanel>
+                <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="FINISH CH." Classes="fieldLabel" /><NumericUpDown Value="{Binding TimingFinishChannel}" Minimum="0" Maximum="8" FormatString="0" /></StackPanel>
+                <StackPanel Grid.Column="8" Classes="field"><TextBlock Text="OPERATOR" Classes="fieldLabel" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
+              </Grid>
+              <TextBlock Text="{Binding TimingDeviceHelp}" Classes="supportingText" TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="180,10,180,10,Auto" IsVisible="{Binding IsTimyUsb}">
+                <TextBox Text="{Binding TimyDeviceId}" Watermark="USB device ID (optional)" ToolTip.Tip="Leave blank to use the first connected Timy. Other devices are not merged." />
+                <TextBox Grid.Column="2" Text="{Binding TimingFirmware}" Watermark="Firmware version" />
+                <Button Grid.Column="4" Content="Set up USB library" Command="{Binding SetupTimyUsbCommand}" Classes="secondaryAction" />
+              </Grid>
+              <Grid ColumnDefinitions="150,8,Auto,10,130,*" IsVisible="{Binding IsMt1Serial}">
+                <ComboBox ItemsSource="{Binding TimingPorts}" SelectedItem="{Binding TimingPort}" PlaceholderText="COM port" HorizontalAlignment="Stretch" />
+                <Button Grid.Column="2" Content="Refresh ports" Command="{Binding RefreshTimingPortsCommand}" Classes="secondaryAction" />
+                <NumericUpDown Grid.Column="4" Value="{Binding TimingBaud}" Minimum="1200" Maximum="115200" FormatString="0" ToolTip.Tip="Serial baud rate. Timy PC Timer defaults to 38400; check the connected device." />
+              </Grid>
+              <StackPanel IsVisible="{Binding IsAlgeResults}" Spacing="8">
+                <Grid ColumnDefinitions="*,10,*,10,2*">
+                  <TextBox Text="{Binding Mt1StartDevice}" Watermark="Start MT1 device ID" />
+                  <TextBox Grid.Column="2" Text="{Binding Mt1FinishDevice}" Watermark="Finish MT1 device ID" />
+                  <TextBox Grid.Column="4" Text="{Binding Mt1FromUtc}" Watermark="Receive from UTC (empty = now)" />
+                </Grid>
+                <Grid ColumnDefinitions="2*,10,2*,10,Auto">
+                  <TextBox Text="{Binding Mt1Username}" Watermark="ALGE Results username" />
+                  <TextBox Grid.Column="2" Text="{Binding Mt1Password}" PasswordChar="•" Watermark="Password (empty = saved password)" />
+                  <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding RememberAlgePassword}" />
+                </Grid>
+              </StackPanel>
+              <TextBox IsVisible="{Binding IsTimingReplay}" Text="{Binding TimingReplayPath}" Watermark="Path to raw ALGE ASCII file" />
+
+  <StackPanel Classes="field"><TextBlock Text="INTERMEDIATE CHANNELS · IN COURSE ORDER" Classes="fieldLabel" />
+    <TextBox Text="{Binding TimingIntermediateChannels}" Watermark="e.g. 2,3 for Intermediate 1 and 2" MaxWidth="450" HorizontalAlignment="Left" />
+    <TextBlock Text="One USB/serial channel per intermediate configured for the competition. ALGE Results currently supports start/finish only." Classes="supportingText" TextWrapping="Wrap" />
+  </StackPanel>
+  <Button Content="Save timing settings" Command="{Binding SaveTimingPreferencesCommand}" Classes="primaryAction" HorizontalAlignment="Left" />
+</StackPanel>
+
+ </StackPanel>
+</UserControl>

@@ -64,6 +64,13 @@ Thumbs.db
 *.ost
 *.ost-wal
 *.ost-shm
+*.capture.lock
+
+# Device traces and optional vendor SDK/driver downloads belong outside the repository.
+timing-captures/
+AlgeTimyUsb*.dll
+AlgeTimyUsbDLLExample.zip
+TimyUSB_Driver_Setup*.exe
 
 # --- Secrets & local-only configuration (Constitution Principle VI) ---
 appsettings.Local.json

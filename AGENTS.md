@@ -4,6 +4,7 @@
 - Separate UI, domain rules, timing calculations, persistence and device protocols. Domain/timing calculations have no UI, database, network or device I/O dependencies.
 - Use explicit models and typed contracts. Prefer direct readable code and minimal dependencies; abstract real boundaries rather than hypothetical frameworks.
 - Make race rules/calculations deterministic. Supply dates, clock context, rule versions and randomness explicitly. Never use binary floating point for authoritative timing values.
+- Base alpine timing calculations on the FIS Timing and Data booklets; record reviewed editions and rule references in docs/fis-timing-review.md. Preserve full source timestamp precision on one integer scale; apply truncation/rounding only at the stage required by the rule.
 - Preserve original raw timing input unchanged, including malformed/duplicate input. Never report capture as saved before durable commit.
 - Record manual timing changes with operator, reason, time, old/new values and source references. Commit correction/audit together; undo adds history rather than erasing it.
 - Validate complete changes before mutation. Use explicit transactions, short-lived persistence contexts, database constraints and recoverable failures.

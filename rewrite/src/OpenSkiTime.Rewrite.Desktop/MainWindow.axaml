@@ -1,21 +1,22 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:OpenSkiTime.Rewrite.Desktop"
         x:Class="OpenSkiTime.Rewrite.Desktop.MainWindow" x:CompileBindings="False"
         Title="{Binding WindowTitle}" Width="1280" Height="820" MinWidth="980" MinHeight="680" WindowState="Maximized"
         Background="{DynamicResource CanvasBrush}">
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <Border Grid.Row="0" Background="{DynamicResource NavyBrush}" Padding="22,11">
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <Border Width="30" Height="30" Background="{DynamicResource AccentBrush}" CornerRadius="4">
             <TextBlock Text="O" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Foreground="White" />
           </Border>
-          <StackPanel Spacing="0" VerticalAlignment="Center">
-            <TextBlock Text="OpenSkiTime" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" Foreground="White" />
-            <TextBlock Text="RACE OFFICE  /  LOCAL WORKSPACE" FontSize="{DynamicResource MetaSize}" FontWeight="SemiBold" Foreground="#9CC0C7" />
-          </StackPanel>
+          <TextBlock Text="OpenSkiTime" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <Button Name="ActiveRaceButton" Grid.Column="1" Content="{Binding ActiveRaceLabel}" Click="ActiveRace_Click"
+                IsVisible="{Binding IsOpen}" IsEnabled="{Binding CanEditCompetitions}" Classes="activeRace" HorizontalAlignment="Left"
+                VerticalAlignment="Center" Margin="20,0,12,0" MaxWidth="260" ToolTip.Tip="Select competition and run" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsEnabled="{Binding !IsDrawBusy}">
           <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="toolbarAction" />
           <SplitButton Name="OpenFileButton" Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="toolbarAction">
             <SplitButton.Flyout>
@@ -35,11 +36,11 @@
         <Button Content="1  Event series" Command="{Binding ShowSeriesCommand}" Click="Navigation_Click" Classes="sectionNav" Classes.active="{Binding IsSeriesSection}" />
         <Button Content="2  Competitions" Command="{Binding ShowCompetitionsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitionsSection}" />
         <Button Content="3  Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
-        <TextBlock Text="{Binding FileLabel}" MaxWidth="390" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FileLabel}"
-                   Classes="supportingText" VerticalAlignment="Center" Margin="16,0,0,0" />
+        <Button Name="DrawMenuButton" Content="4  Start lists  ▾" Click="DrawMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsDrawSection}" />
+        <Button Name="TimingMenuButton" Content="5  Timing  ▾" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
       </StackPanel>
     </Border>
-    <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsFormSection}">
       <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" HorizontalAlignment="Stretch">
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSeriesSection}">
           <StackPanel Spacing="14">
@@ -135,8 +136,8 @@
               <DataGrid.Columns>
                 <DataGridTextColumn Header="" Binding="{Binding ImportMarker}" IsReadOnly="True" Width="48" />
                 <DataGridTextColumn Header="DATE" Binding="{Binding Values.Date}" Width="130" />
-                <DataGridTextColumn Header="ID" Binding="{Binding Values.ShortLabel}" Width="150" />
-                <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.Name}" Width="*" />
+                <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.ShortLabel}" Width="*" />
+                <DataGridTextColumn Header="PUBLIC NAME" Binding="{Binding Values.Name}" Width="2*" />
                 <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Values.Discipline}" Width="135" />
                 <DataGridTextColumn Header="RUNS" Binding="{Binding Values.RunCount}" Width="80" />
               </DataGrid.Columns>
@@ -153,14 +154,14 @@
                   </Border>
                 </Grid>
                 <StackPanel Spacing="12">
-                  <Grid ColumnDefinitions="2*,12,*,12,232">
+                  <Grid ColumnDefinitions="160,12,*,12,232">
                     <StackPanel Grid.Column="0" Classes="field">
-                      <TextBlock Text="NAME *" Classes="fieldLabel" />
-                      <TextBox Text="{Binding CompetitionName}" />
+                      <TextBlock Text="SHORT NAME *" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionShortLabel}" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" Classes="field">
-                      <TextBlock Text="SHORT LABEL *" Classes="fieldLabel" />
-                      <TextBox Text="{Binding CompetitionShortLabel}" />
+                      <TextBlock Text="PUBLIC NAME *" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionName}" ToolTip.Tip="Long name reserved for future public-facing views." />
                     </StackPanel>
                     <StackPanel Grid.Column="4" Classes="field">
                       <TextBlock Text="DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
@@ -366,6 +367,7 @@
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSettingsSection}">
           <StackPanel Spacing="12">
             <StackPanel Spacing="1"><TextBlock Text="APPLICATION / SETTINGS" Classes="eyebrow" /><TextBlock Text="Settings" Classes="sectionTitle" /></StackPanel>
+            <Border Classes="subtleSurface" Padding="12"><local:TimingSettingsView /></Border>
             <Border Classes="subtleSurface" Padding="12"><StackPanel Spacing="8">
               <TextBlock Text="FIS API access" FontWeight="SemiBold" />
               <TextBlock Text="Create an API key in FIS Member Section → API Access." Classes="supportingText" />
@@ -381,6 +383,8 @@
         </Border>
       </StackPanel>
     </ScrollViewer>
+    <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />
+    <local:TimingView Name="TimingWorkspace" Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsTimingSection}" />
     <Border Grid.Row="3" Classes="statusBar" Classes.error="{Binding IsError}"
             BorderThickness="0,1,0,0" Padding="22,8">
       <StackPanel Orientation="Horizontal" Spacing="8">
@@ -388,6 +392,7 @@
         <TextBlock Text="!" FontWeight="Bold" Foreground="{DynamicResource ErrorBrush}" IsVisible="{Binding IsError}" />
         <TextBlock Text="{Binding StatusMessage}" Classes="statusText" Classes.error="{Binding IsError}"
                    FontSize="11" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding TimingCaptureLabel}" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="560" IsVisible="{Binding IsTimingConnected}" />
       </StackPanel>
     </Border>
   </Grid>

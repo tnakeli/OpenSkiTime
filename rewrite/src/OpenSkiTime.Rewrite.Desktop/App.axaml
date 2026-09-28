@@ -36,6 +36,7 @@
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+    <StyleInclude Source="avares://OpenSkiTime.Rewrite.Desktop/TimingStyles.axaml" />
 
     <Style Selector="Border.workSurface">
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
@@ -168,6 +169,23 @@
     <Style Selector="Button.toolbarAction:pointerover">
       <Setter Property="Background" Value="#285365" />
     </Style>
+    <Style Selector="Button.activeRace">
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="Background" Value="{DynamicResource NavyRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="16" />
+    </Style>
+    <Style Selector="Button.activeRace:pointerover">
+      <Setter Property="Background" Value="#285365" />
+    </Style>
+    <Style Selector="Button.activeRace:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
     <Style Selector="SplitButton.toolbarAction">
       <Setter Property="MinHeight" Value="34" />
       <Setter Property="Background" Value="{DynamicResource NavyRaisedBrush}" />
@@ -212,6 +230,12 @@
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:pointerover">
       <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
+    </Style>
+    <Style Selector="DataGrid.timingGrid DataGridColumnHeader">
+      <Setter Property="Padding" Value="6,0" />
+    </Style>
+    <Style Selector="DataGrid.timingGrid DataGridCell">
+      <Setter Property="FontSize" Value="14" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:selected">
       <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />

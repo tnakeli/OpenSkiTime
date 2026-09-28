@@ -1,0 +1,123 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ x:Class="OpenSkiTime.Rewrite.Desktop.TimingView" x:CompileBindings="False">
+ <UserControl.Resources>
+  <x:Double x:Key="DataGridSortIconMinWidth">14</x:Double>
+  <ControlTheme x:Key="DataGridCellTextBlockTheme" TargetType="TextBlock"><Setter Property="Margin" Value="6,0" /><Setter Property="VerticalAlignment" Value="Center" /></ControlTheme>
+ </UserControl.Resources>
+ <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+  <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
+   <StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Text="{Binding TimingContext}" Classes="sectionTitle" /><TextBlock Text="{Binding TimingSummary}" Classes="supportingText" VerticalAlignment="Center" /></StackPanel>
+   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5">
+    <TextBlock Text="STATUS" Classes="eyebrow" VerticalAlignment="Center" Margin="0,0,5,0" />
+    <Button Name="StatusDropDNS" Tag="DNS" Content="DNS" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNS" Classes="statusDrop" ToolTip.Tip="Did not start · Ctrl+D. Drag a competitor here." />
+    <Button Name="StatusDropDNF" Tag="DNF" Content="DNF" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNF" Classes="statusDrop" ToolTip.Tip="Did not finish · Ctrl+F. Drag a competitor here." />
+    <Button Name="StatusDropDSQ" Tag="DSQ" Content="DSQ" Command="{Binding ClassifyTimingCommand}" CommandParameter="DSQ" Classes="statusDrop" ToolTip.Tip="Disqualified · Ctrl+Q. Drag a competitor here." />
+    <Button Name="StatusDropNPS" Tag="NPS" Content="NPS" Command="{Binding ClassifyTimingCommand}" CommandParameter="NPS" Classes="statusDrop" ToolTip.Tip="Not permitted to start · Ctrl+N. Drag a competitor here." />
+    <Button Name="StatusDropClear" Tag="Clear" Content="Clear status" Command="{Binding ClassifyTimingCommand}" CommandParameter="Clear" Classes="statusDrop" ToolTip.Tip="Use recorded times · Ctrl+R. Drag a competitor here." />
+   </StackPanel>
+   <Button Grid.Column="2" Content="Prepare Run 2" Command="{Binding PrepareNextTimedRunCommand}" IsVisible="{Binding CanPrepareNextTimedRun}" Classes="secondaryAction" Margin="8,0,0,0" />
+  </Grid>
+  <StackPanel Grid.Row="1" Spacing="4" Margin="0,0,0,4">
+   <Border Classes="raceConnection"><StackPanel Spacing="2">
+    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding TimingConnection}" TextTrimming="CharacterEllipsis" />
+     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"><TextBlock Text="DEVICE TIME" Opacity="0.72" />
+      <TextBlock Text="{Binding TimingDeviceClock}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" FontWeight="SemiBold" /></StackPanel></Grid>
+    <StackPanel Orientation="Horizontal" Spacing="5">
+     <ToggleButton Content="START" IsChecked="{Binding StartInputOn, Mode=OneWay}" Command="{Binding ToggleTimingChannelCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" />
+     <StackPanel Name="TimingIntermediateSwitches" Orientation="Horizontal" Spacing="5" />
+     <ToggleButton Content="FINISH" IsChecked="{Binding FinishInputOn, Mode=OneWay}" Command="{Binding ToggleTimingChannelCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" />
+     <TextBlock Text="{Binding TimingHoldSummary}" VerticalAlignment="Center" Margin="6,0,0,0" FontWeight="SemiBold" />
+    </StackPanel>
+   </StackPanel></Border>
+   <Border IsVisible="{Binding HasTimingAlarm}" BorderBrush="{DynamicResource ErrorBrush}" BorderThickness="1" Padding="8">
+    <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
+   </Border>
+  </StackPanel>
+  <Grid Grid.Row="2" RowDefinitions="1.85*,6,0.95*,6,1.2*" ColumnDefinitions="0.9*,8,2*">
+   <Border Name="StartDropTarget" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
+    <Grid Background="{DynamicResource SubtleSurfaceBrush}">
+     <TextBlock Text="AT START" Classes="raceHeading" />
+    </Grid>
+    <Grid Grid.Row="1">
+     <TextBlock Text="{Binding NextStartLabel, StringFormat='Next · {0}'}" Classes="raceQueueHint" />
+     <TextBlock Text="{Binding TimingDropHint}" IsVisible="{Binding IsTimingDragging}" Classes="raceQueueHint raceDropHint" />
+    </Grid>
+    <DataGrid Grid.Row="2" Name="AtStartGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding AtStartRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRow="EnableStartRowDrop"
+     AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
+     ToolTip.Tip="Drag a waiting racer above or below another row to change start order. Drop on empty At start space to start next. Ctrl+Up/Down moves one place.">
+     <DataGrid.Columns>
+      <DataGridTextColumn Header="" Binding="{Binding Clock.Marker}" Width="26" />
+      <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="46" />
+      <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="100" />
+      <DataGridTextColumn Header="RUN 1" Binding="{Binding PreviousRunTime}" Width="78" IsVisible="{Binding ShowTimingTotal}" />
+     </DataGrid.Columns>
+    </DataGrid>
+   </Grid></Border>
+   <Border Grid.Column="2" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
+    <TextBlock Text="RUNNING" Classes="raceHeading" />
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Background="{DynamicResource AccentTintBrush}">
+     <TextBlock Text="{Binding ExpectedFinishLabel, StringFormat='Finish next · {0}'}" Classes="raceQueueHint" />
+     <TextBlock Grid.Column="1" Text="{Binding ExpectedFinishTime}" Classes="raceClock" Margin="8,3" FontSize="18" />
+    </Grid>
+    <DataGrid Grid.Row="2" Name="RunningGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding RunningRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
+     AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
+     ToolTip.Tip="▶ Expected finish. Right-click or Shift+F10 for actions.">
+     <DataGrid.Columns>
+      <DataGridTextColumn Header="" Binding="{Binding Clock.Marker}" Width="26" />
+      <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="46" />
+      <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="110" />
+      <DataGridTextColumn Header="CURRENT" Binding="{Binding Clock.Time}" Width="82" />
+     </DataGrid.Columns>
+    </DataGrid>
+   </Grid></Border>
+   <GridSplitter Grid.Row="1" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
+   <Border Grid.Row="2" Grid.ColumnSpan="3" Classes="racePane"><Grid RowDefinitions="Auto,*">
+    <Grid Background="{DynamicResource SubtleSurfaceBrush}">
+     <TextBlock Text="TIMESTAMPS · TIME OF DAY" Classes="raceHeading" />
+    </Grid>
+    <DataGrid Grid.Row="1" Name="TimestampsGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimestampRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
+     AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="26" GridLinesVisibility="All">
+     <DataGrid.Columns>
+      <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="54" />
+      <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="160" />
+     </DataGrid.Columns>
+    </DataGrid>
+   </Grid></Border>
+   <GridSplitter Grid.Row="3" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
+   <Border Grid.Row="4" Grid.ColumnSpan="3" Classes="racePane"><Grid RowDefinitions="Auto,*">
+    <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource SubtleSurfaceBrush}">
+     <TextBlock Text="RANKING" Classes="raceHeading" />
+     <TextBlock Grid.Column="1" Text="◆ Latest finisher" Classes="supportingText" FontSize="11" Margin="8,0" VerticalAlignment="Center" />
+    </Grid>
+    <DataGrid Grid.Row="1" Name="RankingGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding RankingView}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRowGroup="DescribeCategory"
+     AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
+     ToolTip.Tip="Results in rank order within each category. Drag a competitor onto a timestamp to assign it. Right-click or Shift+F10 for status.">
+     <DataGrid.Columns>
+      <DataGridTextColumn Header="" Binding="{Binding FinishMarker}" Width="28" />
+      <DataGridTextColumn Header="RK" Binding="{Binding DisplayRank}" Width="42" />
+      <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="46" />
+      <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="130" />
+      <DataGridTextColumn Header="NAT" Binding="{Binding Result.Entry.Entrant.Athlete.Nation}" Width="55" />
+      <DataGridTextColumn Header="CLUB" Binding="{Binding Result.Entry.Entrant.Athlete.Club}" Width="*" MinWidth="100" />
+      <DataGridTextColumn Header="TIME / STATE" Binding="{Binding DisplayTime}" Width="100" />
+      <DataGridTextColumn Header="TOTAL" Binding="{Binding TotalTime}" Width="90" IsVisible="{Binding ShowTimingTotal}" />
+     </DataGrid.Columns>
+    </DataGrid>
+   </Grid></Border>
+  </Grid>
+  <StackPanel Grid.Row="3" Spacing="3" Margin="0,5,0,0">
+   <Grid ColumnDefinitions="*,Auto">
+    <TextBlock Text="{Binding SelectedTimingIdentity}" Classes="supportingText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+    <TextBlock Grid.Column="1" Text="{Binding TimingDropHint}" Classes="supportingText" FontSize="10" />
+   </Grid>
+   <TextBlock Text="{Binding SelectedTimingProblem}" IsVisible="{Binding HasSelectedTimingProblem}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
+   <TextBlock Text="Unassigned finish · drag a competitor onto its finish timestamp." IsVisible="{Binding HasUnassignedFinish}" Foreground="{DynamicResource WarningBrush}" />
+  </StackPanel>
+  <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsTimingSimulator}">
+   <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Text="{Binding SimulationTime}" Width="155" />
+   <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+   <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />
+   <Button Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+  </StackPanel>
+ </Grid>
+</UserControl>

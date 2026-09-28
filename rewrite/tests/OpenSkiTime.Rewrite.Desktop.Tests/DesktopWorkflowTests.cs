@@ -22,11 +22,239 @@ namespace OpenSkiTime.Rewrite.Tests;
 public sealed class HeadlessAppBuilder
 {
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
-        .UseHeadless(new AvaloniaHeadlessPlatformOptions());
+        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }
 
-public class DesktopWorkflowTests
+public partial class DesktopWorkflowTests
 {
+    [AvaloniaFact]
+    public async Task CompetitionDrawUsesAllMenAndRejectsMixedEntriesWithoutFiltering()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-draw-ui", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var path = Path.Combine(root, "men.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(SyntheticFisArchive());
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var series = await workspace.CreateAsync(path, new("Test", "Test", "Test", new(2026, 9, 27), new(2026, 9, 27), "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null, new("Men Slalom", "MSL", new(2026, 9, 27), Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);
+            var competition = series.Competitions[0];
+            await workspace.SaveDeskRowAsync(null, new("TEST", "Athlete", 2000, "555001", "FIN", "Test", Gender.Male), competition.Id, true, null, series.Revision);
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = path, OpenPath = path, BackupPath = path + ".backup" }, fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            await vm.PrepareDrawCommand.ExecuteAsync(null);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(Gender.Male, Assert.Single(vm.DrawEntries).Entrant.Athlete.Gender);
+            series = await workspace.ReadAsync();
+            await workspace.SaveDeskRowAsync(null, new("SECOND", "Athlete", 2000, "555002", "FIN", "Test", Gender.Female), competition.Id, true, null, series.Revision);
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            Assert.False(vm.CanPrepareDraw);
+            Assert.Contains("nobody has been filtered out", vm.DrawHelp, StringComparison.Ordinal);
+        }
+        finally
+        {
+            var parent = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "openskitime-draw-ui"));
+            if (Path.GetFullPath(root).StartsWith(parent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            { Directory.Delete(root, recursive: true); }
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DrawWorkspaceSavesAndReopensBothRunsWithoutApproval()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-draw-ui", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "Synthetic.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(SyntheticFisArchive());
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var series = await workspace.CreateAsync(file, new("Synthetic race weekend", "Test slope", "Test club",
+                new(2026, 9, 27), new(2026, 9, 27), "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null, new("Synthetic Slalom", "SL1", new(2026, 9, 27), Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);
+            var competition = series.Competitions[0];
+            var revision = series.Revision;
+            for (var i = 0; i < 36; i++)
+            {
+                var saved = await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Athlete", 2000, $"{123456 + i}", "FIN", "Synthetic club", Gender.Female),
+                    competition.Id, true, null, revision);
+                revision = saved.Revision;
+            }
+            var dialogs = new FileDialogsStub { NewPath = file, OpenPath = file, BackupPath = file + ".backup" };
+            var exchange = new EntryExchangeStub();
+            using var vm = new MainViewModel(workspace, dialogs, exchange, cache, recentSeriesStore: new RecentSeriesStore(root));
+            vm.OpenSeriesCommand.Execute(null);
+            await vm.OpenSeriesCommand.ExecutionTask!;
+            var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1280, Height = 800 };
+            window.Show();
+            var competitionGrid = window.GetVisualDescendants().OfType<DataGrid>()
+                .Single(x => ReferenceEquals(x.ItemsSource, vm.Competitions));
+            Assert.Contains(competitionGrid.Columns, x => Equals(x.Header, "PUBLIC NAME"));
+            CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "competitions-public-name.png");
+            var activeRaceButton = window.FindControl<Button>("ActiveRaceButton")!;
+            Assert.Equal("Choose competition  ▾", activeRaceButton.Content);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "RACE OFFICE  /  LOCAL WORKSPACE");
+            Assert.Equal("4  Start lists  ▾", window.FindControl<Button>("DrawMenuButton")!.Content);
+            var drawButton = window.FindControl<Button>("DrawMenuButton")!;
+            drawButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await vm.RefreshDrawMenuCommand.ExecutionTask!;
+            Dispatcher.UIThread.RunJobs();
+            var menu = Assert.IsType<MenuFlyout>(drawButton.Flyout);
+            var raceMenu = Assert.IsType<MenuItem>(Assert.Single(menu.Items));
+            Assert.Equal("SL1", raceMenu.Header);
+            var runMenu = Assert.IsType<MenuItem>(Assert.Single(raceMenu.Items));
+            Assert.Equal("Run 1", runMenu.Header);
+            runMenu.Command!.Execute(runMenu.CommandParameter);
+            await vm.OpenDrawRunCommand.ExecutionTask!;
+            menu.Hide();
+            Assert.True(vm.IsDrawSection);
+            Assert.Equal("SL1  /  Run 1  ▾", activeRaceButton.Content);
+            activeRaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await vm.RefreshDrawMenuCommand.ExecutionTask!;
+            Dispatcher.UIThread.RunJobs();
+            var activeMenu = Assert.IsType<MenuItem>(Assert.Single(Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Items));
+            Assert.Equal("SL1  ·  ACTIVE", activeMenu.Header);
+            Assert.True(activeMenu.IsSubMenuOpen);
+            CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "active-start-menu.png");
+            Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
+            vm.ShowCompetitionsCommand.Execute(null);
+            activeRaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await vm.OpenDrawRunCommand.ExecutionTask!;
+            Assert.True(vm.IsDrawSection);
+            Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
+            Assert.Contains("1234", vm.WindowTitle, StringComparison.Ordinal);
+            Assert.Equal("Waiting for draw", vm.DrawState);
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<ComboBox>(), x => x.Name is "DrawRunPicker" or "DrawCompetitionPicker");
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 2));
+            Assert.Equal(1, vm.DrawRun);
+            Assert.False(window.GetVisualDescendants().OfType<ComboBox>().Single(x => x.Name == "DrawReversePicker").IsEffectivelyVisible);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Approve list"));
+            Click(window, "Draw");
+            await vm.PrepareDrawCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(36, vm.DrawEntries.Count);
+            Assert.True(vm.CanExportDraw);
+            Assert.All(vm.DrawStartListRows, row => Assert.Empty(row.RunOneTime));
+            Assert.False(window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "DrawStartListGrid")
+                .Columns.Single(x => Equals(x.Header, "RUN 1 TIME")).IsVisible);
+            var first = vm.DrawRevision!;
+            var output = Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR");
+            CaptureDraw(window, output, "run1.png");
+            var current = await workspace.ReadAsync();
+            var renamed = await workspace.SaveCompetitionAsync(competition.Id, competition.Values with { Name = "Corrected Slalom", ShortLabel = "SL NEW" }, current.Revision);
+            competition = renamed.Competitions[0];
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            Assert.Equal(first.Plan.Entries, vm.DrawEntries);
+            await vm.RefreshDrawMenuCommand.ExecuteAsync(null);
+            Assert.Equal([1], Assert.Single(vm.DrawMenu).Runs);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Mark run started"));
+            await workspace.MarkRunStartedAsync(first.Id, (await workspace.ReadAsync()).Revision, "Operator", DateTimeOffset.UtcNow);
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.True(vm.DrawRunStarted);
+            Assert.False(vm.CanPrepareDraw);
+            await vm.RefreshDrawMenuCommand.ExecuteAsync(null);
+            Assert.Equal([1, 2], Assert.Single(vm.DrawMenu).Runs);
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 2));
+            await WaitForDrawAsync(vm);
+            Assert.True(vm.HasDrawSource);
+            Assert.Equal(36, vm.DrawResults.Count);
+            exchange.ClipboardText = "Bib\tTime\tStatus\n" + string.Join('\n', first.Plan.Entries.Select((x, i) => $"{x.Bib}\t{60 + i}.00\tFinished"));
+            Click(window, "Paste results (Bib / Time / Status)");
+            await vm.PasteDrawResultsCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.True(vm.HasUnsavedRunInput);
+            vm.ShowCompetitorsCommand.Execute(null);
+            Assert.True(vm.IsDrawSection);
+            vm.DrawRun = 1;
+            Assert.Equal(2, vm.DrawRun);
+            window.UpdateLayout();
+            var reverse = window.GetVisualDescendants().OfType<ComboBox>().Single(x => x.Name == "DrawReversePicker");
+            Assert.True(reverse.IsEffectivelyVisible);
+            reverse.SelectedItem = 15;
+            Assert.Equal(15, vm.DrawReverseCount);
+            Click(window, "Create start list");
+            await vm.PrepareDrawCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.False(vm.HasUnsavedRunInput);
+            Assert.Equal(15, vm.DrawEntries[0].Bib);
+            Assert.Equal(30, first.Plan.Options.ReverseCount);
+            Assert.Equal(15, vm.DrawRevision!.Plan.Options.ReverseCount);
+            Assert.All(vm.DrawStartListRows, row => Assert.Equal(
+                RunResultInput.FormatTime(vm.DrawRevision.Plan.SourceResults.Single(x => x.CompetitorId == row.Entry.Entrant.CompetitorId).Hundredths),
+                row.RunOneTime));
+            Assert.True(window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "DrawStartListGrid")
+                .Columns.Single(x => Equals(x.Header, "RUN 1 TIME")).IsVisible);
+            vm.IsResultInputOpen = true;
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(competition, vm.DrawCompetition);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == vm.DrawContext && x.Text.Contains("SL NEW", StringComparison.Ordinal));
+            Assert.DoesNotContain("Corrected Slalom", vm.DrawContext, StringComparison.Ordinal);
+            Assert.Contains("SL NEW", vm.WindowTitle, StringComparison.Ordinal);
+            dialogs.ExportPath = Path.Combine(root, "start-list.tsv");
+            Click(window, "Export TSV");
+            await vm.ExportDrawCommand.ExecutionTask!;
+            Assert.Equal(StartListExchange.ToTsv(vm.DrawRevision!), await File.ReadAllTextAsync(dialogs.ExportPath));
+            dialogs.ExportPath = Path.Combine(root, "start-list.html");
+            Click(window, "Print view…");
+            await vm.PrintDrawCommand.ExecutionTask!;
+            var printed = await File.ReadAllTextAsync(dialogs.ExportPath);
+            Assert.Contains("SL NEW", printed, StringComparison.Ordinal);
+            Assert.DoesNotContain("Corrected Slalom", printed, StringComparison.Ordinal);
+            Assert.DoesNotContain("Approved", printed, StringComparison.Ordinal);
+            Assert.Equal(StartListExchange.ToPrintHtml(vm.DrawRevision! with { Plan = vm.DrawRevision.Plan with { Competition = competition.Values } }), printed);
+            vm.ShowDrawListCommand.Execute(null);
+            window.UpdateLayout();
+            CaptureDraw(window, output, "run2.png");
+            window.Width = 980; window.Height = 680;
+            CaptureDraw(window, output, "run2-compact.png");
+            if (!string.IsNullOrEmpty(output))
+            {
+                Directory.CreateDirectory(output);
+                await workspace.BackupAsync(Path.Combine(output, "Synthetic-M4-" + Guid.NewGuid().ToString("N") + ".ost"));
+                await File.WriteAllTextAsync(Path.Combine(output, "start-list.html"), StartListExchange.ToPrintHtml(vm.DrawRevision!));
+            }
+            await workspace.OpenAsync(file);
+            Assert.Equal(2, (await workspace.ReadStartListsAsync(competition.Id)).Revisions.Count);
+            await vm.RefreshDrawMenuCommand.ExecuteAsync(null);
+            Assert.Equal([1, 2], Assert.Single(vm.DrawMenu).Runs);
+            window.Close();
+        }
+        finally
+        {
+            var full = Path.GetFullPath(root);
+            var parent = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "openskitime-draw-ui"));
+            if (full.StartsWith(parent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            { Directory.Delete(full, recursive: true); }
+        }
+    }
+
+    private static async Task WaitForDrawAsync(MainViewModel vm)
+    {
+        for (var i = 0; vm.IsDrawBusy && i < 200; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+        Assert.False(vm.IsDrawBusy);
+    }
+
+    private static void CaptureDraw(Window window, string? directory, string name)
+    {
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout(); // Apply queued DataGrid scrolling before the headless screenshot.
+        if (string.IsNullOrEmpty(directory)) { return; }
+        Directory.CreateDirectory(directory);
+        using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)window.Width, (int)window.Height), new Vector(96, 96));
+        bitmap.Render(window);
+        bitmap.Save(Path.Combine(directory, name));
+    }
+
     [Fact]
     public void RecentSeriesStoreKeepsTenExistingFilesInOpenOrder()
     {
@@ -697,11 +925,13 @@ public class DesktopWorkflowTests
         public required string OpenPath { get; init; }
         public required string BackupPath { get; init; }
         public bool ConfirmDiscardResult { get; set; }
+        public string? ExportPath { get; set; }
         public int? RequestedDiscardCount { get; private set; }
         public Task<string?> ChooseNewAsync(string suggestedName) => Task.FromResult<string?>(NewPath);
         public Task<string?> ChooseOpenAsync() => Task.FromResult<string?>(OpenPath);
         public Task<string?> ChooseBackupAsync(string suggestedName) => Task.FromResult<string?>(BackupPath);
         public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(true);
+        public Task<string?> ChooseStartListExportAsync(string suggestedName, bool print) => Task.FromResult(ExportPath);
         public Task<bool> ConfirmDiscardChangesAsync(int changeCount)
         {
             RequestedDiscardCount = changeCount;

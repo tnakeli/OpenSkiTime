@@ -19,12 +19,21 @@ public partial class MainWindow : Window
     private bool _competitorSortDescending;
     private CompetitorGridRow? _entryClickedRow;
     private CompetitorGridRow[] _entrySelectionBeforeClick = [];
+    private bool _timingCloseReady;
 
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
         DataContextChanged += (_, _) => BindCompetitionColumns();
         SizeChanged += (_, _) => UpdateCompetitorGridHeight();
+        Closing += async (_, e) =>
+        {
+            if (DataContext is not MainViewModel vm || _timingCloseReady) { return; }
+            if (!vm.CanLeaveDrawInput()) { e.Cancel = true; return; }
+            if (!vm.IsTimingConnected) { return; }
+            e.Cancel = true;
+            if (await vm.StopTimingForCloseAsync()) { _timingCloseReady = true; Close(); }
+        };
         AddHandler(KeyDownEvent, OnGridKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(TextInputEvent, OnGridTextInput, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnGridPointerPressed, handledEventsToo: true);
@@ -56,6 +65,44 @@ public partial class MainWindow : Window
     private void OnRecentFilesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         => RebuildRecentMenu();
 
+    private void ActiveRace_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) { return; }
+        if (vm.ActiveRaceUsesTiming) { TimingMenu_Click(sender, e); }
+        else { DrawMenu_Click(sender, e); }
+    }
+
+    private async void DrawMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel vm || vm.IsDrawBusy) { return; }
+        await vm.RefreshDrawMenuCommand.ExecuteAsync(null);
+        if (vm.ActiveRaceDestination is { } selected
+            && vm.DrawMenu.Any(c => c.Competition.Id == selected.Competition.Id && c.Runs.Contains(selected.Run)))
+        { await vm.OpenDrawRunCommand.ExecuteAsync(selected); }
+        var menu = new MenuFlyout { Placement = Avalonia.Controls.PlacementMode.Bottom };
+        MenuItem? activeItem = null;
+        foreach (var competition in vm.DrawMenu)
+        {
+            var item = new MenuItem { Header = competition.Competition.Values.ShortLabel };
+            if (vm.ActiveRaceDestination?.Competition.Id == competition.Competition.Id)
+            { item.Header = $"{competition.Competition.Values.ShortLabel}  ·  ACTIVE";
+              item.Icon = new TextBlock { Text = "●", Foreground = Avalonia.Media.Brushes.Teal }; item.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+              activeItem = item; }
+            foreach (var run in competition.Runs)
+            {
+                var runItem = new MenuItem { Header = $"Run {run}", Command = vm.OpenDrawRunCommand,
+                    CommandParameter = new DrawDestination(competition.Competition, run) };
+                if (vm.IsActiveRaceDestination(competition.Competition.Id, run, WorkspaceSection.Draw))
+                { runItem.Header = $"Run {run}  ·  OPEN";
+                  runItem.Icon = new TextBlock { Text = "✓", Foreground = Avalonia.Media.Brushes.Teal }; runItem.FontWeight = Avalonia.Media.FontWeight.SemiBold; }
+                item.Items.Add(runItem);
+            }
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count == 0) { menu.Items.Add(new MenuItem { Header = "Add a competition first", IsEnabled = false }); }
+        ShowRaceMenu(button, menu, activeItem);
+    }
+
     private void RebuildRecentMenu()
     {
         if (this.FindControl<SplitButton>("OpenFileButton")?.Flyout is not MenuFlyout flyout) { return; }
@@ -83,6 +130,45 @@ public partial class MainWindow : Window
             ToolTip.SetTip(item, path);
             flyout.Items.Add(item);
         }
+    }
+
+    private async void TimingMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel vm || vm.IsTimingBusy) { return; }
+        await vm.RefreshTimingMenuCommand.ExecuteAsync(null);
+        if (vm.ActiveRaceDestination is { } selected
+            && vm.TimingMenu.Any(c => c.Competition.Id == selected.Competition.Id && c.Runs.Contains(selected.Run)))
+        { await vm.OpenTimingRunCommand.ExecuteAsync(selected); }
+        var menu = new MenuFlyout { Placement = Avalonia.Controls.PlacementMode.Bottom };
+        MenuItem? activeItem = null;
+        foreach (var competition in vm.TimingMenu)
+        {
+            var item = new MenuItem { Header = competition.Competition.Values.ShortLabel };
+            if (vm.ActiveRaceDestination?.Competition.Id == competition.Competition.Id)
+            { item.Header = $"{competition.Competition.Values.ShortLabel}  ·  ACTIVE";
+              item.Icon = new TextBlock { Text = "●", Foreground = Avalonia.Media.Brushes.Teal }; item.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+              activeItem = item; }
+            foreach (var run in competition.Runs)
+            {
+                var runItem = new MenuItem { Header = $"Run {run}", Command = vm.OpenTimingRunCommand,
+                    CommandParameter = new DrawDestination(competition.Competition, run) };
+                if (vm.IsActiveRaceDestination(competition.Competition.Id, run, WorkspaceSection.Timing))
+                { runItem.Header = $"Run {run}  ·  OPEN";
+                  runItem.Icon = new TextBlock { Text = "✓", Foreground = Avalonia.Media.Brushes.Teal }; runItem.FontWeight = Avalonia.Media.FontWeight.SemiBold; }
+                item.Items.Add(runItem);
+            }
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count == 0) { menu.Items.Add(new MenuItem { Header = "Prepare a start list in Draw first", IsEnabled = false }); }
+        ShowRaceMenu(button, menu, activeItem);
+    }
+
+    private static void ShowRaceMenu(Button button, MenuFlyout menu, MenuItem? activeItem)
+    {
+        button.Flyout = menu;
+        menu.ShowAt(button);
+        if (activeItem is not null)
+        { Dispatcher.UIThread.Post(() => { if (menu.IsOpen) { activeItem.IsSubMenuOpen = true; } }, DispatcherPriority.Loaded); }
     }
 
     private void OnGridViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
