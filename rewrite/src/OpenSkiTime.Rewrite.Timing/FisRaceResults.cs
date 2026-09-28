@@ -22,14 +22,15 @@ public static class FisRaceResults
     {
         ArgumentNullException.ThrowIfNull(first);
         ArgumentNullException.ThrowIfNull(firstTiming);
-        if (first.Plan.RunNumber != 1 || firstTiming.ListId != first.Id || !firstTiming.Complete || firstTiming.Unresolved != 0)
-        { throw new DomainValidationException("Run 1 timing must be complete, with all observations resolved."); }
+        if (first.Plan.RunNumber != 1 || firstTiming.ListId != first.Id)
+        { throw new DomainValidationException("Choose the saved Run 1 timing for this start list."); }
+        EnsureClassified(firstTiming, 1);
         if (first.Plan.Competition.RunCount == 2)
         {
             if (second is null || secondTiming is null || second.Plan.RunNumber != 2
-                || second.Plan.SourceListId != first.Id || secondTiming.ListId != second.Id
-                || !secondTiming.Complete || secondTiming.Unresolved != 0)
-            { throw new DomainValidationException("Run 2 timing must be complete, with all observations resolved."); }
+                || second.Plan.SourceListId != first.Id || secondTiming.ListId != second.Id)
+            { throw new DomainValidationException("Choose the saved Run 2 timing for this Run 1 start list."); }
+            EnsureClassified(secondTiming, 2);
             if (!second.Plan.SourceResults.SequenceEqual(firstTiming.ToRunFinishes()))
             { throw new DomainValidationException("Run 1 results changed after the Run 2 start list was created."); }
         }
@@ -60,5 +61,17 @@ public static class FisRaceResults
         var totals = interim.Where(x => x.TotalHundredths is not null).Select(x => x.TotalHundredths!.Value).ToArray();
         return new(first, second, interim.Select(x => x with { Rank = x.TotalHundredths is { } total
             ? totals.Count(y => y < total) + 1 : null }).ToArray());
+    }
+
+    private static void EnsureClassified(TimingSnapshot timing, int run)
+    {
+        var pending = timing.Results.Where(x => x.Status is not (TimingStatus.Finished or TimingStatus.DNS
+            or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS)).Select(x => x.Bib).ToArray();
+        if (timing.Results.Count == 0 || pending.Length > 0)
+        {
+            var bibs = pending.Length == 0 ? "no starters" : "Bib " + string.Join(", ", pending.Take(10))
+                + (pending.Length > 10 ? "…" : "");
+            throw new DomainValidationException($"Run {run}: {pending.Length} starter(s) still need a time or classification ({bibs}). Check Timing.");
+        }
     }
 }

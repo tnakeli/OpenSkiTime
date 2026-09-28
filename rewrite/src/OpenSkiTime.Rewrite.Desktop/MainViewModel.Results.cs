@@ -117,14 +117,16 @@ public sealed partial class MainViewModel
             SelectedResultApproval = ResultApprovals.FirstOrDefault();
             if (firstData.Sessions.Count == 0 || secondData is { Sessions.Count: 0 })
             { ResultsState = "Timing capture is missing for a run. Complete the race before preparing results."; return; }
-            ResultsState = "Timing must be complete with every observation resolved. Check the status bar for details.";
+            ResultsState = "Checking each starter's result. Check the status bar for details.";
             var firstTiming = TimingReplay.Restore(firstData, new Devices.AlgeDecoderFactory());
             var secondTiming = secondData is null ? null : TimingReplay.Restore(secondData, new Devices.AlgeDecoderFactory());
             _resultRace = FisRaceResults.Assemble(firstData.List, firstTiming, secondData?.List, secondTiming);
             _resultFingerprint = ResultSourceFingerprint.Create(firstData, secondData);
             ResultsPointsList = $"FIS list {_resultRace.FirstList.Plan.PointsList.Code} · valid {_resultRace.FirstList.Plan.PointsList.ValidFrom:yyyy-MM-dd} – {_resultRace.FirstList.Plan.PointsList.ValidTo:yyyy-MM-dd}";
             PopulateResultRows();
-            ResultsState = $"{_resultRace.Rows.Count(x => x.Status == TimingStatus.Finished)} classified · {_resultRace.Rows.Count(x => x.Status != TimingStatus.Finished)} not classified. Review penalty and race information with the TD.";
+            var unresolved = firstTiming.Unresolved + (secondTiming?.Unresolved ?? 0);
+            ResultsState = $"{_resultRace.Rows.Count(x => x.Status == TimingStatus.Finished)} classified · {_resultRace.Rows.Count(x => x.Status != TimingStatus.Finished)} not classified. Review penalty and race information with the TD."
+                + (unresolved > 0 ? $" {unresolved} extra timestamp(s) remain unassigned or need review in Timing; original input is preserved." : "");
         });
         OnPropertyChanged(nameof(ResultsReady));
     }
