@@ -34,13 +34,7 @@
     </DataGrid>
    </Grid></Border>
    <Border Grid.Column="2" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
-    <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource SubtleSurfaceBrush}">
-     <TextBlock Text="RUNNING · LAST 3 FINISHERS" Classes="raceHeading" />
-     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" Margin="8,0" IsVisible="{Binding HasTimingIntermediates}">
-      <TextBlock Text="Checkpoint" FontSize="11" VerticalAlignment="Center" />
-      <ComboBox ItemsSource="{Binding TimingCheckpoints}" SelectedItem="{Binding SelectedTimingCheckpoint}" Width="54" MinHeight="24" Padding="5,0" ToolTip.Tip="{Binding ExpectedIntermediateLabel}" />
-     </StackPanel>
-    </Grid>
+    <TextBlock Text="RUNNING · LAST 3 FINISHERS" Classes="raceHeading" />
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Background="{DynamicResource AccentTintBrush}">
      <TextBlock Text="{Binding ExpectedFinishLabel, StringFormat='Finish next · {0}'}" Classes="raceQueueHint" />
      <TextBlock Grid.Column="1" Text="{Binding ExpectedFinishTime}" Classes="raceClock" Margin="8,3" FontSize="18" />
@@ -104,7 +98,7 @@
   <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding IsTimingSimulator}">
    <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Text="{Binding SimulationTime}" Width="155" />
    <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
-   <Button Content="Test intermediate" Command="{Binding SimulatePulseCommand}" CommandParameter="intermediate" IsVisible="{Binding HasTimingIntermediates}" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+   <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />
    <Button Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
   </StackPanel>
  </Grid>

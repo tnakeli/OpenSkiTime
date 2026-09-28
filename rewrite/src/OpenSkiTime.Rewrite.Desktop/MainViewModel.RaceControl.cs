@@ -11,7 +11,6 @@ namespace OpenSkiTime.Rewrite.Desktop;
 public sealed partial class MainViewModel
 {
     private TimingSnapshot? _queueSnapshot;
-    private int _queueCheckpoint;
     private DataGridCollectionView? _rankingView;
     public ObservableCollection<TimingGridRow> AtStartRows { get; } = [];
     public ObservableCollection<TimingGridRow> RunningRows { get; } = [];
@@ -20,21 +19,17 @@ public sealed partial class MainViewModel
     public bool HasTimingCategories => _desk?.Categories.Count > 0;
     public ObservableCollection<TimingGridRow> OnCourseRows { get; } = [];
     public ObservableCollection<TimingGridRow> FinishedTimingRows { get; } = [];
-    public ObservableCollection<TimingGridRow> IntermediateTimingRows { get; } = [];
     public ObservableCollection<int> TimingCheckpoints { get; } = [];
-    [ObservableProperty] private int _selectedTimingCheckpoint = 1;
     [ObservableProperty] private string _timingIntermediateChannels = "";
     [ObservableProperty] private bool _followTimingOrder = true;
     [ObservableProperty] private bool _showTimingCorrection;
     [ObservableProperty] private string _expectedFinishTime = "—";
     [ObservableProperty] private string _nextStartLabel = "No competitor waiting";
     [ObservableProperty] private string _expectedFinishLabel = "No competitor on course";
-    [ObservableProperty] private string _expectedIntermediateLabel = "No competitor approaching";
     [ObservableProperty] private string _onCourseLabel = "ON COURSE · 0";
     [ObservableProperty] private string _finishListLabel = "FINISHED · 0";
     [ObservableProperty] private string _startHoldLabel = "Hold start";
     [ObservableProperty] private string _finishHoldLabel = "Hold finish";
-    [ObservableProperty] private string _intermediateHoldLabel = "Hold intermediate";
     public bool HasTimingIntermediates => TimingCheckpoints.Count > 0;
     public string SelectedTimingIdentity => SelectedTimingRow?.Label ?? "Select a competitor";
     public string SelectedTimingProblem => SelectedTimingRow?.Result.Status == TimingStatus.Review ? SelectedTimingRow.Detail : "";
@@ -51,7 +46,7 @@ public sealed partial class MainViewModel
     private void RefreshRunningTimes()
     {
         var timing = workspace.Timing;
-        foreach (var row in TimingRows.Concat(OnCourseRows).Concat(IntermediateTimingRows).Concat(RunningRows))
+        foreach (var row in TimingRows.Concat(OnCourseRows).Concat(RunningRows))
         { row.Clock.Time = TimingTime.Format(row.Result.Status == TimingStatus.OnCourse ? timing?.RunningHundredths(row.Result.StartKey) : row.Result.Hundredths); }
         foreach (var row in AtStartRows) { row.Clock.Marker = row.Bib == timing?.ArmedStart ? "▶" : ""; }
         foreach (var row in RunningRows)
@@ -97,14 +92,10 @@ public sealed partial class MainViewModel
     {
         if (workspace.Timing is { } timing) { await timing.FollowStartOrderAsync(FollowTimingOrder); RefreshTiming(); }
     }
-    partial void OnSelectedTimingCheckpointChanged(int value) { if (value > 0) { RefreshTiming(); } }
-
     private void ConfigureTimingCheckpoints()
     {
-        SelectedTimingCheckpoint = 0;
         TimingCheckpoints.Clear();
         for (var i = 1; i <= _timingList!.Plan.Competition.IntermediateCount; i++) { TimingCheckpoints.Add(i); }
-        SelectedTimingCheckpoint = 1;
         _queueSnapshot = null;
         OnPropertyChanged(nameof(HasTimingIntermediates));
         OnPropertyChanged(nameof(HasTimingCategories));
@@ -115,17 +106,15 @@ public sealed partial class MainViewModel
         var timing = workspace.Timing;
         var snapshot = timing?.Snapshot;
         if (snapshot is null || !HasTimingRun)
-        { OnCourseRows.Clear(); FinishedTimingRows.Clear(); IntermediateTimingRows.Clear(); AtStartRows.Clear(); RunningRows.Clear(); RankingRows.Clear(); _queueSnapshot = null; return; }
-        if (!ReferenceEquals(snapshot, _queueSnapshot) || _queueCheckpoint != SelectedTimingCheckpoint)
+        { OnCourseRows.Clear(); FinishedTimingRows.Clear(); AtStartRows.Clear(); RunningRows.Clear(); RankingRows.Clear(); _queueSnapshot = null; return; }
+        if (!ReferenceEquals(snapshot, _queueSnapshot))
         {
-            _queueSnapshot = snapshot; _queueCheckpoint = SelectedTimingCheckpoint;
+            _queueSnapshot = snapshot;
             var currentRows = TimingEngine.Combined(snapshot, _previousTiming)
                 .ToDictionary(x => x.Result.Bib, x => new TimingGridRow(x.Result, x.Total, x.Rank));
             TimingGridRow Map(TimingResult result) => currentRows[result.Bib];
             var onCourse = RaceFlow.OnCourse(snapshot).Select(Map).ToArray();
             SyncTimingRows(OnCourseRows, onCourse);
-            SyncTimingRows(IntermediateTimingRows, HasTimingIntermediates
-                ? RaceFlow.Expected(snapshot, SelectedTimingCheckpoint + 1).Select(Map).ToArray() : []);
             var finishOrder = snapshot.Observations.Select((x, i) => (x.Observation.Key, i)).ToDictionary(x => x.Key, x => x.i);
             SyncTimingRows(FinishedTimingRows, snapshot.Results.Where(x => x.FinishKey is not null || x.Status == TimingStatus.Finished)
                 .OrderByDescending(x => x.FinishKey is null ? -1 : finishOrder.GetValueOrDefault(x.FinishKey)).Select(Map).ToArray());
@@ -158,23 +147,23 @@ public sealed partial class MainViewModel
             : snapshot.Results.FirstOrDefault(x => x.Bib == timing.ExpectedBib(channel)) is { } row ? $"{row.Bib} · {row.Name}" : empty;
         NextStartLabel = Expected(0, "No starter selected");
         ExpectedFinishLabel = Expected(1, "No competitor expected");
-        ExpectedIntermediateLabel = Expected(SelectedTimingCheckpoint + 1, "No competitor approaching");
         StartHoldLabel = timing!.IsHeld(0) ? "Resume start" : "Hold start";
         FinishHoldLabel = timing.IsHeld(1) ? "Resume finish" : "Hold finish";
-        IntermediateHoldLabel = timing.IsHeld(SelectedTimingCheckpoint + 1) ? "Resume intermediate" : "Hold intermediate";
     }
 
     [RelayCommand] private async Task ExpectSelectedAsync(string position) => await GuardAsync(async () =>
     {
         if (SelectedTimingRow is not { } row || workspace.Timing is not { } timing) { return; }
-        var channel = position == "start" ? 0 : position == "finish" ? 1 : SelectedTimingCheckpoint + 1;
+        var channel = position switch
+        { "start" => 0, "finish" => 1, _ => throw new DomainValidationException("Choose start or finish.") };
         await timing.ExpectAsync(channel, row.Bib); RefreshTiming();
     });
 
     [RelayCommand] private async Task HoldTimingPositionAsync(string position) => await GuardAsync(async () =>
     {
         if (workspace.Timing is not { } timing) { return; }
-        var channel = position == "start" ? 0 : position == "finish" ? 1 : SelectedTimingCheckpoint + 1;
+        var channel = position switch
+        { "start" => 0, "finish" => 1, _ => throw new DomainValidationException("Choose start or finish.") };
         await timing.ExpectAsync(channel, null, !timing.IsHeld(channel)); RefreshTiming();
     });
 

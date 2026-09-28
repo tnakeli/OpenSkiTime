@@ -359,8 +359,20 @@ public sealed partial class MainViewModel
         {
             if (_simulator is null || !IsTimingConnected) { throw new DomainValidationException("Connect the simulator first."); }
             if (!TimingTime.TryTimeOfDay(SimulationTime, out var ticks, out _)) { throw new DomainValidationException("Enter simulator time as HH:mm:ss with 1–7 decimal places (for example 12:00:00.1234567)."); }
-            await _simulator.PulseAsync(channel == "start" ? TimingStartChannel : channel == "finish" ? TimingFinishChannel
-                : ReadIntermediateChannels()[SelectedTimingCheckpoint - 1], ticks);
+            int IntermediateChannel(string? position)
+            {
+                if (position is null || !position.StartsWith("intermediate:", StringComparison.Ordinal)
+                    || !int.TryParse(position.AsSpan("intermediate:".Length), out var checkpoint)
+                    || checkpoint < 1 || checkpoint > TimingCheckpoints.Count)
+                { throw new DomainValidationException("Choose a valid simulator timing position."); }
+                var configured = ReadIntermediateChannels();
+                if (checkpoint > configured.Length)
+                { throw new DomainValidationException($"Configure the channel for intermediate {checkpoint} in Settings."); }
+                return configured[checkpoint - 1];
+            }
+            var physicalChannel = channel switch
+            { "start" => TimingStartChannel, "finish" => TimingFinishChannel, _ => IntermediateChannel(channel) };
+            await _simulator.PulseAsync(physicalChannel, ticks);
         });
     }
 

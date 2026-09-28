@@ -35,6 +35,7 @@ public sealed partial class TimingView : UserControl
     private void BindViewModel(MainViewModel? vm)
     {
         if (_viewModel is not null) { _viewModel.PropertyChanged -= OnViewModelChanged; }
+        if (!ReferenceEquals(_viewModel, vm)) { _splitCount = -1; }
         _viewModel = vm;
         if (vm is not null) { vm.PropertyChanged += OnViewModelChanged; BuildActions(vm); ConfigureColumns(); SynchronizeSelection(); }
     }
@@ -69,6 +70,16 @@ public sealed partial class TimingView : UserControl
         var count = _viewModel?.TimingCheckpoints.Count ?? 0;
         if (count == _splitCount) { return; }
         _splitCount = count;
+        var simulatorButtons = this.FindControl<StackPanel>("SimulatorIntermediateButtons")!;
+        simulatorButtons.Children.Clear();
+        for (var i = 1; i <= count; i++)
+        {
+            var button = new Button { Content = $"Test I{i}", Command = _viewModel?.SimulatePulseCommand,
+                CommandParameter = $"intermediate:{i}" };
+            button.Classes.Add("secondaryAction");
+            button.Bind(IsEnabledProperty, new Binding(nameof(MainViewModel.IsTimingConnected)) { Source = _viewModel });
+            simulatorButtons.Children.Add(button);
+        }
         var grid = this.FindControl<DataGrid>("RunningGrid")!;
         foreach (var column in grid.Columns.Where(x => x.Tag is "intermediate").ToArray()) { grid.Columns.Remove(column); }
         for (var i = 0; i < count; i++)
@@ -108,7 +119,6 @@ public sealed partial class TimingView : UserControl
         _actions = [
             new("Next at start", "F5", vm.ExpectSelectedCommand, "start"),
             new("Next at finish", "F6", vm.ExpectSelectedCommand, "finish"),
-            new("Next at intermediate", "F7", vm.ExpectSelectedCommand, "intermediate", Visible: nameof(vm.HasTimingIntermediates)),
             new("Back to start", "F8", vm.ReturnToStartCommand),
             new("DNS · did not start", "Ctrl+D", vm.ClassifyTimingCommand, "DNS"),
             new("DNF · did not finish", "Ctrl+F", vm.ClassifyTimingCommand, "DNF"),
@@ -118,7 +128,6 @@ public sealed partial class TimingView : UserControl
             new("Absent next starter · DNS", "Shift+F5", vm.NextStartDnsCommand),
             new("Hold start", "Ctrl+F5", vm.HoldTimingPositionCommand, "start", DynamicHeader: nameof(vm.StartHoldLabel)),
             new("Hold finish", "Ctrl+F6", vm.HoldTimingPositionCommand, "finish", DynamicHeader: nameof(vm.FinishHoldLabel)),
-            new("Hold intermediate", "Ctrl+F7", vm.HoldTimingPositionCommand, "intermediate", Visible: nameof(vm.HasTimingIntermediates), DynamicHeader: nameof(vm.IntermediateHoldLabel)),
             new("False finish · not a racer", "Ctrl+Back", vm.IgnoreLastFinishCommand, Enabled: nameof(vm.CanIgnoreLastFinish)),
         ];
         foreach (var name in GridNames)
@@ -133,9 +142,9 @@ public sealed partial class TimingView : UserControl
                 if (action.Enabled is { } enabled) { item.Bind(IsEnabledProperty, new Binding(enabled) { Source = vm }); }
                 if (action.Visible is { } visible) { item.Bind(IsVisibleProperty, new Binding(visible) { Source = vm }); }
                 if (action.DynamicHeader is { } header) { item.Bind(MenuItem.HeaderProperty, new Binding(header) { Source = vm }); }
-                if (i is >= 4 and <= 8) { status.Items.Add(item); }
-                else if (i >= 9) { more.Items.Add(item); }
-                else if (name == "AtStartGrid" && i is 1 or 2) { more.Items.Add(item); }
+                if (i is >= 3 and <= 7) { status.Items.Add(item); }
+                else if (i >= 8) { more.Items.Add(item); }
+                else if (name == "AtStartGrid" && i == 1) { more.Items.Add(item); }
                 else { menu.Items.Add(item); }
             }
             menu.Items.Add(new Separator()); menu.Items.Add(status); menu.Items.Add(more);
