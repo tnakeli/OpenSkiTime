@@ -14,13 +14,17 @@ public sealed partial class TimingView
     private Point _pressPoint;
     private bool _dragging;
     private Control? _dropHighlight;
+    private string? _dropHighlightClass;
     public Task PendingTimingDrop { get; private set; } = Task.CompletedTask;
 
     private void ConfigureDragging()
     {
         DragDrop.SetAllowDrop(this, true);
         DragDrop.SetAllowDrop(this.FindControl<Border>("StartDropTarget")!, true);
+        DragDrop.SetAllowDrop(this.FindControl<DataGrid>("AtStartGrid")!, true);
         DragDrop.SetAllowDrop(this.FindControl<DataGrid>("TimestampsGrid")!, true);
+        foreach (var status in new[] { "DNS", "DNF", "DSQ", "NPS", "Clear" })
+        { DragDrop.SetAllowDrop(this.FindControl<Button>("StatusDrop" + status)!, true); }
         AddHandler(PointerPressedEvent, TrackDragStart, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, StartDrag, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, (_, _) => { _pressedCompetitor = null; _press = null; }, RoutingStrategies.Tunnel);
@@ -29,8 +33,14 @@ public sealed partial class TimingView
         AddHandler(DragDrop.DropEvent, DropCompetitor);
     }
 
+    private void EnableStartRowDrop(object? sender, DataGridRowEventArgs e)
+        => DragDrop.SetAllowDrop(e.Row, true);
+
     private static IEnumerable<Visual> Ancestry(object? source) => source is Visual visual
         ? new[] { visual }.Concat(visual.GetVisualAncestors()) : [];
+
+    private static Button? StatusTarget(object? source) => Ancestry(source).OfType<Button>()
+        .FirstOrDefault(x => x.Classes.Contains("statusDrop"));
 
     private void TrackDragStart(object? sender, PointerPressedEventArgs e)
     {
@@ -70,34 +80,55 @@ public sealed partial class TimingView
         }
     }
 
-    private static (Control? Target, TimingTimestampCell? Cell, bool ToStart) DropTarget(object? source)
+    private static (Control? Target, TimingTimestampCell? Cell, bool ToStart, int? QueueTargetBib,
+        bool VisuallyAbove) DropTarget(object? source, DragEventArgs e)
     {
         var ancestors = Ancestry(source).ToArray();
-        if (ancestors.OfType<Control>().FirstOrDefault(x => x.Name == "StartDropTarget") is { } start) { return (start, null, true); }
+        if (ancestors.OfType<DataGrid>().Any(x => x.Name == "AtStartGrid")
+            && ancestors.OfType<DataGridRow>().FirstOrDefault() is { DataContext: TimingGridRow racer } row)
+        { return (row, null, true, racer.Bib, e.GetPosition(row).Y < row.Bounds.Height / 2); }
+        if (ancestors.OfType<Control>().FirstOrDefault(x => x.Name == "StartDropTarget") is { } start)
+        { return (start, null, true, null, false); }
         if (ancestors.OfType<Border>().FirstOrDefault(x => x.Tag is TimingTimestampCell) is { Tag: TimingTimestampCell cell } border)
-        { return (border, cell, false); }
-        return (null, null, false);
+        { return (border, cell, false, null, false); }
+        return (null, null, false, null, false);
     }
 
-    private void HighlightDrop(Control? control)
+    private void HighlightDrop(Control? control, string className = "timingDropTarget")
     {
-        if (_dropHighlight == control) { return; }
-        _dropHighlight?.Classes.Remove("timingDropTarget");
+        if (_dropHighlight == control && _dropHighlightClass == className) { return; }
+        if (_dropHighlightClass is not null) { _dropHighlight?.Classes.Remove(_dropHighlightClass); }
         _dropHighlight = control;
-        _dropHighlight?.Classes.Add("timingDropTarget");
+        _dropHighlightClass = control is null ? null : className;
+        if (_dropHighlightClass is not null) { _dropHighlight!.Classes.Add(_dropHighlightClass); }
     }
 
     private void ShowDropTarget(object? sender, DragEventArgs e)
     {
         e.DragEffects = DragDropEffects.None;
         if (_viewModel is not { } vm || e.Data.Get(CompetitorDragFormat) is not TimingDragCompetitor item) { return; }
-        var target = DropTarget(e.Source);
-        var problem = target.Target is null ? "Drop on At start or a recorded timestamp." : vm.TimingDropProblem(item, target.Cell, target.ToStart);
-        HighlightDrop(problem is null ? target.Target : null);
+        if (StatusTarget(e.Source) is { Tag: string status } button)
+        {
+            var statusProblem = vm.StatusDropProblem(item, status);
+            HighlightDrop(statusProblem is null ? button : null, "timingStatusDropTarget");
+            vm.TimingDropHint = statusProblem ?? $"Bib {item.Bib} · {item.Name} → {status}";
+            e.DragEffects = statusProblem is null ? DragDropEffects.Move : DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+        var target = DropTarget(e.Source, e);
+        var problem = target.Target is null ? "Drop on At start or a recorded timestamp."
+            : target.QueueTargetBib is { } bib ? vm.StartQueueDropProblem(item, bib)
+            : vm.TimingDropProblem(item, target.Cell, target.ToStart);
+        var highlightClass = target.QueueTargetBib is not null
+            ? target.VisuallyAbove ? "timingDropAbove" : "timingDropBelow" : "timingDropTarget";
+        HighlightDrop(problem is null ? target.Target : null, highlightClass);
         if (problem is null)
         {
             e.DragEffects = DragDropEffects.Move;
-            vm.TimingDropHint = target.ToStart ? $"Bib {item.Bib} → next at start"
+            vm.TimingDropHint = target.QueueTargetBib is { } targetBib
+                ? $"Bib {item.Bib} → {(target.VisuallyAbove ? "above" : "below")} Bib {targetBib} · {(target.VisuallyAbove ? "later" : "earlier")} start"
+                : target.ToStart ? $"Bib {item.Bib} → next at start"
                 : $"Bib {item.Bib} → {target.Cell!.Position} {target.Cell.Time}"
                     + (target.Cell.Review.Bib is { } previous && previous != item.Bib ? $" · removes it from Bib {previous}" : "");
         }
@@ -110,11 +141,28 @@ public sealed partial class TimingView
         e.DragEffects = DragDropEffects.None;
         HighlightDrop(null);
         if (_viewModel is not { } vm || e.Data.Get(CompetitorDragFormat) is not TimingDragCompetitor item) { return; }
-        var target = DropTarget(e.Source);
+        if (StatusTarget(e.Source) is { Tag: string status })
+        {
+            e.Handled = true;
+            if (vm.StatusDropProblem(item, status) is not null) { return; }
+            PendingTimingDrop = vm.DropTimingStatusAsync(item, status);
+            await PendingTimingDrop;
+            if (!vm.IsError) { e.DragEffects = DragDropEffects.Move; }
+            return;
+        }
+        var target = DropTarget(e.Source, e);
         if (target.Target is null) { return; }
         e.Handled = true;
-        if (vm.TimingDropProblem(item, target.Cell, target.ToStart) is not null) { return; }
-        PendingTimingDrop = vm.DropTimingCompetitorAsync(item, target.Cell, target.ToStart);
+        if (target.QueueTargetBib is { } bib)
+        {
+            if (vm.StartQueueDropProblem(item, bib) is not null) { return; }
+            PendingTimingDrop = vm.DropStartQueueAsync(item, bib, target.VisuallyAbove);
+        }
+        else
+        {
+            if (vm.TimingDropProblem(item, target.Cell, target.ToStart) is not null) { return; }
+            PendingTimingDrop = vm.DropTimingCompetitorAsync(item, target.Cell, target.ToStart);
+        }
         await PendingTimingDrop;
         if (!vm.IsError) { e.DragEffects = DragDropEffects.Move; }
     }

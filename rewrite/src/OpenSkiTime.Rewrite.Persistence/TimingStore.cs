@@ -87,8 +87,6 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 {
                     await ValidateStartPlanAsync(db, list.Plan, ct);
                     await ValidateTimingSourceAsync(db, listRow, list.Plan, ct);
-                    listRow.StartedAt = at; listRow.StartedBy = operatorName.Trim();
-                    var series = await db.Series.SingleAsync(ct); series.Revision++;
                 }
                 var row = new CaptureRow { Id = Guid.NewGuid(), ListId = listId, OptionsJson = JsonSerializer.Serialize(options), StartedAt = at };
                 if (previousSessionId is { } previousId)
@@ -147,11 +145,14 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
     }
 
     public async Task<TimingAudit> AppendTimingAuditAsync(Guid listId, long expectedVersion, TimingDecision before,
-        TimingDecision after, string operatorName, string reason, DateTimeOffset at, long? reversesId = null, CancellationToken ct = default)
-        => (await AppendTimingAuditBatchAsync(listId, expectedVersion, [new(before, after, reversesId)], operatorName, reason, at, ct))[0];
+        TimingDecision after, string operatorName, string reason, DateTimeOffset at, long? reversesId = null,
+        bool startsRun = false, CancellationToken ct = default)
+        => (await AppendTimingAuditBatchAsync(listId, expectedVersion, [new(before, after, reversesId)], operatorName,
+            reason, at, startsRun, ct))[0];
 
     public async Task<IReadOnlyList<TimingAudit>> AppendTimingAuditBatchAsync(Guid listId, long expectedVersion,
-        IReadOnlyList<TimingAuditChange> edits, string operatorName, string reason, DateTimeOffset at, CancellationToken ct = default)
+        IReadOnlyList<TimingAuditChange> edits, string operatorName, string reason, DateTimeOffset at,
+        bool startsRun = false, CancellationToken ct = default)
     {
         using var idleLease = _captureLease is null ? AcquireIdleWriteLease() : null;
         if (string.IsNullOrWhiteSpace(operatorName) || string.IsNullOrWhiteSpace(reason))
@@ -184,12 +185,25 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                     { throw new DomainValidationException("The observation must reference original data in this run."); }
                     if (after.Bib is { } bib && !entries.Any(x => x.Bib == bib)) { throw new DomainValidationException("Unknown bib."); }
                 }
+                else if (after.Kind == DecisionKind.StartOrder)
+                {
+                    if (after.StartOrder is { } order && !TimingEngine.ParseStartOrder(order).Order()
+                        .SequenceEqual(entries.Select(x => x.Bib).Order()))
+                    { throw new DomainValidationException("The start order must include every starter exactly once."); }
+                }
                 else if (!entries.Any(x => x.Entrant.CompetitorId == after.CompetitorId))
                 { throw new DomainValidationException("Unknown starter."); }
                 var result = new TimingAuditRow { ListId = listId, At = at, Operator = operatorName.Trim(), Reason = reason.Trim(),
                     BeforeJson = JsonSerializer.Serialize(before), AfterJson = JsonSerializer.Serialize(after), ReversesId = reversesId };
                 db.TimingAudit.Add(result);
                 results.Add(result);
+            }
+            if (startsRun && list.StartedAt is null)
+            {
+                list.StartedAt = at;
+                list.StartedBy = operatorName.Trim();
+                var series = await db.Series.SingleAsync(ct);
+                series.Revision++;
             }
             return results;
         }, ct);

@@ -17,8 +17,12 @@ internal sealed partial class SqliteSeriesFileSession
             var series = await db.Series.AsNoTracking().SingleAsync(ct);
             var runIds = await db.Runs.Where(x => x.CompetitionId == competitionId).Select(x => x.Id).ToArrayAsync(ct);
             var lists = await db.StartLists.AsNoTracking().Where(x => runIds.Contains(x.RunId)).ToListAsync(ct);
+            var listIds = lists.Select(x => x.Id).ToArray();
+            var capturedIds = (await db.Captures.AsNoTracking().Where(x => listIds.Contains(x.ListId))
+                .Select(x => x.ListId).Distinct().ToArrayAsync(ct)).ToHashSet();
             var revisions = new List<StartListRevision>();
-            foreach (var list in lists) { revisions.Add(await ReadListAsync(db, list, ct)); }
+            foreach (var list in lists)
+            { revisions.Add((await ReadListAsync(db, list, ct)) with { HasCapture = capturedIds.Contains(list.Id) }); }
             return new(series.Revision, revisions.OrderBy(x => x.Plan.RunNumber).ThenBy(x => x.Revision).ToArray());
         }
         catch (Exception ex) when (ex is SqliteException or JsonException or IOException or UnauthorizedAccessException)
@@ -40,9 +44,9 @@ internal sealed partial class SqliteSeriesFileSession
                 if (!TimingReplay.InputVersionMatches(request.ExpectedTimingVersion, TimingReplay.InputVersion(timing)))
                 { throw new DomainValidationException("Run 1 timing changed. Reload its results before creating the next start list."); }
             }
-            if (await db.StartLists.AnyAsync(x => x.StartedAt != null && db.Runs.Any(r => r.Id == x.RunId
+            if (await db.StartLists.AnyAsync(x => (x.StartedAt != null || db.Captures.Any(c => c.ListId == x.Id)) && db.Runs.Any(r => r.Id == x.RunId
                 && r.CompetitionId == plan.CompetitionId && r.Number == plan.RunNumber), ct))
-            { throw new DomainValidationException("This run has started. Its start list can no longer be redrawn."); }
+            { throw new DomainValidationException("Timing capture has begun for this run. Its start list can no longer be redrawn."); }
             var run = await db.Runs.SingleOrDefaultAsync(x => x.CompetitionId == plan.CompetitionId
                 && x.Gender == plan.Gender && x.Number == plan.RunNumber, ct);
             if (run is null)

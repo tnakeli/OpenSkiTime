@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Domain;
 using OpenSkiTime.Rewrite.Timing;
 
@@ -37,7 +38,8 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _startHoldLabel = "Hold start";
     [ObservableProperty] private string _finishHoldLabel = "Hold finish";
     public bool HasTimingIntermediates => TimingCheckpoints.Count > 0;
-    public string SelectedTimingIdentity => SelectedTimingRow?.Label ?? "Select a competitor";
+    public string SelectedTimingIdentity => SelectedTimingBibs.Count > 1
+        ? $"{SelectedTimingBibs.Count} competitors selected" : SelectedTimingRow?.Label ?? "Select a competitor";
     public string SelectedTimingProblem => SelectedTimingRow?.Result.Status == TimingStatus.Review ? SelectedTimingRow.Detail : "";
     public bool HasSelectedTimingProblem => SelectedTimingProblem.Length > 0;
     public bool CanReturnToStart => RaceFlow.CanReturnToStart(SelectedTimingRow?.Result);
@@ -93,9 +95,20 @@ public sealed partial class MainViewModel
     [RelayCommand] private async Task ReturnToTimingAsync()
     {
         if (!HasTimingRun) { return; }
+        var entering = !IsTimingSection;
         SwitchSection(WorkspaceSection.Timing);
+        if (!IsTimingSection) { return; }
         ConfigureTimingCheckpoints();
+        if (entering && workspace.Timing is { IsActive: true } timing)
+            { await HoldTimingChannelsAsync(timing); }
         if (workspace.Timing?.IsActive != true && timingPreferencesStore?.Load() is not null) { await ConnectTimingAsync(); }
+    }
+
+    private async Task HoldTimingChannelsAsync(TimingWorkspace timing)
+    {
+        await timing.HoldAllAsync();
+        RefreshTiming();
+        OnPropertyChanged(nameof(TimingChannelStates));
     }
     [RelayCommand] private async Task ApplyFollowTimingOrderAsync()
     {
@@ -129,6 +142,9 @@ public sealed partial class MainViewModel
         await timing.ExpectAsync(channel, null, !timing.IsHeld(channel));
         RefreshTiming();
         OnPropertyChanged(nameof(TimingChannelStates));
+        var label = channel switch { 0 => "Start", 1 => "Finish", _ => $"Intermediate {channel - 1}" };
+        SetStatus(timing.IsHeld(channel) ? $"{label} on HOLD. Original impulses are still saved."
+            : $"{label} resumed. Incoming impulses can be assigned.");
     });
 
     private void RefreshRaceQueues()
@@ -158,9 +174,7 @@ public sealed partial class MainViewModel
                 IsLatestFinish = row.Bib == latest,
                 Category = HasTimingCategories ? CategoryResolver.Resolve(row.Result.Entry.Entrant.Athlete, _desk!.Categories) : ""
             };
-            SyncTimingRows(AtStartRows, RaceFlow.Waiting(snapshot)
-                .OrderBy(x => x.Bib == timing.ArmedStart ? 1 : 0).ThenByDescending(x => x.Entry.Position)
-                .Select(Map).ToArray());
+            SyncTimingRows(AtStartRows, RaceFlow.Waiting(snapshot).Reverse().Select(Map).ToArray());
             var arrivalOrder = onCourse.OrderBy(x => x.Bib == timing.ArmedFinish ? 1 : 0)
                 .ThenByDescending(x => x.Result.StartKey is null ? long.MinValue : snapshot.Observations
                     .First(y => y.Observation.Key == x.Result.StartKey).Observation.DeviceTicks ?? long.MinValue);
@@ -197,7 +211,16 @@ public sealed partial class MainViewModel
         if (SelectedTimingRow is not { } row || workspace.Timing is not { } timing) { return; }
         var channel = position switch
         { "start" => 0, "finish" => 1, _ => throw new DomainValidationException("Choose start or finish.") };
-        await timing.ExpectAsync(channel, row.Bib); RefreshTiming();
+        if (channel == 0) { await timing.MoveWaitingToNextAsync(row.Bib, TimingOperator); }
+        else { await timing.ExpectAsync(channel, row.Bib); }
+        RefreshTiming();
+    });
+
+    [RelayCommand] private async Task MoveStartRowAsync(string direction) => await GuardAsync(async () =>
+    {
+        if (SelectedTimingRow is not { } row || workspace.Timing is not { } timing) { return; }
+        await timing.MoveWaitingAsync(row.Bib, direction == "up" ? 1 : -1, TimingOperator);
+        RefreshTiming();
     });
 
     [RelayCommand] private async Task HoldTimingPositionAsync(string position) => await GuardAsync(async () =>
@@ -211,8 +234,7 @@ public sealed partial class MainViewModel
     [RelayCommand] private async Task NextStartDnsAsync()
     {
         if (workspace.Timing?.ArmedStart is not { } bib) { return; }
-        SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == bib);
-        await ClassifyTimingAsync("DNS");
+        await GuardAsync(() => ApplyTimingStatusAsync([bib], "DNS"));
     }
 
     [RelayCommand(CanExecute = nameof(CanReturnToStart))]

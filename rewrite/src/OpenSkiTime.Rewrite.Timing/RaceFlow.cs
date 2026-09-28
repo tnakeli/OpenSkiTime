@@ -10,7 +10,9 @@ public static class RaceFlow
     public static IReadOnlyList<TimingResult> Waiting(TimingSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        return snapshot.Results.Where(x => x.Status == TimingStatus.Ready).OrderBy(x => x.Entry.Position).ToArray();
+        var order = snapshot.StartOrder.Select((bib, index) => (bib, index)).ToDictionary(x => x.bib, x => x.index);
+        return snapshot.Results.Where(x => x.Status == TimingStatus.Ready)
+            .OrderBy(x => order.GetValueOrDefault(x.Bib, x.Entry.Position)).ToArray();
     }
 
     public static IReadOnlyList<TimingResult> OnCourse(TimingSnapshot snapshot)

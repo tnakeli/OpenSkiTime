@@ -9,6 +9,7 @@ namespace OpenSkiTime.Rewrite.Desktop;
 
 public sealed record DrawDestination(CompetitionDetails Competition, int Run);
 public sealed record DrawMenuCompetition(CompetitionDetails Competition, IReadOnlyList<int> Runs);
+public sealed record DrawStartListRow(StartListEntry Entry, string RunOneTime);
 
 public sealed partial class ResultInputRow(StartListEntry entry) : ObservableObject
 {
@@ -36,6 +37,7 @@ public sealed partial class MainViewModel
     private bool _settingDraw;
     public ObservableCollection<DrawMenuCompetition> DrawMenu { get; } = [];
     public ObservableCollection<StartListEntry> DrawEntries { get; } = [];
+    public ObservableCollection<DrawStartListRow> DrawStartListRows { get; } = [];
     public ObservableCollection<ResultInputRow> DrawResults { get; } = [];
     public IReadOnlyList<int> ReverseChoices { get; } = [30, 15];
     private CompetitionDetails? _drawCompetition;
@@ -90,16 +92,13 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _drawEntryIssue = string.Empty;
     public bool IsFirstDrawRun => DrawRun == 1;
     public bool IsLaterDrawRun => DrawRun > 1;
-    public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && !DrawRunStarted
+    public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && !DrawRunStarted && DrawRevision?.HasCapture != true
         && DrawEntryIssue.Length == 0 && (DrawRun == 1 || (DrawRun == 2 && _sourceRun is not null && (_sourceTiming is null || _sourceTiming.Complete)));
     public bool CanExportDraw => DrawRevision is not null && !IsDrawBusy && !HasUnsavedRunInput
         && (_sourceTiming is null || (_sourceTiming.Complete && _sourceTimingVersion is not null && TimingReplay.InputVersionMatches(DrawRevision.SourceTimingVersion, _sourceTimingVersion)));
     public bool HasDrawSource => _sourceRun is not null;
     public bool CanEditDrawResults => HasDrawSource && !DrawRunStarted && !IsDrawBusy;
-    public bool CanMarkRunStarted => CanExportDraw && !DrawRunStarted && !DrawHasChangedEntries && DrawEntryIssue.Length == 0;
     public string DrawActionLabel => IsFirstDrawRun ? DrawRevision is null ? "Draw" : "Draw again" : "Create start list";
-    public string DrawNavigationLabel => IsDrawSection && DrawCompetition is { } c
-        ? $"4  Draw / Start lists · {c.Values.ShortLabel} / Run {DrawRun}  ▾" : "4  Draw / Start lists  ▾";
     [RelayCommand] private void ShowDrawList() => IsResultInputOpen = false;
     [RelayCommand] private void ShowRunInput() => IsResultInputOpen = true;
 
@@ -139,6 +138,7 @@ public sealed partial class MainViewModel
         DrawRun = destination.Run;
         _settingDraw = false;
         await LoadDrawAsync();
+        SetActiveRace(competition, destination.Run, WorkspaceSection.Draw);
     }
 
     partial void OnDrawRevisionChanged(StartListRevision? value) => ShowDrawRevision();
@@ -170,6 +170,7 @@ public sealed partial class MainViewModel
         HasUnsavedRunInput = false;
         var competition = DrawCompetition;
         DrawEntries.Clear();
+        DrawStartListRows.Clear();
         DrawResults.Clear();
         DrawRevision = null;
         _sourceRun = null;
@@ -242,13 +243,21 @@ public sealed partial class MainViewModel
             }
         }
         DrawEntries.Clear();
+        DrawStartListRows.Clear();
         if (DrawRevision is { } revision)
         {
-            foreach (var entry in revision.Plan.Entries) { DrawEntries.Add(entry); }
+            var sourceTimes = revision.Plan.SourceResults.ToDictionary(x => x.CompetitorId, x => x.Hundredths);
+            foreach (var entry in revision.Plan.Entries)
+            {
+                DrawEntries.Add(entry);
+                DrawStartListRows.Add(new(entry, revision.Plan.RunNumber == 1 ? ""
+                    : RunResultInput.FormatTime(sourceTimes[entry.Entrant.CompetitorId])));
+            }
             DrawState = DrawRunStarted ? "Run started" : "Start list ready";
             DrawListInfo = $"{revision.Plan.Entries.Count} starters · FIS list {revision.Plan.PointsList.Code}";
-            DrawHelp = DrawRunStarted ? "Run started. Starting order is locked; select the next run from the Draw / Start lists menu."
-                : "Start list saved. Mark the run started when racing begins.";
+            DrawHelp = DrawRunStarted ? "Run started. Starting order is locked; select the next run from Start lists."
+                : revision.HasCapture ? "Timing capture has begun. The start list is locked; the run starts with the first assigned start impulse."
+                : "Start list saved. The run starts automatically with the first assigned start impulse.";
             var reference = revision.Plan.RunNumber == 1 ? revision.Plan.Entries : _sourceRun?.Plan.Entries ?? revision.Plan.Entries;
             var entered = _desk?.Participations.Where(x => x.CompetitionId == revision.Plan.CompetitionId && x.Participates)
                 .Select(x => x.CompetitorId).ToHashSet() ?? [];
@@ -283,7 +292,6 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(DrawActionLabel));
         OnPropertyChanged(nameof(CanExportDraw)); OnPropertyChanged(nameof(HasDrawSource));
         OnPropertyChanged(nameof(WindowTitle));
-        OnPropertyChanged(nameof(DrawNavigationLabel)); OnPropertyChanged(nameof(CanMarkRunStarted));
         OnPropertyChanged(nameof(CanEditDrawResults));
         OnPropertyChanged(nameof(HasCapturedRunInput)); OnPropertyChanged(nameof(CanPasteDrawResults)); OnPropertyChanged(nameof(RunInputHelp));
     }
@@ -325,20 +333,6 @@ public sealed partial class MainViewModel
                 DrawRun == 1 ? "Draw" : "Run 2 start order", DateTimeOffset.UtcNow, _sourceTimingVersion));
             await LoadDrawAsync();
             SetStatus("Start list saved.");
-        });
-        IsDrawBusy = false;
-    }
-
-    [RelayCommand]
-    private async Task MarkRunStartedAsync()
-    {
-        if (!CanMarkRunStarted || DrawRevision is not { } revision || _drawDesk is null) { return; }
-        IsDrawBusy = true;
-        await GuardAsync(async () =>
-        {
-            await workspace.MarkRunStartedAsync(revision.Id, _drawDesk.SeriesRevision, Environment.UserName, DateTimeOffset.UtcNow);
-            await LoadDrawAsync();
-            SetStatus($"Run {DrawRun} marked started. This records run progress; it does not start timing capture.");
         });
         IsDrawBusy = false;
     }

@@ -95,6 +95,7 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _timingReplayPath = "";
     [ObservableProperty] private string _timingOperator = Environment.UserName;
     [ObservableProperty] private string _timingConnection = "Disconnected";
+    [ObservableProperty] private string _timingHoldSummary = "";
     [ObservableProperty] private string _timingAlarm = "";
     [ObservableProperty] private string _timingSummary = "Choose a saved start list.";
     [ObservableProperty] private string _startBibText = "";
@@ -105,6 +106,16 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _correctedTimeText = "";
     [ObservableProperty] private string _simulationTime = "12:00:00.0000";
     [ObservableProperty] private TimingGridRow? _selectedTimingRow;
+    public IReadOnlyList<int> SelectedTimingBibs { get; private set; } = [];
+    public void SelectTimingBibs(IReadOnlyList<int> bibs, int? activeBib)
+    {
+        ArgumentNullException.ThrowIfNull(bibs);
+        SelectedTimingBibs = bibs.Distinct().ToArray();
+        OnPropertyChanged(nameof(SelectedTimingBibs));
+        SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == activeBib)
+            ?? TimingRows.FirstOrDefault(x => SelectedTimingBibs.Count > 0 && x.Bib == SelectedTimingBibs[0]);
+        OnPropertyChanged(nameof(SelectedTimingIdentity));
+    }
     [ObservableProperty] private TimingObservationRow? _selectedTimingObservation;
     [ObservableProperty] private TimingHistoryRow? _selectedTimingHistory;
     public bool IsTimyUsb => TimingSource == TimingSources[0];
@@ -121,7 +132,6 @@ public sealed partial class MainViewModel
     public string TimingContext => TimingCompetition is { } c
         ? $"{c.Values.ShortLabel}  /  Run {TimingRun} of {c.Values.RunCount}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
         : "Timing · choose a competition and run";
-    public string TimingNavigationLabel => IsTimingSection && TimingCompetition is { } c ? $"5  Timing · {c.Values.ShortLabel} / {TimingRun}  ▾" : "5  Timing  ▾";
     public string TimingCaptureLabel => IsTimingConnected ? TimingContext + " · " + TimingConnection : "";
     public string TimingDeviceHelp => IsTimyUsb ? "PC Timer mode · install the ALGE USB driver once. Native USB uses the vendor library."
         : IsMt1Serial ? "Choose the MT1 virtual COM port. Start and finish must use different channels on this device."
@@ -137,6 +147,11 @@ public sealed partial class MainViewModel
     partial void OnShowAllTimingObservationsChanged(bool value) { _shownTiming = null; RefreshTiming(); }
     partial void OnSelectedTimingRowChanged(TimingGridRow? value)
     {
+        if (value is not null && !SelectedTimingBibs.Contains(value.Bib))
+        {
+            SelectedTimingBibs = [value.Bib];
+            OnPropertyChanged(nameof(SelectedTimingBibs));
+        }
         OnPropertyChanged(nameof(SelectedTimingIdentity));
         OnPropertyChanged(nameof(SelectedTimingProblem));
         OnPropertyChanged(nameof(HasSelectedTimingProblem));
@@ -151,7 +166,7 @@ public sealed partial class MainViewModel
     private void NotifyTiming()
     {
         foreach (var name in new[] { nameof(IsTimyUsb), nameof(IsMt1Serial), nameof(IsAlgeResults), nameof(IsTimingSimulator), nameof(IsTimingReplay),
-            nameof(CanConnectTiming), nameof(CanChangeTimingDevice), nameof(HasTimingRun), nameof(TimingContext), nameof(TimingNavigationLabel),
+            nameof(CanConnectTiming), nameof(CanChangeTimingDevice), nameof(HasTimingRun), nameof(TimingContext),
             nameof(TimingCaptureLabel), nameof(TimingDeviceHelp), nameof(WindowTitle), nameof(CanPrepareNextTimedRun), nameof(ShowTimingTotal) }) { OnPropertyChanged(name); }
     }
 
@@ -177,14 +192,19 @@ public sealed partial class MainViewModel
         {
             EnsureDeskClean();
             var timing = workspace.Timing ?? throw new SeriesFileException("Timing is unavailable in this workspace.");
+            var entering = !IsTimingSection;
             SwitchSection(WorkspaceSection.Timing);
             if (!IsTimingSection) { return; }
+            if (entering && timing.IsActive && timing.ListId is not null && _timingList is not null)
+            { await HoldTimingChannelsAsync(timing); }
             var lists = await workspace.ReadStartListsAsync(destination.Competition.Id);
             var list = lists.Revisions.Where(x => x.Plan.RunNumber == destination.Run).MaxBy(x => x.Revision)
                 ?? throw new DomainValidationException("Draw and save this run's start list first.");
-            if (timing.ListId != list.Id) { await timing.SelectRunAsync(list.Id); }
+            var changingRun = timing.ListId != list.Id;
+            if (changingRun) { await timing.SelectRunAsync(list.Id); }
             TimingCompetition = Competitions.Single(x => x.Id == destination.Competition.Id);
             TimingRun = destination.Run;
+            SetActiveRace(TimingCompetition, destination.Run, WorkspaceSection.Timing);
             _timingList = list;
             if (!timing.IsActive)
             {
@@ -222,6 +242,8 @@ public sealed partial class MainViewModel
             await timing.FollowStartOrderAsync(FollowTimingOrder);
             _shownTiming = null;
             ConfigureTimingCheckpoints();
+            if (entering || changingRun)
+            { await HoldTimingChannelsAsync(timing); }
             RefreshTiming();
             RefreshTimingPorts();
             _timingTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) => RefreshTiming());
@@ -303,11 +325,12 @@ public sealed partial class MainViewModel
                 source = new ReplayFileTimingSource(TimingReplayPath);
             }
             await timing.FollowStartOrderAsync(FollowTimingOrder);
+            await HoldTimingChannelsAsync(timing);
             await timing.StartAsync(source, options, TimingOperator);
             ConfigureTimingCheckpoints();
             if (_current is not null) { _current = await workspace.ReadAsync(); }
             RefreshTiming();
-            SetStatus("Timing connected. Check Next start and Expected finish. Race queues advance with saved impulses.");
+            SetStatus("Timing connected in HOLD. Check the race, then resume each timing position before assigning impulses.");
         });
         IsTimingBusy = false;
     }
@@ -394,12 +417,27 @@ public sealed partial class MainViewModel
     {
         await GuardAsync(async () =>
         {
-            if (SelectedTimingRow is not { } row || workspace.Timing is not { } timing) { return; }
-            TimingStatus? classification = status == "Clear" ? null : Enum.Parse<TimingStatus>(status);
-            var reason = string.IsNullOrWhiteSpace(TimingReason) ? (classification is null ? "Operator cleared classification" : "Operator marked " + status) : TimingReason;
-            await timing.CorrectAsync(new(DecisionKind.Status, CompetitorId: row.Result.CompetitorId, Status: classification), TimingOperator, reason);
-            RefreshTiming();
+            var bibs = SelectedTimingBibs.Count > 0 ? SelectedTimingBibs
+                : SelectedTimingRow is { } row ? [row.Bib] : [];
+            if (bibs.Count > 0) { await ApplyTimingStatusAsync(bibs, status); }
         });
+    }
+
+    private async Task ApplyTimingStatusAsync(IReadOnlyList<int> bibs, string status)
+    {
+        if (workspace.Timing is not { } timing) { return; }
+        TimingStatus? classification = status switch
+        {
+            "DNS" => TimingStatus.DNS, "DNF" => TimingStatus.DNF,
+            "DSQ" => TimingStatus.DSQ, "NPS" => TimingStatus.NPS,
+            "Clear" => null,
+            _ => throw new DomainValidationException("Choose DNS, DNF, DSQ, NPS or clear status.")
+        };
+        var reason = string.IsNullOrWhiteSpace(TimingReason)
+            ? classification is null ? "Operator cleared classification" : "Operator marked " + status
+            : TimingReason;
+        await timing.CorrectStatusesAsync(bibs, classification, TimingOperator, reason);
+        RefreshTiming();
     }
 
     [RelayCommand]
@@ -457,6 +495,10 @@ public sealed partial class MainViewModel
             ? TimingTime.FormatTimeOfDay(ticks)[..8] : "--:--:--";
         StartInputOn = timing?.IsHeld(0) != true;
         FinishInputOn = timing?.IsHeld(1) != true;
+        var heldCount = timing is { IsActive: true }
+            ? Enumerable.Range(0, TimingCheckpoints.Count + 2).Count(timing.IsHeld) : 0;
+        TimingHoldSummary = heldCount == 0 ? "" : heldCount == TimingCheckpoints.Count + 2
+            ? "HOLD · all positions" : $"HOLD · {heldCount} position(s)";
         TimingAlarm = timing?.Fault ?? (timing?.Pending >= 512 ? "CAPTURE BACKLOG: input is waiting for storage. Do not close this file; check the local disk." : "");
         ArmedBibs = $"Start {timing?.ArmedStart?.ToString(CultureInfo.InvariantCulture) ?? "—"}  /  Finish {timing?.ArmedFinish?.ToString(CultureInfo.InvariantCulture) ?? "—"}";
         OnPropertyChanged(nameof(TimingCaptureLabel));
@@ -499,6 +541,7 @@ public sealed partial class MainViewModel
     {
         DecisionKind.Assignment => value.Ignored ? "Ignored" : value.Bib?.ToString(CultureInfo.InvariantCulture) ?? "Unassigned",
         DecisionKind.Status => value.Status?.ToString() ?? "Use recorded times",
+        DecisionKind.StartOrder => value.StartOrder ?? "Draw order",
         _ => value.Hundredths is null ? "Use recorded times" : TimingTime.Format(value.Hundredths)
     };
 
@@ -524,6 +567,7 @@ public sealed partial class MainViewModel
         TimingCompetition = null; TimingRows.Clear(); TimingObservations.Clear(); TimingHistory.Clear();
         TimingCheckpoints.Clear(); ShowTimingCorrection = false;
         SelectedTimingRow = null; SelectedTimingObservation = null; SelectedTimingHistory = null;
+        SelectedTimingBibs = [];
         StartBibText = FinishBibText = TimingReason = CorrectedTimeText = "";
         IsTimingConnected = false; RefreshRaceQueues(); NotifyTiming();
     }

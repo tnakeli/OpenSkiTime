@@ -136,7 +136,15 @@ public sealed class TimingStorageTests
         await workspace.Timing!.SelectRunAsync(first.Id);
         var source = new SimulatorTimingSource();
         await workspace.Timing.StartAsync(source, Options(), "Operator");
+        Assert.Null(Assert.Single((await workspace.ReadStartListsAsync(first.Plan.CompetitionId)).Revisions).StartedAt);
+        Assert.True(Assert.Single((await workspace.ReadStartListsAsync(first.Plan.CompetitionId)).Revisions).HasCapture);
+        var beforeStartRevision = (await workspace.ReadAsync()).Revision;
+        var redraw = await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(
+            new(first.Plan, beforeStartRevision, "Operator", "Redraw", TimingRulesTests.At)));
+        Assert.Contains("Timing capture has begun", redraw.Message, StringComparison.Ordinal);
         await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks, 1);
+        await UntilAsync(() => workspace.Timing.Snapshot!.Results.Any(x => x.Status == TimingStatus.OnCourse));
+        Assert.NotNull(Assert.Single((await workspace.ReadStartListsAsync(first.Plan.CompetitionId)).Revisions).StartedAt);
         await source.PulseAsync(1, TimeSpan.FromHours(12).Ticks + TimeSpan.FromSeconds(60).Ticks, 1);
         await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks + TimeSpan.FromSeconds(80).Ticks, 2);
         await source.PulseAsync(1, TimeSpan.FromHours(12).Ticks + TimeSpan.FromSeconds(145).Ticks, 2);
@@ -238,7 +246,8 @@ public sealed class TimingStorageTests
         }
         public Task EndCaptureAsync(Guid id, DateTimeOffset at, CancellationToken ct = default) => inner.EndCaptureAsync(id, at, ct);
         public Task<TimingAudit> AppendTimingAuditAsync(Guid id, long version, TimingDecision before, TimingDecision after,
-            string who, string why, DateTimeOffset at, long? undo = null, CancellationToken ct = default) => inner.AppendTimingAuditAsync(id, version, before, after, who, why, at, undo, ct);
+            string who, string why, DateTimeOffset at, long? undo = null, bool startsRun = false,
+            CancellationToken ct = default) => inner.AppendTimingAuditAsync(id, version, before, after, who, why, at, undo, startsRun, ct);
     }
 
     private sealed class Folder : IDisposable

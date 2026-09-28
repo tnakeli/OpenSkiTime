@@ -45,9 +45,11 @@ public interface ITimingStore
     Task AppendRawAsync(RawTimingPacket packet, CancellationToken ct = default);
     Task EndCaptureAsync(Guid sessionId, DateTimeOffset at, CancellationToken ct = default);
     Task<TimingAudit> AppendTimingAuditAsync(Guid listId, long expectedVersion, TimingDecision before,
-        TimingDecision after, string operatorName, string reason, DateTimeOffset at, long? reversesId = null, CancellationToken ct = default);
+        TimingDecision after, string operatorName, string reason, DateTimeOffset at, long? reversesId = null,
+        bool startsRun = false, CancellationToken ct = default);
     Task<IReadOnlyList<TimingAudit>> AppendTimingAuditBatchAsync(Guid listId, long expectedVersion,
-        IReadOnlyList<TimingAuditChange> changes, string operatorName, string reason, DateTimeOffset at, CancellationToken ct = default)
+        IReadOnlyList<TimingAuditChange> changes, string operatorName, string reason, DateTimeOffset at,
+        bool startsRun = false, CancellationToken ct = default)
         => throw new NotSupportedException("This timing store cannot save a timestamp transfer atomically.");
 }
 
@@ -356,6 +358,35 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
+    public async Task CorrectStatusesAsync(IReadOnlyList<int> bibs, TimingStatus? status,
+        string operatorName, string reason, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(bibs);
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot is null || bibs.Count == 0 || bibs.Distinct().Count() != bibs.Count)
+            { throw new DomainValidationException("Select one or more distinct starters in this run."); }
+            var changes = new List<TimingAuditChange>();
+            foreach (var bib in bibs)
+            {
+                var row = _snapshot.Results.SingleOrDefault(x => x.Bib == bib)
+                    ?? throw new DomainValidationException($"Bib {bib} is not in this run.");
+                var after = new TimingDecision(DecisionKind.Status, CompetitorId: row.CompetitorId, Status: status);
+                TimingEngine.ValidateDecision(after, _snapshot);
+                var before = TimingEngine.CurrentDecision(after, _audit);
+                if (before != after) { changes.Add(new(before, after)); }
+            }
+            if (changes.Count == 0) { return; }
+            var saved = await store.AppendTimingAuditBatchAsync(_snapshot.ListId, _snapshot.AuditVersion,
+                changes, operatorName, reason, DateTimeOffset.UtcNow, ct: ct);
+            _audit.AddRange(saved);
+            Rebuild();
+            foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
+        }
+        finally { _state.Release(); }
+    }
+
     public async Task ReturnToStartAsync(int bib, string startKey, string operatorName, CancellationToken ct = default)
     {
         await _state.WaitAsync(ct);
@@ -396,11 +427,21 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             if (status.Status is not null) { changes.Add(new(status, status with { Status = null })); }
             var time = TimingEngine.CurrentDecision(new(DecisionKind.Time, CompetitorId: result.CompetitorId), _audit);
             if (time.Hundredths is not null) { changes.Add(new(time, time with { Hundredths = null })); }
+            var order = _snapshot.StartOrder.ToList();
+            order.Remove(bib);
+            var waiting = RaceFlow.Waiting(_snapshot);
+            var next = waiting.Count == 0 ? (int?)null : waiting[0].Bib;
+            order.Insert(next is null ? 0 : order.IndexOf(next.Value), bib);
+            if (!order.SequenceEqual(_snapshot.StartOrder))
+            {
+                var queue = TimingEngine.CurrentDecision(new(DecisionKind.StartOrder), _audit);
+                changes.Add(new(queue, new(DecisionKind.StartOrder, StartOrder: string.Join(',', order))));
+            }
             foreach (var change in changes) { TimingEngine.ValidateDecision(change.After, _snapshot); }
             if (changes.Count > 0)
             {
                 var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName,
-                    $"Restart Bib {bib} at start; prior impulses retained", DateTimeOffset.UtcNow, ct);
+                    $"Restart Bib {bib} at start; prior impulses retained", DateTimeOffset.UtcNow, ct: ct);
                 _audit.AddRange(saved); Rebuild();
             }
             for (var channel = 1; channel < _expected.Length; channel++)
@@ -437,7 +478,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             changes.Add(new(expectedTarget, decision));
             foreach (var change in changes) { TimingEngine.ValidateDecision(change.After, _snapshot); }
             var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName,
-                $"Drag timestamp to Bib {bib}; displaced timestamps remain unassigned", DateTimeOffset.UtcNow, ct);
+                $"Drag timestamp to Bib {bib}; displaced timestamps remain unassigned", DateTimeOffset.UtcNow,
+                startsRun: target.Observation.Channel == 0, ct: ct);
             _audit.AddRange(saved); Rebuild();
             foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
         }
@@ -451,7 +493,9 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         var before = TimingEngine.CurrentDecision(decision, _audit);
         if (before == decision) { return; }
         var change = await store.AppendTimingAuditAsync(_snapshot.ListId, _snapshot.AuditVersion, before, decision,
-            operatorName, reason, DateTimeOffset.UtcNow, reversesId);
+            operatorName, reason, DateTimeOffset.UtcNow, reversesId,
+            startsRun: decision.Kind == DecisionKind.Assignment && decision.Bib is not null
+                && _snapshot.Observations.Any(x => x.Observation.Key == decision.ObservationKey && x.Observation.Channel == 0));
         _audit.Add(change); Rebuild();
     }
 
@@ -476,6 +520,71 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
+    // The complete order is one audited value, so a move and its undo cannot leave duplicate positions.
+    public async Task MoveWaitingAsync(int bib, int direction, string operatorName, CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (direction is not (-1 or 1) || _snapshot is null)
+            { throw new DomainValidationException("Choose a waiting starter and a direction."); }
+            var waiting = RaceFlow.Waiting(_snapshot).Select(x => x.Bib).ToArray();
+            var index = Array.IndexOf(waiting, bib);
+            var other = index + direction;
+            if (index < 0 || other < 0 || other >= waiting.Length) { return; }
+            var order = _snapshot.StartOrder.ToArray();
+            var first = Array.IndexOf(order, bib);
+            var second = Array.IndexOf(order, waiting[other]);
+            (order[first], order[second]) = (order[second], order[first]);
+            await AppendDecisionAsync(new(DecisionKind.StartOrder, StartOrder: string.Join(',', order)),
+                operatorName, $"Move Bib {bib} in start order");
+            _expected[0] = 0;
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
+    public async Task MoveWaitingToNextAsync(int bib, string operatorName, CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot is null || !RaceFlow.Waiting(_snapshot).Any(x => x.Bib == bib))
+            { throw new DomainValidationException("Choose a waiting starter."); }
+            var order = _snapshot.StartOrder.ToList();
+            order.Remove(bib);
+            var next = RaceFlow.Waiting(_snapshot).FirstOrDefault(x => x.Bib != bib)?.Bib;
+            order.Insert(next is null ? 0 : order.IndexOf(next.Value), bib);
+            await AppendDecisionAsync(new(DecisionKind.StartOrder, StartOrder: string.Join(',', order)),
+                operatorName, $"Move Bib {bib} to next start");
+            _expected[0] = _held[0] ? 0 : bib;
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
+    public async Task MoveWaitingRelativeAsync(int bib, int targetBib, bool visuallyAbove,
+        string operatorName, CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot is null || bib == targetBib) { return; }
+            var waiting = RaceFlow.Waiting(_snapshot);
+            if (!waiting.Any(x => x.Bib == bib) || !waiting.Any(x => x.Bib == targetBib))
+            { throw new DomainValidationException("The start queue changed. Drag the competitor again."); }
+            var order = _snapshot.StartOrder.ToList();
+            order.Remove(bib);
+            // At start is displayed in reverse: visually above means later in the starting order.
+            order.Insert(order.IndexOf(targetBib) + (visuallyAbove ? 1 : 0), bib);
+            await AppendDecisionAsync(new(DecisionKind.StartOrder, StartOrder: string.Join(',', order)),
+                operatorName, $"Move Bib {bib} {(visuallyAbove ? "above" : "below")} Bib {targetBib} at start");
+            _expected[0] = 0;
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
     public async Task ExpectAsync(int channel, int? bib, bool held = false, CancellationToken ct = default)
     {
         await _state.WaitAsync(ct);
@@ -491,8 +600,22 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
+    public async Task HoldAllAsync(CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot is null || _list is null) { throw new DomainValidationException("Choose a timing run first."); }
+            for (var channel = 0; channel < 2 + _list.Plan.Competition.IntermediateCount; channel++)
+            { _expected[channel] = 0; _held[channel] = true; }
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
+
     private void ReconcileCorrectedQueue(TimingDecision before, TimingDecision after)
     {
+        if (after.Kind == DecisionKind.StartOrder) { _expected[0] = 0; }
         if (!_followOrder && _snapshot is not null)
         {
             // Undoing a return-to-start can make the armed starter ineligible again.

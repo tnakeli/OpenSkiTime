@@ -9,6 +9,75 @@ namespace OpenSkiTime.Rewrite.Tests;
 public sealed class RaceFlowTests
 {
     [Fact]
+    public async Task GroupClassificationIsAtomicAndPersistsAcrossReopen()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-group-status", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var file = Path.Combine(root, "synthetic.ost");
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var list = await TimingStorageTests.SeedAsync(workspace, file, 3);
+            var timing = workspace.Timing!;
+            await timing.SelectRunAsync(list.Id);
+            await timing.FollowStartOrderAsync(true);
+            var bibs = list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
+            await Assert.ThrowsAsync<OpenSkiTime.Rewrite.Domain.DomainValidationException>(() =>
+                timing.CorrectStatusesAsync([bibs[0], -1], TimingStatus.DNS, "Test operator", "Group DNS"));
+            Assert.Empty(timing.Snapshot!.Audit);
+            await timing.CorrectStatusesAsync(bibs[..2], TimingStatus.DNS, "Test operator", "Group DNS");
+            Assert.Equal(new[] { TimingStatus.DNS, TimingStatus.DNS, TimingStatus.Ready },
+                bibs.Select(bib => timing.Snapshot!.Results.Single(x => x.Bib == bib).Status));
+            Assert.Equal(bibs[2], timing.ArmedStart);
+            Assert.Equal(2, timing.Snapshot!.Audit.Count);
+            Assert.All(timing.Snapshot.Audit, x => Assert.Equal("Group DNS", x.Reason));
+            await workspace.CloseAsync();
+            await workspace.OpenAsync(file);
+            await workspace.Timing!.SelectRunAsync(list.Id);
+            Assert.Equal(2, workspace.Timing.Snapshot!.Results.Count(x => x.Status == TimingStatus.DNS));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task StartQueueCanBeReorderedAndReopenedWithoutChangingTheDraw()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-start-order", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var file = Path.Combine(root, "synthetic.ost");
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var list = await TimingStorageTests.SeedAsync(workspace, file, 3);
+            var original = list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
+            var timing = workspace.Timing!;
+            await timing.SelectRunAsync(list.Id);
+            await timing.FollowStartOrderAsync(true);
+            Assert.Equal(original[0], timing.ArmedStart);
+            await timing.MoveWaitingAsync(original[0], 1, "Test operator");
+            Assert.Equal(original[1], timing.ArmedStart);
+            Assert.Equal(new[] { original[1], original[0], original[2] }, RaceFlow.Waiting(timing.Snapshot!).Select(x => x.Bib));
+            await timing.MoveWaitingRelativeAsync(original[2], original[1], visuallyAbove: false, "Test operator");
+            Assert.Equal(original[2], timing.ArmedStart);
+            Assert.Equal(new[] { original[2], original[1], original[0] }, RaceFlow.Waiting(timing.Snapshot!).Select(x => x.Bib));
+            Assert.Equal(original, list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib));
+            await workspace.CloseAsync();
+            await workspace.OpenAsync(file);
+            await workspace.Timing!.SelectRunAsync(list.Id);
+            await workspace.Timing.FollowStartOrderAsync(true);
+            Assert.Equal(original[2], workspace.Timing.ArmedStart);
+            Assert.Equal(new[] { original[2], original[1], original[0] }, RaceFlow.Waiting(workspace.Timing.Snapshot!).Select(x => x.Bib));
+            var changes = workspace.Timing.Snapshot!.Audit.ToArray();
+            Assert.Equal(2, changes.Length);
+            await workspace.Timing.UndoAsync(changes[^1].Id, "Test operator", "Restore order");
+            Assert.Equal(new[] { original[1], original[0], original[2] }, RaceFlow.Waiting(workspace.Timing.Snapshot!).Select(x => x.Bib));
+            await workspace.Timing.UndoAsync(changes[0].Id, "Test operator", "Restore draw order");
+            Assert.Equal(original, RaceFlow.Waiting(workspace.Timing.Snapshot!).Select(x => x.Bib));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void ConfiguredButUnusedIntermediateIsIgnoredWithoutBlockingTheResult()
     {
         var list = TimingRulesTests.List(1); // Competition has no intermediate positions.
