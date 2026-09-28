@@ -67,7 +67,7 @@ public partial class DesktopWorkflowTests
             await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
             var date = new DateOnly(2026, 9, 27);
             var series = await workspace.CreateAsync(file, new("Synthetic race weekend", "Test slope", "Test club", date, date, "FIN", "2026/27"));
-            series = await workspace.SaveCompetitionAsync(null, new("Synthetic Slalom", "SL1", date, Discipline.Slalom, RaceType.Fis, 2, 1, "1234"), series.Revision);
+            series = await workspace.SaveCompetitionAsync(null, new("Synthetic Slalom", "SL1", date, Discipline.Slalom, RaceType.Fis, 2, 2, "1234"), series.Revision);
             var competition = series.Competitions[0];
             var revision = series.Revision;
             revision = (await workspace.SaveCategoryRuleAsync(null, new("Test 2000", 2000, 2000, null, 0), revision)).Revision;
@@ -89,9 +89,9 @@ public partial class DesktopWorkflowTests
             window.Show();
             var view = window.FindControl<TimingView>("TimingWorkspace")!;
             vm.ShowSettingsCommand.Execute(null);
-            vm.TimingSource = "Simulator"; vm.TimingIntermediateChannels = "2";
+            vm.TimingSource = "Simulator"; vm.TimingIntermediateChannels = "2,3";
             Click(window, "Save timing settings"); await vm.SaveTimingPreferencesCommand.ExecutionTask!;
-            Assert.Equal("2", preferences.Load()!.IntermediateChannels);
+            Assert.Equal("2,3", preferences.Load()!.IntermediateChannels);
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR");
             CaptureDraw(window, output, "race-settings.png");
             Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
@@ -138,9 +138,12 @@ public partial class DesktopWorkflowTests
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 2);
             Assert.True(vm.ReturnToStartCommand.CanExecute(null));
             vm.SimulationTime = "12:00:20.0000";
-            Click(window, "Test intermediate"); await vm.SimulatePulseCommand.ExecutionTask!;
-            await WaitTimingAsync(vm, () => vm.IntermediateTimingRows.Count == 1);
+            Click(window, "Test I1"); await vm.SimulatePulseCommand.ExecutionTask!;
+            await WaitTimingAsync(vm, () => vm.OnCourseRows.Single(x => x.Bib == a).SplitTimes.Contains("I1 0:20.00", StringComparison.Ordinal));
             Assert.Equal("I1 0:20.00", vm.OnCourseRows.Single(x => x.Bib == a).SplitTimes);
+            vm.SimulationTime = "12:00:25.0000";
+            Click(window, "Test I2"); await vm.SimulatePulseCommand.ExecutionTask!;
+            await WaitTimingAsync(vm, () => vm.OnCourseRows.Single(x => x.Bib == a).SplitTimes.Contains("I2 0:25.00", StringComparison.Ordinal));
             // Selection in a different visual pane must target that competitor's quick actions.
             view.FindControl<DataGrid>("RunningGrid")!.SelectedItem = vm.RunningRows.Single(x => x.Bib == d);
             view.FindControl<DataGrid>("RunningGrid")!.Focus();
@@ -237,7 +240,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal(5, vm.FinishedTimingRows.Count);
             Assert.Empty(vm.OnCourseRows);
             Assert.Equal(3, vm.RunningRows.Count);
-            Assert.Equal(1, Assert.IsType<int>(view.GetVisualDescendants().OfType<ComboBox>().Single().SelectedItem));
+            Assert.Empty(view.GetVisualDescendants().OfType<ComboBox>());
             window.Close();
         }
         finally
