@@ -8,6 +8,7 @@ public sealed class RunningTimingClock(TimeProvider? timeProvider = null)
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private readonly Dictionary<string, (long Device, long Monotonic)> _anchors = [];
     private readonly object _gate = new();
+    private string? _latestClockId;
 
     public void Observe(TimingObservation observation, DateTimeOffset receivedAt)
     {
@@ -19,7 +20,7 @@ public sealed class RunningTimingClock(TimeProvider? timeProvider = null)
             var delay = Math.Max(0, (_time.GetUtcNow() - receivedAt).Ticks);
             var deviceNow = observation.ClockId == "UTC" ? _time.GetUtcNow().UtcTicks : ticks + delay;
             if (!_anchors.TryGetValue(observation.ClockId, out var old) || deviceNow >= old.Device)
-            { _anchors[observation.ClockId] = (deviceNow, _time.GetTimestamp()); }
+            { _anchors[observation.ClockId] = (deviceNow, _time.GetTimestamp()); _latestClockId = observation.ClockId; }
         }
     }
 
@@ -34,5 +35,15 @@ public sealed class RunningTimingClock(TimeProvider? timeProvider = null)
         }
     }
 
-    public void Clear() { lock (_gate) { _anchors.Clear(); } }
+    public long? DeviceNowTicks(TimeSpan maxAge)
+    {
+        lock (_gate)
+        {
+            if (_latestClockId is null || !_anchors.TryGetValue(_latestClockId, out var anchor)) { return null; }
+            var age = _time.GetElapsedTime(anchor.Monotonic);
+            return age <= maxAge ? anchor.Device + age.Ticks : null;
+        }
+    }
+
+    public void Clear() { lock (_gate) { _anchors.Clear(); _latestClockId = null; } }
 }

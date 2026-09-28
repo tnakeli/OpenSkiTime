@@ -94,7 +94,6 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _timingReplayPath = "";
     [ObservableProperty] private string _timingOperator = Environment.UserName;
     [ObservableProperty] private string _timingConnection = "Disconnected";
-    [ObservableProperty] private string _timingStorage = "No capture yet";
     [ObservableProperty] private string _timingAlarm = "";
     [ObservableProperty] private string _timingSummary = "Choose a saved start list.";
     [ObservableProperty] private string _startBibText = "";
@@ -189,7 +188,7 @@ public sealed partial class MainViewModel
             if (!timing.IsActive)
             {
                 SelectedTimingRow = null; StartBibText = FinishBibText = "";
-                if (timing.LastCaptureOptions is { } last)
+                if (timing.LastCaptureOptions is { } last && timingPreferencesStore?.Load() is null)
                 {
                     if (TimingSources.Contains(last.Device)) { TimingSource = last.Device; }
                     TimingStartChannel = last.StartChannel; TimingFinishChannel = last.FinishChannel;
@@ -228,7 +227,7 @@ public sealed partial class MainViewModel
             _timingTimer.Start();
             NotifyTiming();
             SetStatus("Timing changes save automatically. Original device data and correction history are retained.");
-            if (!timing.IsActive && timingPreferencesStore?.Load() is not null && !IsTimingSimulator && !IsTimingReplay)
+            if (!timing.IsActive && timingPreferencesStore?.Load() is not null)
             { await ConnectTimingAsync(); }
         });
     }
@@ -278,8 +277,8 @@ public sealed partial class MainViewModel
                 IsTimingSimulator || IsTimingReplay, TimingFirmware, Mt1StartDevice.Trim(), Mt1FinishDevice.Trim(), since)
                 { BaudRate = TimingBaud, IntermediateChannels = ReadIntermediateChannels() };
             options.Validate();
-            if (options.IntermediateChannels.Length != _timingList!.Plan.Competition.IntermediateCount)
-            { throw new DomainValidationException("Set one intermediate channel per competition intermediate in Settings → Timing devices & clocks."); }
+            if (options.IntermediateChannels.Length > _timingList!.Plan.Competition.IntermediateCount)
+            { throw new DomainValidationException("Configured intermediate channels exceed this competition's intermediate count."); }
             if (IsAlgeResults && options.IntermediateChannels.Length > 0)
             { throw new DomainValidationException("ALGE Results supports start/finish only. Use USB/serial for intermediate capture."); }
             ITimingSource source;
@@ -306,6 +305,7 @@ public sealed partial class MainViewModel
             }
             await timing.FollowStartOrderAsync(FollowTimingOrder);
             await timing.StartAsync(source, options, TimingOperator);
+            ConfigureTimingCheckpoints();
             if (_current is not null) { _current = await workspace.ReadAsync(); }
             RefreshTiming();
             SetStatus("Timing connected. Check Next start and Expected finish. Race queues advance with saved impulses.");
@@ -454,8 +454,11 @@ public sealed partial class MainViewModel
         var timing = workspace.Timing;
         IsTimingConnected = timing?.IsActive == true;
         TimingConnection = timing?.Connection ?? "Disconnected";
+        TimingDeviceClock = timing?.IsActive == true && timing.LiveDeviceTicks is { } ticks
+            ? TimingTime.FormatTimeOfDay(ticks)[..8] : "--:--:--";
+        StartInputOn = timing?.IsHeld(0) != true;
+        FinishInputOn = timing?.IsHeld(1) != true;
         TimingAlarm = timing?.Fault ?? (timing?.Pending >= 512 ? "CAPTURE BACKLOG: input is waiting for storage. Do not close this file; check the local disk." : "");
-        TimingStorage = timing is null ? "No capture" : $"{timing.SavedPackets:N0} packets saved · {timing.Pending:N0} waiting";
         ArmedBibs = $"Start {timing?.ArmedStart?.ToString(CultureInfo.InvariantCulture) ?? "—"}  /  Finish {timing?.ArmedFinish?.ToString(CultureInfo.InvariantCulture) ?? "—"}";
         OnPropertyChanged(nameof(TimingCaptureLabel));
         RefreshRaceQueues();

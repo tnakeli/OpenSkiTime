@@ -9,18 +9,25 @@
    <StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Text="{Binding TimingContext}" Classes="sectionTitle" /><TextBlock Text="{Binding TimingSummary}" Classes="supportingText" VerticalAlignment="Center" /></StackPanel>
    <Button Grid.Column="1" Content="Prepare Run 2" Command="{Binding PrepareNextTimedRunCommand}" IsVisible="{Binding CanPrepareNextTimedRun}" Classes="secondaryAction" />
   </Grid>
-  <StackPanel Grid.Row="1" Spacing="6" Margin="0,0,0,8">
-   <Border Classes="raceConnection"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding TimingConnection}" TextTrimming="CharacterEllipsis" />
-    <TextBlock Grid.Column="1" Text="{Binding TimingStorage}" Margin="12,0,0,0" /></Grid></Border>
+  <StackPanel Grid.Row="1" Spacing="4" Margin="0,0,0,4">
+   <Border Classes="raceConnection"><StackPanel Spacing="2">
+    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding TimingConnection}" TextTrimming="CharacterEllipsis" />
+     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"><TextBlock Text="DEVICE TIME" Opacity="0.72" />
+      <TextBlock Text="{Binding TimingDeviceClock}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" FontWeight="SemiBold" /></StackPanel></Grid>
+    <StackPanel Orientation="Horizontal" Spacing="5">
+     <ToggleButton Content="START" IsChecked="{Binding StartInputOn, Mode=OneWay}" Command="{Binding ToggleTimingChannelCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" />
+     <StackPanel Name="TimingIntermediateSwitches" Orientation="Horizontal" Spacing="5" />
+     <ToggleButton Content="FINISH" IsChecked="{Binding FinishInputOn, Mode=OneWay}" Command="{Binding ToggleTimingChannelCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" />
+    </StackPanel>
+   </StackPanel></Border>
    <Border IsVisible="{Binding HasTimingAlarm}" BorderBrush="{DynamicResource ErrorBrush}" BorderThickness="1" Padding="8">
     <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
    </Border>
   </StackPanel>
-  <Grid Grid.Row="2" RowDefinitions="1.6*,6,1*,6,1*" ColumnDefinitions="0.9*,8,2*">
+  <Grid Grid.Row="2" RowDefinitions="1.85*,6,0.95*,6,1.2*" ColumnDefinitions="0.9*,8,2*">
    <Border Name="StartDropTarget" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
-    <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource SubtleSurfaceBrush}">
+    <Grid Background="{DynamicResource SubtleSurfaceBrush}">
      <TextBlock Text="AT START" Classes="raceHeading" />
-     <CheckBox Grid.Column="1" Content="Follow order" IsChecked="{Binding FollowTimingOrder}" Command="{Binding ApplyFollowTimingOrderCommand}" FontSize="11" Margin="8,0" MinHeight="24" />
     </Grid>
     <TextBlock Grid.Row="1" Text="{Binding NextStartLabel, StringFormat='Next · {0}'}" Classes="raceQueueHint" />
     <DataGrid Grid.Row="2" Name="AtStartGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding AtStartRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
@@ -95,7 +102,7 @@
    <TextBlock Text="{Binding SelectedTimingProblem}" IsVisible="{Binding HasSelectedTimingProblem}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
    <TextBlock Text="Unassigned finish · drag a competitor onto its finish timestamp." IsVisible="{Binding HasUnassignedFinish}" Foreground="{DynamicResource WarningBrush}" />
   </StackPanel>
-  <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding IsTimingSimulator}">
+  <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsTimingSimulator}">
    <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Text="{Binding SimulationTime}" Width="155" />
    <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
    <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />

@@ -24,11 +24,13 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
             && (!x.Ignored || showIgnored)).ToArray();
         TimingTimestampCell Cell(ObservationReview review) => new(snapshot.ListId, review,
             TimingEngine.CurrentDecision(new(DecisionKind.Assignment, review.Observation.Key), snapshot.Audit));
+        IEnumerable<TimingTimestampCell?> Cells(Func<int, TimingTimestampCell?> get) => Enumerable.Range(0, 22)
+            .Select(index => index == 0 ? get(0) : index == 21 ? get(1) : get(index + 1));
         var rows = new List<TimingTimestampRow>();
         foreach (var pulse in input.Where(x => x.Bib is null).Reverse())
         {
             rows.Add(new(pulse.Observation.Key, null, pulse.Ignored ? "Ignored impulse" : "Unassigned impulse",
-                channels.Select(c => c == pulse.Observation.Channel ? Cell(pulse) : null).ToArray()));
+                Cells(c => c == pulse.Observation.Channel ? Cell(pulse) : null).ToArray()));
         }
         var byBib = input.Where(x => x.Bib is not null).GroupBy(x => x.Bib!.Value).ToDictionary(x => x.Key, x => x.ToArray());
         foreach (var result in snapshot.Results.OrderBy(x => x.Entry.Position))
@@ -39,7 +41,7 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
             for (var i = 0; i < byChannel.Values.Max(x => x.Length); i++)
             {
                 rows.Add(new($"{result.Bib}:{i}", result.Bib, result.Name + (i == 0 ? "" : " · extra impulse"),
-                    channels.Select(c => byChannel.TryGetValue(c, out var values) && i < values.Length ? Cell(values[i]) : null).ToArray()));
+                    Cells(c => channels.Contains(c) && byChannel.TryGetValue(c, out var values) && i < values.Length ? Cell(values[i]) : null).ToArray()));
             }
         }
         return rows;

@@ -13,6 +13,50 @@ public sealed class TimestampTransferTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task DragFinishedOrClassifiedRacerToStartRestartsWithNewImpulsesAndKeepsTheOldOnes(bool classified)
+    {
+        using var folder = new TestFolder();
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, folder.File, 1, 1);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id); await timing.FollowStartOrderAsync(true);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, new("Simulator", "Test", TimingRulesTests.Date, Simulation: true)
+            { IntermediateChannels = [2] }, "Operator");
+        var bib = list.Plan.Entries[0].Bib;
+        await Pulse(timing, source, 0, 0);
+        await Pulse(timing, source, 2, 10);
+        await Pulse(timing, source, 1, 40);
+        if (classified)
+        { await timing.CorrectAsync(new(DecisionKind.Status, CompetitorId: list.Plan.Entries[0].Entrant.CompetitorId,
+            Status: TimingStatus.DSQ), "Operator", "Synthetic classification"); }
+        var before = await workspace.ReadTimingAsync(list.Id);
+        var result = timing.Snapshot!.Results.Single();
+        var originalKeys = timing.Snapshot.Observations.Where(x => x.Bib == bib).Select(x => x.Observation.Key).ToArray();
+        await Assert.ThrowsAsync<DomainValidationException>(() => timing.MoveToStartAsync(list.Id, bib, result.StartKey,
+            [], "Operator"));
+        Assert.Equal(before.Audit, (await workspace.ReadTimingAsync(list.Id)).Audit);
+        await timing.MoveToStartAsync(list.Id, bib, result.StartKey, originalKeys, "Operator");
+        Assert.Equal(TimingStatus.Ready, timing.Snapshot!.Results.Single().Status);
+        Assert.Equal(bib, timing.ArmedStart);
+        Assert.All(timing.Snapshot.Observations.Where(x => originalKeys.Contains(x.Observation.Key)),
+            x => Assert.Equal("Ignored", x.State));
+        var saved = await workspace.ReadTimingAsync(list.Id);
+        Assert.Equal(before.Audit.Count + originalKeys.Length + (classified ? 1 : 0), saved.Audit.Count);
+        Assert.Equal(before.Packets.Select(x => Convert.ToHexString(x.Bytes)), saved.Packets.Select(x => Convert.ToHexString(x.Bytes)));
+        await Pulse(timing, source, 0, 60);
+        await Pulse(timing, source, 1, 90);
+        Assert.Equal(3000, timing.Snapshot!.Results.Single().Hundredths);
+        await timing.StopAsync(); await workspace.CloseAsync(); await workspace.OpenAsync(folder.File);
+        await workspace.Timing!.SelectRunAsync(list.Id);
+        Assert.Equal(3000, workspace.Timing.Snapshot!.Results.Single().Hundredths);
+        Assert.All(workspace.Timing.Snapshot.Observations.Where(x => originalKeys.Contains(x.Observation.Key)),
+            x => Assert.Equal("Ignored", x.State));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task FinishTransferReturnsPreviousRacerToCourseAndPreservesAllOriginalInput(bool replaceExisting)
     {
         using var folder = new TestFolder();
