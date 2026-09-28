@@ -117,7 +117,8 @@ public sealed partial class MainViewModel
     private void ConfigureTimingCheckpoints()
     {
         TimingCheckpoints.Clear();
-        var count = Math.Min(ReadIntermediateChannels().Length, _timingList!.Plan.Competition.IntermediateCount);
+        var count = Math.Min(ReadIntermediateChannels().Length,
+            TimingCompetition?.Values.IntermediateCount ?? _timingList!.Plan.Competition.IntermediateCount);
         for (var i = 1; i <= count; i++) { TimingCheckpoints.Add(i); }
         _queueSnapshot = null;
         _timestampSnapshot = null;
@@ -139,6 +140,8 @@ public sealed partial class MainViewModel
                 && int.TryParse(position[13..], out var number) && number >= 1 && number <= TimingCheckpoints.Count => number + 1,
             _ => throw new DomainValidationException("Choose a configured timing position.")
         };
+        if (channel >= 2 && channel - 2 >= (timing.LastCaptureOptions?.IntermediateChannels.Length ?? 0))
+        { throw new DomainValidationException($"Configure the channel for intermediate {channel - 1} in Settings, then reconnect timing."); }
         await timing.ExpectAsync(channel, null, !timing.IsHeld(channel));
         RefreshTiming();
         OnPropertyChanged(nameof(TimingChannelStates));
