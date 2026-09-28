@@ -16,7 +16,7 @@ namespace OpenSkiTime.Rewrite.Tests;
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
-    public async Task TimingWorkspaceCapturesCorrectsUndoesReopensAndFeedsRunTwoThroughVisibleCommands()
+    public async Task TimingWorkspaceCapturesDragAssignmentsReopensAndFeedsRunTwoThroughVisibleCommands()
     {
         var root = Path.Combine(Path.GetTempPath(), "openskitime-timing-ui", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -92,22 +92,23 @@ public partial class DesktopWorkflowTests
             vm.SimulationTime = "12:01:35.0000";
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned"));
-            vm.SelectedTimingObservation = vm.TimingObservations.Single(x => x.State == "Unassigned");
-            vm.CorrectLastFinishCommand.Execute(null);
-            vm.ObservationBibText = vm.TimingRows[1].Bib.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            Click(window, "Assign finish"); await vm.ChangeObservationCommand.ExecutionTask!;
+            var unassigned = vm.TimestampRows.SelectMany(x => x.Cells).OfType<TimingTimestampCell>().Single(x => x.Review.Bib is null);
+            await DropTimingRacer(view, vm.CreateTimingDrag(vm.TimingRows[1].Bib)!, unassigned.Key);
             Assert.Equal("1:05.00", vm.TimingRows[1].Time);
-            vm.SelectedTimingRow = vm.TimingRows[0];
-            vm.CorrectedTimeText = "1:02.00"; vm.TimingReason = "Verified backup timing";
-            Click(window, "Correct time"); await vm.CorrectTimingTimeCommand.ExecutionTask!;
-            Assert.Equal("1:02.00", vm.TimingRows[0].Time);
-            vm.ShowTimingHistory = true;
-            vm.SelectedTimingHistory = vm.TimingHistory[0];
-            CaptureDraw(window, output, "timing-history.png");
-            Click(window, "Undo last change"); await vm.UndoLastTimingChangeCommand.ExecutionTask!;
             Assert.Equal("1:01.99", vm.TimingRows[0].Time);
-            vm.ShowTimingHistory = false;
-            vm.ShowTimingCorrection = false;
+            // Reassign an occupied finish through the visible drop target. The former
+            // owner returns to the course and the recipient's old finish is unassigned.
+            var firstFinish = vm.TimestampRows.SelectMany(x => x.Cells).OfType<TimingTimestampCell>()
+                .Single(x => x.Review.Bib == firstBib && x.Channel == 1);
+            await DropTimingRacer(view, vm.CreateTimingDrag(vm.TimingRows[1].Bib)!, firstFinish.Key);
+            Assert.Equal("On course", vm.TimingRows[0].Status);
+            Assert.Equal("0:32.99", vm.TimingRows[1].Time);
+            Assert.Contains(vm.TimestampRows, x => x.Cells.Any(c => c?.Key == unassigned.Key && c.Review.Bib is null));
+            await DropTimingRacer(view, vm.CreateTimingDrag(firstBib)!, firstFinish.Key);
+            Assert.Equal("On course", vm.TimingRows[1].Status);
+            await DropTimingRacer(view, vm.CreateTimingDrag(vm.TimingRows[1].Bib)!, unassigned.Key);
+            Assert.Equal("1:01.99", vm.TimingRows[0].Time);
+            Assert.Equal("1:05.00", vm.TimingRows[1].Time);
             vm.ShowAllTimingObservations = true;
             Assert.Contains(vm.TimingObservations, x => x.Time == "12:00:00.9999999");
             Assert.Contains(vm.TimingObservations, x => x.Time == "12:01:02.9999998");

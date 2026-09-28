@@ -1,4 +1,8 @@
 <Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:OpenSkiTime.Rewrite.Desktop">
+ <Style Selector="Border.timestampCell"><Setter Property="Background" Value="Transparent" /></Style>
+ <Style Selector="Border.timestampCell.timingDropTarget, Border.racePane.timingDropTarget">
+  <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="2" />
+ </Style>
  <Style Selector="TextBlock.raceQueueHint">
   <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   <Setter Property="Padding" Value="8,5" /><Setter Property="FontSize" Value="12" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
