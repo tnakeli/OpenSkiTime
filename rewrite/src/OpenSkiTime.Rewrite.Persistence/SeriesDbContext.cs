@@ -16,6 +16,7 @@ public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> op
     internal DbSet<RunRow> Runs => Set<RunRow>();
     internal DbSet<StartListRow> StartLists => Set<StartListRow>();
     internal DbSet<StartListEntryRow> StartListEntries => Set<StartListEntryRow>();
+    internal DbSet<ApprovedResultRow> ApprovedResults => Set<ApprovedResultRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -129,6 +130,13 @@ public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> op
         start.HasIndex(x => new { x.ListId, x.CompetitorId }).IsUnique();
         start.HasOne<StartListRow>().WithMany().HasForeignKey(x => x.ListId).OnDelete(DeleteBehavior.Restrict);
         ConfigureTiming(modelBuilder);
+        var approved = modelBuilder.Entity<ApprovedResultRow>();
+        approved.ToTable("ApprovedResults");
+        approved.HasKey(x => x.Id);
+        approved.Property(x => x.Id).ValueGeneratedNever();
+        approved.HasIndex(x => new { x.CompetitionId, x.Revision }).IsUnique();
+        approved.HasOne<CompetitionRow>().WithMany().HasForeignKey(x => x.CompetitionId).OnDelete(DeleteBehavior.Restrict);
+        approved.HasOne<StartListRow>().WithMany().HasForeignKey(x => x.FirstListId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
