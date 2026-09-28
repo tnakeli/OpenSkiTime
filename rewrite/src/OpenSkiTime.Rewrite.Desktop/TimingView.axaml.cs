@@ -155,13 +155,12 @@ public sealed partial class TimingView : UserControl
     private void UpdateChannelVisibility()
     {
         var count = _viewModel?.TimingCheckpoints.Count ?? 0;
-        var states = _viewModel?.TimingChannelStates;
         foreach (var name in new[] { "RunningGrid", "TimestampsGrid" })
         {
             var grid = this.FindControl<DataGrid>(name)!;
             var splitColumns = grid.Columns.Where(x => x.Tag is "intermediate").ToArray();
             for (var i = 0; i < splitColumns.Length; i++)
-            { splitColumns[i].IsVisible = i < count && states?.ElementAtOrDefault(i + 2) == true; }
+            { splitColumns[i].IsVisible = i < count; }
         }
     }
 

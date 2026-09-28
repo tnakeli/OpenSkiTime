@@ -16,6 +16,79 @@ namespace OpenSkiTime.Rewrite.Tests;
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
+    public async Task EditingCompetitionIntermediatesUpdatesConnectedTimingColumnsWithoutRedrawing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-intermediate-ui", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "Synthetic.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(SyntheticFisArchive());
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var date = new DateOnly(2026, 9, 27);
+            var series = await workspace.CreateAsync(file, new("Synthetic race", "Test slope", "Test club", date, date, "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null, new("Slalom", "SL", date, Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);
+            var competition = series.Competitions[0];
+            var revision = series.Revision;
+            for (var i = 0; i < 12; i++)
+            {
+                revision = (await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Athlete", 2000, $"{123456 + i}", "FIN", "Test club", Gender.Female),
+                    competition.Id, true, null, revision)).Revision;
+            }
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
+                fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            await vm.PrepareDrawCommand.ExecuteAsync(null);
+            await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            Assert.False(vm.IsError, vm.StatusMessage);
+            var window = new MainWindow { DataContext = vm, Width = 1280, Height = 850 };
+            window.Show();
+            try
+            {
+                var view = window.FindControl<TimingView>("TimingWorkspace")!;
+                vm.TimingSource = "Simulator";
+                vm.TimingIntermediateChannels = "2";
+                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                Assert.True(vm.IsTimingConnected);
+                Assert.Empty(vm.TimingCheckpoints);
+
+                vm.ShowCompetitionsCommand.Execute(null);
+                vm.SelectedCompetition = vm.Competitions.Single();
+                vm.CompetitionIntermediateCount = 1;
+                await vm.SaveCompetitionCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+                Assert.False(vm.IsError, vm.StatusMessage);
+                Assert.True(vm.IsTimingConnected);
+                Assert.Single(vm.TimingCheckpoints);
+                Assert.Single(vm.TimingRows[0].Result.Splits);
+                Assert.True(workspace.Timing!.IsHeld(2));
+                Assert.Single(view.FindControl<DataGrid>("RunningGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+                Assert.Single(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+
+                await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:1");
+                Assert.False(vm.IsError, vm.StatusMessage);
+                Assert.False(workspace.Timing.IsHeld(2));
+
+                vm.ShowCompetitionsCommand.Execute(null);
+                vm.SelectedCompetition = vm.Competitions.Single();
+                vm.CompetitionIntermediateCount = 0;
+                await vm.SaveCompetitionCommand.ExecuteAsync(null);
+                await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+                Assert.Empty(vm.TimingCheckpoints);
+                Assert.Empty(vm.TimingRows[0].Result.Splits);
+                Assert.DoesNotContain(view.FindControl<DataGrid>("RunningGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+                Assert.DoesNotContain(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [AvaloniaFact]
     public async Task TimingWorkspaceCapturesDragAssignmentsReopensAndFeedsRunTwoThroughVisibleCommands()
     {
         var root = Path.Combine(Path.GetTempPath(), "openskitime-timing-ui", Guid.NewGuid().ToString("N"));
