@@ -26,15 +26,22 @@ public interface ISeriesFileSession : IAsyncDisposable
     Task<ImportCommitResult> ApplyImportAsync(ImportCommit commit, CancellationToken ct = default);
     Task<DeskBatchResult> ApplyDeskBatchAsync(DeskBatch batch, CancellationToken ct = default);
     Task BackupAsync(string destinationPath, CancellationToken ct = default);
+    Task<StartListDesk> ReadStartListsAsync(Guid competitionId, CancellationToken ct = default);
+    Task<StartListDesk> SaveStartListAsync(SaveStartList request, CancellationToken ct = default);
+    Task<StartListDesk> MarkRunStartedAsync(Guid listId, long expectedRevision, string operatorName, DateTimeOffset at, CancellationToken ct = default);
 }
 
 public sealed class SeriesFileException(string message, Exception? inner = null) : Exception(message, inner);
 public sealed class SeriesConflictException() : Exception("The series changed since it was displayed. Reopen it and review the latest data.");
 
-public sealed class SeriesWorkspace(ISeriesFileStore store) : IAsyncDisposable
+public sealed class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactory? timingDecoders = null) : IAsyncDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ISeriesFileSession? _session;
+    public TimingWorkspace? Timing { get; private set; }
+
+    public Task<TimingReplayData> ReadTimingAsync(Guid listId, CancellationToken ct = default)
+        => WithSessionAsync(s => (s as ITimingStore ?? throw new SeriesFileException("Timing storage is unavailable.")).ReadTimingAsync(listId, ct), ct);
     public string? FilePath => _session?.FilePath;
     public bool IsOpen => _session is not null;
 
@@ -67,10 +74,12 @@ public sealed class SeriesWorkspace(ISeriesFileStore store) : IAsyncDisposable
             var details = await replacement.ReadAsync(ct);
             if (_session is not null)
             {
+                if (Timing is not null) { await Timing.DisposeAsync(); Timing = null; }
                 await _session.DisposeAsync();
             }
 
             _session = replacement;
+            if (timingDecoders is not null && replacement is ITimingStore timingStore) { Timing = new(timingStore, timingDecoders); }
             return details;
         }
         catch
@@ -87,6 +96,7 @@ public sealed class SeriesWorkspace(ISeriesFileStore store) : IAsyncDisposable
         {
             if (_session is not null)
             {
+                if (Timing is not null) { await Timing.DisposeAsync(); Timing = null; }
                 await _session.DisposeAsync();
                 _session = null;
             }
@@ -121,6 +131,12 @@ public sealed class SeriesWorkspace(ISeriesFileStore store) : IAsyncDisposable
         => WithSessionAsync(s => s.ApplyDeskBatchAsync(batch, ct), ct);
     public Task BackupAsync(string destinationPath, CancellationToken ct = default)
         => WithSessionAsync(async s => { await s.BackupAsync(destinationPath, ct); return true; }, ct);
+    public Task<StartListDesk> ReadStartListsAsync(Guid competitionId, CancellationToken ct = default)
+        => WithSessionAsync(s => s.ReadStartListsAsync(competitionId, ct), ct);
+    public Task<StartListDesk> SaveStartListAsync(SaveStartList request, CancellationToken ct = default)
+        => WithSessionAsync(s => s.SaveStartListAsync(request, ct), ct);
+    public Task<StartListDesk> MarkRunStartedAsync(Guid listId, long expectedRevision, string operatorName, DateTimeOffset at, CancellationToken ct = default)
+        => WithSessionAsync(s => s.MarkRunStartedAsync(listId, expectedRevision, operatorName, at, ct), ct);
 
     private async Task<T> WithSessionAsync<T>(Func<ISeriesFileSession, Task<T>> operation, CancellationToken ct)
     {

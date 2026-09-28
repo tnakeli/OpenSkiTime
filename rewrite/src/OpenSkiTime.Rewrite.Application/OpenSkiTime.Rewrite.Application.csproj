@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../OpenSkiTime.Rewrite.Domain/OpenSkiTime.Rewrite.Domain.csproj" />
+    <ProjectReference Include="../OpenSkiTime.Rewrite.Timing/OpenSkiTime.Rewrite.Timing.csproj" />
   </ItemGroup>
 </Project>

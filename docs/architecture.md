@@ -1,6 +1,6 @@
 # OpenSkiTime architecture
 
-Rewrite proposal, refreshed 2026-09-26 against recovered master: `legacy-recovered-pre-codex` (`5505ceb`). The earlier `legacy-pre-codex` (`8259809`) remains unchanged. Work branch: `rewrite/codex`. The target below is proposed, not implemented.
+Reference review refreshed 2026-09-26 against recovered master: `legacy-recovered-pre-codex` (`5505ceb`). The earlier `legacy-pre-codex` (`8259809`) remains unchanged. Work branch: `rewrite/codex`. The reference findings below describe legacy; current implementation progress is recorded in milestone evidence.
 
 ## Evidence and current structure
 
@@ -49,6 +49,10 @@ Poor abstractions: `IImportPreviewService` returns `object`; actual import servi
 - No dependency versions changed in recovered master. Central versions and nullable/warning checks exist; SDK pinning, CI and lock files do not. NU1900–NU1904 are exempted from build failure; the earlier audit reported vulnerable transitive dependencies (M0 evidence). README links to missing LICENSE, uses stale UI/counts, and metadata uses `example.invalid`. Spec Kit now targets Feature 002; its renamed Devin workflows remain historical material.
 
 ## Recommended target
+
+M5 now implements the Timing, capture coordination, Devices and journal/audit boundaries described below. SQLite stores exact packets before decoding; correction records are themselves the authoritative state transitions. Results are replayed from the journal plus audit, without a second mutable results table or checkpoint mechanism yet. A bounded background channel separates transport/storage from the UI. An event-file capture lease excludes competing capture and ordinary registration writers while timing is active. Non-capture editing retains optimistic revision checks.
+
+Timy native USB is the sole runtime exception to .NET 10: the vendor's mixed-mode CLR 4 library runs in an isolated x64 .NET Framework 4.8 helper. It forwards both unchanged byte/text SDK fields in a versioned envelope because the current SDK's byte-array copy is defective. Storage precedes ASCII interpretation; no domain rules or persistence live in the helper. The SDK is downloaded separately, not linked into the core or redistributed. MT1 serial uses System.IO.Ports; ALGE Results uses HttpClient polling/history recovery. Windows Credential Manager is shared by the optional FIS and ALGE credentials. See [M5 evidence](m5-evidence.md), [USB acceptance](m6-evidence.md) and [device setup](timing.md).
 
 One modular desktop process with six purposeful boundaries. Introduce modules as vertical milestones need them.
 

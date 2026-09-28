@@ -279,6 +279,8 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
             {
                 row = await db.Competitions.SingleOrDefaultAsync(x => x.Id == existingId && x.SeriesId == series.Id, ct)
                     ?? throw new SeriesFileException("The competition no longer exists in this event series.");
+                if (!Values(row).HasSameStartOrderRules(validated) && await db.Runs.AnyAsync(x => x.CompetitionId == existingId, ct))
+                { throw new DomainValidationException("Discipline, race type, date and run count affect the saved starting order and cannot be changed after drawing. Names, codes and course details can be edited."); }
             }
             else
             {
@@ -288,7 +290,7 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
 
             Assign(row, validated);
             series.Revision++;
-        }, ct);
+        }, ct, allowCaptureOwner: true);
 
     public Task<SeriesDetails> RemoveCompetitionAsync(Guid id, long expectedRevision, CancellationToken ct = default)
         => WriteAsync(async db =>
@@ -296,13 +298,16 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
             var series = await LoadForWriteAsync(db, expectedRevision, ct);
             var competition = await db.Competitions.SingleOrDefaultAsync(x => x.Id == id && x.SeriesId == series.Id, ct)
                 ?? throw new SeriesFileException("The competition no longer exists in this event series.");
+            if (await db.Runs.AnyAsync(x => x.CompetitionId == id, ct))
+            { throw new DomainValidationException("This competition has start-list history and cannot be removed."); }
             db.Competitions.Remove(competition);
             series.Revision++;
         }, ct);
 
-    private async Task<SeriesDetails> WriteAsync(Func<SeriesDbContext, Task> change, CancellationToken ct)
+    private async Task<SeriesDetails> WriteAsync(Func<SeriesDbContext, Task> change, CancellationToken ct, bool allowCaptureOwner = false)
     {
         CheckOpen();
+        using var idleLease = allowCaptureOwner && _captureLease is not null ? null : AcquireIdleWriteLease();
         await _write.WaitAsync(ct);
         try
         {
@@ -362,6 +367,7 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
 
     public ValueTask DisposeAsync()
     {
+        if (_captureLease is not null) { throw new SeriesFileException("Timing capture must drain before closing this series."); }
         _disposed = true;
         _write.Dispose();
         return ValueTask.CompletedTask;

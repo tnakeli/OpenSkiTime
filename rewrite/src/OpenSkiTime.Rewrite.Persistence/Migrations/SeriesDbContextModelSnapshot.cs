@@ -17,6 +17,34 @@ namespace OpenSkiTime.Rewrite.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.CaptureRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("CleanStop")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ListId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OptionsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("StoppedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListId");
+
+                    b.ToTable("TimingCaptures", (string)null);
+                });
+
             modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.CategoryRuleRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -247,6 +275,67 @@ namespace OpenSkiTime.Rewrite.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.RawPacketRow", b =>
+                {
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Bytes")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("Protocol")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stream")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("SessionId", "Sequence");
+
+                    b.ToTable("RawTimingPackets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Raw_Sequence", "Sequence > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.RunRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompetitionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Gender")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompetitionId", "Gender", "Number")
+                        .IsUnique();
+
+                    b.ToTable("Runs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Run_Number", "Number BETWEEN 1 AND 9");
+                        });
+                });
+
             modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.SeriesRow", b =>
                 {
                     b.Property<int>("SingleRow")
@@ -308,6 +397,133 @@ namespace OpenSkiTime.Rewrite.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.StartListEntryRow", b =>
+                {
+                    b.Property<Guid>("ListId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Bib")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("CompetitorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntryJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ListId", "Position");
+
+                    b.HasIndex("ListId", "Bib")
+                        .IsUnique();
+
+                    b.HasIndex("ListId", "CompetitorId")
+                        .IsUnique();
+
+                    b.ToTable("StartListEntries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Start_Bib", "Bib BETWEEN 1 AND 99999");
+
+                            t.HasCheckConstraint("CK_Start_Position", "Position > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.StartListRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Operator")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PlanJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceTimingVersion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StartedBy")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "Revision")
+                        .IsUnique();
+
+                    b.ToTable("StartLists", (string)null);
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.TimingAuditRow", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AfterJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BeforeJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ListId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Operator")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ReversesId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListId", "Id");
+
+                    b.ToTable("TimingAudit", (string)null);
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.CaptureRow", b =>
+                {
+                    b.HasOne("OpenSkiTime.Rewrite.Persistence.StartListRow", null)
+                        .WithMany()
+                        .HasForeignKey("ListId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.CategoryRuleRow", b =>
                 {
                     b.HasOne("OpenSkiTime.Rewrite.Persistence.SeriesRow", null)
@@ -362,6 +578,51 @@ namespace OpenSkiTime.Rewrite.Persistence.Migrations
                         .HasForeignKey("SeriesId", "CompetitorId")
                         .HasPrincipalKey("SeriesId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.RawPacketRow", b =>
+                {
+                    b.HasOne("OpenSkiTime.Rewrite.Persistence.CaptureRow", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.RunRow", b =>
+                {
+                    b.HasOne("OpenSkiTime.Rewrite.Persistence.CompetitionRow", null)
+                        .WithMany()
+                        .HasForeignKey("CompetitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.StartListEntryRow", b =>
+                {
+                    b.HasOne("OpenSkiTime.Rewrite.Persistence.StartListRow", null)
+                        .WithMany()
+                        .HasForeignKey("ListId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.StartListRow", b =>
+                {
+                    b.HasOne("OpenSkiTime.Rewrite.Persistence.RunRow", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenSkiTime.Rewrite.Persistence.TimingAuditRow", b =>
+                {
+                    b.HasOne("OpenSkiTime.Rewrite.Persistence.StartListRow", null)
+                        .WithMany()
+                        .HasForeignKey("ListId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

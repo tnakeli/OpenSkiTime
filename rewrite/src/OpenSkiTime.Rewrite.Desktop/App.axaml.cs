@@ -16,10 +16,11 @@ public sealed class App : Avalonia.Application, IDisposable
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            _workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            _workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new Devices.AlgeDecoderFactory());
             var window = new MainWindow();
             _viewModel = new MainViewModel(_workspace, new AvaloniaFileDialogs(window),
-                new AvaloniaEntryExchange(window));
+                new AvaloniaEntryExchange(window), timingPreferencesStore: new TimingPreferencesStore());
+            _viewModel.LoadTimingPreferences();
             window.DataContext = _viewModel;
             desktop.MainWindow = window;
             desktop.Exit += OnExit;

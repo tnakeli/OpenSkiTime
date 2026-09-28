@@ -1,10 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/OpenSkiTime.TimyUsbHost/TimySdkEvent.cs" Link="DeviceHost/TimySdkEvent.cs" />
+    <Compile Include="../../src/OpenSkiTime.TimyUsbHost/TimyUsbSelection.cs" Link="DeviceHost/TimyUsbSelection.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <ProjectReference Include="../../src/OpenSkiTime.Rewrite.Persistence/OpenSkiTime.Rewrite.Persistence.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.Rewrite.Devices/OpenSkiTime.Rewrite.Devices.csproj" />
   </ItemGroup>
 </Project>

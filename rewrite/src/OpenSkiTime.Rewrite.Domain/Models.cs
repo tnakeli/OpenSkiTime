@@ -47,6 +47,9 @@ public sealed record CompetitionValues(
     int? FinishAltitudeMeters = null, int? VerticalDropMeters = null,
     string? HomologationNumber = null)
 {
+    public bool HasSameStartOrderRules(CompetitionValues? other) => other is not null && Discipline == other.Discipline
+        && RaceType == other.RaceType && RunCount == other.RunCount && Date == other.Date;
+
     public CompetitionValues Validated()
     {
         var name = SeriesValues.Required(Name, nameof(Name), 160);

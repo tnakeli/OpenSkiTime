@@ -172,9 +172,10 @@ internal sealed partial class SqliteSeriesFileSession
     }
 
     private async Task<DeskMutationResult<T>> WriteDeskAsync<T>(
-        Func<SeriesDbContext, SeriesRow, Task<T>> change, long expectedRevision, CancellationToken ct)
+        Func<SeriesDbContext, SeriesRow, Task<T>> change, long expectedRevision, CancellationToken ct, bool allowCaptureOwner = false)
     {
         CheckOpen();
+        using var idleLease = allowCaptureOwner && _captureLease is not null ? null : AcquireIdleWriteLease();
         await _write.WaitAsync(ct);
         try
         {
