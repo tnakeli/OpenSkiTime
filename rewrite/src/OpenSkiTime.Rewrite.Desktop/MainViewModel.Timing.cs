@@ -201,11 +201,15 @@ public sealed partial class MainViewModel
             var list = lists.Revisions.Where(x => x.Plan.RunNumber == destination.Run).MaxBy(x => x.Revision)
                 ?? throw new DomainValidationException("Draw and save this run's start list first.");
             var changingRun = timing.ListId != list.Id;
-            if (changingRun) { await timing.SelectRunAsync(list.Id); }
-            TimingCompetition = Competitions.Single(x => x.Id == destination.Competition.Id);
+            var currentCompetition = Competitions.Single(x => x.Id == destination.Competition.Id);
+            if (changingRun || !timing.IsActive) { await timing.SelectRunAsync(list.Id); }
+            else if (_timingList?.Plan.Competition.IntermediateCount != currentCompetition.Values.IntermediateCount)
+            { await timing.RefreshIntermediateCountAsync(); }
+            TimingCompetition = currentCompetition;
             TimingRun = destination.Run;
             SetActiveRace(TimingCompetition, destination.Run, WorkspaceSection.Timing);
-            _timingList = list;
+            _timingList = list with { Plan = list.Plan with { Competition = list.Plan.Competition with
+                { IntermediateCount = TimingCompetition.Values.IntermediateCount } } };
             if (!timing.IsActive)
             {
                 SelectedTimingRow = null; StartBibText = FinishBibText = "";

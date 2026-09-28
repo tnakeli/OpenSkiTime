@@ -38,6 +38,13 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
             var row = await db.StartLists.SingleOrDefaultAsync(x => x.Id == listId, ct)
                 ?? throw new DomainValidationException("Draw and save a start list before timing this run.");
             var list = await ReadListAsync(db, row, ct);
+            // The draw preserves its original competition snapshot. Timing positions are
+            // operational configuration and may be edited after the draw, so use the
+            // current count when replaying or continuing this run.
+            var currentIntermediateCount = await db.Competitions.AsNoTracking()
+                .Where(x => x.Id == list.Plan.CompetitionId).Select(x => x.IntermediateCount).SingleAsync(ct);
+            list = list with { Plan = list.Plan with
+            { Competition = list.Plan.Competition with { IntermediateCount = currentIntermediateCount } } };
             var sessions = (await db.Captures.AsNoTracking().Where(x => x.ListId == listId).ToArrayAsync(ct))
                 .OrderBy(x => x.StartedAt).Select(ToCapture).ToArray();
             var ids = sessions.Select(x => x.Id).ToArray();
