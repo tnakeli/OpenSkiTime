@@ -6,17 +6,17 @@
         Background="{DynamicResource CanvasBrush}">
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <Border Grid.Row="0" Background="{DynamicResource NavyBrush}" Padding="22,11">
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <Border Width="30" Height="30" Background="{DynamicResource AccentBrush}" CornerRadius="4">
             <TextBlock Text="O" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Foreground="White" />
           </Border>
-          <StackPanel Spacing="0" VerticalAlignment="Center">
-            <TextBlock Text="OpenSkiTime" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" Foreground="White" />
-            <TextBlock Text="RACE OFFICE  /  LOCAL WORKSPACE" FontSize="{DynamicResource MetaSize}" FontWeight="SemiBold" Foreground="#9CC0C7" />
-          </StackPanel>
+          <TextBlock Text="OpenSkiTime" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsEnabled="{Binding !IsDrawBusy}">
+        <Button Name="ActiveRaceButton" Grid.Column="1" Content="{Binding ActiveRaceLabel}" Click="ActiveRace_Click"
+                IsVisible="{Binding IsOpen}" IsEnabled="{Binding CanEditCompetitions}" Classes="activeRace" HorizontalAlignment="Left"
+                VerticalAlignment="Center" Margin="20,0,12,0" MaxWidth="260" ToolTip.Tip="Select competition and run" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsEnabled="{Binding !IsDrawBusy}">
           <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="toolbarAction" />
           <SplitButton Name="OpenFileButton" Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="toolbarAction">
             <SplitButton.Flyout>
@@ -32,17 +32,13 @@
       </Grid>
     </Border>
     <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="22,7">
-      <Grid ColumnDefinitions="Auto,*">
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Content="1  Event series" Command="{Binding ShowSeriesCommand}" Click="Navigation_Click" Classes="sectionNav" Classes.active="{Binding IsSeriesSection}" />
         <Button Content="2  Competitions" Command="{Binding ShowCompetitionsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitionsSection}" />
         <Button Content="3  Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
-        <Button Name="DrawMenuButton" Content="{Binding DrawNavigationLabel}" Click="DrawMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsDrawSection}" />
-        <Button Name="TimingMenuButton" Content="{Binding TimingNavigationLabel}" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
+        <Button Name="DrawMenuButton" Content="4  Start lists  ▾" Click="DrawMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsDrawSection}" />
+        <Button Name="TimingMenuButton" Content="5  Timing  ▾" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
       </StackPanel>
-        <TextBlock Grid.Column="1" Text="{Binding FileLabel}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FileLabel}"
-                   Classes="supportingText" VerticalAlignment="Center" Margin="16,0,0,0" />
-      </Grid>
     </Border>
     <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsFormSection}">
       <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" HorizontalAlignment="Stretch">
@@ -141,6 +137,7 @@
                 <DataGridTextColumn Header="" Binding="{Binding ImportMarker}" IsReadOnly="True" Width="48" />
                 <DataGridTextColumn Header="DATE" Binding="{Binding Values.Date}" Width="130" />
                 <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.ShortLabel}" Width="*" />
+                <DataGridTextColumn Header="PUBLIC NAME" Binding="{Binding Values.Name}" Width="2*" />
                 <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Values.Discipline}" Width="135" />
                 <DataGridTextColumn Header="RUNS" Binding="{Binding Values.RunCount}" Width="80" />
               </DataGrid.Columns>

@@ -10,10 +10,8 @@ public sealed partial class MainViewModel
     private Guid _timingDragWorkspace = Guid.NewGuid();
     private TimingSnapshot? _timestampSnapshot;
     public ObservableCollection<TimingTimestampRow> TimestampRows { get; } = [];
-    [ObservableProperty] private bool _showIgnoredTimestamps;
     [ObservableProperty] private bool _isTimingDragging;
     [ObservableProperty] private string _timingDropHint = "Drag a competitor to At start or a timestamp.";
-    partial void OnShowIgnoredTimestampsChanged(bool value) { _timestampSnapshot = null; RefreshTimestamps(); }
     partial void OnIsTimingDraggingChanged(bool value) { if (!value) { RefreshTimestamps(); } }
 
     private void RefreshTimestamps()
@@ -21,7 +19,7 @@ public sealed partial class MainViewModel
         var snapshot = workspace.Timing?.Snapshot;
         if (IsTimingDragging || ReferenceEquals(snapshot, _timestampSnapshot)) { return; }
         _timestampSnapshot = snapshot;
-        var rows = snapshot is null ? [] : TimingTimestampRow.Create(snapshot, TimingCheckpoints.Count, ShowIgnoredTimestamps);
+        var rows = snapshot is null ? [] : TimingTimestampRow.Create(snapshot, TimingCheckpoints.Count);
         while (TimestampRows.Count > rows.Count) { TimestampRows.RemoveAt(TimestampRows.Count - 1); }
         for (var i = 0; i < rows.Count; i++)
         {
@@ -57,11 +55,46 @@ public sealed partial class MainViewModel
     {
         if (TimingDropProblem(item, cell, toStart) is { } problem) { throw new DomainValidationException(problem); }
         var timing = workspace.Timing!;
-        if (toStart) { await timing.MoveToStartAsync(item.ListId, item.Bib, item.StartKey, item.AssignedKeys, TimingOperator); }
+        if (toStart)
+        {
+            if (timing.Snapshot!.Results.Single(x => x.Bib == item.Bib).Status == TimingStatus.Ready)
+            { await timing.MoveWaitingToNextAsync(item.Bib, TimingOperator); }
+            else { await timing.MoveToStartAsync(item.ListId, item.Bib, item.StartKey, item.AssignedKeys, TimingOperator); }
+        }
         else { await timing.MoveTimestampAsync(item.ListId, item.Bib, cell!.Key, cell.Decision, item.AssignedKeys, TimingOperator); }
         SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == item.Bib);
         RefreshTiming();
         SetStatus(toStart ? $"Bib {item.Bib} restarted at start. Previous impulses retained." + (timing.IsHeld(0) ? " Start remains on hold." : " Next start is ready.")
             : $"{cell!.Position} {cell.Time} assigned to Bib {item.Bib}. Original timestamp retained.");
+    });
+
+    public string? StartQueueDropProblem(TimingDragCompetitor item, int targetBib)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (!IsCurrentTimingDrag(item)) { return "Choose a competitor in the current run."; }
+        var waiting = workspace.Timing?.Snapshot is { } snapshot ? RaceFlow.Waiting(snapshot) : [];
+        return waiting.Any(x => x.Bib == item.Bib) && waiting.Any(x => x.Bib == targetBib)
+            && item.Bib != targetBib ? null : "Choose another waiting starter to change the order.";
+    }
+
+    public Task DropStartQueueAsync(TimingDragCompetitor item, int targetBib, bool visuallyAbove) => GuardAsync(async () =>
+    {
+        if (StartQueueDropProblem(item, targetBib) is { } problem) { throw new DomainValidationException(problem); }
+        await workspace.Timing!.MoveWaitingRelativeAsync(item.Bib, targetBib, visuallyAbove, TimingOperator);
+        RefreshTiming();
+        SetStatus($"Bib {item.Bib} moved {(visuallyAbove ? "above" : "below")} Bib {targetBib} in the start queue.");
+    });
+
+    public string? StatusDropProblem(TimingDragCompetitor item, string status)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (!IsCurrentTimingDrag(item)) { return "Choose a competitor in the current run."; }
+        return status is "DNS" or "DNF" or "DSQ" or "NPS" or "Clear" ? null : "Choose a valid status.";
+    }
+
+    public Task DropTimingStatusAsync(TimingDragCompetitor item, string status) => GuardAsync(async () =>
+    {
+        if (StatusDropProblem(item, status) is { } problem) { throw new DomainValidationException(problem); }
+        await ApplyTimingStatusAsync([item.Bib], status);
     });
 }

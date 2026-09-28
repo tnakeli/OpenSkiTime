@@ -97,6 +97,12 @@ public sealed class StartListTests
         Assert.DoesNotContain("<script>", html, StringComparison.Ordinal);
         Assert.Contains("\"\"TEST\"\"", StartListExchange.ToTsv(first), StringComparison.Ordinal);
         Assert.Equal(StartListExchange.ToTsv(first), StartListExchange.ToTsv(first with { ApprovedAt = s_at }));
+        Assert.DoesNotContain("Run 1 time", StartListExchange.ToTsv(first), StringComparison.Ordinal);
+        var second = Stored(FisStartOrder.SecondRun(first, parsed));
+        Assert.Contains("Run 1 time", StartListExchange.ToTsv(second), StringComparison.Ordinal);
+        Assert.Contains("\"1:02.34\"", StartListExchange.ToTsv(second), StringComparison.Ordinal);
+        Assert.Contains("<th>Run 1 time</th>", StartListExchange.ToPrintHtml(second), StringComparison.Ordinal);
+        Assert.Contains("<td>1:02.34</td>", StartListExchange.ToPrintHtml(second), StringComparison.Ordinal);
     }
 
     [Fact]

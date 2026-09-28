@@ -1,12 +1,11 @@
-# Screenshots
+# README screenshots
 
-Placeholder directory for UI screenshots. These will be populated with actual screenshots after the first end-to-end demo run.
+These images are headless Avalonia captures of a generated demo event. Athlete identities, codes, competition details and FIS-style points data are fictional; timing comes from the simulator. No personal event file or downloaded points list is checked in.
 
-## Planned Screenshots
+To regenerate the six PNGs from the repository root, set `OPENSKITIME_README_SCREENSHOTS` to the absolute path of this directory and run:
 
-| File | Contents |
-|---|---|
-| `event-series-overview.png` | Event Series overview showing series list, basic data form, and competitions list with Delete/Remove actions |
-| `competitor-grid.png` | Competitor grid for a selected series: DataGrid with bib, name, YOB, gender, nation, club columns; toolbar with Import, filter, and group-by controls |
-| `competition-editor.png` | Competition editor form: all basic-data fields, Save/Cancel buttons, and the disabled "Update from FIS API" placeholder button |
-| `import-preview.png` | Import preview sheet: New / Warnings tabs, competitor rows with parsed name and participation flags, Apply/Cancel actions |
+```powershell
+dotnet test rewrite/OpenSkiTime.Rewrite.slnx --filter FullyQualifiedName~GenerateReadmeScreenshotsFromSyntheticEvent
+```
+
+The fixture creates its `.ost` file and points-list ZIP under the system temporary directory and removes them after capture.

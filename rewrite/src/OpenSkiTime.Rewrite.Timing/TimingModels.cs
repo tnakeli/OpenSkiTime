@@ -5,7 +5,7 @@ namespace OpenSkiTime.Rewrite.Timing;
 
 public enum ObservationKind { Impulse, DeviceCorrection, Invalid, Information }
 public enum TimingStatus { Ready, OnCourse, Finished, DNS, DNF, DSQ, NPS, Review }
-public enum DecisionKind { Assignment, Status, Time }
+public enum DecisionKind { Assignment, Status, Time, StartOrder }
 
 // Ticks are integer 100 ns units. Device precision is retained separately; receive time never determines race time.
 public sealed record TimingObservation(string Key, Guid SessionId, long PacketSequence, string Source,
@@ -13,7 +13,8 @@ public sealed record TimingObservation(string Key, Guid SessionId, long PacketSe
     int? SuggestedBib, bool Manual, string ClockId, string Message);
 
 public sealed record TimingDecision(DecisionKind Kind, string? ObservationKey = null, Guid? CompetitorId = null,
-    int? Bib = null, bool Ignored = false, TimingStatus? Status = null, long? Hundredths = null);
+    int? Bib = null, bool Ignored = false, TimingStatus? Status = null, long? Hundredths = null,
+    string? StartOrder = null);
 
 public sealed record TimingAudit(long Id, Guid ListId, DateTimeOffset At, string Operator, string Reason,
     TimingDecision Before, TimingDecision After, long? ReversesId = null);
@@ -39,6 +40,7 @@ public sealed record ObservationReview(TimingObservation Observation, int? Bib, 
 public sealed record TimingSnapshot(Guid ListId, long AuditVersion, IReadOnlyList<TimingResult> Results,
     IReadOnlyList<ObservationReview> Observations, IReadOnlyList<TimingAudit> Audit)
 {
+    public IReadOnlyList<int> StartOrder { get; init; } = [];
     public int Unresolved => Observations.Count(x => x.State == "Unassigned" || x.State == "Review");
     public bool Complete => Results.Count > 0 && Results.All(x => x.Status is TimingStatus.Finished
         or TimingStatus.DNS or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS);

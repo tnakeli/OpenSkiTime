@@ -49,11 +49,15 @@ public partial class DesktopWorkflowTests
             var timingButton = window.FindControl<Button>("TimingMenuButton")!;
             timingButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await vm.RefreshTimingMenuCommand.ExecutionTask!;
+            await vm.OpenTimingRunCommand.ExecutionTask!;
+            Assert.True(vm.IsTimingSection); // the selected race opens without choosing it again in the menu
             Dispatcher.UIThread.RunJobs();
             var menu = Assert.IsType<MenuFlyout>(timingButton.Flyout);
             var raceMenu = Assert.IsType<MenuItem>(Assert.Single(menu.Items));
-            Assert.Equal("SL1", raceMenu.Header);
+            Assert.Equal("SL1  ·  ACTIVE", raceMenu.Header);
+            Assert.True(raceMenu.IsSubMenuOpen);
             var runMenu = Assert.IsType<MenuItem>(Assert.Single(raceMenu.Items));
+            Assert.Equal("Run 1  ·  OPEN", runMenu.Header);
             runMenu.Command!.Execute(runMenu.CommandParameter);
             await vm.OpenTimingRunCommand.ExecutionTask!;
             menu.Hide();
@@ -67,8 +71,17 @@ public partial class DesktopWorkflowTests
             vm.ShowSettingsCommand.Execute(null);
             Click(window, "Connect");
             await vm.ConnectTimingCommand.ExecutionTask!;
-            vm.ReturnToTimingCommand.Execute(null);
+            await vm.ReturnToTimingCommand.ExecuteAsync(null);
             Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.False(vm.StartInputOn);
+            Assert.False(vm.FinishInputOn);
+            Assert.Equal("HOLD · all positions", vm.TimingHoldSummary);
+            CaptureDraw(window, output, "timing-hold.png");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("finish");
+            await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            Assert.True(vm.StartInputOn); // reopening the current menu does not interrupt live timing
+            Assert.True(vm.FinishInputOn);
             vm.SelectedTimingRow = vm.TimingRows[0];
             var firstBib = vm.SelectedTimingRow.Bib;
             var view = window.FindControl<TimingView>("TimingWorkspace")!;
@@ -79,6 +92,23 @@ public partial class DesktopWorkflowTests
             vm.SimulationTime = "12:00:00.9999999";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingRows[0].Status == "On course");
+            vm.ShowCompetitionsCommand.Execute(null);
+            vm.NewCompetitionCommand.Execute(null);
+            vm.CompetitionShortLabel = "SL2";
+            vm.CompetitionName = "Second slalom";
+            await vm.SaveCompetitionCommand.ExecuteAsync(null);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(2, vm.Competitions.Count);
+            Assert.True(vm.IsTimingConnected);
+            timingButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await vm.OpenTimingRunCommand.ExecutionTask!;
+            Assert.True(vm.IsTimingSection);
+            Assert.True(vm.IsTimingConnected);
+            Assert.False(vm.StartInputOn); // returning to Timing holds an already connected source
+            Assert.False(vm.FinishInputOn);
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("finish");
+            (timingButton.Flyout as MenuFlyout)?.Hide();
             vm.SelectedTimingRow = vm.TimingRows[1];
             await vm.ArmStartCommand.ExecuteAsync(null);
             vm.SimulationTime = "12:00:30.0000";
@@ -94,7 +124,10 @@ public partial class DesktopWorkflowTests
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned"));
             var unassigned = vm.TimestampRows.SelectMany(x => x.Cells).OfType<TimingTimestampCell>().Single(x => x.Review.Bib is null);
+            Assert.Contains(vm.TimestampRows[0].Cells, x => x?.Key == unassigned.Key);
             await DropTimingRacer(view, vm.CreateTimingDrag(vm.TimingRows[1].Bib)!, unassigned.Key);
+            Assert.Equal(vm.TimingRows[1].Bib, vm.TimestampRows[0].Bib); // latest impulse stays on top after assignment
+            Assert.Contains(vm.TimestampRows[0].Cells, x => x?.Key == unassigned.Key);
             Assert.Equal("1:05.00", vm.TimingRows[1].Time);
             Assert.Equal("1:01.99", vm.TimingRows[0].Time);
             // Reassign an occupied finish through the visible drop target. The former
@@ -140,6 +173,10 @@ public partial class DesktopWorkflowTests
             Assert.True(view.FindControl<DataGrid>("AtStartGrid")!.Columns.Single(x => Equals(x.Header, "RUN 1")).IsVisible);
             Assert.True(vm.IsTimingConnected);
             Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.False(vm.StartInputOn); // changing runs requires explicit resume
+            Assert.False(vm.FinishInputOn);
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("finish");
             var bib = vm.TimingRows[0].Bib;
             vm.StartBibText = bib.ToString(System.Globalization.CultureInfo.InvariantCulture);
             await vm.ArmStartCommand.ExecuteAsync(null);

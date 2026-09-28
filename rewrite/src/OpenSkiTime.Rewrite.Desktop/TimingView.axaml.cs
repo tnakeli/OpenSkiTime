@@ -17,12 +17,12 @@ public sealed partial class TimingView : UserControl
 {
     private MainViewModel? _viewModel;
     private bool _synchronizingSelection;
+    private (DataGrid Grid, int[] Bibs)? _contextSelection;
     private static readonly string[] GridNames = ["AtStartGrid", "RunningGrid", "TimestampsGrid", "RankingGrid"];
     private TimingAction[] _actions = [];
     private int _splitCount = -1;
     // One definition drives both the context menus and actual keyboard shortcuts.
-    private sealed record TimingAction(string Header, string Gesture, ICommand Command, string? Parameter = null,
-        string? Enabled = null, string? Visible = null, string? DynamicHeader = null);
+    private sealed record TimingAction(string Header, string Gesture, ICommand Command, string? Parameter = null);
 
     public TimingView()
     {
@@ -32,6 +32,7 @@ public sealed partial class TimingView : UserControl
         DetachedFromVisualTree += (_, _) => BindViewModel(null);
         SizeChanged += (_, _) => Dispatcher.UIThread.Post(ScrollToNext, DispatcherPriority.Background);
         AddHandler(KeyDownEvent, OnTimingKey, RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, CaptureContextSelection, RoutingStrategies.Tunnel, handledEventsToo: true);
         ConfigureDragging();
     }
 
@@ -63,9 +64,12 @@ public sealed partial class TimingView : UserControl
             foreach (var name in GridNames)
             {
                 var grid = this.FindControl<DataGrid>(name)!;
-                grid.SelectedItem = name == "TimestampsGrid"
-                    ? grid.ItemsSource?.OfType<TimingTimestampRow>().FirstOrDefault(x => x.Bib == _viewModel?.SelectedTimingRow?.Bib && x.Bib is not null)
-                    : grid.ItemsSource?.OfType<TimingGridRow>().FirstOrDefault(x => x.Bib == _viewModel?.SelectedTimingRow?.Bib);
+                var selected = _viewModel?.SelectedTimingBibs ?? [];
+                var items = name == "TimestampsGrid"
+                    ? grid.ItemsSource?.OfType<TimingTimestampRow>().Where(x => x.Bib is { } bib && selected.Contains(bib)).Cast<object>().ToArray() ?? []
+                    : grid.ItemsSource?.OfType<TimingGridRow>().Where(x => selected.Contains(x.Bib)).Cast<object>().ToArray() ?? [];
+                grid.SelectedItems.Clear();
+                foreach (var item in items) { grid.SelectedItems.Add(item); }
             }
         }
         finally { _synchronizingSelection = false; }
@@ -170,6 +174,8 @@ public sealed partial class TimingView : UserControl
     {
         _actions = [
             new("Next at start", "F5", vm.ExpectSelectedCommand, "start"),
+            new("Move up in start order", "Ctrl+Up", vm.MoveStartRowCommand, "up"),
+            new("Move down in start order", "Ctrl+Down", vm.MoveStartRowCommand, "down"),
             new("Next at finish", "F6", vm.ExpectSelectedCommand, "finish"),
             new("Back to start", "F8", vm.ReturnToStartCommand),
             new("DNS · did not start", "Ctrl+D", vm.ClassifyTimingCommand, "DNS"),
@@ -178,28 +184,18 @@ public sealed partial class TimingView : UserControl
             new("NPS · not permitted to start", "Ctrl+N", vm.ClassifyTimingCommand, "NPS"),
             new("Clear classification", "Ctrl+R", vm.ClassifyTimingCommand, "Clear"),
             new("Absent next starter · DNS", "Shift+F5", vm.NextStartDnsCommand),
-            new("Hold start", "Ctrl+F5", vm.HoldTimingPositionCommand, "start", DynamicHeader: nameof(vm.StartHoldLabel)),
-            new("Hold finish", "Ctrl+F6", vm.HoldTimingPositionCommand, "finish", DynamicHeader: nameof(vm.FinishHoldLabel)),
-            new("False finish · not a racer", "Ctrl+Back", vm.IgnoreLastFinishCommand, Enabled: nameof(vm.CanIgnoreLastFinish)),
+            new("Hold start", "Ctrl+F5", vm.HoldTimingPositionCommand, "start"),
+            new("Hold finish", "Ctrl+F6", vm.HoldTimingPositionCommand, "finish"),
+            new("False finish · not a racer", "Ctrl+Back", vm.IgnoreLastFinishCommand),
         ];
         foreach (var name in GridNames)
         {
             var menu = new ContextMenu();
-            var status = new MenuItem { Header = "Status" };
-            var more = new MenuItem { Header = "More…" };
-            for (var i = 0; i < _actions.Length; i++)
+            foreach (var action in _actions.Where(x => x.Command == vm.ClassifyTimingCommand))
             {
-                var action = _actions[i];
                 var item = new MenuItem { Header = action.Header, InputGesture = KeyGesture.Parse(action.Gesture), Command = action.Command, CommandParameter = action.Parameter };
-                if (action.Enabled is { } enabled) { item.Bind(IsEnabledProperty, new Binding(enabled) { Source = vm }); }
-                if (action.Visible is { } visible) { item.Bind(IsVisibleProperty, new Binding(visible) { Source = vm }); }
-                if (action.DynamicHeader is { } header) { item.Bind(MenuItem.HeaderProperty, new Binding(header) { Source = vm }); }
-                if (i is >= 3 and <= 7) { status.Items.Add(item); }
-                else if (i >= 8) { more.Items.Add(item); }
-                else if (name == "AtStartGrid" && i == 1) { more.Items.Add(item); }
-                else { menu.Items.Add(item); }
+                menu.Items.Add(item);
             }
-            menu.Items.Add(new Separator()); menu.Items.Add(status); menu.Items.Add(more);
             this.FindControl<DataGrid>(name)!.ContextMenu = menu;
         }
     }
@@ -214,20 +210,57 @@ public sealed partial class TimingView : UserControl
         { grid.ContextMenu?.Open(grid); e.Handled = true; return; }
         var action = _actions.FirstOrDefault(x => KeyGesture.Parse(x.Gesture).Matches(e));
         if (action is null) { return; }
+        if (grid.Name != "AtStartGrid" && action.Command == _viewModel?.MoveStartRowCommand) { return; }
         e.Handled = true;
-        var menuItem = MenuActions(grid.ContextMenu!.Items).First(x => x.Command == action.Command && Equals(x.CommandParameter, action.Parameter));
-        if (menuItem.IsEnabled && menuItem.IsVisible && action.Command.CanExecute(action.Parameter)) { action.Command.Execute(action.Parameter); }
+        if (action.Command == _viewModel?.IgnoreLastFinishCommand && _viewModel.CanIgnoreLastFinish != true) { return; }
+        if (action.Command.CanExecute(action.Parameter)) { action.Command.Execute(action.Parameter); }
     }
-
-    private static IEnumerable<MenuItem> MenuActions(IEnumerable<object?> items) => items.OfType<MenuItem>()
-        .SelectMany(x => new[] { x }.Concat(MenuActions(x.Items)));
 
     private void SelectCompetitor(object? sender, SelectionChangedEventArgs e)
     {
-        if (_synchronizingSelection || DataContext is not MainViewModel { IsRefreshingTimingUi: false } vm) { return; }
-        if (e.AddedItems.OfType<TimingGridRow>().FirstOrDefault() is { } row) { vm.SelectedTimingRow = row; }
-        else if (e.AddedItems.OfType<TimingTimestampRow>().FirstOrDefault() is { } timestamps)
-        { vm.SelectedTimingRow = vm.TimingRows.FirstOrDefault(x => x.Bib == timestamps.Bib); }
+        if (_synchronizingSelection || sender is not DataGrid grid
+            || DataContext is not MainViewModel { IsRefreshingTimingUi: false } vm) { return; }
+        var bibs = grid.SelectedItems.OfType<object>().Select(BibOf).OfType<int>().Distinct().ToArray();
+        var active = e.AddedItems.OfType<object>().Select(BibOf).OfType<int>().LastOrDefault();
+        vm.SelectTimingBibs(bibs, active == 0 ? bibs.FirstOrDefault() : active);
+    }
+
+    private static int? BibOf(object? item) => item switch
+    {
+        TimingGridRow racer => racer.Bib,
+        TimingTimestampRow timestamps => timestamps.Bib,
+        _ => null
+    };
+
+    private void CaptureContextSelection(object? sender, PointerPressedEventArgs e)
+    {
+        _contextSelection = null;
+        if (!e.GetCurrentPoint(this).Properties.IsRightButtonPressed) { return; }
+        var ancestors = Ancestry(e.Source).ToArray();
+        var grid = ancestors.OfType<DataGrid>().FirstOrDefault();
+        var row = ancestors.OfType<DataGridRow>().FirstOrDefault()?.DataContext;
+        if (grid is null || BibOf(row) is not { } bib) { return; }
+        var selected = grid.SelectedItems.OfType<object>().Select(BibOf).OfType<int>().Distinct().ToArray();
+        if (selected.Length > 1 && selected.Contains(bib))
+        {
+            _contextSelection = (grid, selected);
+            Dispatcher.UIThread.Post(() => RestoreContextSelection(bib), DispatcherPriority.Background);
+        }
+    }
+
+    private void RestoreContextSelection(int activeBib)
+    {
+        if (_contextSelection is not { } preserved || _viewModel is not { } vm) { return; }
+        _contextSelection = null;
+        _synchronizingSelection = true;
+        try
+        {
+            preserved.Grid.SelectedItems.Clear();
+            foreach (var item in preserved.Grid.ItemsSource?.OfType<object>() ?? [])
+            { if (BibOf(item) is { } bib && preserved.Bibs.Contains(bib)) { preserved.Grid.SelectedItems.Add(item); } }
+        }
+        finally { _synchronizingSelection = false; }
+        vm.SelectTimingBibs(preserved.Bibs, activeBib);
     }
 
     private void SelectContextCompetitor(object? sender, PointerPressedEventArgs e)
@@ -235,12 +268,15 @@ public sealed partial class TimingView : UserControl
         if (sender is not DataGrid grid || !e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) { return; }
         if (DataContext is not MainViewModel vm) { return; }
         var row = Ancestry(e.Source).OfType<DataGridRow>().FirstOrDefault()?.DataContext;
-        grid.SelectedItem = row;
-        vm.SelectedTimingRow = row switch
+        if (BibOf(row) is not { } bib) { return; }
+        if (_contextSelection is { } preserved && preserved.Grid == grid && preserved.Bibs.Contains(bib))
         {
-            TimingGridRow racer => racer,
-            TimingTimestampRow timestamps => vm.TimingRows.FirstOrDefault(x => x.Bib == timestamps.Bib),
-            _ => null
-        };
+            RestoreContextSelection(bib);
+            return;
+        }
+        _contextSelection = null;
+        if (!grid.SelectedItems.Contains(row)) { grid.SelectedItem = row; }
+        var bibs = grid.SelectedItems.OfType<object>().Select(BibOf).OfType<int>().Distinct().ToArray();
+        vm.SelectTimingBibs(bibs, bib);
     }
 }

@@ -14,14 +14,13 @@ public sealed record TimingTimestampCell(Guid ListId, ObservationReview Review, 
 
 public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IReadOnlyList<TimingTimestampCell?> Cells)
 {
-    public static IReadOnlyList<TimingTimestampRow> Create(TimingSnapshot snapshot, int intermediateCount, bool showIgnored)
+    public static IReadOnlyList<TimingTimestampRow> Create(TimingSnapshot snapshot, int intermediateCount)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         var channels = Enumerable.Range(2, intermediateCount).Prepend(0).Append(1).ToArray();
         var input = snapshot.Observations.Where(x => x.Observation.Kind == ObservationKind.Impulse
             && x.Observation.DeviceTicks is not null && x.DuplicateOf is null
-            && x.Observation.Channel is { } channel && channels.Contains(channel)
-            && (!x.Ignored || showIgnored)).ToArray();
+            && x.Observation.Channel is { } channel && channels.Contains(channel)).ToArray();
         TimingTimestampCell Cell(ObservationReview review) => new(snapshot.ListId, review,
             TimingEngine.CurrentDecision(new(DecisionKind.Assignment, review.Observation.Key), snapshot.Audit));
         IEnumerable<TimingTimestampCell?> Cells(Func<int, TimingTimestampCell?> get) => Enumerable.Range(0, 22)
@@ -44,7 +43,11 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
                     Cells(c => channels.Contains(c) && byChannel.TryGetValue(c, out var values) && i < values.Length ? Cell(values[i]) : null).ToArray()));
             }
         }
-        return rows;
+        // Use journal arrival order, not device time: clock resets and late packets must not reorder history.
+        var arrival = snapshot.Observations.Select((review, index) => (review.Observation.Key, index))
+            .ToDictionary(x => x.Key, x => x.index);
+        return rows.OrderByDescending(row => row.Cells.OfType<TimingTimestampCell>()
+            .Max(cell => arrival[cell.Key])).ToArray();
     }
 }
 

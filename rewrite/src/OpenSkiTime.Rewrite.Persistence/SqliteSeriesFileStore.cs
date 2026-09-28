@@ -290,7 +290,7 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
 
             Assign(row, validated);
             series.Revision++;
-        }, ct);
+        }, ct, allowCaptureOwner: true);
 
     public Task<SeriesDetails> RemoveCompetitionAsync(Guid id, long expectedRevision, CancellationToken ct = default)
         => WriteAsync(async db =>
@@ -304,10 +304,10 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
             series.Revision++;
         }, ct);
 
-    private async Task<SeriesDetails> WriteAsync(Func<SeriesDbContext, Task> change, CancellationToken ct)
+    private async Task<SeriesDetails> WriteAsync(Func<SeriesDbContext, Task> change, CancellationToken ct, bool allowCaptureOwner = false)
     {
         CheckOpen();
-        using var idleLease = AcquireIdleWriteLease();
+        using var idleLease = allowCaptureOwner && _captureLease is not null ? null : AcquireIdleWriteLease();
         await _write.WaitAsync(ct);
         try
         {

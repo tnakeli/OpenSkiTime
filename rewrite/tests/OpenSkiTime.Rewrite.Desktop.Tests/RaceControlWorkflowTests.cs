@@ -55,6 +55,53 @@ public partial class DesktopWorkflowTests
         Assert.DoesNotContain("timingDropTarget", target.Classes);
     }
 
+    private static async Task DropStartQueueRow(TimingView view, TimingDragCompetitor racer, int targetBib)
+    {
+        var grid = view.FindControl<DataGrid>("AtStartGrid")!;
+        var vm = (MainViewModel)view.DataContext!;
+        var targetItem = vm.AtStartRows.Single(x => x.Bib == targetBib);
+        grid.ScrollIntoView(targetItem, null);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        ((Window)view.GetVisualRoot()!).UpdateLayout();
+        var row = grid.GetVisualDescendants().OfType<DataGridRow>()
+            .Single(x => x.DataContext is TimingGridRow racerRow && racerRow.Bib == targetBib);
+        Assert.True(DragDrop.GetAllowDrop(row));
+        var data = new DataObject(); data.Set(TimingView.CompetitorDragFormat, racer);
+        vm.IsTimingDragging = true;
+        var lower = new DragEventArgs(DragDrop.DragOverEvent, data, row,
+            new Avalonia.Point(2, row.Bounds.Height - 2), KeyModifiers.None) { Source = row };
+        row.RaiseEvent(lower);
+        Assert.Equal(DragDropEffects.Move, lower.DragEffects);
+        Assert.Contains("timingDropBelow", row.Classes);
+        var over = new DragEventArgs(DragDrop.DragOverEvent, data, row, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = row };
+        row.RaiseEvent(over);
+        Assert.Equal(DragDropEffects.Move, over.DragEffects);
+        Assert.Contains("timingDropAbove", row.Classes);
+        Assert.DoesNotContain("timingDropBelow", row.Classes);
+        CaptureDraw((Window)view.GetVisualRoot()!, Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR"), "race-start-reorder-hover.png");
+        var drop = new DragEventArgs(DragDrop.DropEvent, data, row, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = row };
+        row.RaiseEvent(drop);
+        await view.PendingTimingDrop;
+        vm.IsTimingDragging = false;
+        Assert.DoesNotContain("timingDropAbove", row.Classes);
+    }
+
+    private static async Task DropTimingStatus(TimingView view, TimingDragCompetitor racer, string status)
+    {
+        var button = view.FindControl<Button>("StatusDrop" + status)!;
+        Assert.True(DragDrop.GetAllowDrop(button));
+        var data = new DataObject(); data.Set(TimingView.CompetitorDragFormat, racer);
+        var over = new DragEventArgs(DragDrop.DragOverEvent, data, button, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = button };
+        button.RaiseEvent(over);
+        Assert.Equal(DragDropEffects.Move, over.DragEffects);
+        Assert.Contains("timingStatusDropTarget", button.Classes);
+        CaptureDraw((Window)view.GetVisualRoot()!, Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR"), "race-status-drop-hover.png");
+        var drop = new DragEventArgs(DragDrop.DropEvent, data, button, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = button };
+        button.RaiseEvent(drop);
+        await view.PendingTimingDrop;
+        Assert.DoesNotContain("timingStatusDropTarget", button.Classes);
+    }
+
     [AvaloniaFact]
     public async Task RaceControlKeepsQueuesVisibleAndSupportsFastClassificationAndFalseFinishRecovery()
     {
@@ -96,8 +143,14 @@ public partial class DesktopWorkflowTests
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR");
             CaptureDraw(window, output, "race-settings.png");
             Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
-            Click(window, "Back to timing");
+            Click(window, "Back to timing"); await vm.ReturnToTimingCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(4, vm.TimingChannelStates.Count);
+            Assert.All(vm.TimingChannelStates, state => Assert.False(state));
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("finish");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:1");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
             Assert.Equal(2, view.FindControl<DataGrid>("RunningGrid")!.Columns.Count(x => x.Tag is "intermediate" && x.IsVisible));
             await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
             Assert.Single(view.FindControl<DataGrid>("RunningGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
@@ -106,6 +159,48 @@ public partial class DesktopWorkflowTests
             var a = vm.TimingRows[0].Bib; var b = vm.TimingRows[1].Bib; var c = vm.TimingRows[2].Bib; var d = vm.TimingRows[3].Bib;
             Assert.Equal(a, vm.AtStartRows[^1].Bib);
             Assert.StartsWith(a + " ·", vm.NextStartLabel, StringComparison.Ordinal);
+            view.FindControl<DataGrid>("AtStartGrid")!.SelectedItem = vm.AtStartRows[^1];
+            view.FindControl<DataGrid>("AtStartGrid")!.Focus();
+            window.KeyPressQwerty(PhysicalKey.ArrowUp, RawInputModifiers.Control); await vm.MoveStartRowCommand.ExecutionTask!;
+            Assert.Equal(a, vm.AtStartRows[^2].Bib);
+            Assert.Equal(b, vm.AtStartRows[^1].Bib);
+            Assert.StartsWith(b + " ·", vm.NextStartLabel, StringComparison.Ordinal);
+            view.FindControl<DataGrid>("AtStartGrid")!.SelectedItem = vm.AtStartRows[^2];
+            window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.Control); await vm.MoveStartRowCommand.ExecutionTask!;
+            Assert.Equal(a, vm.AtStartRows[^1].Bib);
+            await DropStartQueueRow(view, vm.CreateTimingDrag(a)!, c);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(new[] { b, c, a }, vm.AtStartRows.Reverse().Take(3).Select(x => x.Bib));
+            view.FindControl<DataGrid>("AtStartGrid")!.SelectedItem = vm.AtStartRows.Single(x => x.Bib == a);
+            window.KeyPressQwerty(PhysicalKey.F5, RawInputModifiers.None); await vm.ExpectSelectedCommand.ExecutionTask!;
+            Assert.Equal(a, vm.AtStartRows[^1].Bib);
+            vm.SelectedTimingRow = vm.TimingRows.Single(x => x.Bib == a);
+            await DropTimingStatus(view, vm.CreateTimingDrag(c)!, "DSQ");
+            Assert.Equal("DSQ", vm.TimingRows.Single(x => x.Bib == c).Status);
+            await DropTimingStatus(view, vm.CreateTimingDrag(c)!, "Clear");
+            Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == c).Status);
+            view.FindControl<DataGrid>("AtStartGrid")!.SelectedItem = vm.AtStartRows.Single(x => x.Bib == c);
+            Click(window, "DNS"); await vm.ClassifyTimingCommand.ExecutionTask!;
+            Assert.Equal("DNS", vm.TimingRows.Single(x => x.Bib == c).Status);
+            Click(window, "Clear status"); await vm.ClassifyTimingCommand.ExecutionTask!;
+            Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == c).Status);
+            var startGrid = view.FindControl<DataGrid>("AtStartGrid")!;
+            startGrid.SelectedItems.Clear();
+            startGrid.SelectedItems.Add(vm.AtStartRows.Single(x => x.Bib == b));
+            startGrid.SelectedItems.Add(vm.AtStartRows.Single(x => x.Bib == c));
+            Assert.Equal(new[] { b, c }, vm.SelectedTimingBibs.Order());
+            Assert.Equal(2, startGrid.SelectedItems.Count);
+            Assert.Equal("2 competitors selected", vm.SelectedTimingIdentity);
+            CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR"), "race-multi-selected.png");
+            TimingMenu(view, "AtStartGrid", "DNS · did not start"); await vm.ClassifyTimingCommand.ExecutionTask!;
+            Assert.Equal("DNS", vm.TimingRows.Single(x => x.Bib == b).Status);
+            Assert.Equal("DNS", vm.TimingRows.Single(x => x.Bib == c).Status);
+            Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == d).Status);
+            Assert.Equal(2, vm.SelectedTimingBibs.Count);
+            Assert.Equal(2, view.FindControl<DataGrid>("RankingGrid")!.SelectedItems.Count);
+            Click(window, "Clear status"); await vm.ClassifyTimingCommand.ExecutionTask!;
+            Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == b).Status);
+            Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == c).Status);
             await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
             vm.SimulationTime = "11:59:50.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
@@ -125,13 +220,20 @@ public partial class DesktopWorkflowTests
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<DataGrid>(), x => x.Name == "TimingObservationsGrid");
             vm.ShowSettingsCommand.Execute(null);
             Assert.True(vm.IsTimingConnected);
-            vm.ReturnToTimingCommand.Execute(null);
+            await vm.ReturnToTimingCommand.ExecuteAsync(null);
+            Assert.False(vm.StartInputOn);
+            Assert.False(vm.FinishInputOn);
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("finish");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:1");
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
             Assert.StartsWith(b + " ·", vm.NextStartLabel, StringComparison.Ordinal);
-            TimingMenu(view, "AtStartGrid", "Absent next starter · DNS"); await vm.NextStartDnsCommand.ExecutionTask!;
+            view.FindControl<DataGrid>("AtStartGrid")!.Focus();
+            window.KeyPressQwerty(PhysicalKey.F5, RawInputModifiers.Shift); await vm.NextStartDnsCommand.ExecutionTask!;
             Assert.Equal("DNS", vm.TimingRows.Single(x => x.Bib == b).Status);
             Assert.StartsWith(c + " ·", vm.NextStartLabel, StringComparison.Ordinal);
             view.FindControl<DataGrid>("AtStartGrid")!.SelectedItem = vm.AtStartRows.Single(x => x.Bib == d);
-            TimingMenu(view, "AtStartGrid", "Next at start"); await vm.ExpectSelectedCommand.ExecutionTask!;
+            window.KeyPressQwerty(PhysicalKey.F5, RawInputModifiers.None); await vm.ExpectSelectedCommand.ExecutionTask!;
             Assert.Equal(d, vm.AtStartRows[^1].Bib); // changing the next starter also moves that racer in the visible queue
             Assert.StartsWith(d + " ·", vm.NextStartLabel, StringComparison.Ordinal);
             vm.SimulationTime = "12:00:05.0000";
@@ -172,7 +274,8 @@ public partial class DesktopWorkflowTests
             await WaitTimingAsync(vm, () => vm.FinishedTimingRows.Count == 1);
             Assert.Equal(d, vm.SelectedTimingRow!.Bib); // background queue changes must not retarget quick actions
             Assert.Equal(d, Assert.IsType<TimingGridRow>(view.FindControl<DataGrid>("RankingGrid")!.SelectedItem).Bib);
-            TimingMenu(view, "RunningGrid", "False finish · not a racer"); await vm.IgnoreLastFinishCommand.ExecutionTask!;
+            view.FindControl<DataGrid>("RunningGrid")!.Focus();
+            window.KeyPressQwerty(PhysicalKey.Backspace, RawInputModifiers.Control); await vm.IgnoreLastFinishCommand.ExecutionTask!;
             Assert.Single(vm.OnCourseRows); Assert.Empty(vm.FinishedTimingRows);
             Assert.StartsWith(a + " ·", vm.ExpectedFinishLabel, StringComparison.Ordinal);
             vm.SimulationTime = "12:00:42.1234";
@@ -183,8 +286,9 @@ public partial class DesktopWorkflowTests
             vm.SimulationTime = "12:00:44.0000";
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned" && x.Channel == "Finish" && x.Time.StartsWith("12:00:44", StringComparison.Ordinal)));
-            TimingMenu(view, "RunningGrid", "False finish · not a racer"); await vm.IgnoreLastFinishCommand.ExecutionTask!;
+            window.KeyPressQwerty(PhysicalKey.Backspace, RawInputModifiers.Control); await vm.IgnoreLastFinishCommand.ExecutionTask!;
             Assert.Equal("0:42.12", vm.FinishedTimingRows[0].Time); // a stray unassigned pulse must not erase the previous racer's finish
+            Assert.Contains(vm.TimestampRows[0].Cells, x => x?.Review.Ignored == true); // latest ignored pulse remains visible
             vm.SimulationTime = "12:00:45.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 1);
@@ -198,17 +302,18 @@ public partial class DesktopWorkflowTests
             Assert.True(view.FindControl<DataGrid>("RunningGrid")!.Bounds.Height > 80);
             Assert.Equal(4, view.GetVisualDescendants().OfType<DataGrid>().Count());
             Assert.True(view.FindControl<DataGrid>("RankingGrid")!.Bounds.Height >= 65);
-            vm.ShowAllTimingObservations = true;
-            Assert.Contains(vm.TimingObservations, x => x.State == "Ignored");
+            Assert.Contains(vm.TimestampRows, x => x.Cells.Any(cell => cell?.Review.Ignored == true));
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<CheckBox>(), x => Equals(x.Content, "Show ignored"));
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Correct time") || Equals(x.Content, "Assign finish"));
-            // Each queue exposes the same contextual classification actions.
+            // Each queue exposes only contextual classification actions.
             foreach (var name in new[] { "AtStartGrid", "RunningGrid", "TimestampsGrid", "RankingGrid" })
             {
                 var grid = view.FindControl<DataGrid>(name)!;
                 grid.ContextMenu!.Open(grid);
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.Contains(AllTimingMenuItems(grid.ContextMenu!.Items), x => Equals(x.Header, "DSQ · disqualified"));
-                Assert.Contains(grid.ContextMenu.Items.OfType<MenuItem>(), x => Equals(x.Header, "Back to start") && x.Command == vm.ReturnToStartCommand);
+                Assert.Equal(5, grid.ContextMenu.Items.OfType<MenuItem>().Count());
+                Assert.All(grid.ContextMenu.Items.OfType<MenuItem>(), x => Assert.Equal(vm.ClassifyTimingCommand, x.Command));
                 Assert.All(AllTimingMenuItems(grid.ContextMenu.Items).Where(x => x.Command is not null), x => Assert.NotNull(x.InputGesture));
                 grid.ContextMenu.Close();
             }
@@ -250,6 +355,8 @@ public partial class DesktopWorkflowTests
             await vm.ReturnToTimingCommand.ExecuteAsync(null);
             Assert.True(vm.IsTimingConnected);
             Assert.Single(vm.TimingCheckpoints);
+            Assert.All(vm.TimingChannelStates, state => Assert.False(state));
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:1");
             Assert.Single(view.FindControl<DataGrid>("RunningGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
             Assert.Single(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
             Assert.Equal(5, vm.FinishedTimingRows.Count); // changing active channels preserves earlier results

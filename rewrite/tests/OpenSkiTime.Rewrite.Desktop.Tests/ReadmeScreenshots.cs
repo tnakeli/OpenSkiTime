@@ -1,0 +1,165 @@
+using System.IO.Compression;
+using System.Globalization;
+using System.Text;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using OpenSkiTime.Rewrite.Application;
+using OpenSkiTime.Rewrite.Desktop;
+using OpenSkiTime.Rewrite.Devices;
+using OpenSkiTime.Rewrite.Domain;
+using OpenSkiTime.Rewrite.Persistence;
+using Xunit;
+
+namespace OpenSkiTime.Rewrite.Tests;
+
+public partial class DesktopWorkflowTests
+{
+    private sealed record DemoAthlete(string Surname, string FirstName, int Year, string Club, Gender Gender);
+
+    [AvaloniaFact]
+    public async Task GenerateReadmeScreenshotsFromSyntheticEvent()
+    {
+        var output = Environment.GetEnvironmentVariable("OPENSKITIME_README_SCREENSHOTS");
+        if (string.IsNullOrWhiteSpace(output)) { return; }
+
+        var athletes = new[]
+        {
+            new DemoAthlete("AURORA", "Mira", 2003, "North Ridge", Gender.Female),
+            new DemoAthlete("LUMI", "Elina", 2005, "Snowline", Gender.Female),
+            new DemoAthlete("KIDE", "Aava", 2004, "Fell Alpine", Gender.Female),
+            new DemoAthlete("TUNTURI", "Helmi", 2002, "North Ridge", Gender.Female),
+            new DemoAthlete("KAARNA", "Iida", 2006, "Peak Club", Gender.Female),
+            new DemoAthlete("HALLA", "Saana", 2003, "Snowline", Gender.Female),
+            new DemoAthlete("RINNE", "Veera", 2001, "Fell Alpine", Gender.Female),
+            new DemoAthlete("TUULI", "Emilia", 2005, "Peak Club", Gender.Female),
+            new DemoAthlete("KORPI", "Sofia", 2004, "North Ridge", Gender.Female),
+            new DemoAthlete("PAKKA", "Linnea", 2002, "Snowline", Gender.Female),
+            new DemoAthlete("JÄNNE", "Olivia", 2006, "Fell Alpine", Gender.Female),
+            new DemoAthlete("SUMU", "Aino", 2003, "Peak Club", Gender.Female),
+            new DemoAthlete("KALLIO", "Eero", 2002, "North Ridge", Gender.Male),
+            new DemoAthlete("HUIPPU", "Leo", 2005, "Snowline", Gender.Male),
+            new DemoAthlete("KAAMOS", "Mikael", 2003, "Fell Alpine", Gender.Male),
+            new DemoAthlete("HARJU", "Oliver", 2004, "Peak Club", Gender.Male),
+            new DemoAthlete("VIRTA", "Noel", 2001, "North Ridge", Gender.Male),
+            new DemoAthlete("LUMIKKO", "Oskari", 2006, "Snowline", Gender.Male),
+            new DemoAthlete("ROUTA", "Julius", 2002, "Fell Alpine", Gender.Male),
+            new DemoAthlete("VANNE", "Elias", 2004, "Peak Club", Gender.Male),
+            new DemoAthlete("KURU", "Aarni", 2005, "North Ridge", Gender.Male),
+            new DemoAthlete("PILVI", "Vilho", 2003, "Snowline", Gender.Male),
+        };
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-readme-demo", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "Northern Alpine Demo.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(DemoFisList(athletes));
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var date = new DateOnly(2026, 9, 27);
+            var series = await workspace.CreateAsync(file, new("Northern Alpine Weekend", "Summit Arena", "Demo Race Office",
+                date, date.AddDays(1), "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null, new("Northern Slalom Women", "SL Women", date,
+                Discipline.Slalom, RaceType.Fis, 2, 1, "DEMO-101", CourseName: "North Face", StartAltitudeMeters: 820,
+                FinishAltitudeMeters: 430, VerticalDropMeters: 390), series.Revision);
+            series = await workspace.SaveCompetitionAsync(null, new("Northern Slalom Men", "SL Men", date.AddDays(1),
+                Discipline.Slalom, RaceType.Fis, 2, 1, "DEMO-102", CourseName: "North Face", StartAltitudeMeters: 820,
+                FinishAltitudeMeters: 430, VerticalDropMeters: 390), series.Revision);
+            var women = series.Competitions[0];
+            var men = series.Competitions[1];
+            var revision = series.Revision;
+            revision = (await workspace.SaveCategoryRuleAsync(null, new("Women U23", 2004, 2008, Gender.Female, 0), revision)).Revision;
+            revision = (await workspace.SaveCategoryRuleAsync(null, new("Women Senior", 1980, 2003, Gender.Female, 1), revision)).Revision;
+            revision = (await workspace.SaveCategoryRuleAsync(null, new("Men U23", 2004, 2008, Gender.Male, 2), revision)).Revision;
+            revision = (await workspace.SaveCategoryRuleAsync(null, new("Men Senior", 1980, 2003, Gender.Male, 3), revision)).Revision;
+            for (var i = 0; i < athletes.Length; i++)
+            {
+                var athlete = athletes[i];
+                var competition = athlete.Gender == Gender.Female ? women : men;
+                var saved = await workspace.SaveDeskRowAsync(null, new(athlete.Surname, athlete.FirstName, athlete.Year,
+                    (990001 + i).ToString(System.Globalization.CultureInfo.InvariantCulture), "FIN", athlete.Club, athlete.Gender),
+                    competition.Id, true, null, revision);
+                revision = saved.Revision;
+            }
+
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
+                fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            vm.FileLabel = @"C:\Demo\Northern Alpine Weekend.ost";
+            var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1440, Height = 520 };
+            window.Show();
+            try
+            {
+                vm.ShowSeriesCommand.Execute(null);
+                CaptureDraw(window, output, "01-event-series.png");
+                window.Height = 760;
+                vm.ShowCompetitionsCommand.Execute(null);
+                vm.SelectedCompetition = vm.Competitions[0];
+                CaptureDraw(window, output, "02-competitions.png");
+                window.Height = 850;
+                vm.ShowCompetitorsCommand.Execute(null);
+                CaptureDraw(window, output, "03-competitors.png");
+
+                await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(women, 1));
+                await vm.PrepareDrawCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                window.Height = 900;
+                CaptureDraw(window, output, "04-start-lists.png");
+
+                await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(women, 1));
+                window.Height = 1000;
+                vm.TimingSource = "Simulator";
+                vm.TimingIntermediateChannels = "2";
+                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
+                await vm.ToggleTimingChannelCommand.ExecuteAsync("finish");
+                await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:1");
+                var expected = workspace.Timing!.Snapshot!.Observations.Count;
+                async Task Pulse(string channel, string time)
+                {
+                    vm.SimulationTime = time;
+                    await vm.SimulatePulseCommand.ExecuteAsync(channel);
+                    await WaitTimingAsync(vm, () => workspace.Timing!.Snapshot!.Observations.Count > expected);
+                    expected++;
+                }
+                await Pulse("start", "12:00:00.0000");
+                await Pulse("intermediate:1", "12:00:22.1400");
+                await Pulse("start", "12:00:30.0000");
+                await Pulse("finish", "12:00:54.8700");
+                await Pulse("intermediate:1", "12:00:55.2300");
+                await Pulse("start", "12:01:00.0000");
+                await Pulse("finish", "12:01:24.5800");
+                await Pulse("intermediate:1", "12:01:25.3400");
+                await Pulse("start", "12:01:30.0000");
+                CaptureDraw(window, output, "05-timing.png");
+                await Pulse("finish", "12:01:53.6700");
+                await Pulse("intermediate:1", "12:01:55.2700");
+                CaptureDraw(window, output, "overview.png");
+                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private static byte[] DemoFisList(IReadOnlyList<DemoAthlete> athletes)
+    {
+        using var output = new MemoryStream();
+        using (var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            Write(zip, "AL1327hdr.csv", "Listid\tSeasoncode\tListnumber\tListname\tCalculationdate\tStartracedate\tEndracedate\tValidfrom\tValidto\tLastupdate\n"
+                + "465\t2027\t13\t13th FIS points list 2026/27\t2026-09-22\t2026-07-01\t2026-09-20\t2026-09-24\t2026-09-30\t2026-09-22 04:19:38\n");
+            var competitors = new StringBuilder("Competitorid\tSectorcode\tFiscode\tLastname\tFirstname\tGender\tBirthdate\tNationcode\tNationalcode\tSkiclub\tAssociation\tStatus\n");
+            var points = new StringBuilder("Recid\tListid\tCompetitorid\tDisciplinecode\tFispoints\tPosition\tPenalty\tLastupdate\n");
+            for (var i = 0; i < athletes.Count; i++)
+            {
+                var athlete = athletes[i];
+                competitors.AppendLine(CultureInfo.InvariantCulture, $"{i + 1}\tAL\t{990001 + i}\t{athlete.Surname}\t{athlete.FirstName}\t{(athlete.Gender == Gender.Female ? "W" : "M")}\t{athlete.Year}-01-01\tFIN\t\t{athlete.Club}\t\tA");
+                points.AppendLine(CultureInfo.InvariantCulture, $"{i + 1}\t465\t{i + 1}\tSL\t{(18 + i * 3.71m):0.00}\t{i + 1}\t\t2026-09-22");
+            }
+            Write(zip, "AL1327com.csv", competitors.ToString());
+            Write(zip, "AL1327pts.csv", points.ToString());
+        }
+        return output.ToArray();
+    }
+}

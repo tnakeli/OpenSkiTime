@@ -92,9 +92,12 @@ public static class TimingEngine
             .ToDictionary(x => x.CompetitorId, x => x.Rank);
         var badSplits = rows.SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
             .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
+        var startOrder = decisions.TryGetValue("q", out var queue) && queue.StartOrder is { } savedOrder
+            ? ParseStartOrder(savedOrder) : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
         return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
             rows.Select(x => x with { Rank = ranks.TryGetValue(x.CompetitorId, out var rank) ? rank : null }).ToArray(),
-            reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray());
+            reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray())
+        { StartOrder = startOrder };
     }
 
     // Timy keyboard impulses carry the manual marker and may contain only hundredths.
@@ -109,6 +112,7 @@ public static class TimingEngine
             DecisionKind.Assignment => "a:" + decision.ObservationKey,
             DecisionKind.Status => "s:" + decision.CompetitorId,
             DecisionKind.Time => "t:" + decision.CompetitorId,
+            DecisionKind.StartOrder => "q",
             _ => throw new DomainValidationException("Unknown timing correction.")
         };
     }
@@ -142,6 +146,12 @@ public static class TimingEngine
                 if (!snapshot.Results.Any(x => x.Bib == bib)) { throw new DomainValidationException("That bib is not on this run's start list."); }
             }
         }
+        else if (decision.Kind == DecisionKind.StartOrder)
+        {
+            if (decision.StartOrder is { } order && !ParseStartOrder(order).Order()
+                .SequenceEqual(snapshot.Results.Select(x => x.Bib).Order()))
+            { throw new DomainValidationException("The start order must include every starter exactly once."); }
+        }
         else
         {
             if (!snapshot.Results.Any(x => x.CompetitorId == decision.CompetitorId)) { throw new DomainValidationException("Select a starter in this run."); }
@@ -158,14 +168,27 @@ public static class TimingEngine
         {
             DecisionKind.Assignment => !string.IsNullOrWhiteSpace(decision.ObservationKey) && decision.ObservationKey.Split(':').Length >= 2
                 && decision.CompetitorId is null && decision.Status is null && decision.Hundredths is null
-                && !(decision.Ignored && decision.Bib is not null),
+                && decision.StartOrder is null && !(decision.Ignored && decision.Bib is not null),
             DecisionKind.Status => decision.CompetitorId is not null && decision.ObservationKey is null && decision.Bib is null
-                && !decision.Ignored && decision.Hundredths is null && decision.Status is null or TimingStatus.DNS or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS,
+                && !decision.Ignored && decision.Hundredths is null && decision.StartOrder is null
+                && decision.Status is null or TimingStatus.DNS or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS,
             DecisionKind.Time => decision.CompetitorId is not null && decision.ObservationKey is null && decision.Bib is null
-                && !decision.Ignored && decision.Status is null && decision.Hundredths is null or > 0 and <= 720000,
+                && !decision.Ignored && decision.Status is null && decision.StartOrder is null && decision.Hundredths is null or > 0 and <= 720000,
+            DecisionKind.StartOrder => decision.ObservationKey is null && decision.CompetitorId is null && decision.Bib is null
+                && !decision.Ignored && decision.Status is null && decision.Hundredths is null
+                && (decision.StartOrder is null || ParseStartOrder(decision.StartOrder).Length > 0),
             _ => false
         };
         if (!valid) { throw new DomainValidationException("Invalid timing correction. Choose a single observation, classification or elapsed time."); }
+    }
+
+    public static int[] ParseStartOrder(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) { throw new DomainValidationException("Start order is empty."); }
+        var parts = value.Split(',');
+        if (parts.Any(x => !int.TryParse(x, out var bib) || bib <= 0))
+        { throw new DomainValidationException("Start order contains an invalid bib."); }
+        return parts.Select(int.Parse).ToArray();
     }
 
     public static IReadOnlyList<(TimingResult Result, long? Total, int? Rank)> Combined(TimingSnapshot current, TimingSnapshot? previous)

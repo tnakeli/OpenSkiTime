@@ -91,6 +91,14 @@ public partial class DesktopWorkflowTests
             await vm.OpenSeriesCommand.ExecutionTask!;
             var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1280, Height = 800 };
             window.Show();
+            var competitionGrid = window.GetVisualDescendants().OfType<DataGrid>()
+                .Single(x => ReferenceEquals(x.ItemsSource, vm.Competitions));
+            Assert.Contains(competitionGrid.Columns, x => Equals(x.Header, "PUBLIC NAME"));
+            CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "competitions-public-name.png");
+            var activeRaceButton = window.FindControl<Button>("ActiveRaceButton")!;
+            Assert.Equal("Choose competition  ▾", activeRaceButton.Content);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "RACE OFFICE  /  LOCAL WORKSPACE");
+            Assert.Equal("4  Start lists  ▾", window.FindControl<Button>("DrawMenuButton")!.Content);
             var drawButton = window.FindControl<Button>("DrawMenuButton")!;
             drawButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await vm.RefreshDrawMenuCommand.ExecutionTask!;
@@ -104,6 +112,20 @@ public partial class DesktopWorkflowTests
             await vm.OpenDrawRunCommand.ExecutionTask!;
             menu.Hide();
             Assert.True(vm.IsDrawSection);
+            Assert.Equal("SL1  /  Run 1  ▾", activeRaceButton.Content);
+            activeRaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await vm.RefreshDrawMenuCommand.ExecutionTask!;
+            Dispatcher.UIThread.RunJobs();
+            var activeMenu = Assert.IsType<MenuItem>(Assert.Single(Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Items));
+            Assert.Equal("SL1  ·  ACTIVE", activeMenu.Header);
+            Assert.True(activeMenu.IsSubMenuOpen);
+            CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "active-start-menu.png");
+            Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
+            vm.ShowCompetitionsCommand.Execute(null);
+            activeRaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await vm.OpenDrawRunCommand.ExecutionTask!;
+            Assert.True(vm.IsDrawSection);
+            Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
             Assert.Contains("1234", vm.WindowTitle, StringComparison.Ordinal);
             Assert.Equal("Waiting for draw", vm.DrawState);
             window.UpdateLayout();
@@ -118,6 +140,9 @@ public partial class DesktopWorkflowTests
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(36, vm.DrawEntries.Count);
             Assert.True(vm.CanExportDraw);
+            Assert.All(vm.DrawStartListRows, row => Assert.Empty(row.RunOneTime));
+            Assert.False(window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "DrawStartListGrid")
+                .Columns.Single(x => Equals(x.Header, "RUN 1 TIME")).IsVisible);
             var first = vm.DrawRevision!;
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR");
             CaptureDraw(window, output, "run1.png");
@@ -129,8 +154,9 @@ public partial class DesktopWorkflowTests
             Assert.Equal(first.Plan.Entries, vm.DrawEntries);
             await vm.RefreshDrawMenuCommand.ExecuteAsync(null);
             Assert.Equal([1], Assert.Single(vm.DrawMenu).Runs);
-            Click(window, "Mark run started");
-            await vm.MarkRunStartedCommand.ExecutionTask!;
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Mark run started"));
+            await workspace.MarkRunStartedAsync(first.Id, (await workspace.ReadAsync()).Revision, "Operator", DateTimeOffset.UtcNow);
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.True(vm.DrawRunStarted);
             Assert.False(vm.CanPrepareDraw);
@@ -161,6 +187,11 @@ public partial class DesktopWorkflowTests
             Assert.Equal(15, vm.DrawEntries[0].Bib);
             Assert.Equal(30, first.Plan.Options.ReverseCount);
             Assert.Equal(15, vm.DrawRevision!.Plan.Options.ReverseCount);
+            Assert.All(vm.DrawStartListRows, row => Assert.Equal(
+                RunResultInput.FormatTime(vm.DrawRevision.Plan.SourceResults.Single(x => x.CompetitorId == row.Entry.Entrant.CompetitorId).Hundredths),
+                row.RunOneTime));
+            Assert.True(window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "DrawStartListGrid")
+                .Columns.Single(x => Equals(x.Header, "RUN 1 TIME")).IsVisible);
             vm.IsResultInputOpen = true;
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
@@ -180,6 +211,8 @@ public partial class DesktopWorkflowTests
             Assert.DoesNotContain("Corrected Slalom", printed, StringComparison.Ordinal);
             Assert.DoesNotContain("Approved", printed, StringComparison.Ordinal);
             Assert.Equal(StartListExchange.ToPrintHtml(vm.DrawRevision! with { Plan = vm.DrawRevision.Plan with { Competition = competition.Values } }), printed);
+            vm.ShowDrawListCommand.Execute(null);
+            window.UpdateLayout();
             CaptureDraw(window, output, "run2.png");
             window.Width = 980; window.Height = 680;
             CaptureDraw(window, output, "run2-compact.png");

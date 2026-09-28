@@ -3,9 +3,36 @@
  <Style Selector="Border.timestampCell.timingDropTarget, Border.racePane.timingDropTarget">
   <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="2" />
  </Style>
+ <Style Selector="DataGrid#AtStartGrid DataGridRow.timingDropAbove /template/ Border#RowBorder">
+  <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="0,3,0,0" />
+ </Style>
+ <Style Selector="DataGrid#AtStartGrid DataGridRow.timingDropBelow /template/ Border#RowBorder">
+  <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="0,0,0,3" />
+ </Style>
+ <Style Selector="DataGrid#AtStartGrid DataGridRow.timingDropAbove /template/ Rectangle#BackgroundRectangle,
+                  DataGrid#AtStartGrid DataGridRow.timingDropBelow /template/ Rectangle#BackgroundRectangle">
+  <Setter Property="Fill" Value="{DynamicResource AccentTintBrush}" /><Setter Property="Opacity" Value="1" />
+ </Style>
  <Style Selector="TextBlock.raceQueueHint">
   <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   <Setter Property="Padding" Value="8,5" /><Setter Property="FontSize" Value="12" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
+ </Style>
+ <Style Selector="TextBlock.raceDropHint">
+  <Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" />
+  <Setter Property="FontWeight" Value="SemiBold" />
+ </Style>
+ <Style Selector="Button.statusDrop">
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="4" />
+  <Setter Property="MinWidth" Value="48" /><Setter Property="MinHeight" Value="24" />
+  <Setter Property="Padding" Value="7,3" /><Setter Property="FontSize" Value="11" />
+ </Style>
+ <Style Selector="Button.statusDrop:pointerover">
+  <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+ </Style>
+ <Style Selector="Button.statusDrop.timingStatusDropTarget">
+  <Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" />
+  <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="2" />
  </Style>
  <Style Selector="TextBlock.raceClock">
   <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" /><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /><Setter Property="FontWeight" Value="SemiBold" />
