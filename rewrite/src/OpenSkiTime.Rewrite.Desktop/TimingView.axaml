@@ -42,20 +42,19 @@
     </DataGrid>
    </Grid></Border>
    <Border Grid.Column="2" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
-    <TextBlock Text="RUNNING · LAST 3 FINISHERS" Classes="raceHeading" />
+    <TextBlock Text="RUNNING" Classes="raceHeading" />
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Background="{DynamicResource AccentTintBrush}">
      <TextBlock Text="{Binding ExpectedFinishLabel, StringFormat='Finish next · {0}'}" Classes="raceQueueHint" />
      <TextBlock Grid.Column="1" Text="{Binding ExpectedFinishTime}" Classes="raceClock" Margin="8,3" FontSize="18" />
     </Grid>
     <DataGrid Grid.Row="2" Name="RunningGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding RunningRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
      AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
-     ToolTip.Tip="▶ Expected finish · ◆ Latest finisher. Right-click or Shift+F10 for actions.">
+     ToolTip.Tip="▶ Expected finish. Right-click or Shift+F10 for actions.">
      <DataGrid.Columns>
       <DataGridTextColumn Header="" Binding="{Binding Clock.Marker}" Width="26" />
       <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="46" />
       <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="110" />
       <DataGridTextColumn Header="CURRENT" Binding="{Binding Clock.Time}" Width="82" />
-      <DataGridTextColumn Header="FINISH" Binding="{Binding DisplayTime}" Width="86" />
      </DataGrid.Columns>
     </DataGrid>
    </Grid></Border>
