@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
 using Avalonia.Layout;
+using Avalonia.Controls.Primitives;
 using System.ComponentModel;
 using System.Windows.Input;
 
@@ -43,6 +44,7 @@ public sealed partial class TimingView : UserControl
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.HasTimingIntermediates)) { ConfigureColumns(); }
+        if (e.PropertyName == nameof(MainViewModel.TimingChannelStates)) { UpdateChannelVisibility(); }
         if (e.PropertyName is nameof(MainViewModel.SelectedTimingRow) or nameof(MainViewModel.IsRefreshingTimingUi)
             && _viewModel?.IsRefreshingTimingUi == false) { SynchronizeSelection(); }
     }
@@ -68,12 +70,21 @@ public sealed partial class TimingView : UserControl
     private void ConfigureColumns()
     {
         var count = _viewModel?.TimingCheckpoints.Count ?? 0;
-        if (count == _splitCount) { return; }
+        if (count == _splitCount) { UpdateChannelVisibility(); return; }
         _splitCount = count;
         var simulatorButtons = this.FindControl<StackPanel>("SimulatorIntermediateButtons")!;
         simulatorButtons.Children.Clear();
+        var switches = this.FindControl<StackPanel>("TimingIntermediateSwitches")!;
+        switches.Children.Clear();
         for (var i = 1; i <= count; i++)
         {
+            var position = i;
+            var channelSwitch = new ToggleButton { Content = $"I{i}", Command = _viewModel?.ToggleTimingChannelCommand,
+                CommandParameter = $"intermediate:{i}" };
+            channelSwitch.Bind(IsEnabledProperty, new Binding(nameof(MainViewModel.IsTimingConnected)) { Source = _viewModel });
+            channelSwitch.Bind(ToggleButton.IsCheckedProperty, new Binding($"TimingChannelStates[{i + 1}]")
+                { Source = _viewModel, Mode = BindingMode.OneWay });
+            switches.Children.Add(channelSwitch);
             var button = new Button { Content = $"Test I{i}", Command = _viewModel?.SimulatePulseCommand,
                 CommandParameter = $"intermediate:{i}" };
             button.Classes.Add("secondaryAction");
@@ -81,20 +92,27 @@ public sealed partial class TimingView : UserControl
             simulatorButtons.Children.Add(button);
         }
         var grid = this.FindControl<DataGrid>("RunningGrid")!;
-        foreach (var column in grid.Columns.Where(x => x.Tag is "intermediate").ToArray()) { grid.Columns.Remove(column); }
-        for (var i = 0; i < count; i++)
+        var existing = grid.Columns.Count(x => x.Tag is "intermediate");
+        for (var i = existing; i < count; i++)
         {
             grid.Columns.Insert(4 + i, new DataGridTextColumn
             { Header = $"INTERM {i + 1}", Binding = new Binding($"Intermediates[{i}]"), Width = new DataGridLength(82), Tag = "intermediate" });
         }
         var timestamps = this.FindControl<DataGrid>("TimestampsGrid")!;
-        while (timestamps.Columns.Count > 2) { timestamps.Columns.RemoveAt(2); }
-        for (var i = 0; i < count + 2; i++)
+        if (timestamps.Columns.Count == 2) { timestamps.Columns.Add(TimestampColumn(0, "START")); timestamps.Columns.Add(TimestampColumn(21, "FINISH")); }
+        existing = timestamps.Columns.Count(x => x.Tag is "intermediate");
+        for (var i = existing + 1; i <= count; i++)
         {
-            var index = i;
-            timestamps.Columns.Add(new DataGridTemplateColumn
+            timestamps.Columns.Insert(timestamps.Columns.Count - 1, TimestampColumn(i, $"INTERM {i}", "intermediate"));
+        }
+        UpdateChannelVisibility();
+    }
+
+    private static DataGridTemplateColumn TimestampColumn(int index, string header, string? tag = null)
+    {
+        return new DataGridTemplateColumn
             {
-                Header = i == 0 ? "START" : i == count + 1 ? "FINISH" : $"INTERM {i}", Width = new DataGridLength(150),
+                Header = header, Width = new DataGridLength(150), Tag = tag,
                 CellTemplate = new FuncDataTemplate<TimingTimestampRow>((row, _) =>
                 {
                     var cell = row?.Cells.ElementAtOrDefault(index);
@@ -105,7 +123,19 @@ public sealed partial class TimingView : UserControl
                     if (cell is not null) { ToolTip.SetTip(border, cell.Hint); }
                     return border;
                 })
-            });
+            };
+    }
+
+    private void UpdateChannelVisibility()
+    {
+        var count = _viewModel?.TimingCheckpoints.Count ?? 0;
+        var states = _viewModel?.TimingChannelStates;
+        foreach (var name in new[] { "RunningGrid", "TimestampsGrid" })
+        {
+            var grid = this.FindControl<DataGrid>(name)!;
+            var splitColumns = grid.Columns.Where(x => x.Tag is "intermediate").ToArray();
+            for (var i = 0; i < splitColumns.Length; i++)
+            { splitColumns[i].IsVisible = i < count && states?.ElementAtOrDefault(i + 2) == true; }
         }
     }
 

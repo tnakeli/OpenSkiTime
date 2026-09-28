@@ -41,7 +41,8 @@ public partial class DesktopWorkflowTests
             ((Window)view.GetVisualRoot()!).UpdateLayout();
         }
         var target = timestampKey is null ? view.FindControl<Border>("StartDropTarget")!
-            : view.GetVisualDescendants().OfType<Border>().Single(x => x.Tag is TimingTimestampCell cell && cell.Key == timestampKey);
+            : view.FindControl<DataGrid>("TimestampsGrid")!.GetVisualDescendants().OfType<Border>()
+                .First(x => x.Tag is TimingTimestampCell cell && cell.Key == timestampKey && x.Bounds.Width > 0);
         var data = new DataObject(); data.Set(TimingView.CompetitorDragFormat, racer);
         var over = new DragEventArgs(DragDrop.DragOverEvent, data, target, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = target };
         target.RaiseEvent(over);
@@ -97,11 +98,23 @@ public partial class DesktopWorkflowTests
             Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
             Click(window, "Back to timing");
             Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(2, view.FindControl<DataGrid>("RunningGrid")!.Columns.Count(x => x.Tag is "intermediate" && x.IsVisible));
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
+            Assert.Single(view.FindControl<DataGrid>("RunningGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+            Assert.Single(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:2");
             var a = vm.TimingRows[0].Bib; var b = vm.TimingRows[1].Bib; var c = vm.TimingRows[2].Bib; var d = vm.TimingRows[3].Bib;
             Assert.StartsWith(a + " ·", vm.NextStartLabel, StringComparison.Ordinal);
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
+            vm.SimulationTime = "11:59:50.0000";
+            Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
+            await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned"));
+            Assert.Equal("Ready", vm.TimingRows[0].Status); // OFF still journals the raw start pulse
+            await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
             vm.SimulationTime = "12:00:00.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 1);
+            Assert.Equal("12:00:00", vm.TimingDeviceClock);
             var runningRow = Assert.Single(vm.OnCourseRows);
             var initialRunningTime = runningRow.Clock.Time;
             await WaitTimingAsync(vm, () => runningRow.Clock.Time != initialRunningTime);
@@ -166,7 +179,7 @@ public partial class DesktopWorkflowTests
             Assert.False(vm.ShowTimingCorrection); // a valid finish is displayed immediately without an approval step
             vm.SimulationTime = "12:00:44.0000";
             Click(window, "Test finish"); await vm.SimulatePulseCommand.ExecutionTask!;
-            await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned"));
+            await WaitTimingAsync(vm, () => vm.TimingObservations.Any(x => x.State == "Unassigned" && x.Channel == "Finish" && x.Time.StartsWith("12:00:44", StringComparison.Ordinal)));
             TimingMenu(view, "RunningGrid", "False finish · not a racer"); await vm.IgnoreLastFinishCommand.ExecutionTask!;
             Assert.Equal("0:42.12", vm.FinishedTimingRows[0].Time); // a stray unassigned pulse must not erase the previous racer's finish
             vm.SimulationTime = "12:00:45.0000";
@@ -229,6 +242,16 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "race-grouped-ranking.png");
             vm.ShowSettingsCommand.Execute(null);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
+            vm.TimingIntermediateChannels = "2";
+            await vm.SaveTimingPreferencesCommand.ExecuteAsync(null);
+            await vm.ReturnToTimingCommand.ExecuteAsync(null);
+            Assert.True(vm.IsTimingConnected);
+            Assert.Single(vm.TimingCheckpoints);
+            Assert.Single(view.FindControl<DataGrid>("RunningGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+            Assert.Single(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
+            Assert.Equal(5, vm.FinishedTimingRows.Count); // changing active channels preserves earlier results
+            CaptureDraw(window, output, "race-intermediate-removed.png");
+            await vm.DisconnectTimingCommand.ExecuteAsync(null);
             if (!string.IsNullOrEmpty(output))
             {
                 Directory.CreateDirectory(output);
@@ -236,11 +259,15 @@ public partial class DesktopWorkflowTests
             }
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            Assert.True(vm.IsTimingConnected); // remembered source reconnects when returning to Timing
             Assert.Equal("0:42.12", vm.FinishedTimingRows.Single(x => x.Bib == a).Time);
             Assert.Equal(5, vm.FinishedTimingRows.Count);
             Assert.Empty(vm.OnCourseRows);
             Assert.Equal(3, vm.RunningRows.Count);
             Assert.Empty(view.GetVisualDescendants().OfType<ComboBox>());
+            await DropTimingRacer(view, vm.CreateTimingDrag(a)!);
+            Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == a).Status);
+            await vm.DisconnectTimingCommand.ExecuteAsync(null);
             window.Close();
         }
         finally

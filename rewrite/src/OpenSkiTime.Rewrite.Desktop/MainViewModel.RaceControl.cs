@@ -21,6 +21,9 @@ public sealed partial class MainViewModel
     public ObservableCollection<TimingGridRow> FinishedTimingRows { get; } = [];
     public ObservableCollection<int> TimingCheckpoints { get; } = [];
     [ObservableProperty] private string _timingIntermediateChannels = "";
+    [ObservableProperty] private string _timingDeviceClock = "--:--:--";
+    [ObservableProperty] private bool _startInputOn = true;
+    [ObservableProperty] private bool _finishInputOn = true;
     [ObservableProperty] private bool _followTimingOrder = true;
     [ObservableProperty] private bool _showTimingCorrection;
     [ObservableProperty] private string _expectedFinishTime = "—";
@@ -87,7 +90,13 @@ public sealed partial class MainViewModel
         return parts.Select(x => int.Parse(x, CultureInfo.InvariantCulture)).ToArray();
     }
 
-    [RelayCommand] private void ReturnToTiming() { if (HasTimingRun) { SwitchSection(WorkspaceSection.Timing); } }
+    [RelayCommand] private async Task ReturnToTimingAsync()
+    {
+        if (!HasTimingRun) { return; }
+        SwitchSection(WorkspaceSection.Timing);
+        ConfigureTimingCheckpoints();
+        if (workspace.Timing?.IsActive != true && timingPreferencesStore?.Load() is not null) { await ConnectTimingAsync(); }
+    }
     [RelayCommand] private async Task ApplyFollowTimingOrderAsync()
     {
         if (workspace.Timing is { } timing) { await timing.FollowStartOrderAsync(FollowTimingOrder); RefreshTiming(); }
@@ -95,11 +104,32 @@ public sealed partial class MainViewModel
     private void ConfigureTimingCheckpoints()
     {
         TimingCheckpoints.Clear();
-        for (var i = 1; i <= _timingList!.Plan.Competition.IntermediateCount; i++) { TimingCheckpoints.Add(i); }
+        var count = Math.Min(ReadIntermediateChannels().Length, _timingList!.Plan.Competition.IntermediateCount);
+        for (var i = 1; i <= count; i++) { TimingCheckpoints.Add(i); }
         _queueSnapshot = null;
+        _timestampSnapshot = null;
         OnPropertyChanged(nameof(HasTimingIntermediates));
         OnPropertyChanged(nameof(HasTimingCategories));
+        OnPropertyChanged(nameof(TimingChannelStates));
     }
+
+    public IReadOnlyList<bool> TimingChannelStates => Enumerable.Range(0, TimingCheckpoints.Count + 2)
+        .Select(channel => workspace.Timing?.IsHeld(channel) != true).ToArray();
+
+    [RelayCommand] private async Task ToggleTimingChannelAsync(string position) => await GuardAsync(async () =>
+    {
+        if (workspace.Timing is not { IsActive: true } timing) { return; }
+        var channel = position switch
+        {
+            "start" => 0, "finish" => 1,
+            _ when position.StartsWith("intermediate:", StringComparison.Ordinal)
+                && int.TryParse(position[13..], out var number) && number >= 1 && number <= TimingCheckpoints.Count => number + 1,
+            _ => throw new DomainValidationException("Choose a configured timing position.")
+        };
+        await timing.ExpectAsync(channel, null, !timing.IsHeld(channel));
+        RefreshTiming();
+        OnPropertyChanged(nameof(TimingChannelStates));
+    });
 
     private void RefreshRaceQueues()
     {

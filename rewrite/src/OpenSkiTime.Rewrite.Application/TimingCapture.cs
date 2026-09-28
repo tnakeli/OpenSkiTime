@@ -109,6 +109,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     public int? ArmedFinish => ExpectedBib(1);
     public int? ExpectedBib(int channel) => _expected[channel] is > 0 and var bib ? bib : null;
     public bool IsHeld(int channel) => _held[channel];
+    public long? LiveDeviceTicks => _runningClock.DeviceNowTicks(TimeSpan.FromSeconds(5));
     public long? RunningHundredths(string? startKey)
     {
         var start = Snapshot?.Observations.FirstOrDefault(x => x.Observation.Key == startKey)?.Observation;
@@ -246,7 +247,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     if (RaceFlow.OnCourse(_snapshot!).Count > 0)
                     { throw new DomainValidationException("Competitors are still on course. Finish or classify them before switching the active timing run."); }
                     var data = await store.ReadTimingAsync(change.ListId);
-                    if (data.List.Plan.Competition.IntermediateCount != session.Options.IntermediateChannels.Length)
+                    if (data.List.Plan.Competition.IntermediateCount < session.Options.IntermediateChannels.Length)
                     { throw new DomainValidationException("The next competition needs different intermediate channels. Configure them in Settings."); }
                     var restored = TimingReplay.Restore(data, decoders);
                     var next = await store.SwitchCaptureAsync(session.Id, change.ListId, session.Options, session.Options.Operator, DateTimeOffset.UtcNow);
@@ -376,7 +377,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
-    public async Task MoveToStartAsync(Guid listId, int bib, string? expectedStart, string operatorName, CancellationToken ct = default)
+    public async Task MoveToStartAsync(Guid listId, int bib, string? expectedStart,
+        IReadOnlyList<string> expectedAssignedKeys, string operatorName, CancellationToken ct = default)
     {
         await _state.WaitAsync(ct);
         try
@@ -385,10 +387,24 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             var result = _snapshot.Results.SingleOrDefault(x => x.Bib == bib);
             if (result is null || result.StartKey != expectedStart)
             { throw new DomainValidationException("The competitor's start changed. Drag the competitor again."); }
-            if (RaceFlow.CanReturnToStart(result))
-            { await AppendDecisionAsync(new(DecisionKind.Assignment, result.StartKey, Ignored: true), operatorName, "Drag to start — false start impulse"); }
-            else if (result.Status != TimingStatus.Ready)
-            { throw new DomainValidationException("Only a waiting competitor or a false starter without splits or a finish can return to start."); }
+            var assigned = _snapshot.Observations.Where(x => x.Bib == bib && !x.Ignored && x.DuplicateOf is null
+                && x.Observation.Kind == ObservationKind.Impulse).ToArray();
+            if (!assigned.Select(x => x.Observation.Key).Order().SequenceEqual(expectedAssignedKeys.Order()))
+            { throw new DomainValidationException("The competitor received new timing while dragging. Check it and drag again."); }
+            var changes = assigned.Select(x => new TimingAuditChange(
+                TimingEngine.CurrentDecision(new(DecisionKind.Assignment, x.Observation.Key), _audit),
+                new(DecisionKind.Assignment, x.Observation.Key, Ignored: true))).ToList();
+            var status = TimingEngine.CurrentDecision(new(DecisionKind.Status, CompetitorId: result.CompetitorId), _audit);
+            if (status.Status is not null) { changes.Add(new(status, status with { Status = null })); }
+            var time = TimingEngine.CurrentDecision(new(DecisionKind.Time, CompetitorId: result.CompetitorId), _audit);
+            if (time.Hundredths is not null) { changes.Add(new(time, time with { Hundredths = null })); }
+            foreach (var change in changes) { TimingEngine.ValidateDecision(change.After, _snapshot); }
+            if (changes.Count > 0)
+            {
+                var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName,
+                    $"Restart Bib {bib} at start; prior impulses retained", DateTimeOffset.UtcNow, ct);
+                _audit.AddRange(saved); Rebuild();
+            }
             for (var channel = 1; channel < _expected.Length; channel++)
             { if (_expected[channel] == bib) { _expected[channel] = 0; } }
             _expected[0] = _held[0] ? 0 : bib;

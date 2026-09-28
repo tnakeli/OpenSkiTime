@@ -21,7 +21,9 @@ public sealed class LiveTimingTests
         var start = Assert.Single(decoder.Feed(TimingRulesTests.Packet(capture, 1, " *0001 C0 12:00:00.9999999\r")));
         Assert.Null(clock.ElapsedHundredths(start));
         clock.Observe(start, time.GetUtcNow());
+        Assert.Equal(start.DeviceTicks, clock.DeviceNowTicks(TimeSpan.FromSeconds(5)));
         time.Advance(TimeSpan.FromMilliseconds(1234));
+        Assert.Equal(start.DeviceTicks + TimeSpan.FromMilliseconds(1234).Ticks, clock.DeviceNowTicks(TimeSpan.FromSeconds(5)));
         Assert.Equal(123, clock.ElapsedHundredths(start));
         time.MoveWallClock(TimeSpan.FromHours(-2));
         Assert.Equal(123, clock.ElapsedHundredths(start)); // changing Windows time must not move the counter
@@ -33,8 +35,11 @@ public sealed class LiveTimingTests
         var reset = Assert.Single(decoder.Feed(TimingRulesTests.Packet(capture, 3, "10:00:00.0000000\r")));
         clock.Observe(reset, time.GetUtcNow());
         Assert.Equal(1000, clock.ElapsedHundredths(start));
+        time.Advance(TimeSpan.FromSeconds(6));
+        Assert.Null(clock.DeviceNowTicks(TimeSpan.FromSeconds(5)));
         Assert.Null(clock.ElapsedHundredths(start with { ClockId = "different-clock" }));
         clock.Clear();
+        Assert.Null(clock.DeviceNowTicks(TimeSpan.FromSeconds(5)));
         Assert.Null(clock.ElapsedHundredths(start));
     }
 

@@ -47,8 +47,7 @@ public sealed partial class MainViewModel
         if (toStart)
         {
             var result = workspace.Timing!.Snapshot!.Results.Single(x => x.Bib == item.Bib);
-            return result.StartKey == item.StartKey && (result.Status == TimingStatus.Ready || RaceFlow.CanReturnToStart(result))
-                ? null : "Only a waiting competitor or a false starter without splits or a finish can return to start.";
+            return result.StartKey == item.StartKey ? null : "The competitor's start changed. Drag again.";
         }
         if (cell is null || cell.ListId != item.ListId) { return "Drop on a recorded timestamp."; }
         return null;
@@ -58,11 +57,11 @@ public sealed partial class MainViewModel
     {
         if (TimingDropProblem(item, cell, toStart) is { } problem) { throw new DomainValidationException(problem); }
         var timing = workspace.Timing!;
-        if (toStart) { await timing.MoveToStartAsync(item.ListId, item.Bib, item.StartKey, TimingOperator); }
+        if (toStart) { await timing.MoveToStartAsync(item.ListId, item.Bib, item.StartKey, item.AssignedKeys, TimingOperator); }
         else { await timing.MoveTimestampAsync(item.ListId, item.Bib, cell!.Key, cell.Decision, item.AssignedKeys, TimingOperator); }
         SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == item.Bib);
         RefreshTiming();
-        SetStatus(toStart ? $"Bib {item.Bib} returned to start." + (timing.IsHeld(0) ? " Start remains on hold." : " Next start is ready.")
+        SetStatus(toStart ? $"Bib {item.Bib} restarted at start. Previous impulses retained." + (timing.IsHeld(0) ? " Start remains on hold." : " Next start is ready.")
             : $"{cell!.Position} {cell.Time} assigned to Bib {item.Bib}. Original timestamp retained.");
     });
 }
