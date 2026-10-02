@@ -34,11 +34,12 @@ public sealed partial class FisRaceInformationClient(HttpClient client)
         var lookup = $"https://api.fis-ski.com/competitions/find-by-codex/AL/{codex}?season={season}";
         var summary = await GetAsync(lookup, apiKey, ct);
         ValidateIdentity(summary, race, season, codex, nation);
-        if (summary.IsCancelled) { throw new DomainValidationException("FIS marks this competition as cancelled. Review the calendar before importing."); }
         if (string.IsNullOrWhiteSpace(summary.CategoryCode)) { throw new DomainValidationException("FIS returned no calendar category. Enter it manually."); }
         return new(summary.Id, lookup, [new(0, "Category", summary.CategoryCode.ToUpperInvariant())],
-            "Calendar category retrieved from the public API. Jury and run report fields are entered locally; the public competition endpoint does not provide them.");
+            "Calendar category retrieved from the public API. Jury and run report fields are entered locally; the public competition endpoint does not provide them." + CancellationNote(summary));
     }
+    private static string CancellationNote(FisCompetitionInformation summary) => summary.IsCancelled
+        ? " FIS marks this competition as cancelled; local registration, start lists and timing remain available." : "";
     private async Task<FisCompetitionInformation> GetAsync(string url, string credential, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);

@@ -67,6 +67,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection;
     public string ActiveRaceLabel => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
         ? $"{race.Values.ShortLabel}  /  Run {_activeRaceRun}  ▾" : "Choose competition  ▾";
+    public string ActiveRaceName => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
+        ? race.Values.Name : string.Empty;
     public bool ActiveRaceUsesTiming => IsTimingSection || (!IsDrawSection && _activeRaceSection == WorkspaceSection.Timing);
     public DrawDestination? ActiveRaceDestination => _activeRaceId is { } id
         && Competitions.FirstOrDefault(c => c.Id == id) is { } race
@@ -80,6 +82,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         _activeRaceRun = run;
         _activeRaceSection = section;
         OnPropertyChanged(nameof(ActiveRaceLabel));
+        OnPropertyChanged(nameof(ActiveRaceName));
     }
 
     private void ClearActiveRace()
@@ -88,6 +91,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         _activeRaceRun = 0;
         _activeRaceSection = WorkspaceSection.Draw;
         OnPropertyChanged(nameof(ActiveRaceLabel));
+        OnPropertyChanged(nameof(ActiveRaceName));
     }
 
     [RelayCommand] private void ShowSeries() => SwitchSection(WorkspaceSection.Series);
@@ -101,6 +105,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             ?? FisCompetitions.FirstOrDefault();
         if (Equals(ResultsCompetition, selected)) { await LoadResultsAsync(); }
         else { ResultsCompetition = selected; }
+        if (selected is not null) { SetActiveRace(selected, _activeRaceId == selected.Id ? _activeRaceRun : 1, _activeRaceSection); }
     }
     [RelayCommand] private void ShowSettings()
     {
@@ -127,13 +132,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private string _fileLabel = "No series file open";
-    public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime"
-        : IsTimingSection ? $"{FileLabel} · {TimingContext}"
-        : IsDrawSection && DrawCompetition is { } c
-            ? $"{FileLabel} · {c.Values.ShortLabel}{CompetitionCodexLabel(c.Values)} · Run {DrawRun}"
-            : IsResultsSection && ResultsCompetition is { } resultRace
-                ? $"{FileLabel} · {resultRace.Values.ShortLabel} · Codex {resultRace.Values.FisCode ?? "—"} · Results"
-            : FileLabel;
+    public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime" : FileLabel;
     private static string CompetitionCodexLabel(CompetitionValues competition)
         => competition.RaceType == RaceType.Fis ? $" · Codex {competition.FisCode ?? "—"}" : "";
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";
@@ -516,6 +515,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             if (competition.Values.RaceType == RaceType.Fis) { FisCompetitions.Add(competition); }
         }
         OnPropertyChanged(nameof(ActiveRaceLabel));
+        OnPropertyChanged(nameof(ActiveRaceName));
         DeskCompetition = Competitions.FirstOrDefault(x => x.Id == deskCompetitionId) ?? Competitions.FirstOrDefault();
         FileLabel = workspace.FilePath ?? "No series file open";
     }

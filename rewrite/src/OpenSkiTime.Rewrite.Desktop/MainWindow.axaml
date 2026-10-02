@@ -4,9 +4,26 @@
         x:Class="OpenSkiTime.Rewrite.Desktop.MainWindow" x:CompileBindings="False"
         Title="{Binding WindowTitle}" Width="1280" Height="820" MinWidth="980" MinHeight="680" WindowState="Maximized"
         Background="{DynamicResource CanvasBrush}">
+  <Window.Styles>
+    <Style Selector="DataGrid#CompetitorGrid DataGridColumnHeader">
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <!-- Our header supplies both icons; reclaim the native sort icon column. -->
+    <Style Selector="DataGrid#CompetitorGrid DataGridColumnHeader /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+    </Style>
+    <Style Selector="Button.calendarHeader">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+    </Style>
+  </Window.Styles>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <Border Grid.Row="0" Background="{DynamicResource NavyBrush}" Padding="22,11">
-      <Grid ColumnDefinitions="Auto,*,Auto">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <Border Width="30" Height="30" Background="{DynamicResource AccentBrush}" CornerRadius="4">
             <TextBlock Text="O" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Foreground="White" />
@@ -16,7 +33,10 @@
         <Button Name="ActiveRaceButton" Grid.Column="1" Content="{Binding ActiveRaceLabel}" Click="ActiveRace_Click"
                 IsVisible="{Binding IsOpen}" IsEnabled="{Binding CanEditCompetitions}" Classes="activeRace" HorizontalAlignment="Left"
                 VerticalAlignment="Center" Margin="20,0,12,0" MaxWidth="260" ToolTip.Tip="Select competition and run" />
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsEnabled="{Binding !IsDrawBusy}">
+        <TextBlock Name="ActiveRaceNameText" Grid.Column="2" Text="{Binding ActiveRaceName}" ToolTip.Tip="{Binding ActiveRaceName}"
+                   Foreground="White" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0" IsVisible="{Binding IsOpen}" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsEnabled="{Binding !IsDrawBusy}">
           <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="toolbarAction" />
           <SplitButton Name="OpenFileButton" Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="toolbarAction">
             <SplitButton.Flyout>
@@ -62,23 +82,23 @@
             <Button Name="BrowseSeriesCalendarButton" Content="Browse FIS calendar" Command="{Binding BrowseSeriesCalendarCommand}" HorizontalAlignment="Left" Classes="secondaryAction" />
             <Border Classes="subtleSurface" Padding="12" IsVisible="{Binding IsSeriesCalendarOpen}">
               <StackPanel Spacing="10">
-                <WrapPanel IsEnabled="{Binding !IsSeriesCalendarBusy}">
-                  <StackPanel Classes="field" Width="110" Margin="0,0,12,0"><TextBlock Text="FIS SEASON" Classes="fieldLabel" /><TextBox Text="{Binding SeriesCalendarSeason}" /></StackPanel>
-                  <StackPanel Classes="field" Width="110" Margin="0,0,12,0"><TextBlock Text="NATION" Classes="fieldLabel" /><TextBox Text="{Binding SeriesCalendarNation}" Watermark="All" MaxLength="3" /></StackPanel>
-                  <StackPanel Classes="field" Width="320" Margin="0,0,12,0"><TextBlock Text="LOCATION / EVENT" Classes="fieldLabel" /><TextBox Text="{Binding SeriesCalendarSearch}" Watermark="Search calendar" /></StackPanel>
-                  <Button Content="Load calendar" Command="{Binding BrowseSeriesCalendarCommand}" VerticalAlignment="Bottom" />
-                </WrapPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8" IsEnabled="{Binding !IsSeriesCalendarBusy}">
+                  <TextBlock Text="FIS SEASON" Classes="fieldLabel" VerticalAlignment="Center" />
+                  <TextBox Width="90" Text="{Binding SeriesCalendarSeason}" />
+                  <Button Content="Load calendar" Command="{Binding BrowseSeriesCalendarCommand}" />
+                  <Button Content="Clear filters" Command="{Binding ClearCalendarFiltersCommand}" />
+                </StackPanel>
                 <TextBlock Text="{Binding SeriesCalendarStatus}" Classes="supportingText" TextWrapping="Wrap" />
                 <TextBlock Text="Import the event and its supported races. Existing course settings and missing values are preserved." Classes="supportingText" TextWrapping="Wrap" />
                 <DataGrid Name="SeriesCalendarEventsGrid" Classes="raceGrid" ItemsSource="{Binding SeriesCalendarEvents}" SelectedItem="{Binding SelectedSeriesCalendarEvent}"
-                          AutoGenerateColumns="False" IsReadOnly="True" Height="220" SelectionMode="Single">
+                          AutoGenerateColumns="False" IsReadOnly="True" Height="240" SelectionMode="Single" CanUserSortColumns="False">
                   <DataGrid.Columns>
-                    <DataGridTextColumn Header="START" Binding="{Binding StartDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
-                    <DataGridTextColumn Header="END" Binding="{Binding EndDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
-                    <DataGridTextColumn Header="LOCATION" Binding="{Binding Location}" Width="180" />
-                    <DataGridTextColumn Header="NATION" Binding="{Binding Nation}" Width="80" />
-                    <DataGridTextColumn Header="EVENT" Binding="{Binding Name}" Width="*" />
-                    <DataGridTextColumn Header="RACES" Binding="{Binding CompetitionCount}" Width="75" />
+                    <DataGridTextColumn Binding="{Binding StartDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110"><DataGridTextColumn.Header><Button Tag="Start" Content="START ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter start date" /></DataGridTextColumn.Header></DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding EndDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110"><DataGridTextColumn.Header><Button Tag="End" Content="END ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter end date" /></DataGridTextColumn.Header></DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding Location}" Width="180"><DataGridTextColumn.Header><Button Tag="Location" Content="LOCATION ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter location" /></DataGridTextColumn.Header></DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding Nation}" Width="110"><DataGridTextColumn.Header><Button Tag="Nation" Content="NATION ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter nation" /></DataGridTextColumn.Header></DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding Name}" Width="*"><DataGridTextColumn.Header><Button Tag="Event" Content="EVENT ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter event" /></DataGridTextColumn.Header></DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding CompetitionCount}" Width="100"><DataGridTextColumn.Header><Button Tag="Races" Content="RACES ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter race count" /></DataGridTextColumn.Header></DataGridTextColumn>
                   </DataGrid.Columns>
                 </DataGrid>
                 <DataGrid Name="SeriesCalendarCompetitionsGrid" Classes="raceGrid" ItemsSource="{Binding SeriesCalendarCompetitions}" AutoGenerateColumns="False" IsReadOnly="True" Height="130">
@@ -316,11 +336,6 @@
         </Border>
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsCompetitorsSection}">
           <StackPanel Spacing="10">
-            <StackPanel Spacing="1"><TextBlock Text="SERIES / REGISTRATION" Classes="eyebrow" /><TextBlock Text="Competitors" Classes="sectionTitle" /></StackPanel>
-            <Grid ColumnDefinitions="*,10,150">
-              <TextBox Name="CompetitorFilterInput" Text="{Binding CompetitorFilterText}" Watermark="Filter name, club, code or category" />
-              <ComboBox Grid.Column="2" ItemsSource="{Binding CompetitorGroupings}" SelectedItem="{Binding CompetitorGrouping}" />
-            </Grid>
             <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
             <Border Classes="subtleSurface" Padding="10,7">
               <Grid ColumnDefinitions="Auto,8,*,Auto,8,Auto" VerticalAlignment="Center">
@@ -346,31 +361,31 @@
               </StackPanel>
             </Border>
             <DataGrid Name="CompetitorGrid" Classes="raceGrid" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
-                      SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
-                      MinHeight="300" RowHeight="34" ColumnHeaderHeight="30" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+                      SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" CanUserResizeColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
+                      FrozenColumnCount="3" HorizontalScrollBarVisibility="Auto"
+                      MinHeight="300" RowHeight="34" ColumnHeaderHeight="40" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
               <DataGrid.ContextMenu><ContextMenu>
                 <MenuItem Header="Select all" InputGesture="Ctrl+A" Click="SelectAllContext_Click" />
                 <MenuItem Header="Paste from Excel" InputGesture="Ctrl+V" Click="PasteContext_Click" />
                 <MenuItem Header="Copy selected" InputGesture="Ctrl+C" Click="CopyContext_Click" />
                 <Separator />
                 <MenuItem Header="Delete selected rows" InputGesture="Delete" Click="DeleteContext_Click" />
-                <MenuItem Header="Undo changes to selected row" InputGesture="Ctrl+R" Click="RestoreRowContext_Click" />
               </ContextMenu></DataGrid.ContextMenu>
               <DataGrid.Columns>
-                <DataGridTextColumn Header="" Binding="{Binding ChangeMarker}" IsReadOnly="True" CanUserSort="False" Width="58" />
-                <DataGridTemplateColumn Header="CODE" SortMemberPath="FederationCode" Width="100"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FederationCode}" Classes="gridCell" Classes.changed="{Binding IsCodeChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FederationCode}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="SURNAME" SortMemberPath="Surname" Width="1.2*" MinWidth="130"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Surname}" Classes="gridCell" Classes.changed="{Binding IsSurnameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Surname}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="FIRST NAME" SortMemberPath="FirstName" Width="1*" MinWidth="110"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FirstName}" Classes="gridCell" Classes.changed="{Binding IsFirstNameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FirstName}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTextColumn Header="" Binding="{Binding ChangeMarker}" IsReadOnly="True" CanUserSort="False" Width="28" MinWidth="24" />
+                <DataGridTemplateColumn Header="CODE" SortMemberPath="FederationCode" Width="100" MinWidth="70"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FederationCode}" Classes="gridCell" Classes.changed="{Binding IsCodeChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FederationCode}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="SURNAME" SortMemberPath="Surname" Width="145" MinWidth="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Surname}" Classes="gridCell" Classes.changed="{Binding IsSurnameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Surname}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="FIRST NAME" SortMemberPath="FirstName" Width="125" MinWidth="80"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FirstName}" Classes="gridCell" Classes.changed="{Binding IsFirstNameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FirstName}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
                 <DataGridTemplateColumn Header="YEAR" SortMemberPath="BirthYearText" Width="75"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding BirthYearText}" Classes="gridCell" Classes.changed="{Binding IsYearChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding BirthYearText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="GENDER" SortMemberPath="GenderText" Width="105"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding GenderText}" Classes="gridCell" Classes.changed="{Binding IsGenderChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><ComboBox ItemsSource="{Binding AvailableGenders}" SelectedItem="{Binding GenderText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="NAT" SortMemberPath="Nation" Width="72"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Nation}" Classes="gridCell" Classes.changed="{Binding IsNationChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Nation}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="CLUB" SortMemberPath="Club" Width="1.2*" MinWidth="130"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Club}" Classes="gridCell" Classes.changed="{Binding IsClubChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Club}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTextColumn Header="DH PTS" Binding="{Binding FisDhText}" SortMemberPath="FisDh" IsReadOnly="True" Width="90" />
-                <DataGridTextColumn Header="SG PTS" Binding="{Binding FisSgText}" SortMemberPath="FisSg" IsReadOnly="True" Width="90" />
-                <DataGridTextColumn Header="SL PTS" Binding="{Binding FisSlText}" SortMemberPath="FisSl" IsReadOnly="True" Width="90" />
-                <DataGridTextColumn Header="GS PTS" Binding="{Binding FisGsText}" SortMemberPath="FisGs" IsReadOnly="True" Width="90" />
-                <DataGridTextColumn Header="AC PTS" Binding="{Binding FisAcText}" SortMemberPath="FisAc" IsReadOnly="True" Width="90" />
-                <DataGridTextColumn Header="CATEGORY" Binding="{Binding Category}" SortMemberPath="Category" IsReadOnly="True" Width="1*" MinWidth="120" />
+                <DataGridTemplateColumn Header="GENDER" SortMemberPath="GenderText" Width="95" MinWidth="60"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding GenderText}" Classes="gridCell" Classes.changed="{Binding IsGenderChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><ComboBox ItemsSource="{Binding AvailableGenders}" SelectedItem="{Binding GenderText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="NAT" SortMemberPath="Nation" Width="70" MinWidth="60"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Nation}" Classes="gridCell" Classes.changed="{Binding IsNationChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Nation}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="CLUB" SortMemberPath="Club" Width="145" MinWidth="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Club}" Classes="gridCell" Classes.changed="{Binding IsClubChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Club}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+                <DataGridTextColumn Header="DH PTS" Binding="{Binding FisDhText}" SortMemberPath="FisDh" IsReadOnly="True" Width="75" MinWidth="55" />
+                <DataGridTextColumn Header="SG PTS" Binding="{Binding FisSgText}" SortMemberPath="FisSg" IsReadOnly="True" Width="75" MinWidth="55" />
+                <DataGridTextColumn Header="SL PTS" Binding="{Binding FisSlText}" SortMemberPath="FisSl" IsReadOnly="True" Width="75" MinWidth="55" />
+                <DataGridTextColumn Header="GS PTS" Binding="{Binding FisGsText}" SortMemberPath="FisGs" IsReadOnly="True" Width="75" MinWidth="55" />
+                <DataGridTextColumn Header="AC PTS" Binding="{Binding FisAcText}" SortMemberPath="FisAc" IsReadOnly="True" Width="75" MinWidth="55" />
+                <DataGridTextColumn Header="CATEGORY" Binding="{Binding Category}" SortMemberPath="Category" IsReadOnly="True" Width="125" MinWidth="80" />
               </DataGrid.Columns>
             </DataGrid>
             <Border Classes="subtleSurface" Padding="10,8" IsVisible="{Binding SelectedCompetitorRow.NeedsApproval}"><StackPanel Orientation="Horizontal" Spacing="12">

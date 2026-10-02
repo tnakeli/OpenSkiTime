@@ -37,7 +37,7 @@ public partial class MainWindow : Window
         };
         AddHandler(KeyDownEvent, OnGridKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(TextInputEvent, OnGridTextInput, handledEventsToo: true);
-        AddHandler(PointerPressedEvent, OnGridPointerPressed, handledEventsToo: true);
+        AddHandler(PointerPressedEvent, OnGridPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     private void BindCompetitionColumns()
@@ -58,6 +58,7 @@ public partial class MainWindow : Window
         RebuildCompetitionColumns();
         RebuildRecentMenu();
         UpdateCompetitorGridHeight();
+        UpdateCalendarHeaders();
     }
 
     private void OnCompetitionsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -174,7 +175,7 @@ public partial class MainWindow : Window
 
     private void OnGridViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.CompetitorGrouping)) { ClearCompetitorSortHeader(); }
+        if (e.PropertyName == nameof(MainViewModel.CalendarFiltersVersion)) { UpdateCalendarHeaders(); }
         if (e.PropertyName == nameof(MainViewModel.IsChangeReviewOpen)) { UpdateCompetitorGridHeight(); }
     }
 
@@ -205,7 +206,8 @@ public partial class MainWindow : Window
             grid.Columns.Insert(8 + index, new DataGridTemplateColumn
             {
                 Header = competition.Values.ShortLabel,
-                Width = new DataGridLength(78),
+                Width = new DataGridLength(96),
+                MinWidth = 88,
                 Tag = "competition-entry",
                 SortMemberPath = $"entry:{competition.Id}",
                 IsReadOnly = true,
@@ -236,6 +238,11 @@ public partial class MainWindow : Window
                                 _entryClickedRow = null;
                                 _entrySelectionBeforeClick = [];
                                 await _gridViewModel.StageGridEntryAsync(row, row.GridEntries[position], selected);
+                                if (selected.Length > 1 && selected.Contains(row))
+                                {
+                                    // DataGrid's pointer handling can collapse an extended selection before Click.
+                                    RestoreCompetitorSelection(grid, selected);
+                                }
                             }
                         };
                     }
@@ -244,6 +251,14 @@ public partial class MainWindow : Window
             });
         }
         grid.SetCurrentValue(DataGrid.ItemsSourceProperty, items);
+        InstallCompetitorHeaders(grid);
+    }
+
+    private static void RestoreCompetitorSelection(DataGrid grid, IReadOnlyList<CompetitorGridRow> selected)
+    {
+        var visible = grid.ItemsSource?.OfType<CompetitorGridRow>().ToHashSet() ?? [];
+        foreach (var row in selected.Where(visible.Contains))
+        { if (!grid.SelectedItems.Contains(row)) { grid.SelectedItems.Add(row); } }
     }
 
     private static void UpdateEntryHighlight(CheckBox check, CompetitionEntryChoice choice)
@@ -256,29 +271,36 @@ public partial class MainWindow : Window
     {
         if (this.FindControl<DataGrid>("CompetitorGrid") is { } grid)
         {
-            grid.Height = Math.Clamp(Bounds.Height - 545 - (_gridViewModel?.IsChangeReviewOpen == true ? 155 : 0),
+            grid.Height = Math.Clamp(Bounds.Height - 465 - (_gridViewModel?.IsChangeReviewOpen == true ? 155 : 0),
                 260, 760);
         }
     }
 
     private void CompetitorGrid_Sorting(object? sender, DataGridColumnEventArgs e)
     {
-        if (sender is not DataGrid || DataContext is not MainViewModel vm
-            || string.IsNullOrEmpty(e.Column.SortMemberPath)) { return; }
-        var descending = ReferenceEquals(_sortedCompetitorColumn, e.Column) && !_competitorSortDescending;
         e.Handled = true;
+        if (sender is DataGrid grid) { SortCompetitorColumn(grid, e.Column); }
+    }
+    private void SortCompetitorColumn(DataGrid grid, DataGridColumn column)
+    {
+        if (DataContext is not MainViewModel vm || string.IsNullOrEmpty(column.SortMemberPath)) { return; }
+        if (!grid.CommitEdit(DataGridEditingUnit.Cell, true) || !grid.CommitEdit(DataGridEditingUnit.Row, true)) { return; }
+        var selected = grid.SelectedItems.OfType<CompetitorGridRow>().ToArray();
+        var descending = ReferenceEquals(_sortedCompetitorColumn, column) && !_competitorSortDescending;
         ClearCompetitorSortHeader();
-        _sortedCompetitorColumn = e.Column;
-        _sortedCompetitorHeader = e.Column.Header?.ToString();
+        _sortedCompetitorColumn = column;
+        _sortedCompetitorHeader = column.Header?.ToString();
         _competitorSortDescending = descending;
-        e.Column.Header = _sortedCompetitorHeader + (descending ? " ↓" : " ↑");
-        vm.SortCompetitors(e.Column.SortMemberPath, descending);
+        column.Header = _sortedCompetitorHeader + (descending ? " ↓" : " ↑");
+        vm.SortCompetitors(column.SortMemberPath, descending);
+        RestoreCompetitorSelection(grid, selected);
     }
 
     private void OnGridKeyDown(object? sender, KeyEventArgs e)
     {
         if (DataContext is not MainViewModel vm || !vm.IsCompetitorsSection
             || this.FindControl<DataGrid>("CompetitorGrid") is not { } grid) { return; }
+        if (e.Source is Visual headerSource && headerSource.GetVisualAncestors().OfType<DataGridColumnHeader>().Any()) { return; }
         if (e.KeyModifiers == KeyModifiers.Control && e.Source is not TextBox)
         {
             if (e.Key == Key.V) { vm.PasteFromExcelCommand.Execute(null); e.Handled = true; }
@@ -286,11 +308,6 @@ public partial class MainWindow : Window
             else if (e.Key == Key.A && IsInsideGrid(e.Source, grid))
             {
                 SelectAllCompetitors(grid);
-                e.Handled = true;
-            }
-            else if (e.Key == Key.R && IsInsideGrid(e.Source, grid))
-            {
-                vm.RestoreSelectedRowCommand.Execute(null);
                 e.Handled = true;
             }
             return;
@@ -376,6 +393,7 @@ public partial class MainWindow : Window
         if (this.FindControl<DataGrid>("CompetitorGrid") is not { } grid
             || DataContext is not MainViewModel { IsCompetitorsSection: true }
             || !IsInsideGrid(e.Source, grid) || e.Source is TextBox or ComboBox
+            || e.Source is Visual headerSource && headerSource.GetVisualAncestors().OfType<DataGridColumnHeader>().Any()
             || string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) { return; }
         if (!grid.BeginEdit()) { return; }
         var typed = e.Text;
@@ -471,9 +489,6 @@ public partial class MainWindow : Window
             vm.SetSelectedFisSearchResults(list.SelectedItems?.OfType<FisSearchResult>() ?? []);
         }
     }
-
-    private void RestoreRowContext_Click(object? sender, RoutedEventArgs e)
-        => (DataContext as MainViewModel)?.RestoreSelectedRowCommand.Execute(null);
 
     private void CompetitorGrid_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {

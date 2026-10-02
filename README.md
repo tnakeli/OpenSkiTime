@@ -48,6 +48,8 @@ At start and Running show the immediate race state; Timestamps and Ranking retai
 
 OpenSkiTime has adapters for ALGE Timy 2/3 native USB, MT1 USB/serial and the ALGE Results service. A simulator and ASCII replay are available for practice. Device configuration and channel HOLD controls are described in [timing setup and operation](docs/timing.md).
 
+**Live timing** offers FIS TCP/HTTPS for FIS races and a standalone browser view for every race. Local publishing works offline; Cloud publishing uses the same server and can run alongside FIS. The timing view shows all three statuses and provides Start, Stop, Refresh and session deletion controls. See [live timing setup and operation](docs/live-timing.md) and [cloud server deployment](docs/live-timing-cloud-deployment.md).
+
 The current draw profile covers standard FIS two-run SL/GS and single-run DH/SG. Local category draws, special Cup, youth, snow-seed and three-run formats are not yet supported. Official result publication, FIS result submission, penalties and automatic backup-time substitution are also pending. Physical-device race acceptance still needs a complete rehearsal with independent backup timing.
 
 ## Run from source

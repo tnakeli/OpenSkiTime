@@ -576,5 +576,5 @@ public sealed partial class MainViewModel
         IsTimingConnected = false; RefreshRaceQueues(); NotifyTiming();
     }
 
-    private void DisposeTimingUi() { _timingTimer?.Stop(); _timingHttp.Dispose(); }
+    private void DisposeTimingUi() { DisposeLiveTiming(); _timingTimer?.Stop(); _timingHttp.Dispose(); }
 }

@@ -53,7 +53,11 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(ResultsHasSecondRun));
         OnPropertyChanged(nameof(ResultsIsFis));
         OnPropertyChanged(nameof(WindowTitle));
-        if (IsResultsSection) { _ = LoadResultsAsync(); }
+        if (IsResultsSection)
+        {
+            if (value is not null) { SetActiveRace(value, _activeRaceId == value.Id ? _activeRaceRun : 1, _activeRaceSection); }
+            _ = LoadResultsAsync();
+        }
         else if (value is not null && !workspace.IsOpen)
         {
             ResultsJury.Clear(); ResultsRuns.Clear();

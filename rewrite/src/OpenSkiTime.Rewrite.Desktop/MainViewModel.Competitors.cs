@@ -21,7 +21,6 @@ public sealed partial class MainViewModel
     public ObservableCollection<CompetitorGridRow> VisibleCompetitors { get; } = [];
     public ObservableCollection<DeskChangeLogEntry> DeskChangeLog { get; } = [];
     public ObservableCollection<CategoryRuleDetails> CategoryRules { get; } = [];
-    public IReadOnlyList<string> CompetitorGroupings { get; } = ["Surname", "Category"];
     public IReadOnlyList<string> CategoryGenderOptions { get; } = ["Any", "Women", "Men"];
     public bool HasDeskChangeLog => DeskChangeLog.Count > 0;
     public string UnsavedChangesText => DeskChangeLog.Count is 0 ? "All changes saved"
@@ -51,8 +50,6 @@ public sealed partial class MainViewModel
     }
 
     [ObservableProperty] private CompetitorGridRow? _selectedCompetitorRow;
-    [ObservableProperty] private string _competitorFilterText = string.Empty;
-    [ObservableProperty] private string _competitorGrouping = "Surname";
     [ObservableProperty] private CategoryRuleDetails? _selectedCategoryRule;
     [ObservableProperty] private string _categoryLabel = string.Empty;
     [ObservableProperty] private string _categoryMinYearText = string.Empty;
@@ -114,6 +111,7 @@ public sealed partial class MainViewModel
         _selectedExportRows.Clear();
         _allCompetitorRows.Clear();
         VisibleCompetitors.Clear();
+        _competitorColumnFilters.Clear(); _competitorSortKey = null;
         SelectedCompetitorRow = null;
         DeskCompetition = null;
         CategoryRules.Clear();
@@ -196,31 +194,17 @@ public sealed partial class MainViewModel
 
     private void RefreshVisibleCompetitors()
     {
-        var filter = CompetitorFilterText.Trim();
-        var source = _allCompetitorRows.Where(row => row.IsPlaceholder || filter.Length == 0
-            || row.Surname.Contains(filter, StringComparison.OrdinalIgnoreCase)
-            || row.FirstName.Contains(filter, StringComparison.OrdinalIgnoreCase)
-            || row.FederationCode.Contains(filter, StringComparison.OrdinalIgnoreCase)
-            || row.Club.Contains(filter, StringComparison.OrdinalIgnoreCase)
-            || row.Category.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        var source = _allCompetitorRows.Where(row => row.IsPlaceholder
+            || MatchesCompetitorColumnFilters(row));
         source = _competitorSortKey is { } sortKey
             ? _competitorSortDescending
                 ? source.OrderBy(x => x.IsPlaceholder).ThenByDescending(x => SortValue(x, sortKey), CompetitorSortComparer.Instance)
                 : source.OrderBy(x => x.IsPlaceholder).ThenBy(x => SortValue(x, sortKey), CompetitorSortComparer.Instance)
-            : CompetitorGrouping == "Category"
-                ? source.OrderBy(x => x.IsPlaceholder).ThenBy(x => x.Category).ThenBy(x => x.Surname)
-                : source.OrderBy(x => x.IsPlaceholder).ThenBy(x => x.Surname).ThenBy(x => x.FirstName);
+            : source.OrderBy(x => x.IsPlaceholder).ThenBy(x => x.Surname).ThenBy(x => x.FirstName);
         var selected = SelectedCompetitorRow;
         VisibleCompetitors.Clear();
         foreach (var row in source) { VisibleCompetitors.Add(row); }
         SelectedCompetitorRow = selected is not null && VisibleCompetitors.Contains(selected) ? selected : null;
-    }
-
-    partial void OnCompetitorFilterTextChanged(string value) => RefreshVisibleCompetitors();
-    partial void OnCompetitorGroupingChanged(string value)
-    {
-        _competitorSortKey = null;
-        RefreshVisibleCompetitors();
     }
 
     public void SortCompetitors(string key, bool descending)
@@ -430,7 +414,7 @@ public sealed partial class MainViewModel
             }
             finally { _suspendDeskChangeLog = false; }
         }
-        SelectedCompetitorRow = row;
+        if (selection.Length <= 1) { SelectedCompetitorRow = row; }
         RebuildChangeLog();
         return Task.CompletedTask;
     }

@@ -25,13 +25,13 @@ public sealed partial class FisRaceInformationClient
             { throw new DomainValidationException("Calendar race has an invalid codex or missing metadata."); }
             var codex = int.Parse(race.FisCode!, CultureInfo.InvariantCulture);
             var summary = await GetAsync($"https://api.fis-ski.com/competitions/find-by-codex/AL/{codex}?season={selected.Season}", apiKey, ct);
-            if (summary.Id <= 0 || summary.IsCancelled || string.IsNullOrWhiteSpace(summary.EventCode)
+            if (summary.Id <= 0 || string.IsNullOrWhiteSpace(summary.EventCode)
                 || summary.EventId != selected.Id || summary.SeasonCode != selected.Season || summary.Codex != codex
                 || summary.Date != race.Date || CalendarDiscipline(summary.EventCode.ToUpperInvariant()) != race.Discipline
                 || !string.Equals(summary.CategoryCode, race.Calendar!.Category, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(summary.PlaceNationCode, race.Calendar.Nation, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(summary.GenderCode, race.Calendar.Gender, StringComparison.OrdinalIgnoreCase))
-            { throw new DomainValidationException("A selected race is cancelled or differs from the current FIS calendar. Reload the calendar and review it. No fields were changed."); }
+            { throw new DomainValidationException("A selected race differs from the current FIS calendar. Reload the calendar and review it. No fields were changed."); }
         }
     }
 

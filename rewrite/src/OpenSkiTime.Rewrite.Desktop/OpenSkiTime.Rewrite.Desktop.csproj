@@ -12,5 +12,10 @@
     <ProjectReference Include="../OpenSkiTime.Rewrite.Application/OpenSkiTime.Rewrite.Application.csproj" />
     <ProjectReference Include="../OpenSkiTime.Rewrite.Persistence/OpenSkiTime.Rewrite.Persistence.csproj" />
     <ProjectReference Include="../OpenSkiTime.Rewrite.Devices/OpenSkiTime.Rewrite.Devices.csproj" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="OpenSkiTime.Rewrite.Desktop.Tests" /></ItemGroup>
+  <Import Project="../../LiveTimingArtifacts.targets" />
 </Project>
