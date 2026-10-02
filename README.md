@@ -36,6 +36,8 @@ The registration grid keeps participation, identity, category and FIS points vis
 
 The competition/run selector opens the active start list directly.
 
+The [explanation of draw fairness and verification](docs/fis-draw-fairness.md) describes the random seed, points groups, double draw, replay procedure and the limits of what the saved history proves. A runnable example compares the production draw with an independent implementation using synthetic entrants.
+
 ![First-run start list drawn for a fictional women's slalom](docs/screenshots/04-start-lists.png)
 
 ### 5 · Timing

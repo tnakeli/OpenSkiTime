@@ -1,5 +1,7 @@
 # Repository engineering rules
 
+- Write all project documentation in English.
+
 - Target .NET 10 LTS. Build desktop-first and Windows-first with an isolated path to Linux support. Local race operation must work offline.
 - Separate UI, domain rules, timing calculations, persistence and device protocols. Domain/timing calculations have no UI, database, network or device I/O dependencies.
 - Use explicit models and typed contracts. Prefer direct readable code and minimal dependencies; abstract real boundaries rather than hypothetical frameworks.

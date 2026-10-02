@@ -17,6 +17,10 @@ public interface ISeriesFileSession : IAsyncDisposable
     Task<SeriesDetails> ApplyCalendarAsync(SeriesValues values, IReadOnlyList<CompetitionValues> competitions,
         long expectedRevision, CancellationToken ct = default);
     Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision, CancellationToken ct = default);
+    Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
+        bool saveCourseToAllRaces, CancellationToken ct = default);
+    Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
+        bool saveCourseToAllRaces, bool saveTdToAllRaces, CancellationToken ct = default);
     Task<SeriesDetails> RemoveCompetitionAsync(Guid id, long expectedRevision, CancellationToken ct = default);
     Task<CompetitorDeskDetails> ReadCompetitorDeskAsync(CancellationToken ct = default);
     Task<DeskMutationResult<CompetitorDetails>> SaveDeskRowAsync(Guid? id, CompetitorValues values,
@@ -125,6 +129,14 @@ public sealed class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactor
         => WithSessionAsync(s => s.ApplyCalendarAsync(values, competitions, expectedRevision, ct), ct);
     public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision, CancellationToken ct = default)
         => WithSessionAsync(s => s.SaveCompetitionAsync(id, values, expectedRevision, ct), ct);
+
+    public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
+        bool saveCourseToAllRaces, CancellationToken ct = default)
+        => WithSessionAsync(s => s.SaveCompetitionAsync(id, values, expectedRevision, saveCourseToAllRaces, ct), ct);
+
+    public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
+        bool saveCourseToAllRaces, bool saveTdToAllRaces, CancellationToken ct = default)
+        => WithSessionAsync(s => s.SaveCompetitionAsync(id, values, expectedRevision, saveCourseToAllRaces, saveTdToAllRaces, ct), ct);
     public Task<SeriesDetails> RemoveCompetitionAsync(Guid id, long expectedRevision, CancellationToken ct = default)
         => WithSessionAsync(s => s.RemoveCompetitionAsync(id, expectedRevision, ct), ct);
     public Task<CompetitorDeskDetails> ReadCompetitorDeskAsync(CancellationToken ct = default)

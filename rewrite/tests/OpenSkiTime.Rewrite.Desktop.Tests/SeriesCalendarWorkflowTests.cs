@@ -75,6 +75,9 @@ public partial class DesktopWorkflowTests
             vm.ClearCalendarFiltersCommand.Execute(null); Assert.Single(vm.SeriesCalendarEvents);
             grid.SelectedItem = vm.SeriesCalendarEvents.Single(); window.UpdateLayout();
             Assert.Equal(2, vm.SeriesCalendarCompetitions.Count);
+            Assert.Equal("SL1 W 21.3", vm.SeriesCalendarCompetitions[0].ShortLabel);
+            Assert.Equal("SL2 W 22.3", vm.SeriesCalendarCompetitions[1].ShortLabel);
+            Assert.Equal("Synthetic weekend - SL Women 0034", vm.SeriesCalendarCompetitions[0].Name);
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_M7_VISUAL_DIR");
             if (!string.IsNullOrWhiteSpace(output))
             {
@@ -88,6 +91,8 @@ public partial class DesktopWorkflowTests
             Assert.Equal("21.03.2026", vm.StartDateText); Assert.Equal("22.03.2026", vm.EndDateText); Assert.False(File.Exists(path));
             await vm.CreateSeriesCommand.ExecuteAsync(null);
             Assert.False(vm.IsError); var created = await workspace.ReadAsync(); Assert.Equal(2, created.Competitions.Count);
+            Assert.Equal("SL1 W 21.3", created.Competitions[0].Values.ShortLabel);
+            Assert.Equal("Synthetic weekend - SL Women 0034", created.Competitions[0].Values.Name);
             Assert.Equal("1047", created.Competitions[0].Values.Calendar!.TechnicalDelegate!.Number);
             Assert.Equal("FIN", created.Values.Nation); Assert.Equal("2025/26", created.Values.Season);
             var ids = created.Competitions.Select(x => x.Id).ToArray();

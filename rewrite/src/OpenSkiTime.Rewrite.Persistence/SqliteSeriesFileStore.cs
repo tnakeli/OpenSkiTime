@@ -271,6 +271,14 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
         }, ct);
 
     public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision, CancellationToken ct = default)
+        => SaveCompetitionAsync(id, values, expectedRevision, false, ct);
+
+    public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
+        bool saveCourseToAllRaces, CancellationToken ct = default)
+        => SaveCompetitionAsync(id, values, expectedRevision, saveCourseToAllRaces, false, ct);
+
+    public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
+        bool saveCourseToAllRaces, bool saveTdToAllRaces, CancellationToken ct = default)
         => WriteAsync(async db =>
         {
             var validated = values.Validated();
@@ -286,10 +294,37 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
             else
             {
                 row = new CompetitionRow { Id = Guid.NewGuid(), SeriesId = series.Id };
-                db.Competitions.Add(row);
             }
 
+            var shared = new List<(CompetitionRow Row, CompetitionValues Values)>();
+            if (saveCourseToAllRaces || saveTdToAllRaces)
+            {
+                foreach (var other in await db.Competitions.Where(x => x.SeriesId == series.Id && x.Id != row.Id).ToListAsync(ct))
+                {
+                    var updated = Values(other);
+                    if (saveCourseToAllRaces) { updated = updated with
+                    {
+                        CourseName = validated.CourseName,
+                        HomologationNumber = validated.HomologationNumber,
+                        StartAltitudeMeters = validated.StartAltitudeMeters,
+                        FinishAltitudeMeters = validated.FinishAltitudeMeters,
+                        VerticalDropMeters = validated.VerticalDropMeters,
+                        CourseLengthMeters = validated.CourseLengthMeters
+                    }; }
+                    if (saveTdToAllRaces)
+                    {
+                        var td = validated.Calendar?.TechnicalDelegate;
+                        var calendar = updated.Calendar;
+                        if (calendar is null && td is not null)
+                        { calendar = new CompetitionCalendarData(FisSeason.FromDate(updated.Date), "", "", "", "", null); }
+                        updated = updated with { Calendar = calendar is null ? null : calendar with { TechnicalDelegate = td } };
+                    }
+                    shared.Add((other, updated.Validated()));
+                }
+            }
+            if (id is null) { db.Competitions.Add(row); }
             Assign(row, validated);
+            foreach (var (other, updated) in shared) { Assign(other, updated); }
             series.Revision++;
         }, ct, allowCaptureOwner: true);
 
