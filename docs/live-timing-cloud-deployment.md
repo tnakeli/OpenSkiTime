@@ -1,0 +1,125 @@
+# Live Timing Server: future Azure Container Apps deployment
+
+This is a prepared deployment procedure, not an executed deployment. Development acceptance uses independent local processes and the real REST/SignalR/session-token APIs. No Azure resources, subscriptions, login, custom domain or Azure E2E test were used.
+
+## Architecture and artifact
+
+OpenSkiTime's dedicated cloud publisher creates a session over REST, retains its session-scoped bearer credential, sends a full snapshot and then result events. The browser reads the public snapshot and watches its session through ASP.NET Core SignalR JSON/WebSocket. All authoritative race data and raw timing remain in the portable local series; cloud stores only an in-memory view.
+
+The single `OpenSkiTime.LiveTiming.Server` project is used for managed Local, independently hosted LAN service, locally simulated Cloud and eventual Azure. There is one container image, using the .NET 10 ASP.NET runtime and the same published assembly/web assets. No database, Redis, Azure SignalR Service, Dapr or race-data volume is needed. The [Dockerfile](../rewrite/src/OpenSkiTime.LiveTiming.Server/Dockerfile) and .NET SDK container metadata both package this service. It listens on HTTP 8080 inside the container; Azure ingress terminates public HTTPS 443. REST and WebSocket share that origin/port.
+
+State, session membership and revocation markers are RAM-only. Keep `minReplicas=1`, `maxReplicas=1`, single active revision and all traffic to that revision. More than one active replica would have different caches and SignalR groups; scaling requires a shared state/backplane design that is deliberately absent. [Azure scaling settings](https://learn.microsoft.com/en-us/azure/container-apps/scale-app) document these limits.
+
+Session tokens are HMAC-SHA256 signed, session-scoped and valid for fourteen days by default. Supply a stable random signing key through an Azure secret and reference it from the environment; a restart can then validate an existing token without a credential database. Full snapshot PUT restores its missing cache entry. A new signing key invalidates outstanding tokens and requires new sessions/URLs. Deleted-session token revocation lasts in RAM until expiry; see the [explicit stateless-revocation limitation](live-timing.md#credentials-expiry-and-deletion).
+
+## Configuration
+
+All application settings use ASP.NET Core configuration. Environment uses `__` for nested names. Cloud must supply `LiveTiming__PublicBaseUrl`, since it must not infer an external HTTPS origin from internal HTTP ingress. The client base URL is an operator setting in desktop, outside server configuration.
+
+| Environment variable | Default / permitted range | Purpose |
+|---|---|---|
+| `ASPNETCORE_HTTP_PORTS` | Image: `8080` | Internal listening port; alternatively `--urls` or `ASPNETCORE_URLS`. |
+| `LiveTiming__PublicBaseUrl` | Local managed server supplies its URL | Public origin, e.g. `https://live.openskiti.me`; no trailing path. |
+| `LiveTiming__SigningKey` | Required; base64, at least 32 random bytes | Secret HMAC key. Server fails before listening if missing/invalid. |
+| `LiveTiming__TokenDays` | `14`; clamped 1–14 | Token **and** session lifetime; no independent longer session expiry. |
+| `LiveTiming__MaxSessions` | `100`; clamped 1–10,000 | Combined live-session/revocation-marker capacity. |
+| `LiveTiming__MaxBodyBytes` | `2097152`; clamped 64 KiB–8 MiB | Maximum snapshot/event request body. |
+| `LiveTiming__CreationPerMinute` | `5`; clamped 1–100 | Anonymous session creations per remote-IP fixed window. |
+| `LiveTiming__RequestsPerMinute` | `3000`; clamped 60–100,000 | Global request limit; requests are rejected rather than queued. |
+| `LiveTiming__MaxConnections` | `1000`; clamped 10–10,000 | HTTP and upgraded WebSocket connection limits. |
+| `Logging__LogLevel__Default` | Image: `Warning` | Operational verbosity; never enable body/Authorization logging. |
+
+The contract additionally limits each snapshot to 2,000 competitors, nine runs and twenty intermediates. Each SignalR connection watches one session and accepts at most 4 KiB of client invocation input. No user-wide API secret is distributed in the executable. Anonymous creation can later be replaced with device pairing while keeping the publish/session protocol.
+
+For an initial deployment, use 0.5 CPU/1 GiB memory and conservative session limits; measure representative race/viewer load before increasing limits. Proxy traffic may share an ingress source IP, making the creation limit shared; do not blindly trust caller-supplied forwarded-IP headers to defeat the limiter. Requests never log tokens/signing keys or race bodies. Referencing secrets with `secretref:` follows [Azure environment-variable configuration](https://learn.microsoft.com/en-us/azure/container-apps/environment-variables).
+
+## Deployment procedure
+
+These steps are for the future operator. Replace placeholders in a private working environment; do not save generated secrets or live state into the repository.
+
+1. **Build and validate the service** from the repository root:
+
+   ```powershell
+   dotnet test rewrite/OpenSkiTime.Rewrite.slnx -c Release
+   dotnet publish rewrite/src/OpenSkiTime.LiveTiming.Server -c Release --no-self-contained -o artifacts/live-timing/server
+   ```
+
+2. **Build the one container image** using either Docker or the SDK:
+
+   ```powershell
+   docker build -f rewrite/src/OpenSkiTime.LiveTiming.Server/Dockerfile -t openskitime-live-timing:<version> .
+
+   # Without a Docker daemon: generate an image archive locally.
+   dotnet publish rewrite/src/OpenSkiTime.LiveTiming.Server -c Release --os linux --arch x64 --no-self-contained `
+     /t:PublishContainer -p:ContainerImageTag=<version> -p:ContainerArchiveOutputPath=artifacts/live-timing/image.tar.gz
+   # On a machine with Docker, load this exact archive:
+   docker load -i artifacts/live-timing/image.tar.gz
+   ```
+
+   The SDK archive route is documented in [the .NET container publishing reference](https://learn.microsoft.com/dotnet/core/containers/publish-configuration). Do not bake signing keys into either image.
+
+3. **Run the local cloud rehearsal with the same image**, using a signing key stored outside Git:
+
+   ```powershell
+   $env:LiveTiming__SigningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+   docker run --name ost-live-test -p 5080:8080 `
+     -e LiveTiming__SigningKey -e LiveTiming__PublicBaseUrl=http://localhost:5080 `
+     openskitime-live-timing:<version>
+   ```
+
+   Set desktop Cloud URL to `http://localhost:5080`. Test create, full state, events, WebSocket browser, Stop/Start, Refresh, container restart with the same key and Delete All Data. This project phase ran the same protocol as local server processes; a Docker-engine rehearsal remains to be run on a machine with Docker.
+
+4. **Push the image to the selected registry** with an immutable version/digest:
+
+   ```powershell
+   docker tag openskitime-live-timing:<version> <registry>/openskitime-live-timing:<version>
+   docker push <registry>/openskitime-live-timing:<version>
+   ```
+
+   Use the registry's supported login/identity mechanism. For private Azure Container Registry, provision an identity with AcrPull and configure the Container App's registry identity before pulling. No registry credential belongs in source or a committed parameter file.
+
+5. **Select/create the future Container Apps environment and Container App** in the intended Azure resource group. Use an existing environment if appropriate. Start with the autogenerated HTTPS FQDN as the public origin; the final domain can be added later. [The Bicep template](../deploy/live-timing/containerapp.bicep) takes environment resource ID, image, origin and a secure signing-key parameter. Its schema follows the [Container Apps ARM reference](https://learn.microsoft.com/en-us/azure/templates/microsoft.app/2024-03-01/containerapps).
+
+6. **Add the signing secret** (at least 32 random bytes, base64 encoded) and retain a recoverable copy in the operator's secret-management process. An illustrative CLI creation command, after registry/environment prerequisites, is:
+
+   ```powershell
+   # LIVE_SIGNING_KEY is supplied privately to this shell, not committed or printed.
+   az containerapp create --name <app-name> --resource-group <resource-group> --environment <environment-name> `
+     --image <registry>/openskitime-live-timing:<version> --ingress external --target-port 8080 `
+     --min-replicas 1 --max-replicas 1 --revisions-mode single --cpu 0.5 --memory 1Gi `
+     --secrets "live-signing-key=$env:LIVE_SIGNING_KEY" `
+     --env-vars LiveTiming__SigningKey=secretref:live-signing-key LiveTiming__TokenDays=14 `
+       LiveTiming__PublicBaseUrl=https://<app-fqdn> ASPNETCORE_HTTP_PORTS=8080 Logging__LogLevel__Default=Warning
+   ```
+
+   Do not use shell tracing or CLI debug logging with secret arguments. Alternatively deploy the Bicep template using a private, secured parameter source. The template contains no secret value. Creation/update options are described by [the official Azure CLI reference](https://learn.microsoft.com/en-us/cli/azure/containerapp).
+
+7. **Set all environment variables/limits** from the table and confirm secret references are used for the key. Set HTTP startup/readiness/liveness probes to `/health` on port 8080. The template prepares startup every two seconds (30 failures), readiness every five seconds and liveness every ten seconds. Keep min/max replicas both one and single-revision traffic.
+
+8. **Publish HTTPS ingress** with insecure public HTTP disabled. Test REST and WebSocket against the autogenerated FQDN before adding DNS; the container's internal HTTP port is not an Internet TCP service. Set `LiveTiming__PublicBaseUrl` to this confirmed HTTPS origin.
+
+9. **Attach `live.openskiti.me` later**: create the required domain-validation TXT record and subdomain CNAME to the Container App's generated FQDN, verify domain ownership, then bind a managed TLS certificate or an appropriate existing certificate. Follow [Azure custom-domain and managed-certificate instructions](https://learn.microsoft.com/en-us/azure/container-apps/custom-domains-managed-certificates), including their DNS/certificate renewal requirements. Update public base URL to `https://live.openskiti.me` and confirm `/r/{sessionId}` opens on it. No DNS operation was performed in this phase.
+
+10. **Verify health**: `GET https://<origin>/health` returns HTTP 200 and Running. A valid process health response does not prove that a race is currently published; inspect desktop's publish status separately.
+
+11. **Verify session creation and credentials**: create a synthetic session from the desktop/harness; check a fourteen-day expiry and public URL. A wrong-session, altered or expired token must return 401. Keep returned credentials private; use synthetic data only for the deployment test.
+
+12. **Verify publish/recovery/deletion**: full snapshot, starts, intermediate/finish, DNS/DNF/DSQ, correction, Stop/Start, Refresh, service restart with unchanged key/full resync and both deletion controls. Old state GET must return 404 after deletion. Normal desktop must not reuse a deleted token.
+
+13. **Verify the browser** on desktop and phone viewport. Confirm real SignalR/WebSocket updates without refresh, paused state and unavailable view after deletion. Rehearse an Internet outage while Local and timing capture continue. Delete all synthetic sessions after acceptance.
+
+## Operations
+
+**Update:** publish a new immutable image/version, update the Container App image, preserve the signing secret, single revision and replica limits. Treat an update as a cache reset; coordinate it away from a race if possible. During revision replacement existing WebSockets can disconnect. Client health detects missing state/network failure, reconnects and replaces state with the current snapshot. A brief stale/unavailable public view is expected; timing capture continues.
+
+**Restart:** every restart discards RAM race state. A running publisher's five-second health check sees a missing state; its bounded retry then republishes all runs. A stopped publisher resumes/refreshes manually. A browser reconnects and waits for the publisher. Do not rotate the key for an ordinary restart. Expired credentials create a new session on Start.
+
+**Logs:** use Container Apps log streaming/platform logs (for example `az containerapp logs show --name <app-name> --resource-group <group> --follow`) and desktop's local worker logs. Server logs have statuses/errors without race bodies or authorization headers. FIS debug wire logs belong only on the operator's machine and are unrelated to this server. Never copy a credential/secret into a support log.
+
+**Health:** HTTP `/health` reports that the ASP.NET process is running. Startup probe tolerates initialization; readiness controls ingress admission; liveness can restart a stuck process. Session health on desktop additionally verifies its public state exists. FIS keepalive/publish checks are independent of cloud server health.
+
+**Key rotation:** replace the signing secret and restart the revision so it reloads the key. Outstanding tokens then receive 401; clear the retained cloud credential for each affected competition in Windows Credential Manager and press Start to obtain a new session/URL. The first version deliberately has no overlap between old/new keys. Rotate during a planned maintenance window or immediately if a key is compromised. This also invalidates independently retained pre-deletion credentials.
+
+**Clear data:** use Delete All Data for one session. For an emergency service-wide purge, restart/deactivate the single service process to discard all RAM state and rotate the signing key so prior credentials cannot restore it. Stop active publishers first, then create new sessions only for races that should return. There is no persisted race cache/database to clean. RAM deletion revocation markers contain only ID/expiry and do not survive a process restart; they are bounded and expire with tokens.
+
+**Limits/load:** review session capacity, payload limits, public viewer connection count and memory before a large event. Creation rate limiting behind shared ingress may be conservative. This version has no shared-cache failover, device pairing, multi-replica scaling or long-term publication/archive. Those can be added at explicit boundaries later; moving this tested server from local process to Azure does not require new race/protocol code.

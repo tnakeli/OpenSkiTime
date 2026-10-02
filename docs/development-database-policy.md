@@ -1,0 +1,9 @@
+# Development database policy
+
+Before the first release, the rewrite has no EF migrations, migration history, model snapshot or automatic schema upgrades. `SqliteSeriesFileStore.CreateAsync` creates the current EF model with `EnsureCreated`, installs the immutable-history triggers and saves the series in a temporary file before publishing the new `.ost` file. Raw timing packets, timing audit, approved results and race-information revisions remain protected against SQL updates and deletes.
+
+The current development format marker is `OpenSkiTime.Development/3`. When making an incompatible schema change during development, increment the format marker (the model check constraint uses the same constant); create a new development series file. Opening an incompatible file reports this requirement without changing, deleting or upgrading the existing file. Opening never calls `EnsureCreated` or adds missing tables. Previously created `OpenSkiTime.New/1`, `OpenSkiTime.Development/1` and `OpenSkiTime.Development/2` development files are incompatible with this format. Version 2 added competition course length. Version 3 removes local race codes and limits race types to FIS and Club; no migration is implemented.
+
+Compatible files still support offline reopening and SQLite backup/transfer, including raw inputs and audit history. Tests verify creation without an EF migration-history table, incompatible-file preservation, backup/reopen, immutable history and interrupted-capture replay. No operator database is reset as an error-recovery action.
+
+Introduce migrations when releases begin, using the first released schema as the supported baseline. At that point implement and test upgrade backups, preservation and failure recovery. Legacy source and milestone notes remain historical references; their migrations are not part of the rewrite implementation.

@@ -1,5 +1,7 @@
 # M4 — Prepare runs
 
+Current storage policy (2026-10-02): database migrations and migration tests have been removed from the rewrite. New development files use the current model directly; incompatible files are rejected unchanged. Backup/reopen, replay and immutable-history checks remain. Migration references below describe historical milestone verification, not the current implementation. See [development database policy](development-database-policy.md).
+
 Implemented on `rewrite/codex`, 2026-09-27. The following records the M4 verification boundary. Timing capture and its Run 2 integration were subsequently added in [M5](m5-evidence.md); hardware/operator acceptance is recorded separately.
 
 ## Workflow and boundaries
@@ -8,7 +10,7 @@ Implemented on `rewrite/codex`, 2026-09-27. The following records the M4 verific
 - **Mark run started** records operator/time on the current list, locks its order and makes the next run available. Drawing alone does not reveal Run 2. Existing later-run lists remain accessible on upgraded files. This progress marker does not start timing capture.
 - Run 1 uses the cached FIS list effective on the competition date. Draw settings hold first bib and seed-group size. One **Draw** action saves a usable list; no approval, version picker, Jury checkbox or operator/reason form remains. Repeating the draw retains previous snapshots internally. Run 2 alone exposes the 30/15 reversal, stored with that run's list without modifying Run 1.
 - Run 2 takes manually entered/pasted classified Run 1 times/statuses for every starter. Input is validated as a complete set and saved with the next start-list revision. Navigation cannot silently discard changed input. This temporary input boundary does not implement timing capture, elapsed-time calculation or official results.
-- Each series file includes `Runs`, `StartLists` and `StartListEntries`. Transactions and optimistic revision checks protect writes. Stored snapshots retain inputs, seed, algorithm/rule version, automatic operator/action metadata, timestamps and source-list reference. Names, codes and course descriptions can be corrected without changing the order. Date, discipline, race type and run count remain protected because they determine the saved rules; deletion and redraw of started runs remain blocked.
+- Each series file includes `Runs`, `StartLists` and `StartListEntries`. Transactions and optimistic revision checks protect writes. Stored snapshots retain inputs, seed, algorithm/rule version, automatic operator/action metadata, timestamps and source-list reference. Names, codes and course descriptions can be corrected without changing the order. Date, discipline and run count remain protected because they determine the saved rules; deletion and redraw of started runs remain blocked. Race type can be changed after drawing (including Club → FIS); existing list snapshots retain their original type and recorded draw inputs.
 - Exports use the current saved ordering; printed headings use current competition metadata. TSV contains position and bib separately; the printable HTML is opened in a browser for Ctrl+P/PDF. The UI does not invoke a native printer or produce PDF directly. Old approval timestamps remain historical data; they no longer gate any workflow.
 
 ## Rules implemented

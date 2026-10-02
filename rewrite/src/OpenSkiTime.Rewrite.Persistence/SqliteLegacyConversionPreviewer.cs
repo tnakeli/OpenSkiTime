@@ -116,6 +116,7 @@ public sealed class SqliteLegacyConversionPreviewer : ILegacyConversionPreviewer
             if (race.LegacyDiscipline == 5) { warnings.Add($"Competition {race.Id} uses legacy KOMBI; review its discipline before conversion."); }
             if (race.LegacyDiscipline is < 0 or > 6) { warnings.Add($"Competition {race.Id} has an unknown discipline."); }
             if (race.LegacyRaceType is < 0 or > 3) { warnings.Add($"Competition {race.Id} has an unknown race type."); }
+            if (race.LegacyRaceType is 1 or 3) { warnings.Add($"Competition {race.Id} is treated as a local non-FIS competition; national/training classifications are not retained."); }
             if (race.LegacyGender is not null) { warnings.Add($"Competition {race.Id} has a gender restriction not represented in the new competition model."); }
             TryValidate(race.Values, warnings, $"Competition {race.Id}");
         }
@@ -182,7 +183,7 @@ public sealed class SqliteLegacyConversionPreviewer : ILegacyConversionPreviewer
         await using var command = db.CreateCommand();
         command.CommandText = """
             SELECT Id, EventSeriesId, Name, ShortLabel, Date, Discipline, RaceType, FisCode,
-              LocalRaceCode, Gender, CourseName, StartAltitudeMeters, FinishAltitudeMeters,
+              Gender, CourseName, StartAltitudeMeters, FinishAltitudeMeters,
               VerticalDropMeters, HomologationNumber, NumberOfRuns, NumberOfIntermediateTimes
             FROM Competitions
             """;
@@ -195,17 +196,13 @@ public sealed class SqliteLegacyConversionPreviewer : ILegacyConversionPreviewer
                 0 => Discipline.Slalom, 1 => Discipline.GiantSlalom, 2 => Discipline.SuperG,
                 3 => Discipline.Downhill, 4 => Discipline.AlpineCombined, _ => Discipline.Other,
             };
-            var raceType = reader.GetInt32(6) switch
-            {
-                0 => RaceType.Fis, 1 => RaceType.National, 2 => RaceType.Club,
-                3 => RaceType.Training, _ => RaceType.Club,
-            };
+            var raceType = reader.GetInt32(6) == 0 ? RaceType.Fis : RaceType.Club;
             var values = new CompetitionValues(reader.GetString(2), reader.GetString(3), Date(reader, 4),
-                discipline, raceType, reader.GetInt32(15), reader.GetInt32(16),
-                OptionalString(reader, 7), OptionalString(reader, 8), OptionalString(reader, 10),
-                OptionalInt(reader, 11), OptionalInt(reader, 12), OptionalInt(reader, 13), OptionalString(reader, 14));
+                discipline, raceType, reader.GetInt32(14), reader.GetInt32(15),
+                OptionalString(reader, 7), OptionalString(reader, 9),
+                OptionalInt(reader, 10), OptionalInt(reader, 11), OptionalInt(reader, 12), OptionalString(reader, 13));
             result.Add(new CompetitionSource(Id(reader, 0), Id(reader, 1), values,
-                reader.GetInt32(5), reader.GetInt32(6), OptionalInt(reader, 9)));
+                reader.GetInt32(5), reader.GetInt32(6), OptionalInt(reader, 8)));
         }
         return result;
     }

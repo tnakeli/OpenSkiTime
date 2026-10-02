@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="using:OpenSkiTime.Rewrite.Desktop" x:Class="OpenSkiTime.Rewrite.Desktop.LiveTimingView" x:CompileBindings="False">
+ <Grid ColumnDefinitions="*,Auto">
+  <ItemsControl ItemsSource="{Binding LiveChannels}" VerticalAlignment="Center">
+   <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="12" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+   <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Summary}" ToolTip.Tip="{Binding Detail}" FontSize="12" /></DataTemplate></ItemsControl.ItemTemplate>
+  </ItemsControl>
+  <Button Grid.Column="1" Content="Live timing…" Padding="8,1" MinHeight="0" Height="22" Margin="12,0,0,0">
+   <Button.Flyout><Flyout Placement="BottomEdgeAlignedRight"><ScrollViewer MaxHeight="540" Width="740"><StackPanel Spacing="6">
+  <ItemsControl ItemsSource="{Binding LiveChannels}"><ItemsControl.ItemTemplate><DataTemplate>
+   <Grid ColumnDefinitions="175,95,*,Auto" Margin="0,1">
+    <TextBlock Text="{Binding Label}" VerticalAlignment="Center" FontWeight="SemiBold" />
+    <TextBlock Grid.Column="1" Text="{Binding Status}" VerticalAlignment="Center" />
+    <TextBlock Grid.Column="2" Text="{Binding Detail}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Detail}" />
+    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+     <Button Content="Start" Command="{Binding StartCommand}" /><Button Content="Stop" Command="{Binding StopCommand}" /><Button Content="Refresh" Command="{Binding RefreshCommand}" />
+    </StackPanel>
+   </Grid>
+  </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+  <TextBlock Text="{Binding LiveTimingError}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
+   <StackPanel Spacing="6">
+    <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+     <TextBlock Text="Local URL" /><TextBox Grid.Column="1" Text="{Binding LiveLocalEndpoint}" />
+     <TextBlock Grid.Row="1" Text="Cloud URL" /><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LiveCloudEndpoint}" />
+     <TextBlock Grid.Row="2" Text="FIS transport" /><CheckBox Grid.Row="2" Grid.Column="1" Content="Use TCP (unchecked: HTTPS)" IsChecked="{Binding LiveFisUseTcp}" />
+     <TextBlock Grid.Row="3" Text="FIS HTTPS / TCP" /><StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Spacing="6"><TextBox Width="280" Text="{Binding LiveFisHttpsEndpoint}" /><TextBox Width="170" Text="{Binding LiveFisTcpHost}" /><NumericUpDown Width="90" Minimum="1" Maximum="65535" Value="{Binding LiveFisTcpPort}" /></StackPanel>
+     <TextBlock Grid.Row="4" Text="FIS password" /><TextBox Grid.Row="4" Grid.Column="1" PasswordChar="●" Text="{Binding LiveFisPassword}" />
+     <TextBlock Grid.Row="5" Text="Race time zone" /><TextBox Grid.Row="5" Grid.Column="1" Text="{Binding LiveTimeZone}" Watermark="Windows or IANA time zone ID" />
+    </Grid>
+    <TextBlock Text="Stop retains the last public state as paused. Delete and Delete All Data remove the entire session; Start then creates a new URL." TextWrapping="Wrap" />
+    <ItemsControl ItemsSource="{Binding LiveChannels}"><ItemsControl.ItemTemplate><DataTemplate>
+     <StackPanel IsVisible="{Binding IsStandalone}" Spacing="3">
+      <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding PublicUrl}" TextWrapping="Wrap" /><TextBlock Text="{Binding Expiration}" />
+      <StackPanel Orientation="Horizontal" Spacing="5"><Button Content="Copy URL" Command="{Binding CopyUrlCommand}" /><Button Content="Open URL" Command="{Binding OpenUrlCommand}" />
+       <Button Content="Delete session" Command="{Binding DeleteCommand}" /><Button Content="Delete All Data" Command="{Binding DeleteAllDataCommand}" Classes="dangerAction" /></StackPanel>
+     </StackPanel>
+    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+   </StackPanel>
+   </StackPanel></ScrollViewer></Flyout></Button.Flyout>
+  </Button>
+ </Grid>
+</UserControl>

@@ -1,0 +1,14 @@
+.git
+**/bin
+**/obj
+**/TestResults
+**/*.ost*
+**/*.db*
+**/*.sqlite*
+**/*.log
+**/*.secrets.json
+**/appsettings.*.Local.json
+.env*
+secrets
+artifacts
+timing-captures

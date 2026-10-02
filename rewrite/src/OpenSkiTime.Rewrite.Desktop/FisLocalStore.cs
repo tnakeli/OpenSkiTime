@@ -5,11 +5,13 @@ namespace OpenSkiTime.Rewrite.Desktop;
 // Credentials belong to the current Windows user. The original ZIP is kept outside event files and the repository.
 public sealed class FisLocalStore
 {
-    private readonly WindowsCredentialStore _credential = new("OpenSkiTime.FIS.ApiKey");
+    private readonly ICredentialStore _credential;
+    private readonly WindowsCredentialStore _memberCredential = new("OpenSkiTime.FIS.MemberToken");
     private readonly string _archivePath;
 
-    public FisLocalStore(string? localDataDirectory = null)
+    public FisLocalStore(string? localDataDirectory = null, ICredentialStore? apiCredential = null)
     {
+        _credential = apiCredential ?? new WindowsCredentialStore("OpenSkiTime.FIS.ApiKey");
         var directory = localDataDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime");
         _archivePath = Path.Combine(directory, "fis-points-list.zip");
@@ -38,6 +40,9 @@ public sealed class FisLocalStore
         _credential.Save(key.Trim());
     }
     public void RemoveApiKey() => _credential.Remove();
+    public string? ReadMemberToken() => _memberCredential.Read();
+    public void SaveMemberToken(string token) { ArgumentNullException.ThrowIfNull(token); _memberCredential.Save(token.Trim()); }
+    public void RemoveMemberToken() => _memberCredential.Remove();
 }
 public sealed class FisPointsDownloader(HttpClient client)
 {

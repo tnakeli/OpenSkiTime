@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Domain;
@@ -7,11 +8,15 @@ namespace OpenSkiTime.Rewrite.Persistence;
 
 public sealed class SqliteSeriesFileStore : ISeriesFileStore
 {
-    public async Task<ISeriesFileSession> CreateAsync(string filePath, SeriesValues values, CancellationToken ct = default)
+    public async Task<ISeriesFileSession> CreateAsync(string filePath, SeriesValues values,
+        IReadOnlyList<CompetitionValues>? competitions = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(values);
         var fullPath = FullPath(filePath);
         var validated = values.Validated();
+        var initialCompetitions = (competitions ?? []).Select(x => x.Validated()).ToArray();
+        if (initialCompetitions.Select(x => x.ShortLabel).Distinct(StringComparer.OrdinalIgnoreCase).Count() != initialCompetitions.Length)
+        { throw new DomainValidationException("Calendar competition short labels must be unique."); }
         var parent = Path.GetDirectoryName(fullPath)!;
         if (!Directory.Exists(parent))
         {
@@ -28,10 +33,26 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         {
             await using (var db = await NewContextAsync(temporary, SqliteOpenMode.ReadWriteCreate, ct))
             {
-                await db.Database.MigrateAsync(ct);
+                await db.Database.EnsureCreatedAsync(ct);
+                await db.Database.ExecuteSqlRawAsync("""
+                    CREATE TRIGGER RawTimingPackets_NoUpdate BEFORE UPDATE ON RawTimingPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER RawTimingPackets_NoDelete BEFORE DELETE ON RawTimingPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingAudit_NoUpdate BEFORE UPDATE ON TimingAudit BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingAudit_NoDelete BEFORE DELETE ON TimingAudit BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER ApprovedResults_NoUpdate BEFORE UPDATE ON ApprovedResults BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER ApprovedResults_NoDelete BEFORE DELETE ON ApprovedResults BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER RaceInformation_NoUpdate BEFORE UPDATE ON RaceInformation BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER RaceInformation_NoDelete BEFORE DELETE ON RaceInformation BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    """, ct);
                 var row = new SeriesRow { Id = Guid.NewGuid(), Revision = 1 };
                 Assign(row, validated);
                 db.Series.Add(row);
+                foreach (var competition in initialCompetitions)
+                {
+                    var race = new CompetitionRow { Id = Guid.NewGuid(), SeriesId = row.Id };
+                    SqliteSeriesFileSession.Assign(race, competition);
+                    db.Competitions.Add(race);
+                }
                 await db.SaveChangesAsync(ct);
             }
 
@@ -62,23 +83,6 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         try
         {
             await VerifyFormatAsync(fullPath, ct);
-            await using (var db = await NewContextAsync(fullPath, SqliteOpenMode.ReadWrite, ct))
-            {
-                var known = db.Database.GetMigrations().ToHashSet(StringComparer.Ordinal);
-                var applied = (await db.Database.GetAppliedMigrationsAsync(ct)).ToHashSet(StringComparer.Ordinal);
-                if (applied.Except(known).Any())
-                {
-                    throw new SeriesFileException("This file uses a newer or unknown schema. Open it with a compatible version.");
-                }
-
-                if (known.Except(applied).Any())
-                {
-                    var backupPath = BeforeUpgradePath(fullPath);
-                    await BackupFileAsync(fullPath, backupPath, ct);
-                    await db.Database.MigrateAsync(ct);
-                }
-            }
-
             var session = new SqliteSeriesFileSession(fullPath);
             await session.ReadAsync(ct);
             return session;
@@ -103,9 +107,6 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         }
     }
 
-    private static string BeforeUpgradePath(string path)
-        => path + $".before-upgrade-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.ost";
-
     private static async Task VerifyFormatAsync(string path, CancellationToken ct)
     {
         await using var connection = new SqliteConnection(ConnectionString(path, SqliteOpenMode.ReadOnly));
@@ -124,7 +125,7 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         if (reader.GetInt64(0) != 1 || reader.IsDBNull(1) || reader.IsDBNull(2)
             || reader.GetString(1) != SeriesDbContext.Format || reader.GetString(2) != SeriesDbContext.Format)
         {
-            throw new SeriesFileException("The file has an invalid or unsupported event series format.");
+            throw new SeriesFileException("This development file uses an incompatible format. Create a new event series file; existing files are not upgraded during development.");
         }
 
         await using var integrity = connection.CreateCommand();
@@ -270,6 +271,14 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
         }, ct);
 
     public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision, CancellationToken ct = default)
+        => SaveCompetitionAsync(id, values, expectedRevision, false, ct);
+
+    public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
+        bool saveCourseToAllRaces, CancellationToken ct = default)
+        => SaveCompetitionAsync(id, values, expectedRevision, saveCourseToAllRaces, false, ct);
+
+    public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
+        bool saveCourseToAllRaces, bool saveTdToAllRaces, CancellationToken ct = default)
         => WriteAsync(async db =>
         {
             var validated = values.Validated();
@@ -280,15 +289,42 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
                 row = await db.Competitions.SingleOrDefaultAsync(x => x.Id == existingId && x.SeriesId == series.Id, ct)
                     ?? throw new SeriesFileException("The competition no longer exists in this event series.");
                 if (!Values(row).HasSameStartOrderRules(validated) && await db.Runs.AnyAsync(x => x.CompetitionId == existingId, ct))
-                { throw new DomainValidationException("Discipline, race type, date and run count affect the saved starting order and cannot be changed after drawing. Names, codes and course details can be edited."); }
+                { throw new DomainValidationException("Discipline, date and run count affect the saved starting order and cannot be changed after drawing. Race type, names, codes and course details can be edited."); }
             }
             else
             {
                 row = new CompetitionRow { Id = Guid.NewGuid(), SeriesId = series.Id };
-                db.Competitions.Add(row);
             }
 
+            var shared = new List<(CompetitionRow Row, CompetitionValues Values)>();
+            if (saveCourseToAllRaces || saveTdToAllRaces)
+            {
+                foreach (var other in await db.Competitions.Where(x => x.SeriesId == series.Id && x.Id != row.Id).ToListAsync(ct))
+                {
+                    var updated = Values(other);
+                    if (saveCourseToAllRaces) { updated = updated with
+                    {
+                        CourseName = validated.CourseName,
+                        HomologationNumber = validated.HomologationNumber,
+                        StartAltitudeMeters = validated.StartAltitudeMeters,
+                        FinishAltitudeMeters = validated.FinishAltitudeMeters,
+                        VerticalDropMeters = validated.VerticalDropMeters,
+                        CourseLengthMeters = validated.CourseLengthMeters
+                    }; }
+                    if (saveTdToAllRaces)
+                    {
+                        var td = validated.Calendar?.TechnicalDelegate;
+                        var calendar = updated.Calendar;
+                        if (calendar is null && td is not null)
+                        { calendar = new CompetitionCalendarData(FisSeason.FromDate(updated.Date), "", "", "", "", null); }
+                        updated = updated with { Calendar = calendar is null ? null : calendar with { TechnicalDelegate = td } };
+                    }
+                    shared.Add((other, updated.Validated()));
+                }
+            }
+            if (id is null) { db.Competitions.Add(row); }
             Assign(row, validated);
+            foreach (var (other, updated) in shared) { Assign(other, updated); }
             series.Revision++;
         }, ct, allowCaptureOwner: true);
 
@@ -300,6 +336,8 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
                 ?? throw new SeriesFileException("The competition no longer exists in this event series.");
             if (await db.Runs.AnyAsync(x => x.CompetitionId == id, ct))
             { throw new DomainValidationException("This competition has start-list history and cannot be removed."); }
+            if (await db.Set<RaceInformationRow>().AnyAsync(x => x.CompetitionId == id, ct))
+            { throw new DomainValidationException("This competition has saved race information and cannot be removed."); }
             db.Competitions.Remove(competition);
             series.Revision++;
         }, ct);
@@ -373,7 +411,7 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
         return ValueTask.CompletedTask;
     }
 
-    private static void Assign(CompetitionRow row, CompetitionValues values)
+    internal static void Assign(CompetitionRow row, CompetitionValues values)
     {
         row.Name = values.Name;
         row.ShortLabel = values.ShortLabel;
@@ -384,17 +422,19 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
         row.RunCount = values.RunCount;
         row.IntermediateCount = values.IntermediateCount;
         row.FisCode = values.FisCode;
-        row.LocalRaceCode = values.LocalRaceCode;
         row.CourseName = values.CourseName;
         row.StartAltitudeMeters = values.StartAltitudeMeters;
         row.FinishAltitudeMeters = values.FinishAltitudeMeters;
         row.VerticalDropMeters = values.VerticalDropMeters;
         row.HomologationNumber = values.HomologationNumber;
+        row.CourseLengthMeters = values.CourseLengthMeters;
+        row.CalendarJson = values.Calendar is null ? null : JsonSerializer.Serialize(values.Calendar);
     }
 
     private static CompetitionValues Values(CompetitionRow row) => new(
         row.Name, row.ShortLabel, row.Date, row.Discipline, row.RaceType,
-        row.RunCount, row.IntermediateCount, row.FisCode, row.LocalRaceCode,
+        row.RunCount, row.IntermediateCount, row.FisCode,
         row.CourseName, row.StartAltitudeMeters, row.FinishAltitudeMeters,
-        row.VerticalDropMeters, row.HomologationNumber);
+        row.VerticalDropMeters, row.HomologationNumber,
+        row.CalendarJson is null ? null : JsonSerializer.Deserialize<CompetitionCalendarData>(row.CalendarJson), row.CourseLengthMeters);
 }

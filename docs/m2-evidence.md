@@ -1,5 +1,7 @@
 # M2 competitor desk evidence
 
+Current storage policy (2026-10-02): database migrations and migration tests have been removed from the rewrite. New development files use the current model directly; incompatible files are rejected unchanged. Backup/reopen, replay and immutable-history checks remain. Migration references below describe historical milestone verification, not the current implementation. See [development database policy](development-database-policy.md).
+
 M2 adds a competitor grid to the rewrite desktop application. Competitors belong to one event series; participation and optional imported bib references belong to one competition. A bib is normally blank. Actual bib allocation and FIS/local draw rules belong to Draw in M4. Birth year and gender produce a category suggestion; missing data or overlapping rules remain visible for review. No automatic category assignment is persisted.
 
 Rows save on committed grid-row edits or through **Save row**. **Discard draft** restores the current unsaved row; **Undo saved** reverses the last persisted row edit. Competition/file changes are refused while a row has unsaved changes. Category rules, filtering and grouping are available in the same desk. Readiness is advisory. Competitor removal requires confirmation.
