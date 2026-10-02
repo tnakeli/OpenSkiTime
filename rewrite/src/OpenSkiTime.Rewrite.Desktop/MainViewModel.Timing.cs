@@ -130,7 +130,7 @@ public sealed partial class MainViewModel
     public bool ShowTimingTotal => TimingRun > 1;
     public bool CanPrepareNextTimedRun => _shownTiming?.Complete == true && TimingRun == 1 && TimingCompetition?.Values.RunCount == 2;
     public string TimingContext => TimingCompetition is { } c
-        ? $"{c.Values.ShortLabel}  /  Run {TimingRun} of {c.Values.RunCount}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
+        ? $"{c.Values.ShortLabel}  /  Run {TimingRun} of {c.Values.RunCount}{CompetitionCodexLabel(c.Values)}"
         : "Timing · choose a competition and run";
     public string TimingCaptureLabel => IsTimingConnected ? TimingContext + " · " + TimingConnection : "";
     public string TimingDeviceHelp => IsTimyUsb ? "PC Timer mode · install the ALGE USB driver once. Native USB uses the vendor library."

@@ -3,7 +3,15 @@ using System.Text;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
-public sealed class WindowsCredentialStore(string target)
+public interface ICredentialStore
+{
+    bool Exists();
+    string? Read();
+    void Save(string key);
+    void Remove();
+}
+
+public sealed class WindowsCredentialStore(string target) : ICredentialStore
 {
     public bool Exists()
     {

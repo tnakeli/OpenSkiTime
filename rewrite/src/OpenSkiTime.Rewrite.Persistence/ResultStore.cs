@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Xml.Linq;
+using System.Text.Json;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Domain;
 
@@ -20,6 +21,7 @@ internal sealed class ApprovedResultRow
     public byte[] Xml { get; set; } = [];
     public decimal CalculatedPenalty { get; set; }
     public decimal AppliedPenalty { get; set; }
+    public string? InformationJson { get; set; }
 }
 
 internal sealed partial class SqliteSeriesFileSession : IResultStore
@@ -55,6 +57,7 @@ internal sealed partial class SqliteSeriesFileSession : IResultStore
             if (competition.RunCount is not (1 or 2)
                 || (competition.RunCount == 2) != (request.SecondListId is not null))
             { throw new DomainValidationException("Include the final run before approving results."); }
+            request.Information?.Validate(competition.RunCount);
             var first = await ReadTimingAsync(request.FirstListId, ct);
             if (first.List.Plan.CompetitionId != request.CompetitionId || first.List.Plan.RunNumber != 1)
             { throw new DomainValidationException("Choose this competition's Run 1 start list."); }
@@ -71,6 +74,13 @@ internal sealed partial class SqliteSeriesFileSession : IResultStore
             { throw new DomainValidationException("A newer start-list revision exists. Review its results first."); }
             if (request.SourceFingerprint != ResultSourceFingerprint.Create(first, second))
             { throw new DomainValidationException("Timing or start-list data changed since review. Reload results before approving."); }
+            if (request.Information is { } information)
+            {
+                var informationRevision = (await db.Set<RaceInformationRow>().Where(x => x.CompetitionId == request.CompetitionId)
+                    .MaxAsync(x => (int?)x.Revision, ct) ?? 0) + 1;
+                db.Add(new RaceInformationRow { CompetitionId = request.CompetitionId, Revision = informationRevision,
+                    ValuesJson = JsonSerializer.Serialize(information), SavedAt = DateTimeOffset.UtcNow });
+            }
             var row = new ApprovedResultRow
             {
                 Id = Guid.NewGuid(), CompetitionId = request.CompetitionId,
@@ -79,7 +89,8 @@ internal sealed partial class SqliteSeriesFileSession : IResultStore
                 FirstListId = first.List.Id, SecondListId = second?.List.Id,
                 SourceFingerprint = request.SourceFingerprint, ApprovedAt = DateTimeOffset.UtcNow,
                 ApprovedBy = request.ApprovedBy.Trim(), XmlFileName = request.XmlFileName,
-                Xml = request.Xml, CalculatedPenalty = request.CalculatedPenalty, AppliedPenalty = request.AppliedPenalty
+                Xml = request.Xml, CalculatedPenalty = request.CalculatedPenalty, AppliedPenalty = request.AppliedPenalty,
+                InformationJson = request.Information is null ? null : JsonSerializer.Serialize(request.Information)
             };
             db.ApprovedResults.Add(row);
             return ToApproval(row);
@@ -89,5 +100,6 @@ internal sealed partial class SqliteSeriesFileSession : IResultStore
 
     private static ApprovedResult ToApproval(ApprovedResultRow x) => new(x.Id, x.CompetitionId, x.Revision,
         x.FirstListId, x.SecondListId, x.SourceFingerprint, x.ApprovedAt, x.ApprovedBy,
-        x.XmlFileName, x.Xml, x.CalculatedPenalty, x.AppliedPenalty);
+        x.XmlFileName, x.Xml, x.CalculatedPenalty, x.AppliedPenalty,
+        x.InformationJson is null ? null : JsonSerializer.Deserialize<RaceInformation>(x.InformationJson));
 }

@@ -45,6 +45,7 @@ public sealed partial class MainViewModel
     private Timing.TimingSnapshot? _sourceTiming;
     private string? _sourceTimingVersion;
     public bool HasCapturedRunInput => _sourceTiming is not null;
+    public bool IsDrawFis => DrawCompetition?.Values.RaceType == RaceType.Fis;
     public bool CanPasteDrawResults => CanEditDrawResults && !HasCapturedRunInput;
     public string RunInputHelp => HasCapturedRunInput
         ? "Results come from Timing. Resolve observations and classify every starter there; then choose the reversal and create the start list."
@@ -254,7 +255,7 @@ public sealed partial class MainViewModel
                     : RunResultInput.FormatTime(sourceTimes[entry.Entrant.CompetitorId])));
             }
             DrawState = DrawRunStarted ? "Run started" : "Start list ready";
-            DrawListInfo = $"{revision.Plan.Entries.Count} starters · FIS list {revision.Plan.PointsList.Code}";
+            DrawListInfo = $"{revision.Plan.Entries.Count} starters" + (IsDrawFis ? $" · FIS list {revision.Plan.PointsList.Code}" : "");
             DrawHelp = DrawRunStarted ? "Run started. Starting order is locked; select the next run from Start lists."
                 : revision.HasCapture ? "Timing capture has begun. The start list is locked; the run starts with the first assigned start impulse."
                 : "Start list saved. The run starts automatically with the first assigned start impulse.";
@@ -281,13 +282,14 @@ public sealed partial class MainViewModel
                     : "Run 1 results loaded from Timing. Choose the reversal and create the start list.";
         }
         DrawContext = DrawCompetition is { } c
-            ? $"{c.Values.ShortLabel}  /  Run {DrawRun} of {c.Values.RunCount}  ·  Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"}"
+            ? $"{c.Values.ShortLabel}  /  Run {DrawRun} of {c.Values.RunCount}{CompetitionCodexLabel(c.Values)}"
             : "Choose a competition";
         NotifyDraw();
     }
 
     private void NotifyDraw()
     {
+        OnPropertyChanged(nameof(IsDrawFis));
         OnPropertyChanged(nameof(IsFirstDrawRun)); OnPropertyChanged(nameof(IsLaterDrawRun));
         OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(DrawActionLabel));
         OnPropertyChanged(nameof(CanExportDraw)); OnPropertyChanged(nameof(HasDrawSource));

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
+using OpenSkiTime.Rewrite.Domain;
 using OpenSkiTime.Rewrite.Persistence;
 using Xunit;
 
@@ -58,7 +59,8 @@ public class LegacyConversionPreviewTests
             Assert.Contains(source.Warnings, x => x.Contains("Orphan participation", StringComparison.Ordinal));
             var levi = source.Series.Single(x => x.SourceId == seriesA);
             Assert.Equal("Front slope", Assert.Single(levi.Competitions).Values.CourseName);
-            Assert.Equal("LOCAL-1", levi.Competitions[0].Values.LocalRaceCode);
+            Assert.Equal(RaceType.Club, levi.Competitions[0].Values.RaceType);
+            Assert.Equal("Front slope", levi.Competitions[0].Values.CourseName);
             Assert.Equal(2010, levi.Competitors.Single(x => x.SourceId == athleteA).Values.BirthYear);
             Assert.Equal("FIN123", levi.Competitors.Single(x => x.SourceId == athleteA).Values.FederationCode);
             Assert.Equal(7, levi.Competitors.Single(x => x.SourceId == athleteA).SeriesBibReference);

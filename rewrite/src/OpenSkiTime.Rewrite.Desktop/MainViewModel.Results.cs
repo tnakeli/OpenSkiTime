@@ -31,26 +31,9 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _resultsMaximum = string.Empty;
     [ObservableProperty] private string _resultsAdder = string.Empty;
     [ObservableProperty] private string _resultsCategory = string.Empty;
-    [ObservableProperty] private string _resultsTdFirstName = string.Empty;
-    [ObservableProperty] private string _resultsTdLastName = string.Empty;
-    [ObservableProperty] private string _resultsTdNation = string.Empty;
-    [ObservableProperty] private string _resultsChiefFirstName = string.Empty;
-    [ObservableProperty] private string _resultsChiefLastName = string.Empty;
-    [ObservableProperty] private string _resultsChiefNation = string.Empty;
-    [ObservableProperty] private string _resultsSetter1FirstName = string.Empty;
-    [ObservableProperty] private string _resultsSetter1LastName = string.Empty;
-    [ObservableProperty] private string _resultsSetter1Nation = string.Empty;
-    [ObservableProperty] private string _resultsRun1Gates = string.Empty;
-    [ObservableProperty] private string _resultsRun1Turns = string.Empty;
-    [ObservableProperty] private string _resultsRun1Start = string.Empty;
-    [ObservableProperty] private string _resultsSetter2FirstName = string.Empty;
-    [ObservableProperty] private string _resultsSetter2LastName = string.Empty;
-    [ObservableProperty] private string _resultsSetter2Nation = string.Empty;
-    [ObservableProperty] private string _resultsRun2Gates = string.Empty;
-    [ObservableProperty] private string _resultsRun2Turns = string.Empty;
-    [ObservableProperty] private string _resultsRun2Start = string.Empty;
     [ObservableProperty] private ApprovedResult? _selectedResultApproval;
     public bool ResultsHasSecondRun => ResultsCompetition?.Values.RunCount == 2;
+    public bool ResultsIsFis => ResultsCompetition?.Values.RaceType == RaceType.Fis;
     public bool ResultsReady => _resultRace is not null && _reviewedPenalty is not null;
 
     partial void OnResultsMinimumChanged(string value) => InvalidatePenaltyReview();
@@ -68,8 +51,16 @@ public sealed partial class MainViewModel
     partial void OnResultsCompetitionChanged(CompetitionDetails? value)
     {
         OnPropertyChanged(nameof(ResultsHasSecondRun));
+        OnPropertyChanged(nameof(ResultsIsFis));
         OnPropertyChanged(nameof(WindowTitle));
         if (IsResultsSection) { _ = LoadResultsAsync(); }
+        else if (value is not null && !workspace.IsOpen)
+        {
+            ResultsJury.Clear(); ResultsRuns.Clear();
+            var empty = RaceInformation.Empty(value.Values);
+            foreach (var row in empty.Jury.Where(x => x.Function != "TechnicalDelegate")) { ResultsJury.Add(new(row.Function, row.Person)); }
+            foreach (var row in empty.Runs) { ResultsRuns.Add(new(row)); }
+        }
     }
 
     [RelayCommand]
@@ -80,10 +71,14 @@ public sealed partial class MainViewModel
         _reviewedPenalty = null;
         ResultRows.Clear(); ResultBestClassified.Clear(); ResultBestStarted.Clear(); ResultApprovals.Clear();
         ResultsPenaltySummary = string.Empty;
+        ResultsStatistics = string.Empty;
         var competition = ResultsCompetition;
         if (competition is null)
         {
-            ResultsState = "No FIS competition in this series. Create one in Competitions with Race type Fis and a FIS code before drawing its start list.";
+            RememberInformationDraft(); StopInformationTracking(); _informationKey = null;
+            ResultsJury.Clear(); ResultsRuns.Clear(); ResultsCategory = "";
+            ResultsPointsList = ""; ResultsPointsValidity = "";
+            ResultsState = "No FIS competition in this series. Check FIS competition and enter a FIS codex in Competitions; existing start lists are preserved.";
             OnPropertyChanged(nameof(ResultsReady));
             return;
         }
@@ -91,6 +86,7 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             _current = await workspace.ReadAsync();
+            if (load != _resultsLoad) { return; }
             var currentCompetition = _current.Competitions.FirstOrDefault(x => x.Id == competition.Id);
             if (currentCompetition is null || currentCompetition.Values != competition.Values)
             {
@@ -102,6 +98,8 @@ public sealed partial class MainViewModel
                 ResultsState = $"{competition.Values.ShortLabel} is a {competition.Values.RaceType} race, not a FIS competition. Select a FIS race in Competitions.";
                 return;
             }
+            await LoadRaceInformationAsync(competition, load);
+            if (load != _resultsLoad) { return; }
             var desk = await workspace.ReadStartListsAsync(competition.Id);
             var first = desk.Revisions.Where(x => x.Plan.RunNumber == 1).OrderByDescending(x => x.Revision).FirstOrDefault();
             if (first is null) { ResultsState = "Draw Run 1 before preparing results."; return; }
@@ -122,7 +120,10 @@ public sealed partial class MainViewModel
             var secondTiming = secondData is null ? null : TimingReplay.Restore(secondData, new Devices.AlgeDecoderFactory());
             _resultRace = FisRaceResults.Assemble(firstData.List, firstTiming, secondData?.List, secondTiming);
             _resultFingerprint = ResultSourceFingerprint.Create(firstData, secondData);
-            ResultsPointsList = $"FIS list {_resultRace.FirstList.Plan.PointsList.Code} · valid {_resultRace.FirstList.Plan.PointsList.ValidFrom:yyyy-MM-dd} – {_resultRace.FirstList.Plan.PointsList.ValidTo:yyyy-MM-dd}";
+            var pointsSource = _resultRace.FirstList.Plan.PointsList;
+            ResultsPointsList = _fisList?.ListCode == pointsSource.Code ? _fisList.DisplayName : $"{pointsSource.Code}: FIS points list (drawn snapshot)";
+            ResultsPointsValidity = $"Effective {pointsSource.ValidFrom:yyyy-MM-dd}–{pointsSource.ValidTo:yyyy-MM-dd}";
+            ResultsStatistics = $"Number of competitors {_resultRace.Rows.Count}, number of NSA {_resultRace.Rows.Select(x => x.Entry.Entrant.Athlete.Nation).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Count()} · F = {FisPenalty.FValue(competition.Values.Discipline)} (2026/27 rules)";
             PopulateResultRows();
             var unresolved = firstTiming.Unresolved + (secondTiming?.Unresolved ?? 0);
             ResultsState = $"{_resultRace.Rows.Count(x => x.Status == TimingStatus.Finished)} classified · {_resultRace.Rows.Count(x => x.Status != TimingStatus.Finished)} not classified. Review penalty and race information with the TD."
@@ -191,38 +192,33 @@ public sealed partial class MainViewModel
         {
             if (_resultRace is null || _resultFingerprint is null || ResultsCompetition is null || _current is null)
             { throw new DomainValidationException("Reload complete race results first."); }
+            if (!await FlushRaceInformationAsync()) { throw new DomainValidationException("Resolve unsaved race information before approving results."); }
             var penalty = CalculateCurrentPenalty();
             if (_reviewedPenalty is null || penalty.Rules != _reviewedPenalty.Rules
                 || penalty.Calculated != _reviewedPenalty.Calculated || penalty.Applied != _reviewedPenalty.Applied)
             { throw new DomainValidationException("Calculate and review the current penalty with the TD before approving results."); }
-            var metadata = new FisXmlDetails(ResultsCategory,
-                new(ResultsTdFirstName, ResultsTdLastName, ResultsTdNation),
-                new(ResultsChiefFirstName, ResultsChiefLastName, ResultsChiefNation),
-                ResultsHasSecondRun
-                    ? [RunDetails(ResultsRun1Gates, ResultsRun1Turns, ResultsRun1Start,
-                        ResultsSetter1FirstName, ResultsSetter1LastName, ResultsSetter1Nation),
-                       RunDetails(ResultsRun2Gates, ResultsRun2Turns, ResultsRun2Start,
-                        ResultsSetter2FirstName, ResultsSetter2LastName, ResultsSetter2Nation)]
-                    : [RunDetails(ResultsRun1Gates, ResultsRun1Turns, ResultsRun1Start,
-                        ResultsSetter1FirstName, ResultsSetter1LastName, ResultsSetter1Nation)]);
+            var information = CurrentRaceInformation();
+            var td = information.Jury.Single(x => x.Function == "TechnicalDelegate").Person;
+            var chief = information.Jury.Single(x => x.Function == "ChiefRace").Person;
+            var metadata = new FisXmlDetails(information.Category, td, chief,
+                information.Runs.Select(x => new FisRunXmlDetails(x.Gates ?? 0, x.TurningGates ?? 0, x.StartTime, x.CourseSetter)).ToArray(), information);
             var xmlRace = _resultRace with { FirstList = _resultRace.FirstList with
             { Plan = _resultRace.FirstList.Plan with { Competition = ResultsCompetition.Values } } };
             var xml = FisResultXml.Create(xmlRace, _current.Values, penalty, metadata);
+            var approvedCompetitionId = ResultsCompetition.Id;
+            var approvedPath = workspace.FilePath;
+            var expectedRevision = _current.Revision;
             var saved = await workspace.ApproveResultAsync(new(ResultsCompetition.Id, _resultRace.FirstList.Id,
                 _resultRace.SecondList?.Id, _resultFingerprint, _current.Revision,
-                ResultsTdFirstName.Trim() + " " + ResultsTdLastName.Trim(),
-                FisResultXml.FileName(xmlRace, _current.Values), xml, penalty.Calculated, penalty.Applied));
-            _current = _current with { Revision = _current.Revision + 1 };
-            ResultApprovals.Insert(0, saved); SelectedResultApproval = saved;
+                td.FirstName + " " + td.LastName,
+                FisResultXml.FileName(xmlRace, _current.Values), xml, penalty.Calculated, penalty.Applied, information));
+            if (workspace.FilePath == approvedPath && _current is not null)
+            { _current = _current with { Revision = Math.Max(_current.Revision, expectedRevision + 1) }; }
+            if (workspace.FilePath == approvedPath && ResultsCompetition?.Id == approvedCompetitionId)
+            { ResultApprovals.Insert(0, saved); SelectedResultApproval = saved; }
             SetStatus($"TD approval saved as immutable revision {saved.Revision}. Export {saved.XmlFileName} when ready.");
         });
     }
-
-    private static FisRunXmlDetails RunDetails(string gates, string turns, string start,
-        string first, string last, string nation)
-        => new(int.TryParse(gates, CultureInfo.InvariantCulture, out var g) ? g : 0,
-            int.TryParse(turns, CultureInfo.InvariantCulture, out var t) ? t : 0, start,
-            new(first, last, nation));
 
     [RelayCommand]
     private async Task ExportApprovedXmlAsync()

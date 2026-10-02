@@ -1,5 +1,7 @@
 # FIS points-list integration
 
+Public API race-information lookups, separate Member Section personal access tokens for XML test uploads, per-run metadata and optional weather browsing are described in [Results race information](results-race-information.md). The restricted general OAuth2 API is not used.
+
 The Competitors view can read a cached alpine FIS points list offline. Expand **Update from FIS** below the grid and above category rules to stage updates to existing competitors by exact Code match, or select multiple search results and stage new competitors. Both use the same yellow-cell review and atomic **Commit Changes** operation as grid editing and paste. Bulk update skips duplicate local Codes and rows with pending edits, except Code-only rows that need their FIS details filled in. Adding from FIS does not enter a competitor in any competition.
 
 Category rules remain stored in each portable event-series database. **Save rules for reuse** writes a separate local rule set under the user's application data; **Load saved rules (replace)** validates and atomically replaces the current series' rules. **Update categories** recalculates the read-only category labels from the current rules and competitor birth year/gender. Saved reusable rules are local to this computer and must be loaded explicitly into another series; the series file itself remains self-contained.

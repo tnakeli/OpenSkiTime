@@ -59,6 +59,47 @@
                 </StackPanel>
               </Border>
             </Grid>
+            <Button Name="BrowseSeriesCalendarButton" Content="Browse FIS calendar" Command="{Binding BrowseSeriesCalendarCommand}" HorizontalAlignment="Left" Classes="secondaryAction" />
+            <Border Classes="subtleSurface" Padding="12" IsVisible="{Binding IsSeriesCalendarOpen}">
+              <StackPanel Spacing="10">
+                <WrapPanel IsEnabled="{Binding !IsSeriesCalendarBusy}">
+                  <StackPanel Classes="field" Width="110" Margin="0,0,12,0"><TextBlock Text="FIS SEASON" Classes="fieldLabel" /><TextBox Text="{Binding SeriesCalendarSeason}" /></StackPanel>
+                  <StackPanel Classes="field" Width="110" Margin="0,0,12,0"><TextBlock Text="NATION" Classes="fieldLabel" /><TextBox Text="{Binding SeriesCalendarNation}" Watermark="All" MaxLength="3" /></StackPanel>
+                  <StackPanel Classes="field" Width="320" Margin="0,0,12,0"><TextBlock Text="LOCATION / EVENT" Classes="fieldLabel" /><TextBox Text="{Binding SeriesCalendarSearch}" Watermark="Search calendar" /></StackPanel>
+                  <Button Content="Load calendar" Command="{Binding BrowseSeriesCalendarCommand}" VerticalAlignment="Bottom" />
+                </WrapPanel>
+                <TextBlock Text="{Binding SeriesCalendarStatus}" Classes="supportingText" TextWrapping="Wrap" />
+                <TextBlock Text="Import the event and its supported races. Existing course settings and missing values are preserved." Classes="supportingText" TextWrapping="Wrap" />
+                <DataGrid Name="SeriesCalendarEventsGrid" Classes="raceGrid" ItemsSource="{Binding SeriesCalendarEvents}" SelectedItem="{Binding SelectedSeriesCalendarEvent}"
+                          AutoGenerateColumns="False" IsReadOnly="True" Height="220" SelectionMode="Single">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="START" Binding="{Binding StartDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
+                    <DataGridTextColumn Header="END" Binding="{Binding EndDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
+                    <DataGridTextColumn Header="LOCATION" Binding="{Binding Location}" Width="180" />
+                    <DataGridTextColumn Header="NATION" Binding="{Binding Nation}" Width="80" />
+                    <DataGridTextColumn Header="EVENT" Binding="{Binding Name}" Width="*" />
+                    <DataGridTextColumn Header="RACES" Binding="{Binding CompetitionCount}" Width="75" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <DataGrid Name="SeriesCalendarCompetitionsGrid" Classes="raceGrid" ItemsSource="{Binding SeriesCalendarCompetitions}" AutoGenerateColumns="False" IsReadOnly="True" Height="130">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="DATE" Binding="{Binding Date, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
+                    <DataGridTextColumn Header="CODEX" Binding="{Binding FisCode}" Width="85" />
+                    <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Discipline}" Width="140" />
+                    <DataGridTextColumn Header="CATEGORY" Binding="{Binding Calendar.Category}" Width="100" />
+                    <DataGridTextColumn Header="GENDER" Binding="{Binding Calendar.Gender}" Width="85" />
+                    <DataGridTextColumn Header="TD SURNAME" Binding="{Binding Calendar.TechnicalDelegate.LastName}" Width="160" />
+                    <DataGridTextColumn Header="TD FIRST NAME" Binding="{Binding Calendar.TechnicalDelegate.FirstName}" Width="140" />
+                    <DataGridTextColumn Header="TD NATION" Binding="{Binding Calendar.TechnicalDelegate.Nation}" Width="95" />
+                    <DataGridTextColumn Header="TD NUMBER" Binding="{Binding Calendar.TechnicalDelegate.Number}" Width="95" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <StackPanel Orientation="Horizontal" Spacing="8" IsEnabled="{Binding !IsSeriesCalendarBusy}">
+                  <Button Name="UseSeriesCalendarEventButton" Content="Use selected event" Command="{Binding UseSeriesCalendarEventCommand}" Classes="primaryAction" />
+                  <Button Content="Close calendar" Command="{Binding CloseSeriesCalendarCommand}" Classes="secondaryAction" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
             <StackPanel Spacing="12">
               <Grid ColumnDefinitions="2*,12,2*,12,2*,12,100,12,110">
                 <StackPanel Grid.Column="0" Classes="field">
@@ -121,7 +162,8 @@
               </StackPanel>
               <Button Grid.Column="1" Content="Add competition" Command="{Binding NewCompetitionCommand}" Classes="primaryAction" />
             </Grid>
-            <DataGrid Classes="raceGrid" ItemsSource="{Binding Competitions}" SelectedItem="{Binding SelectedCompetition}" AutoGenerateColumns="False"
+            <DataGrid Name="CompetitionsGrid" Classes="raceGrid" ItemsSource="{Binding Competitions}" SelectedItem="{Binding SelectedCompetition}" AutoGenerateColumns="False"
+                      SelectionMode="Single"
                       IsReadOnly="True" MinHeight="86" MaxHeight="210" RowHeight="36" ColumnHeaderHeight="30"
                       GridLinesVisibility="Horizontal" HeadersVisibility="Column" HorizontalGridLinesBrush="{DynamicResource LineBrush}">
               <DataGrid.Resources>
@@ -136,11 +178,19 @@
               </DataGrid.Resources>
               <DataGrid.Columns>
                 <DataGridTextColumn Header="" Binding="{Binding ImportMarker}" IsReadOnly="True" Width="48" />
-                <DataGridTextColumn Header="DATE" Binding="{Binding Values.Date}" Width="130" />
-                <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.ShortLabel}" Width="*" />
-                <DataGridTextColumn Header="PUBLIC NAME" Binding="{Binding Values.Name}" Width="2*" />
-                <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Values.Discipline}" Width="135" />
-                <DataGridTextColumn Header="RUNS" Binding="{Binding Values.RunCount}" Width="80" />
+                <DataGridTextColumn Header="DATE" Binding="{Binding Values.Date, StringFormat='{}{0:dd.MM.yyyy}'}" Width="105" />
+                <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.ShortLabel}" Width="150" />
+                <DataGridTextColumn Header="EVENT NAME" Binding="{Binding Values.Name}" Width="*" MinWidth="160" />
+                <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Values.Discipline}" Width="105" />
+                <DataGridTextColumn Header="CODEX" Binding="{Binding Values.FisCode}" Width="90" />
+                <DataGridTextColumn Header="CATEGORY" Binding="{Binding Values.Calendar.Category}" Width="100" />
+                <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Calendar.Gender}" Width="85" />
+                <DataGridTextColumn Header="LOCATION" Binding="{Binding Values.Calendar.Location}" Width="100" />
+                <DataGridTextColumn Header="COURSE" Binding="{Binding Values.CourseName}" Width="105" />
+                <DataGridTextColumn Header="HOMOLOGATION" Binding="{Binding Values.HomologationNumber}" Width="140" />
+                <DataGridTextColumn Header="TD SURNAME" Binding="{Binding Values.Calendar.TechnicalDelegate.LastName}" Width="150" />
+                <DataGridTextColumn Header="TD NUMBER" Binding="{Binding Values.Calendar.TechnicalDelegate.Number}" Width="110" />
+                <DataGridTextColumn Header="RUNS" Binding="{Binding Values.RunCount}" Width="75" />
               </DataGrid.Columns>
             </DataGrid>
             <Border Classes="subtleSurface" Padding="16,13" IsVisible="{Binding IsCompetitionEditing}">
@@ -161,8 +211,8 @@
                       <TextBox Text="{Binding CompetitionShortLabel}" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" Classes="field">
-                      <TextBlock Text="PUBLIC NAME *" Classes="fieldLabel" />
-                      <TextBox Text="{Binding CompetitionName}" ToolTip.Tip="Long name reserved for future public-facing views." />
+                      <TextBlock Text="EVENT NAME *" Classes="fieldLabel" />
+                      <TextBox Text="{Binding CompetitionName}" ToolTip.Tip="Event name used in reports and result XML." />
                     </StackPanel>
                     <StackPanel Grid.Column="4" Classes="field">
                       <TextBlock Text="DATE *  ·  DD.MM.YYYY" Classes="fieldLabel" />
@@ -180,10 +230,7 @@
                       <TextBlock Text="DISCIPLINE" Classes="fieldLabel" />
                       <ComboBox ItemsSource="{Binding Disciplines}" SelectedItem="{Binding CompetitionDiscipline}" />
                     </StackPanel>
-                    <StackPanel Grid.Column="2" Classes="field">
-                      <TextBlock Text="RACE TYPE" Classes="fieldLabel" />
-                      <ComboBox ItemsSource="{Binding RaceTypes}" SelectedItem="{Binding CompetitionRaceType}" />
-                    </StackPanel>
+                    <CheckBox Name="CompetitionFisCheckBox" Grid.Column="2" Content="FIS competition" IsChecked="{Binding IsCompetitionFis}" VerticalAlignment="Bottom" MinHeight="34" />
                     <StackPanel Grid.Column="4" Classes="field">
                       <TextBlock Text="RUNS" Classes="fieldLabel" />
                       <NumericUpDown Value="{Binding CompetitionRunCount}" Minimum="1" Maximum="9" FormatString="0" />
@@ -193,30 +240,54 @@
                       <NumericUpDown Value="{Binding CompetitionIntermediateCount}" Minimum="0" Maximum="20" FormatString="0" />
                     </StackPanel>
                   </Grid>
-                  <Grid ColumnDefinitions="*,12,*">
-                    <StackPanel Grid.Column="0" Classes="field">
-                      <TextBlock Text="FIS CODE" Classes="fieldLabel" />
-                      <TextBox Text="{Binding CompetitionFisCode}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="2" Classes="field">
-                      <TextBlock Text="LOCAL RACE CODE" Classes="fieldLabel" />
-                      <TextBox Text="{Binding CompetitionLocalRaceCode}" />
-                    </StackPanel>
-                  </Grid>
+                  <StackPanel IsVisible="{Binding IsCompetitionFis}" Spacing="10">
+                    <WrapPanel>
+                      <StackPanel Name="CompetitionFisCodeField" Classes="field" IsVisible="{Binding IsCompetitionFis}" Width="180" Margin="0,0,10,0">
+                        <TextBlock Text="FIS CODEX" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionFisCode}" />
+                      </StackPanel>
+                      <StackPanel Classes="field" Width="110" Margin="0,0,10,0"><TextBlock Text="FIS SEASON" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionSeason}" MaxLength="4" /></StackPanel>
+                      <Button Name="GetCompetitionDataButton" Content="Get competition data" Command="{Binding GetCompetitionDataCommand}" IsEnabled="{Binding !IsCompetitionDataBusy}" Classes="secondaryAction" VerticalAlignment="Bottom" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding CompetitionCalendarStatus}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding HasCompetitionCalendarStatus}" />
+                    <Grid ColumnDefinitions="2*,12,110,12,140,12,110">
+                      <StackPanel Grid.Column="0" Classes="field"><TextBlock Text="LOCATION" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionLocation}" /></StackPanel>
+                      <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionNation}" MaxLength="3" /></StackPanel>
+                      <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="FIS CATEGORY" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionCalendarCategory}" /></StackPanel>
+                      <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="GENDER" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding CompetitionGenders}" SelectedItem="{Binding CompetitionGender}" /></StackPanel>
+                    </Grid>
+                    <TextBlock Text="TECHNICAL DELEGATE" Classes="fieldLabel" />
+                    <Grid ColumnDefinitions="*,12,*,12,110,12,110">
+                      <StackPanel Grid.Column="0" Classes="field"><TextBlock Text="SURNAME" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdLastName}" /></StackPanel>
+                      <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="FIRST NAME" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdFirstName}" /></StackPanel>
+                      <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdNation}" MaxLength="3" /></StackPanel>
+                      <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="TD NUMBER" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdNumber}" /></StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding CompetitionTdOriginalName}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding CompetitionTdOriginalName}" />
+                  </StackPanel>
                 </StackPanel>
-                <Expander Header="Course and homologation details" HorizontalAlignment="Stretch">
-                  <StackPanel Margin="0,10,0,2" Spacing="12">
+                  <StackPanel Name="CompetitionCourseDetails" Margin="0,10,0,2" Spacing="12">
+                    <TextBlock Text="COURSE AND HOMOLOGATION" Classes="fieldLabel" />
+                    <StackPanel IsVisible="{Binding IsCompetitionFis}" Spacing="8">
+                      <Button Name="BrowseCompetitionHomologationsButton" Content="Browse FIS homologations" Command="{Binding BrowseCompetitionHomologationsCommand}" IsEnabled="{Binding !IsHomologationBusy}" HorizontalAlignment="Left" Classes="secondaryAction" />
+                      <TextBlock Text="{Binding CompetitionHomologationStatus}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding HasCompetitionHomologationStatus}" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,10,Auto" IsVisible="{Binding HasCompetitionHomologations}">
+                      <ComboBox Name="CompetitionHomologationPicker" ItemsSource="{Binding CompetitionHomologations}" SelectedItem="{Binding SelectedCompetitionHomologation}">
+                        <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" /></DataTemplate></ComboBox.ItemTemplate>
+                      </ComboBox>
+                      <Button Grid.Column="2" Content="Apply homologation" Command="{Binding ApplyCompetitionHomologationCommand}" Classes="secondaryAction" />
+                    </Grid>
                     <Grid ColumnDefinitions="2*,12,*">
                       <StackPanel Grid.Column="0" Classes="field">
                         <TextBlock Text="COURSE" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionCourseName}" />
                       </StackPanel>
-                      <StackPanel Grid.Column="2" Classes="field">
+                      <StackPanel Name="CompetitionHomologationField" Grid.Column="2" Classes="field" IsVisible="{Binding IsCompetitionFis}">
                         <TextBlock Text="HOMOLOGATION" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionHomologation}" />
                       </StackPanel>
                     </Grid>
-                    <Grid ColumnDefinitions="*,12,*,12,*">
+                    <Grid ColumnDefinitions="*,12,*,12,*,12,*">
                       <StackPanel Grid.Column="0" Classes="field">
                         <TextBlock Text="START ALTITUDE · M" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionStartAltitude}" />
@@ -229,9 +300,12 @@
                         <TextBlock Text="VERTICAL DROP · M" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionVerticalDrop}" />
                       </StackPanel>
+                      <StackPanel Grid.Column="6" Classes="field">
+                        <TextBlock Text="COURSE LENGTH · M" Classes="fieldLabel" />
+                        <TextBox Text="{Binding CompetitionCourseLength}" />
+                      </StackPanel>
                     </Grid>
                   </StackPanel>
-                </Expander>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <Button Content="Save competition" Command="{Binding SaveCompetitionCommand}" Classes="primaryAction" />
                   <Button Content="Remove competition" Command="{Binding RemoveCompetitionCommand}" Classes="dangerAction" IsVisible="{Binding SelectedCompetition}" />
@@ -378,6 +452,12 @@
                 <Button Grid.Column="4" Content="Remove key" Command="{Binding RemoveFisApiKeyCommand}" Classes="secondaryAction" />
               </Grid>
               <TextBlock Text="{Binding FisApiKeyStatus}" Classes="supportingText" />
+              <TextBlock Text="FIS Member Section personal access token for XML test uploads. Required scopes: competition.files.write and competition.files.read." Classes="supportingText" />
+              <Grid ColumnDefinitions="340,8,Auto,8,Auto" HorizontalAlignment="Left">
+                <TextBox PasswordChar="•" Text="{Binding FisMemberTokenInput}" Watermark="Member Section personal access token" MaxLength="1024" />
+                <Button Grid.Column="2" Content="Save token" Command="{Binding SaveFisMemberTokenCommand}" Classes="primaryAction" />
+                <Button Grid.Column="4" Content="Remove token" Command="{Binding RemoveFisMemberTokenCommand}" Classes="secondaryAction" />
+              </Grid>
               <TextBlock Text="The key stays in this Windows account's credential store. Downloaded FIS lists stay in local application data." Classes="supportingText" />
             </StackPanel></Border>
           </StackPanel>

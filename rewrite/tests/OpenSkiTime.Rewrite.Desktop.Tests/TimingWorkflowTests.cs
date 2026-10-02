@@ -169,6 +169,7 @@ public partial class DesktopWorkflowTests
             vm.NewCompetitionCommand.Execute(null);
             vm.CompetitionShortLabel = "SL2";
             vm.CompetitionName = "Second slalom";
+            vm.CompetitionFisCode = "1235";
             await vm.SaveCompetitionCommand.ExecuteAsync(null);
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(2, vm.Competitions.Count);

@@ -1,5 +1,7 @@
 # M5 — Timing workstation
 
+Current storage policy (2026-10-02): database migrations and migration tests have been removed from the rewrite. New development files use the current model directly; incompatible files are rejected unchanged. Backup/reopen, replay and immutable-history checks remain. Migration references below describe historical milestone verification, not the current implementation. See [development database policy](development-database-policy.md).
+
 The subsequent operator-requested race-board redesign and its verification are recorded in [Timing race control](timing-race-control.md). The original M5 evidence below describes the earlier capture-first UI.
 
 Implemented on `rewrite/codex`, 2026-09-27. Scope was explicitly expanded to bring Timy 2/3 USB, MT1 USB/serial and ALGE Results adapters forward from M6. Software implementation is ready for operator testing; physical-device acceptance is still open. M7 publication has not started.

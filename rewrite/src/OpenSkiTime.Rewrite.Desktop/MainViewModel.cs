@@ -11,7 +11,8 @@ public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
     CategoryRulePresetStore? categoryRulePresetStore = null,
-    RecentSeriesStore? recentSeriesStore = null, TimingPreferencesStore? timingPreferencesStore = null) : ObservableObject, IDisposable
+    RecentSeriesStore? recentSeriesStore = null, TimingPreferencesStore? timingPreferencesStore = null,
+    HttpClient? informationHttp = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private readonly RecentSeriesStore _recentSeriesStore = recentSeriesStore ?? new();
@@ -26,7 +27,11 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public ObservableCollection<CompetitionDetails> Competitions { get; } = [];
     public ObservableCollection<CompetitionDetails> FisCompetitions { get; } = [];
     public IReadOnlyList<Discipline> Disciplines { get; } = Enum.GetValues<Discipline>();
-    public IReadOnlyList<RaceType> RaceTypes { get; } = Enum.GetValues<RaceType>();
+    public bool IsCompetitionFis
+    {
+        get => CompetitionRaceType == RaceType.Fis;
+        set => CompetitionRaceType = value ? RaceType.Fis : RaceType.Club;
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEditingSeries))]
@@ -116,6 +121,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             return;
         }
         ActiveSection = section;
+        if (section == WorkspaceSection.Competitions && Competitions.Count == 0 && !IsCompetitionEditing) { NewCompetition(); }
     }
 
     [ObservableProperty]
@@ -124,10 +130,12 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime"
         : IsTimingSection ? $"{FileLabel} · {TimingContext}"
         : IsDrawSection && DrawCompetition is { } c
-            ? $"{FileLabel} · {c.Values.ShortLabel} · Codex {c.Values.FisCode ?? c.Values.LocalRaceCode ?? "—"} · Run {DrawRun}"
+            ? $"{FileLabel} · {c.Values.ShortLabel}{CompetitionCodexLabel(c.Values)} · Run {DrawRun}"
             : IsResultsSection && ResultsCompetition is { } resultRace
                 ? $"{FileLabel} · {resultRace.Values.ShortLabel} · Codex {resultRace.Values.FisCode ?? "—"} · Results"
             : FileLabel;
+    private static string CompetitionCodexLabel(CompetitionValues competition)
+        => competition.RaceType == RaceType.Fis ? $" · Codex {competition.FisCode ?? "—"}" : "";
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";
     [ObservableProperty] private bool _isError;
     [ObservableProperty] private string _name = string.Empty;
@@ -136,7 +144,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty] private string _startDateText = TodayText();
     [ObservableProperty] private string _endDateText = TodayText();
     [ObservableProperty] private string _nation = "FIN";
-    [ObservableProperty] private string _season = string.Empty;
+    [ObservableProperty] private string _season = FisSeason.SeriesLabel(DateOnly.FromDateTime(DateTime.Today));
     [ObservableProperty] private CompetitionDetails? _selectedCompetition;
     [ObservableProperty] private bool _isCompetitionEditing;
     [ObservableProperty] private string _competitionEditorTitle = "Competition";
@@ -144,12 +152,15 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty] private string _competitionShortLabel = string.Empty;
     [ObservableProperty] private string _competitionDateText = TodayText();
     [ObservableProperty] private Discipline _competitionDiscipline = Discipline.Slalom;
-    [ObservableProperty] private RaceType _competitionRaceType = RaceType.Club;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCompetitionFis))]
+    [NotifyPropertyChangedFor(nameof(HasCompetitionHomologations))]
+    private RaceType _competitionRaceType = RaceType.Fis;
     [ObservableProperty] private int _competitionRunCount = 2;
     [ObservableProperty] private int _competitionIntermediateCount;
     [ObservableProperty] private string _competitionFisCode = string.Empty;
-    [ObservableProperty] private string _competitionLocalRaceCode = string.Empty;
     [ObservableProperty] private string _competitionCourseName = string.Empty;
+    [ObservableProperty] private string _competitionCourseLength = string.Empty;
     [ObservableProperty] private string _competitionStartAltitude = string.Empty;
     [ObservableProperty] private string _competitionFinishAltitude = string.Empty;
     [ObservableProperty] private string _competitionVerticalDrop = string.Empty;
@@ -169,13 +180,14 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         CompetitionRunCount = value.Values.RunCount;
         CompetitionIntermediateCount = value.Values.IntermediateCount;
         CompetitionFisCode = value.Values.FisCode ?? string.Empty;
-        CompetitionLocalRaceCode = value.Values.LocalRaceCode ?? string.Empty;
         CompetitionCourseName = value.Values.CourseName ?? string.Empty;
+        CompetitionCourseLength = value.Values.CourseLengthMeters?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
         CompetitionStartAltitude = value.Values.StartAltitudeMeters?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
         CompetitionFinishAltitude = value.Values.FinishAltitudeMeters?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
         CompetitionVerticalDrop = value.Values.VerticalDropMeters?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
         CompetitionHomologation = value.Values.HomologationNumber ?? string.Empty;
         IsCompetitionEditing = true;
+        LoadCompetitionCalendar(value.Values);
     }
 
     [RelayCommand]
@@ -189,8 +201,10 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             return;
         }
         IsCreatingNew = true;
+        ResetSeriesCalendar();
         ActiveSection = WorkspaceSection.Series;
-        Name = Location = Organizer = Season = string.Empty;
+        Name = Location = Organizer = string.Empty;
+        Season = FisSeason.SeriesLabel(DateOnly.FromDateTime(DateTime.Today));
         StartDateText = EndDateText = TodayText();
         Nation = "FIN";
         IsCompetitionEditing = false;
@@ -217,15 +231,16 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
+            if (!await FlushRaceInformationAsync()) { return; }
             var values = DraftSeries().Validated();
             var path = await dialogs.ChooseNewAsync(SafeFileName(values.Name));
             if (path is null) { return; }
-            var details = await workspace.CreateAsync(path, values);
+            var details = await workspace.CreateAsync(path, values, competitions: _pendingCalendarCompetitions);
             Apply(details);
             IsOpen = true;
             IsCreatingNew = false;
             await LoadCompetitorDeskAsync();
-            ActiveSection = WorkspaceSection.Competitions;
+            SwitchSection(WorkspaceSection.Competitions);
             RememberCurrentFile();
             SetStatus("Event series created and saved.");
         });
@@ -260,6 +275,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     private async Task OpenPathAsync(string path)
     {
+        if (!await FlushRaceInformationAsync()) { return; }
         var details = await workspace.OpenAsync(path);
         ClearActiveRace();
         ResetTimingUi();
@@ -298,7 +314,9 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
+            if (!await FlushRaceInformationAsync()) { return; }
             await workspace.CloseAsync();
+            StopInformationTracking(); _informationKey = null;
             ClearActiveRace();
             ResetTimingUi();
             _current = null;
@@ -332,6 +350,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
+            if (!await FlushRaceInformationAsync()) { return; }
             var revision = _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
             var details = await workspace.SaveSeriesAsync(DraftSeries(), revision);
             Apply(details);
@@ -346,6 +365,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             EnsureDeskClean();
             if (_current is null) { throw new SeriesFileException("Open an event series first."); }
+            if (!await FlushRaceInformationAsync()) { return; }
             var path = await dialogs.ChooseBackupAsync(SafeFileName(_current.Values.Name));
             if (path is null) { return; }
             await workspace.BackupAsync(path);
@@ -360,15 +380,17 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         SelectedCompetition = null;
         _editingCompetitionId = null;
         CompetitionEditorTitle = "New competition";
-        CompetitionName = CompetitionShortLabel = CompetitionFisCode = CompetitionLocalRaceCode = string.Empty;
+        CompetitionName = CompetitionShortLabel = CompetitionFisCode = string.Empty;
         CompetitionCourseName = CompetitionStartAltitude = CompetitionFinishAltitude = string.Empty;
         CompetitionVerticalDrop = CompetitionHomologation = string.Empty;
+        CompetitionCourseLength = string.Empty;
         CompetitionDateText = StartDateText;
         CompetitionDiscipline = Discipline.Slalom;
-        CompetitionRaceType = RaceType.Club;
+        CompetitionRaceType = RaceType.Fis;
         CompetitionRunCount = 2;
         CompetitionIntermediateCount = 0;
         IsCompetitionEditing = true;
+        LoadCompetitionCalendar(null);
     }
 
     [RelayCommand]
@@ -377,12 +399,14 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
+            if (!await FlushRaceInformationAsync()) { return; }
             var revision = workspace.Timing?.IsActive == true
                 ? (await workspace.ReadAsync()).Revision
                 : _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
             var values = DraftCompetition().Validated();
             var details = await workspace.SaveCompetitionAsync(_editingCompetitionId, values, revision);
             var id = _editingCompetitionId;
+            if (id is { } savedId) { InvalidateCompetitionInformation([savedId]); }
             Apply(details);
             SelectedCompetition = id is null
                 ? details.Competitions.Single(c => c.Values.ShortLabel.Equals(values.ShortLabel, StringComparison.OrdinalIgnoreCase))
@@ -418,10 +442,11 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     private CompetitionValues DraftCompetition() => new(
         CompetitionName, CompetitionShortLabel, AsDate(CompetitionDateText, "Competition date"),
         CompetitionDiscipline, CompetitionRaceType, CompetitionRunCount, CompetitionIntermediateCount,
-        CompetitionFisCode, CompetitionLocalRaceCode, CompetitionCourseName,
+        CompetitionFisCode, CompetitionCourseName,
         OptionalInt(CompetitionStartAltitude, "Start altitude"),
         OptionalInt(CompetitionFinishAltitude, "Finish altitude"),
-        OptionalInt(CompetitionVerticalDrop, "Vertical drop"), CompetitionHomologation);
+        OptionalInt(CompetitionVerticalDrop, "Vertical drop"), CompetitionHomologation,
+        DraftCompetitionCalendar(), OptionalInt(CompetitionCourseLength, "Course length"));
 
     private static int? OptionalInt(string value, string field)
     {
@@ -461,6 +486,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         if (_current?.Id != details.Id)
         {
+            ResetSeriesCalendar();
             ClearActiveRace();
             ResetTimingUi();
             _settingDraw = true;
@@ -483,7 +509,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         Nation = details.Values.Nation;
         Season = details.Values.Season;
         Competitions.Clear();
-        FisCompetitions.Clear();
+            FisCompetitions.Clear();
         foreach (var competition in details.Competitions)
         {
             Competitions.Add(competition);

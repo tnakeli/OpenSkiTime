@@ -30,8 +30,9 @@ public partial class MainWindow : Window
         {
             if (DataContext is not MainViewModel vm || _timingCloseReady) { return; }
             if (!vm.CanLeaveDrawInput()) { e.Cancel = true; return; }
-            if (!vm.IsTimingConnected) { return; }
             e.Cancel = true;
+            if (!await vm.FlushRaceInformationAsync()) { return; }
+            if (!vm.IsTimingConnected) { _timingCloseReady = true; Close(); return; }
             if (await vm.StopTimingForCloseAsync()) { _timingCloseReady = true; Close(); }
         };
         AddHandler(KeyDownEvent, OnGridKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -503,7 +504,7 @@ public partial class MainWindow : Window
         }
 
         var calendar = new Avalonia.Controls.Calendar { MinWidth = 290, FirstDayOfWeek = DayOfWeek.Monday };
-        var monthLabel = new TextBlock { Margin = new Thickness(10, 8, 10, 0), FontWeight = Avalonia.Media.FontWeight.SemiBold };
+        var monthLabel = new TextBlock { Name = "DatePickerMonthLabel", Margin = new Thickness(10, 8, 10, 0), FontWeight = Avalonia.Media.FontWeight.SemiBold };
         var format = button.Name == "FisDatePickerButton" ? "yyyy-MM-dd" : "dd.MM.yyyy";
         if (DateTime.TryParseExact(input.Text, button.Name == "FisDatePickerButton"
                 ? ["yyyy-MM-dd"] : ["dd.MM.yyyy", "d.M.yyyy"],
