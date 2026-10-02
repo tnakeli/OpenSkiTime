@@ -323,7 +323,7 @@ public sealed partial class MainViewModel
                     return new DrawEntrant(x.Id, x.Values, points);
                 }).ToArray();
                 plan = FisStartOrder.FirstRun(competition.Id, competition.Values, _drawGender!.Value, entrants,
-                    new(list.ListCode, list.ValidFrom, list.ValidTo), new(FirstDrawGroup, 30, DrawFirstBib),
+                    new(list.ListCode, list.ValidFrom, list.ValidTo, list.PenaltyRules), new(FirstDrawGroup, 30, DrawFirstBib),
                     Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
             }
             else

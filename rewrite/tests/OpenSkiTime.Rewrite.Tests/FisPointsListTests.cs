@@ -55,4 +55,33 @@ public sealed class FisPointsListTests
         using var writer = new StreamWriter(zip.CreateEntry(name).Open(), new UTF8Encoding(false));
         writer.Write(contents);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RuleTablesAreJoinedByListCategoryGenderAndRaceLevel(bool wrongList)
+    {
+        var bytes = Archive("1\tAL\t990001\tTEST\tSynthetic\tW\t2002-02-03\tFIN\t\tTest Club\t\tA\n", "");
+        using var output = new MemoryStream(); output.Write(bytes);
+        using (var zip = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            Add(zip, "AL1327cat.csv", "Recid\tListid\tSeasoncode\tCatcode\tMinfispoints\tMaxfispoints\tLastupdate\n"
+                + $"1\t{(wrongList ? 999 : 465)}\t2027\tTEST\t29.00\t888.00\t2026-09-22\n");
+            Add(zip, "AL1327dis.csv", "Recid\tListid\tSeasoncode\tDisciplinecode\tGender\tZvalue\tFvalue\tMaxpoints\tAdder0\tAdder1\tAdder2\tAdder3\tAdder4\n"
+                + "1\t465\t2027\tSL\tW\t0.00\t731\t166\t0\t1\t2\t7\t9\n"
+                + "2\t465\t2027\tSL\tM\t0.00\t732\t167\t0\t1\t2\t6\t9\n");
+            Add(zip, "Fiscategory.txt", "Recid\tSectorcode\tCatcode\tDescription\tDisplayorder\tInuse\tPublished\tRacelevel\tCalautoload\tLastupdate\n"
+                + "1\tAL\tTEST\tSynthetic category\t1\t1\t1\t3\t1\t2026-09-22\n");
+        }
+        if (wrongList) { Assert.Throws<DomainValidationException>(() => FisPointsListReader.Read(output.ToArray())); return; }
+        var list = FisPointsListReader.Read(output.ToArray());
+        var profile = list.PenaltyRules!.Resolve("TEST", Discipline.Slalom, Gender.Female);
+        Assert.Equal(731, profile.FValue); Assert.Equal(166m, profile.MaximumPoints);
+        Assert.Equal(29m, profile.Minimum); Assert.Equal(888m, profile.Maximum); Assert.Equal(7m, profile.Adder);
+        Assert.Equal(6m, list.PenaltyRules.Resolve("TEST", Discipline.Slalom, Gender.Male).Adder);
+        Assert.Throws<DomainValidationException>(() => list.PenaltyRules.Resolve("UNKNOWN", Discipline.Slalom, Gender.Female));
+        var snapshot = new PointsListSource(list.ListCode, list.ValidFrom, list.ValidTo, list.PenaltyRules);
+        var roundTrip = System.Text.Json.JsonSerializer.Deserialize<PointsListSource>(System.Text.Json.JsonSerializer.Serialize(snapshot));
+        Assert.Equal(profile, roundTrip!.PenaltyRules!.Resolve("TEST", Discipline.Slalom, Gender.Female));
+    }
 }

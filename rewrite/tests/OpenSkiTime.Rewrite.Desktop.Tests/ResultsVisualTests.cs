@@ -34,8 +34,9 @@ public sealed class ResultsVisualTests
             run.AddForerunnerCommand.Execute(null);
             run.Forerunners[0].FirstName = "Test"; run.Forerunners[0].LastName = "RUNNER"; run.Forerunners[0].Nation = "FIN";
         }
-        vm.ResultsPenaltySummary = "A 85.00 + B 80.00 − C 62.00 = 10.30 · adder 0.00 · applied 10.30";
-        vm.ResultsMinimum = "0"; vm.ResultsMaximum = "999"; vm.ResultsAdder = "0";
+        vm.ResultsPenaltySummary = "A · best 5 in top 10: 85.00    B · best 5 starters: 80.00    C · corresponding capped race points: 62.00\nCalculated penalty (A + B − C) / 10 = 10.30\nCorrection (Z): 0.00    Category adder: 8.00    Minimum: 23.00    Maximum: 999.00\nApplied penalty: 23.00";
+        vm.ResultsRuleSource = "FIS list 1327 · FIS · race level 3 · Female · FIS Points Rules 2026/27";
+        vm.ResultsRuleValues = "F 730   Points cap 165.00   Correction (Z) 0.00   Category adder 8.00   Minimum 23.00   Maximum 999.00";
         var approval = new ApprovedResult(Guid.NewGuid(), vm.ResultsCompetition.Id, 1, Guid.NewGuid(), null,
             "synthetic-fingerprint", DateTimeOffset.UnixEpoch, "Synthetic TD", "FIN9991.xml", [1], 10m, 10m);
         vm.ResultApprovals.Add(approval); vm.SelectedResultApproval = approval;
@@ -53,12 +54,16 @@ public sealed class ResultsVisualTests
                 vm.ResultBestClassified.Add(new(i, "RACER " + i, "15.00", "15.00", "12.00", ""));
                 vm.ResultBestStarted.Add(new(i, "RACER " + i, "15.00", "15.00", "—", ""));
             }
+            if (i <= 10) { vm.ResultTopTen.Add(new(i, "RACER " + i, "15.00", i <= 5 ? "15.00" : "—", "12.00", i <= 5 ? "Best 5" : "", i.ToString(System.Globalization.CultureInfo.InvariantCulture), "990001", "2007", "FIN", "Finished", i <= 5 ? "12.00" : "—")); }
         }
         window.Content = new ResultsView { DataContext = vm };
         window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
         var titles = window.GetVisualDescendants().OfType<TextBlock>().Select(x => x.Text).ToArray();
         Assert.True(Array.IndexOf(titles, "Race information") < Array.IndexOf(titles, "Penalty calculation"));
         Assert.True(Array.IndexOf(titles, "Penalty calculation") < Array.IndexOf(titles, "XML file"));
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Calculate"));
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text?.StartsWith("Enter the category", StringComparison.Ordinal) == true);
+        Assert.Contains(vm.ResultsRuleValues, titles);
         Assert.DoesNotContain(window.GetVisualDescendants().OfType<Expander>(), x => x.Header?.ToString()?.StartsWith("FIS suggestions", StringComparison.Ordinal) == true);
         var send = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SendApprovedXmlTestButton");
         Assert.Same(vm.SendApprovedXmlTestCommand, send.Command); Assert.True(send.IsEnabled);
@@ -72,6 +77,8 @@ public sealed class ResultsVisualTests
             var scroller = window.GetVisualDescendants().OfType<ScrollViewer>().First();
             scroller.Offset = new Vector(0, 700); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-runs.png"));
+            scroller.Offset = new Vector(0, 1650); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-penalty.png"));
             scroller.Offset = new Vector(0, scroller.Extent.Height); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-xml.png"));
         }

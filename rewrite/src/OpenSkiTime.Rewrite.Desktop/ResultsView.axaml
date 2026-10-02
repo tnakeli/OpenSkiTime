@@ -35,26 +35,30 @@
               <DataGridTextColumn Header="RACE PTS" Binding="{Binding RacePoints}" Width="100" />
             </DataGrid.Columns>
           </DataGrid>
-          <TextBlock Text="Enter the category values from the FIS points list effective on race day. No values are assumed." Classes="supportingText" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <StackPanel Classes="field" Width="115"><TextBlock Text="MINIMUM" Classes="fieldLabel" /><TextBox Text="{Binding ResultsMinimum}" Watermark="0.00" /></StackPanel>
-            <StackPanel Classes="field" Width="115"><TextBlock Text="MAXIMUM" Classes="fieldLabel" /><TextBox Text="{Binding ResultsMaximum}" Watermark="999.00" /></StackPanel>
-            <StackPanel Classes="field" Width="115"><TextBlock Text="ADDER" Classes="fieldLabel" /><TextBox Text="{Binding ResultsAdder}" Watermark="0.00" /></StackPanel>
-            <Button Content="Calculate" Command="{Binding CalculateResultsPenaltyCommand}" Classes="primaryAction" VerticalAlignment="Bottom" />
-            <TextBlock Text="{Binding ResultsPenaltySummary}" VerticalAlignment="Bottom" Margin="8,0,0,6" />
-          </StackPanel>
-          <Grid ColumnDefinitions="*,12,*">
-            <StackPanel Grid.Column="0" Spacing="4"><TextBlock Text="A · FIVE BEST CLASSIFIED IN TOP TEN" Classes="fieldLabel" />
-              <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultBestClassified}" AutoGenerateColumns="False" IsReadOnly="True" Height="180" RowHeight="28" ColumnHeaderHeight="27">
-                <DataGrid.Columns><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="75" /><DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" />
-                  <DataGridTextColumn Header="LIST" Binding="{Binding Listed}" Width="75" /><DataGridTextColumn Header="USED" Binding="{Binding Used}" Width="75" />
-                  <DataGridTextColumn Header="RACE" Binding="{Binding RacePoints}" Width="75" /></DataGrid.Columns></DataGrid></StackPanel>
-            <StackPanel Grid.Column="2" Spacing="4"><TextBlock Text="B · FIVE BEST STARTERS" Classes="fieldLabel" />
-              <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultBestStarted}" AutoGenerateColumns="False" IsReadOnly="True" Height="180" RowHeight="28" ColumnHeaderHeight="27">
-                <DataGrid.Columns><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="75" /><DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" />
-                  <DataGridTextColumn Header="LIST" Binding="{Binding Listed}" Width="75" /><DataGridTextColumn Header="USED" Binding="{Binding Used}" Width="75" />
-                  <DataGridTextColumn Header="NOTE" Binding="{Binding Note}" Width="120" /></DataGrid.Columns></DataGrid></StackPanel>
-          </Grid>
+          <TextBlock Text="{Binding ResultsRuleSource}" TextWrapping="Wrap" Classes="supportingText" />
+          <Border Background="#E4F1EF" Padding="12"><TextBlock Text="{Binding ResultsRuleValues}" TextWrapping="Wrap" /></Border>
+          <TextBlock Text="BEST TEN FINISHERS / A AND C" Classes="fieldLabel" />
+          <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultTopTen}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" Height="340" RowHeight="28" ColumnHeaderHeight="28">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="70" /><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="70" />
+              <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="85" /><DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="140" />
+              <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="80" /><DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="80" />
+              <DataGridTextColumn Header="LIST PTS" Binding="{Binding Listed}" Width="100" /><DataGridTextColumn Header="BEST 5" Binding="{Binding Used}" Width="85" />
+              <DataGridTextColumn Header="RACE PTS" Binding="{Binding RacePoints}" Width="105" /><DataGridTextColumn Header="C PTS" Binding="{Binding PenaltyRacePoints}" Width="85" /><DataGridTextColumn Header="NOTE" Binding="{Binding Note}" Width="190" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <TextBlock Text="BEST FIVE STARTERS / B (INCLUDING DNF, DSQ AND DNS RUN 2)" Classes="fieldLabel" />
+          <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultBestStarted}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" Height="185" RowHeight="28" ColumnHeaderHeight="28">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="70" /><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="70" />
+              <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="85" /><DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="140" />
+              <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="80" /><DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="80" />
+              <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="90" /><DataGridTextColumn Header="LIST PTS" Binding="{Binding Listed}" Width="100" />
+              <DataGridTextColumn Header="USED PTS" Binding="{Binding Used}" Width="105" /><DataGridTextColumn Header="NOTE" Binding="{Binding Note}" Width="190" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <TextBlock Text="All ties at rank 10 are included. Selected finishers use the points cap where list or race points exceed it." Classes="supportingText" TextWrapping="Wrap" />
+          <Border Background="#E4F1EF" Padding="12"><TextBlock Text="{Binding ResultsPenaltySummary}" TextWrapping="Wrap" FontWeight="SemiBold" /></Border>
         </StackPanel>
       </Border>
       <Border Classes="workSurface" Padding="16" IsVisible="{Binding ResultsIsFis}">

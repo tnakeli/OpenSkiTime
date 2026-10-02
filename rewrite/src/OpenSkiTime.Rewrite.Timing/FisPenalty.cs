@@ -9,11 +9,11 @@ public sealed record PenaltyCompetitor(StartListEntry Entry, bool Started, Timin
     public int Bib => Entry.Bib;
 }
 
-public sealed record PenaltyRuleValues(decimal Minimum, decimal Maximum, decimal Adder)
+public sealed record PenaltyRuleValues(decimal Minimum, decimal Maximum, decimal Adder, decimal Correction = 0)
 {
     public void Validate()
     {
-        if (Minimum < 0 || Maximum < Minimum || Maximum > 999.99m || Adder < 0 || Adder > 999.99m)
+        if (Minimum < 0 || Maximum < Minimum || Maximum > 999.99m || Adder < 0 || Adder > 999.99m || Math.Abs(Correction) > 999.99m)
         { throw new DomainValidationException("Check the category minimum, maximum and adder against the valid FIS list."); }
     }
 }
@@ -49,12 +49,22 @@ public static class FisPenalty
 
     public static FisPenaltyResult Calculate(Discipline discipline, IReadOnlyList<PenaltyCompetitor> entrants,
         PenaltyRuleValues rules)
+        => Calculate(FValue(discipline), MaximumPoints(discipline), entrants, rules);
+
+    public static FisPenaltyResult Calculate(FisPenaltyProfile profile, IReadOnlyList<PenaltyCompetitor> entrants)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return Calculate(profile.FValue, profile.MaximumPoints, entrants,
+            new(profile.Minimum, profile.Maximum, profile.Adder, profile.Correction));
+    }
+
+    private static FisPenaltyResult Calculate(int f, decimal max, IReadOnlyList<PenaltyCompetitor> entrants,
+        PenaltyRuleValues rules)
     {
         ArgumentNullException.ThrowIfNull(entrants);
         ArgumentNullException.ThrowIfNull(rules);
         rules.Validate();
-        var f = FValue(discipline);
-        var max = MaximumPoints(discipline);
+        if (f <= 0 || max <= 0) { throw new DomainValidationException("FIS factor and points cap must be positive."); }
         if (entrants.Count == 0 || entrants.Select(x => x.Bib).Distinct().Count() != entrants.Count)
         { throw new DomainValidationException("A unique final result is required for the penalty calculation."); }
         var classified = entrants.Where(x => x.Status == TimingStatus.Finished).OrderBy(x => x.TotalHundredths)
@@ -83,7 +93,7 @@ public static class FisPenalty
             || classified.Count(x => x.ListedPoints is null) >= 3;
         var minimum = doubleMinimum ? Math.Max(rules.Minimum, 2m * max) : rules.Minimum;
         // The double-maximum rule establishes a new minimum even if it exceeds the category ceiling.
-        var applied = Math.Min(Math.Max(calculated + rules.Adder, minimum), Math.Max(rules.Maximum, minimum));
+        var applied = Math.Min(Math.Max(calculated - rules.Correction + rules.Adder, minimum), Math.Max(rules.Maximum, minimum));
         return new(f, max, rules, bestClassified, bestStarted, a, b, c, calculated, applied,
             doubleMinimum, racePoints);
     }

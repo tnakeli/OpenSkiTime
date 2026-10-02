@@ -11,7 +11,7 @@ public sealed record FisAthlete(string Code, string Surname, string FirstName, i
 
 public sealed class FisPointsList(
     string listCode, string name, DateOnly publishedOn, DateOnly validFrom, DateOnly validTo,
-    IReadOnlyDictionary<string, FisAthlete> athletes)
+    IReadOnlyDictionary<string, FisAthlete> athletes, FisPenaltyListRules? penaltyRules = null)
 {
     public string ListCode { get; } = listCode;
     public string Name { get; } = name;
@@ -19,6 +19,7 @@ public sealed class FisPointsList(
     public DateOnly ValidFrom { get; } = validFrom;
     public DateOnly ValidTo { get; } = validTo;
     public IReadOnlyDictionary<string, FisAthlete> Athletes { get; } = athletes;
+    public FisPenaltyListRules? PenaltyRules { get; } = penaltyRules;
     public string DisplayName => $"{ListCode}: {Name} ({PublishedOn:dd-MM-yyyy})";
 
     public IEnumerable<FisAthlete> Search(string query) => Athletes.Values
@@ -151,7 +152,8 @@ public static class FisPointsListReader
             {
                 throw new DomainValidationException("FIS points-list metadata is invalid.");
             }
-            return new FisPointsList(code, h[3], published, validFrom, validTo, athletes);
+            return new FisPointsList(code, h[3], published, validFrom, validTo, athletes,
+                ReadPenaltyRules(zip, prefix, h[0], seasonCode));
         }
         catch (InvalidDataException ex)
         {
@@ -161,6 +163,49 @@ public static class FisPointsListReader
         {
             throw new DomainValidationException("FIS ZIP contains text with an unsupported encoding.");
         }
+    }
+
+    private static FisPenaltyListRules? ReadPenaltyRules(ZipArchive zip, string prefix, string listId, int season)
+    {
+        string[] names = [prefix + "cat.csv", prefix + "dis.csv", "Fiscategory.txt"];
+        var entries = names.Select(name => zip.Entries.Where(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray()).ToArray();
+        if (entries.All(x => x.Length == 0)) { return null; }
+        if (entries.Any(x => x.Length != 1))
+        { throw new DomainValidationException("FIS penalty rule tables are incomplete or duplicated."); }
+        string[][] Rows(int index, string[] expected)
+        {
+            var rows = ReadRows(entries[index][0], 2_000_000).ToArray();
+            if (rows.Length == 0 || !rows[0].SequenceEqual(expected) || rows.Skip(1).Any(x => x.Length != expected.Length))
+            { throw new DomainValidationException("FIS penalty rule table has an unsupported format."); }
+            return rows.Skip(1).ToArray();
+        }
+        decimal Number(string value) => decimal.TryParse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
+            CultureInfo.InvariantCulture, out var result) && Math.Abs(result) <= 9999 && decimal.Round(result, 2) == result
+            ? result : throw new DomainValidationException("FIS penalty rule value is invalid.");
+        int Integer(string value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var result)
+            ? result : throw new DomainValidationException("FIS penalty rule integer is invalid.");
+        var categoryRows = Rows(0, ["Recid", "Listid", "Seasoncode", "Catcode", "Minfispoints", "Maxfispoints", "Lastupdate"]);
+        var disciplineRows = Rows(1, ["Recid", "Listid", "Seasoncode", "Disciplinecode", "Gender", "Zvalue", "Fvalue", "Maxpoints", "Adder0", "Adder1", "Adder2", "Adder3", "Adder4"]);
+        if (categoryRows.Concat(disciplineRows).Any(x => x[1] != listId || Integer(x[2]) != season))
+        { throw new DomainValidationException("FIS penalty rules belong to another list or season."); }
+        var levels = Rows(2, ["Recid", "Sectorcode", "Catcode", "Description", "Displayorder", "Inuse", "Published", "Racelevel", "Calautoload", "Lastupdate"])
+            .Where(x => x[1] == "AL").ToArray();
+        if (levels.GroupBy(x => x[2]).Any(x => x.Count() != 1)
+            || categoryRows.GroupBy(x => x[3]).Any(x => x.Count() != 1)
+            || disciplineRows.GroupBy(x => (x[3], x[4])).Any(x => x.Count() != 1))
+        { throw new DomainValidationException("FIS penalty rule tables contain duplicate values."); }
+        var categories = categoryRows.Select(x =>
+        {
+            var match = levels.SingleOrDefault(y => y[2] == x[3]);
+            return new FisCategoryPenalty(x[3], match is null ? -1 : Integer(match[7]), Number(x[4]), Number(x[5]));
+        }).ToArray();
+        var disciplines = disciplineRows.Select(x => new FisDisciplinePenalty(x[3], x[4] switch
+        { "M" => Gender.Male, "W" or "F" => Gender.Female, _ => throw new DomainValidationException("FIS rule gender is invalid.") },
+            Integer(x[6]), Number(x[7]), Number(x[5]), x.Skip(8).Select(Number).ToArray())).ToArray();
+        if (categories.Any(x => x.Minimum < 0 || x.Maximum < x.Minimum || x.Maximum > 999.99m || x.RaceLevel > 4)
+            || disciplines.Any(x => x.FValue <= 0 || x.MaximumPoints <= 0 || x.Adders.Any(a => a < 0 || a > 999.99m)))
+        { throw new DomainValidationException("FIS penalty rule limits are invalid."); }
+        return new(season, categories, disciplines);
     }
 
     private static ZipArchiveEntry RequiredEntry(ZipArchive zip, string suffix)

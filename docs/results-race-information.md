@@ -90,7 +90,7 @@ Live authenticated upload/status and FIS acceptance of the generated XML remain 
 
 No new points-list download is needed. Results initially uses the same cached-list display as Competitors: `code: name (dd-MM-yyyy)` and `Effective yyyy-MM-dd–yyyy-MM-dd`. Once timing results are assembled, the drawn list's code and validity are authoritative. If the local cache is a different version or unavailable on another computer, display the drawn snapshot explicitly instead of describing a different downloaded list. Race points and penalty use the saved starter points. Number of competitors, distinct represented nations and the existing 2026/27 discipline F value are calculated from the reviewed race.
 
-The downloaded CSV archive does not provide reviewed category minimum, maximum and adder tables. Those fields continue to require entry from the applicable published points rules/list; no guessed category values are applied.
+Penalty parameters now come from the downloaded list's `cat.csv` and `dis.csv` tables, joined to the alpine race level in `Fiscategory.txt`. Category, discipline and gender select the minimum, maximum, F factor, points cap, correction Z and race-level adder. Results displays these values and the exact list validity as read-only information; calculation runs automatically when complete results load. No operator-entered penalty parameters or assumed category defaults are used. See [FIS penalty review](fis-penalty-review.md).
 
 ## Optional weather browser
 

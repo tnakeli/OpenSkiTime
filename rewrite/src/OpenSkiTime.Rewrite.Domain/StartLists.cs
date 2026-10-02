@@ -7,7 +7,8 @@ namespace OpenSkiTime.Rewrite.Domain;
 
 public sealed record DrawEntrant(Guid CompetitorId, CompetitorValues Athlete, decimal? Points);
 public sealed record StartListEntry(int Position, int Bib, DrawEntrant Entrant, string Group);
-public sealed record PointsListSource(string Code, DateOnly ValidFrom, DateOnly ValidTo);
+public sealed record PointsListSource(string Code, DateOnly ValidFrom, DateOnly ValidTo,
+    FisPenaltyListRules? PenaltyRules = null);
 public sealed record DrawOptions(int FirstGroup = 15, int ReverseCount = 30, int FirstBib = 1);
 public enum FinishStatus { Finished, DNS, DNF, DSQ, NPS }
 public sealed record RunFinish(Guid CompetitorId, FinishStatus Status, long? Hundredths);
