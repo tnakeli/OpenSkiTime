@@ -28,6 +28,51 @@ public sealed class HeadlessAppBuilder
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
+    public async Task ResultsPickerOffersOnlyFisCompetitions()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-m7-picker", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var path = Path.Combine(root, "test.ost");
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var date = new DateOnly(2026, 9, 28);
+            var series = await workspace.CreateAsync(path, new("Test", "Test", "Test", date, date, "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null,
+                new("Club Slalom", "SL2", date, Discipline.Slalom, RaceType.Club, 2, 0), series.Revision);
+            var club = Assert.Single(series.Competitions);
+            using var vm = new MainViewModel(workspace, new FileDialogsStub
+                { NewPath = path, OpenPath = path, BackupPath = path + ".bak" },
+                recentSeriesStore: new RecentSeriesStore(root));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.ShowResultsCommand.ExecuteAsync(null);
+            Assert.Empty(vm.FisCompetitions);
+            Assert.Null(vm.ResultsCompetition);
+            Assert.Contains("No FIS competition", vm.ResultsState, StringComparison.Ordinal);
+
+            series = await workspace.ReadAsync();
+            series = await workspace.SaveCompetitionAsync(null,
+                new("FIS Slalom", "FIS", date, Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.ShowResultsCommand.ExecuteAsync(null);
+            Assert.Equal(2, vm.Competitions.Count);
+            Assert.Equal(RaceType.Fis, Assert.Single(vm.FisCompetitions).Values.RaceType);
+            Assert.Equal("FIS", vm.ResultsCompetition?.Values.ShortLabel);
+            Assert.NotEqual(club.Id, vm.ResultsCompetition?.Id);
+            var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1280, Height = 800 };
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("FIS Slalom", window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
+            Assert.Contains("FIS", window.FindControl<Button>("ActiveRaceButton")!.Content!.ToString(), StringComparison.Ordinal);
+            Assert.Equal(path, window.Title);
+            window.Close();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task CompetitionDrawUsesAllMenAndRejectsMixedEntriesWithoutFiltering()
     {
         var root = Path.Combine(Path.GetTempPath(), "openskitime-draw-ui", Guid.NewGuid().ToString("N"));
@@ -93,7 +138,7 @@ public partial class DesktopWorkflowTests
             window.Show();
             var competitionGrid = window.GetVisualDescendants().OfType<DataGrid>()
                 .Single(x => ReferenceEquals(x.ItemsSource, vm.Competitions));
-            Assert.Contains(competitionGrid.Columns, x => Equals(x.Header, "PUBLIC NAME"));
+            Assert.Contains(competitionGrid.Columns, x => Equals(x.Header, "EVENT NAME"));
             CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "competitions-public-name.png");
             var activeRaceButton = window.FindControl<Button>("ActiveRaceButton")!;
             Assert.Equal("Choose competition  ▾", activeRaceButton.Content);
@@ -121,12 +166,19 @@ public partial class DesktopWorkflowTests
             Assert.True(activeMenu.IsSubMenuOpen);
             CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "active-start-menu.png");
             Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
+            foreach (var navigation in new[] { vm.ShowSeriesCommand, vm.ShowCompetitorsCommand, vm.ShowSettingsCommand, vm.ShowCompetitionsCommand })
+            {
+                navigation.Execute(null); Dispatcher.UIThread.RunJobs();
+                Assert.Equal(competition.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
+                Assert.Contains(competition.Values.ShortLabel, activeRaceButton.Content!.ToString(), StringComparison.Ordinal);
+            }
             vm.ShowCompetitionsCommand.Execute(null);
             activeRaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await vm.OpenDrawRunCommand.ExecutionTask!;
             Assert.True(vm.IsDrawSection);
             Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
-            Assert.Contains("1234", vm.WindowTitle, StringComparison.Ordinal);
+            Assert.Equal(vm.FileLabel, vm.WindowTitle);
+            Assert.Equal(competition.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             Assert.Equal("Waiting for draw", vm.DrawState);
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
@@ -196,9 +248,11 @@ public partial class DesktopWorkflowTests
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(competition, vm.DrawCompetition);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == vm.DrawContext && x.Text.Contains("SL NEW", StringComparison.Ordinal));
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == vm.DrawContext);
+            Assert.Equal("Corrected Slalom", window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
+            Assert.Contains("SL NEW", vm.ActiveRaceLabel, StringComparison.Ordinal);
             Assert.DoesNotContain("Corrected Slalom", vm.DrawContext, StringComparison.Ordinal);
-            Assert.Contains("SL NEW", vm.WindowTitle, StringComparison.Ordinal);
+            Assert.Equal(vm.FileLabel, vm.WindowTitle);
             dialogs.ExportPath = Path.Combine(root, "start-list.tsv");
             Click(window, "Export TSV");
             await vm.ExportDrawCommand.ExecutionTask!;
@@ -471,8 +525,8 @@ public partial class DesktopWorkflowTests
             window.UpdateLayout();
             var codeHeader = window.GetVisualDescendants().OfType<DataGridColumnHeader>()
                 .Single(x => Equals(x.Content, "CODE"));
-            var headerPoint = codeHeader.TranslatePoint(
-                new Point(codeHeader.Bounds.Width / 2, codeHeader.Bounds.Height / 2), window)!.Value;
+            var sortButton = codeHeader.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "CompetitorSort_FederationCode");
+            var headerPoint = sortButton.TranslatePoint(new Point(sortButton.Bounds.Width / 2, sortButton.Bounds.Height / 2), window)!.Value;
             Assert.True(codeHeader.IsVisible && codeHeader.Bounds.Width > 0 && codeHeader.Bounds.Height > 0,
                 $"Header not visible: window={window.Bounds}, header={codeHeader.Bounds}, point={headerPoint}");
             window.MouseDown(headerPoint, MouseButton.Left);
@@ -580,6 +634,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Add competition");
             vm.CompetitionName = "Slalom";
             vm.CompetitionShortLabel = "3.1 SL";
+            vm.CompetitionFisCode = "1234";
             AssertNumericDates(window);
             window.Width = 980;
             AssertFieldSpacing(window);
@@ -590,6 +645,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Add competition");
             vm.CompetitionName = "Giant slalom";
             vm.CompetitionShortLabel = "3.2 GS";
+            vm.CompetitionFisCode = "1235";
             Click(window, "Save competition");
             await vm.SaveCompetitionCommand.ExecutionTask!;
             Assert.Equal(2, vm.Competitions.Count);
@@ -741,6 +797,18 @@ public partial class DesktopWorkflowTests
             window.MouseUp(checkPoint, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             Assert.All(selectedRows, x => Assert.False(x.GridEntries.Single(y => y.Label == "3.1 SL").IsParticipating));
+            Assert.Equal(selectedRows.Length, grid.SelectedItems.Count);
+            Assert.All(selectedRows, x => Assert.Contains(x, grid.SelectedItems.Cast<object>()));
+            // Repeat the actual pointer click: the retained selection must remain usable.
+            window.MouseDown(checkPoint, MouseButton.Left);
+            window.MouseUp(checkPoint, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.All(selectedRows, x => Assert.True(x.GridEntries.Single(y => y.Label == "3.1 SL").IsParticipating));
+            Assert.Equal(selectedRows.Length, grid.SelectedItems.Count);
+            window.MouseDown(checkPoint, MouseButton.Left);
+            window.MouseUp(checkPoint, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(selectedRows.Length, grid.SelectedItems.Count);
             Assert.Equal(2, vm.DeskChangeLog.Count(x => x.Kind == DeskChangeKind.Entry));
             Assert.All(vm.DeskChangeLog, x => Assert.Contains(" → ", x.DisplayLabel));
             selectedSl.IsParticipating = true;
@@ -900,7 +968,7 @@ public partial class DesktopWorkflowTests
     {
         window.UpdateLayout();
         foreach (var field in window.GetVisualDescendants().OfType<StackPanel>()
-            .Where(panel => panel.IsVisible && panel.Classes.Contains("field")))
+            .Where(panel => panel.IsEffectivelyVisible && panel.Classes.Contains("field")))
         {
             var children = field.Children.OfType<Control>().ToArray();
             Assert.Equal(2, children.Length);
@@ -910,7 +978,7 @@ public partial class DesktopWorkflowTests
         foreach (var grid in window.GetVisualDescendants().OfType<Grid>())
         {
             var fields = grid.Children.OfType<StackPanel>()
-                .Where(panel => panel.IsVisible && panel.Classes.Contains("field"))
+                .Where(panel => panel.IsEffectivelyVisible && panel.Classes.Contains("field"))
                 .OrderBy(panel => panel.Bounds.Left).ToArray();
             for (var i = 1; i < fields.Length; i++)
             {
@@ -932,6 +1000,7 @@ public partial class DesktopWorkflowTests
         public Task<string?> ChooseBackupAsync(string suggestedName) => Task.FromResult<string?>(BackupPath);
         public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(true);
         public Task<string?> ChooseStartListExportAsync(string suggestedName, bool print) => Task.FromResult(ExportPath);
+        public Task<string?> ChooseResultXmlExportAsync(string suggestedName) => Task.FromResult(ExportPath);
         public Task<bool> ConfirmDiscardChangesAsync(int changeCount)
         {
             RequestedDiscardCount = changeCount;

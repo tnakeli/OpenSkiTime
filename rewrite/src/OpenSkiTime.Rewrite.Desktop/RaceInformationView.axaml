@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:OpenSkiTime.Rewrite.Desktop"
+             x:Class="OpenSkiTime.Rewrite.Desktop.RaceInformationView" x:CompileBindings="False">
+  <StackPanel Spacing="10">
+    <TextBlock Text="Race information" Classes="sectionTitle" />
+    <TextBlock Text="{Binding ResultsCourseSummary}" Classes="supportingText" TextWrapping="Wrap" />
+    <TextBlock Text="{Binding ResultsPointsList}" Classes="supportingText" />
+    <TextBlock Text="{Binding ResultsPointsValidity}" Classes="supportingText" />
+    <TextBlock Text="{Binding ResultsStatistics}" Classes="supportingText" />
+    <TextBlock Text="{Binding RaceInformationStatus}" Classes="supportingText" TextWrapping="Wrap" />
+    <TextBlock Text="{Binding ResultsTechnicalDelegateText}" Classes="supportingText" TextWrapping="Wrap" />
+    <TextBlock Text="COMPETITION JURY" Classes="fieldLabel" />
+    <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultsJury}" AutoGenerateColumns="False" Height="200" RowHeight="28" ColumnHeaderHeight="28">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="FUNCTION" Binding="{Binding Label}" Width="190" IsReadOnly="True" />
+        <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" />
+        <DataGridTextColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
+        <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="90" />
+      </DataGrid.Columns>
+    </DataGrid>
+    <ItemsControl ItemsSource="{Binding ResultsRuns}">
+      <ItemsControl.ItemTemplate><DataTemplate><local:RaceRunView Margin="0,0,0,10" /></DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <Expander Header="Browse weather forecast (optional)" IsExpanded="False">
+      <StackPanel Spacing="8">
+        <TextBlock Text="{Binding WeatherBrowseStatus}" Classes="supportingText" TextWrapping="Wrap" />
+            <ComboBox ItemsSource="{Binding WeatherPlaces}" SelectedItem="{Binding SelectedWeatherPlace}" DisplayMemberBinding="{Binding Display}" HorizontalAlignment="Stretch" />
+        <Button Content="Browse race-day hours" Command="{Binding BrowseWeatherHoursCommand}" IsEnabled="{Binding !IsInformationBusy}" Classes="secondaryAction" HorizontalAlignment="Left" />
+        <ComboBox ItemsSource="{Binding WeatherHours}" SelectedItem="{Binding SelectedWeatherHour}" DisplayMemberBinding="{Binding Display}" HorizontalAlignment="Stretch" />
+        <ItemsControl ItemsSource="{Binding ResultsRuns}">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate><DataTemplate>
+            <Button Content="{Binding Label, StringFormat='Apply forecast to {0}'}" Command="{Binding $parent[UserControl].DataContext.ApplyWeatherToRunCommand}" CommandParameter="{Binding}" Classes="secondaryAction" Margin="0,0,8,0" />
+          </DataTemplate></ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Expander>
+  </StackPanel>
+</UserControl>

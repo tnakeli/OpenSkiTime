@@ -1,8 +1,5 @@
 using System.Text;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Devices;
 using OpenSkiTime.Rewrite.Domain;
@@ -166,14 +163,12 @@ public sealed class TimingStorageTests
     }
 
     [Fact]
-    public async Task UpgradeBacksUpM4AndUncleanCaptureIsVisibleAfterReplay()
+    public async Task UncleanCaptureIsVisibleAfterReopenAndReplay()
     {
         using var folder = new Folder();
-        var path = folder.PathFor("upgrade.ost");
+        var path = folder.PathFor("replay.ost");
         StartListRevision list;
         await using (var seed = new SeriesWorkspace(new SqliteSeriesFileStore())) { list = await SeedAsync(seed, path, 1); }
-        var options = new DbContextOptionsBuilder<SeriesDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options;
-        await using (var db = new SeriesDbContext(options)) { await db.GetService<IMigrator>().MigrateAsync("20260927151124_RunStarted"); }
         await using (var session = await new SqliteSeriesFileStore().OpenAsync(path))
         {
             var store = (ITimingStore)session;
@@ -193,7 +188,6 @@ public sealed class TimingStorageTests
         await reopened.OpenAsync(path);
         await reopened.Timing!.SelectRunAsync(list.Id);
         Assert.Equal(2, reopened.Timing.Snapshot!.Unresolved); // incomplete line + interrupted session
-        Assert.Single(Directory.GetFiles(folder.Root, "*.before-upgrade-*.ost"));
         Assert.Equal("partial", Encoding.ASCII.GetString(Assert.Single((await reopened.ReadTimingAsync(list.Id)).Packets).Bytes));
     }
 

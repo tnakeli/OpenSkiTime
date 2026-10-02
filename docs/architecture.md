@@ -61,7 +61,7 @@ One modular desktop process with six purposeful boundaries. Introduce modules as
 | Domain | Event, registration, entry, run, start-list and rule models; validation/classification | BCL only |
 | Timing | Pure assignment policies, run calculations, ranking and replay | Domain |
 | Application | Typed commands/queries, preview/apply, capture coordination, corrections/audit; I/O ports | Domain, Timing |
-| Persistence | SQLite schema/migrations, focused stores, transactions, raw journal, audit, backup | Application, Domain |
+| Persistence | SQLite schema creation, focused stores, transactions, raw journal, audit, backup | Application, Domain |
 | Integrations | Separate Devices, ImportExport and FIS modules/namespaces; transport, decoding and format conversion | Application, Domain |
 | Desktop | Avalonia views/presentation models, navigation and composition | Application; adapters only at composition |
 
@@ -69,13 +69,13 @@ Use stable IDs and typed snapshots across boundaries, not tracked entities. Sepa
 
 ### Persistence and failures
 
-Keep SQLite and EF Core for ordinary data/migrations. Each command owns a short-lived context and one explicit transaction; queries project only needed fields, following [EF Core context guidance](https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/). Replace the generic unit-of-work wrapper with an operation/session boundary with explicit commit. Never nest independently committing commands. Use conditional revision updates inside the transaction plus database constraints.
+Keep SQLite and EF Core for ordinary data. During pre-release development, create new databases directly from the current model and reject incompatible development files unchanged. Migrations are deferred until releases begin. Each command owns a short-lived context and one explicit transaction; queries project only needed fields, following [EF Core context guidance](https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/). Replace the generic unit-of-work wrapper with an operation/session boundary with explicit commit. Never nest independently committing commands. Use conditional revision updates inside the transaction plus database constraints.
 
 Use one local SQLite database file per event series. Each file contains exactly one series and all its competitions, registrations, entries, rules, runs, start lists, raw timing input, corrections/audit and results. It is the unit of opening, backup, transfer and recovery, independent of the OS user or machine. User preferences and recent-file paths stay outside it; authoritative race data must not depend on them. Keep series identity stable when moving or renaming the file.
 
 Permit one application writer per database, serialize writes and use separate read contexts. Bind operations and capture sessions to the opened series file; stop capture and drain pending writes before closing or switching files. Use local disk, foreign keys, bounded busy handling, WAL and `synchronous=FULL`; verify settings and measure durable commit latency. SQLite documents the [durability tradeoff](https://sqlite.org/pragma.html#pragma_synchronous).
 
-Provide New/Open/Close series and a consistent single-file copy for backup or transfer using the [SQLite backup API](https://sqlite.org/backup.html); do not copy only an open database's main file. A transferred file must reopen on another machine with its full race history and no source-machine dependency. Handoff continues from one authoritative copy; automatic merging of independently edited copies is outside the initial scope. Verify restores and back up each file before upgrades. Refuse unknown newer schemas. Provide recovery for locked/corrupt/full/unwritable storage. Keep bounded diagnostic logs separate from audit. Return structured expected failures; log unexpected failures with a support identifier while preserving the edit buffer.
+Provide New/Open/Close series and a consistent single-file copy for backup or transfer using the [SQLite backup API](https://sqlite.org/backup.html); do not copy only an open database's main file. A transferred file must reopen on another machine with its full race history and no source-machine dependency. Handoff continues from one authoritative copy; automatic merging of independently edited copies is outside the initial scope. Verify restores. During development, incompatible files require a new series file; no automatic schema upgrades are implemented. Release upgrades will require verified backups and upgrade tests. Provide recovery for locked/corrupt/full/unwritable storage. Keep bounded diagnostic logs separate from audit. Return structured expected failures; log unexpected failures with a support identifier while preserving the edit buffer.
 
 ### Timing data path
 

@@ -16,7 +16,7 @@ OpenSkiTime is a desktop race-office application for alpine skiing. It brings re
 
 ### 1 · Event series
 
-One portable file holds the series and its race data.
+One portable file holds the series and its race data. **Browse FIS calendar** lets you filter alpine events by season, nation and location, review an event's races, and fill both the series and its competitions from the selection. Save a public FIS API key in Settings to use this optional online feature; missing details remain editable.
 
 ![Event series details for a fictional alpine weekend](docs/screenshots/01-event-series.png)
 
@@ -36,6 +36,8 @@ The registration grid keeps participation, identity, category and FIS points vis
 
 The competition/run selector opens the active start list directly.
 
+The [explanation of draw fairness and verification](docs/fis-draw-fairness.md) describes the random seed, points groups, double draw, replay procedure and the limits of what the saved history proves. A runnable example compares the production draw with an independent implementation using synthetic entrants.
+
 ![First-run start list drawn for a fictional women's slalom](docs/screenshots/04-start-lists.png)
 
 ### 5 · Timing
@@ -47,6 +49,8 @@ At start and Running show the immediate race state; Timestamps and Ranking retai
 ## Timing sources and current scope
 
 OpenSkiTime has adapters for ALGE Timy 2/3 native USB, MT1 USB/serial and the ALGE Results service. A simulator and ASCII replay are available for practice. Device configuration and channel HOLD controls are described in [timing setup and operation](docs/timing.md).
+
+**Live timing** offers FIS TCP/HTTPS for FIS races and a standalone browser view for every race. Local publishing works offline; Cloud publishing uses the same server and can run alongside FIS. The timing view shows all three statuses and provides Start, Stop, Refresh and session deletion controls. See [live timing setup and operation](docs/live-timing.md) and [cloud server deployment](docs/live-timing-cloud-deployment.md).
 
 The current draw profile covers standard FIS two-run SL/GS and single-run DH/SG. Local category draws, special Cup, youth, snow-seed and three-run formats are not yet supported. Official result publication, FIS result submission, penalties and automatic backup-time substitution are also pending. Physical-device race acceptance still needs a complete rehearsal with independent backup timing.
 
