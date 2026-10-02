@@ -45,6 +45,14 @@ public static class FisResultXml
             || string.IsNullOrWhiteSpace(x.Entry.Entrant.Athlete.Nation)))
         { throw new DomainValidationException("All starters need FIS code, name and nation before FIS XML can be created."); }
         details.Information?.Validate(competition.RunCount);
+        foreach (var row in race.Rows)
+        {
+            if (row.Disqualification is { } dsq)
+            {
+                if (row.Status != TimingStatus.DSQ) { throw new DomainValidationException("Disqualification details require a DSQ result."); }
+                dsq.Validate();
+            }
+        }
         if (details.Runs.Count != competition.RunCount)
         { throw new DomainValidationException("Enter homologation, start/finish elevations and information for every run."); }
         for (var i = 0; i < details.Runs.Count; i++)
@@ -123,8 +131,10 @@ public static class FisResultXml
                 writer.WriteEndElement(); E(writer, "Starttime", run.StartTime);
                 if (report?.Weather is { } weather)
                 {
-                    // Two weather records preserve the reporting location of each measured air temperature.
-                    WriteWeather(writer, weather, "Start", weather.StartTemperature, true);
+                    // Preserve known measurement locations; do not invent a location for imported temperatures.
+                    if (weather.UnlocatedTemperature is { } unlocated)
+                    { WriteWeather(writer, weather, null, unlocated, true); }
+                    WriteWeather(writer, weather, "Start", weather.StartTemperature, weather.UnlocatedTemperature is null);
                     WriteWeather(writer, weather, "Finish", weather.FinishTemperature, false);
                 }
                 writer.WriteEndElement();
@@ -153,10 +163,14 @@ public static class FisResultXml
                     : row.Status.ToString() + (competition.RunCount == 1 ? "" : row.StatusRun.ToString(CultureInfo.InvariantCulture)));
                 E(writer, "Run", row.StatusRun.ToString(CultureInfo.InvariantCulture));
                 E(writer, "Bib", row.Entry.Bib.ToString(CultureInfo.InvariantCulture)); Competitor(writer, row.Entry);
+                if (row.Status == TimingStatus.DSQ && row.Disqualification?.Gate is { } gate)
+                { E(writer, "Gate", gate.ToString(CultureInfo.InvariantCulture)); }
                 if (row.StatusRun > 1 && row.Run1Hundredths is { } firstTime)
                 {
                     writer.WriteStartElement("AL_result"); E(writer, "Timerun1", T(firstTime)); writer.WriteEndElement();
                 }
+                if (row.Status == TimingStatus.DSQ && !string.IsNullOrWhiteSpace(row.Disqualification?.Reason))
+                { E(writer, "Reason", row.Disqualification.Reason.Trim()); }
                 writer.WriteEndElement();
             }
             writer.WriteEndElement(); writer.WriteEndElement(); writer.WriteEndElement(); writer.WriteEndDocument();
@@ -165,10 +179,11 @@ public static class FisResultXml
     }
 
     private static void E(XmlWriter w, string name, string value) => w.WriteElementString(name, value);
-    private static void WriteWeather(XmlWriter writer, RaceWeather weather, string place, decimal? temperature, bool includeConditions)
+    private static void WriteWeather(XmlWriter writer, RaceWeather weather, string? place, decimal? temperature, bool includeConditions)
     {
         if (temperature is null && (!includeConditions || (weather.Conditions.Length == 0 && weather.Snow.Length == 0))) { return; }
-        writer.WriteStartElement("Weather"); E(writer, "Place", place);
+        writer.WriteStartElement("Weather");
+        if (place is not null) { E(writer, "Place", place); }
         if (includeConditions && weather.Conditions.Length > 0) { E(writer, "Weather", weather.Conditions); }
         if (includeConditions && weather.Snow.Length > 0) { E(writer, "Snow", weather.Snow); }
         if (temperature is { } air) { E(writer, "Temperatureair", air.ToString(CultureInfo.InvariantCulture)); }

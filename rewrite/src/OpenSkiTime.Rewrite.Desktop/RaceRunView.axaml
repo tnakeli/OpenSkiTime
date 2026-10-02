@@ -40,6 +40,7 @@
         <StackPanel Classes="field" Width="180" Margin="0,0,8,0"><TextBlock Text="SNOW" Classes="fieldLabel" /><TextBox Text="{Binding Snow}" Watermark="Hard" /></StackPanel>
         <StackPanel Classes="field" Width="135" Margin="0,0,8,0"><TextBlock Text="AIR START °C" Classes="fieldLabel" /><TextBox Text="{Binding StartTemperature}" Watermark="Measured" /></StackPanel>
         <StackPanel Classes="field" Width="135"><TextBlock Text="AIR FINISH °C" Classes="fieldLabel" /><TextBox Text="{Binding FinishTemperature}" Watermark="Measured" /></StackPanel>
+        <StackPanel Classes="field" Width="170" Margin="8,0,0,0"><TextBlock Text="AIR °C · PLACE UNSPECIFIED" Classes="fieldLabel" /><TextBox Text="{Binding UnlocatedTemperature}" Watermark="Measured" /></StackPanel>
       </WrapPanel>
       <TextBlock Text="{Binding WeatherSource}" Classes="supportingText" TextWrapping="Wrap" />
     </StackPanel>

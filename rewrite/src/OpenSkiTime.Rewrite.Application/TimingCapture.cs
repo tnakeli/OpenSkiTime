@@ -380,8 +380,12 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
-    public async Task CorrectStatusesAsync(IReadOnlyList<int> bibs, TimingStatus? status,
+    public Task CorrectStatusesAsync(IReadOnlyList<int> bibs, TimingStatus? status,
         string operatorName, string reason, CancellationToken ct = default)
+        => CorrectStatusesAsync(bibs, status, operatorName, reason, null, ct);
+
+    public async Task CorrectStatusesAsync(IReadOnlyList<int> bibs, TimingStatus? status,
+        string operatorName, string reason, DisqualificationDetails? disqualification, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bibs);
         await _state.WaitAsync(ct);
@@ -394,7 +398,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             {
                 var row = _snapshot.Results.SingleOrDefault(x => x.Bib == bib)
                     ?? throw new DomainValidationException($"Bib {bib} is not in this run.");
-                var after = new TimingDecision(DecisionKind.Status, CompetitorId: row.CompetitorId, Status: status);
+                var after = new TimingDecision(DecisionKind.Status, CompetitorId: row.CompetitorId, Status: status,
+                    Disqualification: status == TimingStatus.DSQ ? disqualification ?? row.Disqualification : disqualification);
                 TimingEngine.ValidateDecision(after, _snapshot);
                 var before = TimingEngine.CurrentDecision(after, _audit);
                 if (before != after) { changes.Add(new(before, after)); }
@@ -446,7 +451,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                 TimingEngine.CurrentDecision(new(DecisionKind.Assignment, x.Observation.Key), _audit),
                 new(DecisionKind.Assignment, x.Observation.Key, Ignored: true))).ToList();
             var status = TimingEngine.CurrentDecision(new(DecisionKind.Status, CompetitorId: result.CompetitorId), _audit);
-            if (status.Status is not null) { changes.Add(new(status, status with { Status = null })); }
+            if (status.Status is not null) { changes.Add(new(status, status with { Status = null, Disqualification = null })); }
             var time = TimingEngine.CurrentDecision(new(DecisionKind.Time, CompetitorId: result.CompetitorId), _audit);
             if (time.Hundredths is not null) { changes.Add(new(time, time with { Hundredths = null })); }
             var order = _snapshot.StartOrder.ToList();

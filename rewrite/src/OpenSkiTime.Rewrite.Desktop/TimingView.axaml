@@ -90,7 +90,7 @@
      <TextBlock Text="RANKING" Classes="raceHeading" />
      <TextBlock Grid.Column="1" Text="◆ Latest finisher" Classes="supportingText" FontSize="11" Margin="8,0" VerticalAlignment="Center" />
     </Grid>
-    <DataGrid Grid.Row="1" Name="RankingGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding RankingView}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRowGroup="DescribeCategory"
+    <DataGrid Grid.Row="1" Name="RankingGrid" Classes="raceGrid timingGrid columnControls" ItemsSource="{Binding RankingView}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRowGroup="DescribeCategory"
      AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
      ToolTip.Tip="Results in rank order within each category. Drag a competitor onto a timestamp to assign it. Right-click or Shift+F10 for status.">
      <DataGrid.Columns>
@@ -109,8 +109,23 @@
   <StackPanel Grid.Row="3" Spacing="3" Margin="0,5,0,0">
    <Grid ColumnDefinitions="*,Auto">
     <TextBlock Text="{Binding SelectedTimingIdentity}" Classes="supportingText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-    <TextBlock Grid.Column="1" Text="{Binding TimingDropHint}" Classes="supportingText" FontSize="10" />
+    <ToggleButton Grid.Column="1" Content="Edit classification" IsChecked="{Binding ShowTimingClassificationEditor}" />
    </Grid>
+   <Border IsVisible="{Binding ShowTimingClassificationEditor}" Classes="racePane" Padding="8">
+    <StackPanel Spacing="6">
+     <Grid ColumnDefinitions="110,8,90,8,*,8,240">
+      <StackPanel><TextBlock Text="STATUS" Classes="eyebrow" /><ComboBox Name="TimingClassificationChoice" ItemsSource="{Binding TimingClassifications}" SelectedItem="{Binding TimingClassification}" /></StackPanel>
+      <StackPanel Grid.Column="2" IsEnabled="{Binding IsTimingDsq}"><TextBlock Text="GATE (OPTIONAL)" Classes="eyebrow" /><TextBox Text="{Binding TimingDsqGate}" /></StackPanel>
+      <StackPanel Grid.Column="4" IsEnabled="{Binding IsTimingDsq}"><TextBlock Text="DSQ REASON / ICR RULE (OPTIONAL)" Classes="eyebrow" /><TextBox Text="{Binding TimingDsqReason}" /></StackPanel>
+      <StackPanel Grid.Column="6" IsEnabled="{Binding IsTimingDsq}"><TextBlock Text="JUDGE (OPTIONAL)" Classes="eyebrow" /><TextBox Text="{Binding TimingDsqJudge}" /></StackPanel>
+     </Grid>
+     <Grid ColumnDefinitions="180,8,*,8,Auto">
+      <StackPanel><TextBlock Text="OPERATOR" Classes="eyebrow" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
+      <StackPanel Grid.Column="2"><TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="eyebrow" /><TextBox Text="{Binding TimingReason}" Watermark="Default classification note is recorded when empty" /></StackPanel>
+      <Button Grid.Column="4" Name="SaveTimingClassification" Content="Save classification" Command="{Binding SaveTimingClassificationCommand}" VerticalAlignment="Bottom" />
+     </Grid>
+    </StackPanel>
+   </Border>
    <TextBlock Text="{Binding SelectedTimingProblem}" IsVisible="{Binding HasSelectedTimingProblem}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
    <TextBlock Text="Unassigned finish · drag a competitor onto its finish timestamp." IsVisible="{Binding HasUnassignedFinish}" Foreground="{DynamicResource WarningBrush}" />
   </StackPanel>

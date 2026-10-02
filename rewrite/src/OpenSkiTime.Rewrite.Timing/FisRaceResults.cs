@@ -6,6 +6,7 @@ public sealed record FisResultRow(StartListEntry Entry, TimingStatus Status, int
     long? Run1Hundredths, long? Run2Hundredths, long? TotalHundredths, int? Rank)
 {
     public bool Started => StatusRun != 1 || Status is not (TimingStatus.DNS or TimingStatus.NPS);
+    public DisqualificationDetails? Disqualification { get; init; }
 }
 
 public sealed record FisRaceResult(StartListRevision FirstList, StartListRevision? SecondList,
@@ -31,7 +32,7 @@ public static class FisRaceResults
                 || second.Plan.SourceListId != first.Id || secondTiming.ListId != second.Id)
             { throw new DomainValidationException("Choose the saved Run 2 timing for this Run 1 start list."); }
             EnsureClassified(secondTiming, 2);
-            if (!second.Plan.SourceResults.SequenceEqual(firstTiming.ToRunFinishes()))
+            if (!SourceResultsMatch(second.Plan.SourceResults, firstTiming))
             { throw new DomainValidationException("Run 1 results changed after the Run 2 start list was created."); }
         }
         else if (first.Plan.Competition.RunCount != 1 || second is not null || secondTiming is not null)
@@ -48,7 +49,8 @@ public static class FisRaceResults
         {
             var firstRow = firstRows[entry.Entrant.CompetitorId];
             if (firstRow.Status != TimingStatus.Finished)
-            { return new FisResultRow(entry, firstRow.Status, 1, null, null, null, null); }
+            { return new FisResultRow(entry, firstRow.Status, 1, null, null, null, null)
+                { Disqualification = firstRow.Disqualification }; }
             if (secondRows is null)
             { return new FisResultRow(entry, TimingStatus.Finished, 1, firstRow.Hundredths, null, firstRow.Hundredths, null); }
             if (!secondRows.TryGetValue(entry.Entrant.CompetitorId, out var later))
@@ -56,11 +58,27 @@ public static class FisRaceResults
             return later.Status == TimingStatus.Finished
                 ? new FisResultRow(entry, TimingStatus.Finished, 2, firstRow.Hundredths, later.Hundredths,
                     firstRow.Hundredths + later.Hundredths, null)
-                : new FisResultRow(entry, later.Status, 2, firstRow.Hundredths, null, null, null);
+                : new FisResultRow(entry, later.Status, 2, firstRow.Hundredths, null, null, null)
+                    { Disqualification = later.Disqualification };
         }).ToArray();
         var totals = interim.Where(x => x.TotalHundredths is not null).Select(x => x.TotalHundredths!.Value).ToArray();
         return new(first, second, interim.Select(x => x with { Rank = x.TotalHundredths is { } total
             ? totals.Count(y => y < total) + 1 : null }).ToArray());
+    }
+
+    private static bool SourceResultsMatch(IReadOnlyList<RunFinish> source, TimingSnapshot current)
+    {
+        var finishes = current.ToRunFinishes();
+        if (source.SequenceEqual(finishes)) { return true; }
+        if (source.Count != finishes.Count || source.Select(x => x.CompetitorId).Distinct().Count() != source.Count)
+        { return false; }
+        // An official post-run classification does not rewrite the saved starting order.
+        // Changed finisher times or newly eligible starters still require review/redrawing.
+        return source.All(saved => finishes.SingleOrDefault(x => x.CompetitorId == saved.CompetitorId) is { } now
+            && (saved == now || (saved.Status == FinishStatus.Finished
+                && now.Status is FinishStatus.DNF or FinishStatus.DSQ or FinishStatus.DNS or FinishStatus.NPS
+                && current.Audit.LastOrDefault(x => x.After.Kind == DecisionKind.Status
+                    && x.After.CompetitorId == now.CompetitorId)?.After.Status?.ToString() == now.Status.ToString())));
     }
 
     private static void EnsureClassified(TimingSnapshot timing, int run)

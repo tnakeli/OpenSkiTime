@@ -8,12 +8,12 @@
     <local:HomologationDisplayConverter x:Key="HomologationDisplayConverter" />
   </Window.Resources>
   <Window.Styles>
-    <Style Selector="DataGrid#CompetitorGrid DataGridColumnHeader">
+    <Style Selector="DataGrid.columnControls DataGridColumnHeader">
       <Setter Property="Padding" Value="4,0" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
     <!-- Our header supplies both icons; reclaim the native sort icon column. -->
-    <Style Selector="DataGrid#CompetitorGrid DataGridColumnHeader /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector="DataGrid.columnControls DataGridColumnHeader /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Grid.ColumnSpan" Value="2" />
     </Style>
     <Style Selector="Button.calendarHeader">
@@ -93,15 +93,15 @@
                 </StackPanel>
                 <TextBlock Text="{Binding SeriesCalendarStatus}" Classes="supportingText" TextWrapping="Wrap" />
                 <TextBlock Text="Import the event and its supported races. Existing course settings and missing values are preserved." Classes="supportingText" TextWrapping="Wrap" />
-                <DataGrid Name="SeriesCalendarEventsGrid" Classes="raceGrid" ItemsSource="{Binding SeriesCalendarEvents}" SelectedItem="{Binding SelectedSeriesCalendarEvent}"
-                          AutoGenerateColumns="False" IsReadOnly="True" Height="240" SelectionMode="Single" CanUserSortColumns="False">
+                <DataGrid Name="SeriesCalendarEventsGrid" Classes="raceGrid columnControls" ItemsSource="{Binding SeriesCalendarEvents}" SelectedItem="{Binding SelectedSeriesCalendarEvent}"
+                          AutoGenerateColumns="False" IsReadOnly="True" Height="240" SelectionMode="Single" CanUserSortColumns="True" CanUserResizeColumns="True">
                   <DataGrid.Columns>
-                    <DataGridTextColumn Binding="{Binding StartDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110"><DataGridTextColumn.Header><Button Tag="Start" Content="START ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter start date" /></DataGridTextColumn.Header></DataGridTextColumn>
-                    <DataGridTextColumn Binding="{Binding EndDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110"><DataGridTextColumn.Header><Button Tag="End" Content="END ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter end date" /></DataGridTextColumn.Header></DataGridTextColumn>
-                    <DataGridTextColumn Binding="{Binding Location}" Width="180"><DataGridTextColumn.Header><Button Tag="Location" Content="LOCATION ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter location" /></DataGridTextColumn.Header></DataGridTextColumn>
-                    <DataGridTextColumn Binding="{Binding Nation}" Width="110"><DataGridTextColumn.Header><Button Tag="Nation" Content="NATION ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter nation" /></DataGridTextColumn.Header></DataGridTextColumn>
-                    <DataGridTextColumn Binding="{Binding Name}" Width="*"><DataGridTextColumn.Header><Button Tag="Event" Content="EVENT ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter event" /></DataGridTextColumn.Header></DataGridTextColumn>
-                    <DataGridTextColumn Binding="{Binding CompetitionCount}" Width="100"><DataGridTextColumn.Header><Button Tag="Races" Content="RACES ▾" Click="CalendarFilter_Click" Classes="calendarHeader" ToolTip.Tip="Sort or filter race count" /></DataGridTextColumn.Header></DataGridTextColumn>
+                    <DataGridTextColumn Header="START" SortMemberPath="Start" Binding="{Binding StartDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
+                    <DataGridTextColumn Header="END" SortMemberPath="End" Binding="{Binding EndDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
+                    <DataGridTextColumn Header="LOCATION" SortMemberPath="Location" Binding="{Binding Location}" Width="180" />
+                    <DataGridTextColumn Header="NATION" SortMemberPath="Nation" Binding="{Binding Nation}" Width="110" />
+                    <DataGridTextColumn Header="EVENT" SortMemberPath="Event" Binding="{Binding Name}" Width="*" />
+                    <DataGridTextColumn Header="RACES" SortMemberPath="Races" Binding="{Binding CompetitionCount}" Width="100" />
                   </DataGrid.Columns>
                 </DataGrid>
                 <DataGrid Name="SeriesCalendarCompetitionsGrid" Classes="raceGrid" ItemsSource="{Binding SeriesCalendarCompetitions}" AutoGenerateColumns="False" IsReadOnly="True" Height="130">
@@ -179,13 +179,9 @@
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsCompetitionsSection}">
           <StackPanel Spacing="12">
             <Grid ColumnDefinitions="*,Auto">
-              <StackPanel Spacing="1">
-                <TextBlock Text="SERIES / RACES" Classes="eyebrow" />
-                <TextBlock Text="Competitions" Classes="sectionTitle" />
-              </StackPanel>
               <Button Grid.Column="1" Content="Add competition" Command="{Binding NewCompetitionCommand}" Classes="primaryAction" />
             </Grid>
-            <DataGrid Name="CompetitionsGrid" Classes="raceGrid" ItemsSource="{Binding Competitions}" SelectedItem="{Binding SelectedCompetition}" AutoGenerateColumns="False"
+            <DataGrid Name="CompetitionsGrid" Classes="raceGrid columnControls" ItemsSource="{Binding CompetitionView}" SelectedItem="{Binding SelectedCompetition}" AutoGenerateColumns="False"
                       SelectionMode="Single"
                       IsReadOnly="True" MinHeight="86" MaxHeight="210" RowHeight="36" ColumnHeaderHeight="30"
                       GridLinesVisibility="Horizontal" HeadersVisibility="Column" HorizontalGridLinesBrush="{DynamicResource LineBrush}">
@@ -377,7 +373,7 @@
                 </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
               </StackPanel>
             </Border>
-            <DataGrid Name="CompetitorGrid" Classes="raceGrid" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
+            <DataGrid Name="CompetitorGrid" Classes="raceGrid columnControls" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
                       SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" CanUserResizeColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
                       FrozenColumnCount="3" HorizontalScrollBarVisibility="Auto"
                       MinHeight="300" RowHeight="34" ColumnHeaderHeight="40" GridLinesVisibility="Horizontal" HeadersVisibility="Column">

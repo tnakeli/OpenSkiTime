@@ -375,7 +375,8 @@ public partial class DesktopWorkflowTests
             Assert.Equal(5, vm.FinishedTimingRows.Count);
             Assert.Empty(vm.OnCourseRows);
             Assert.Empty(vm.RunningRows);
-            Assert.Empty(view.GetVisualDescendants().OfType<ComboBox>());
+            Assert.False(vm.ShowTimingClassificationEditor);
+            Assert.All(view.GetVisualDescendants().OfType<ComboBox>(), choice => Assert.Equal("TimingClassificationChoice", choice.Name));
             await DropTimingRacer(view, vm.CreateTimingDrag(a)!);
             Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == a).Status);
             await vm.DisconnectTimingCommand.ExecuteAsync(null);

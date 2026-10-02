@@ -42,7 +42,8 @@ public sealed partial class MainViewModel
     {
         var selectedId = SelectedSeriesCalendarEvent?.Id;
         SeriesCalendarEvents.Clear();
-        foreach (var item in SortCalendarEvents(_calendarEvents.Where(x => _calendarColumnFilters.All(f => f.Value.Contains(CalendarValue(x, f.Key))))))
+        foreach (var item in SortCalendarEvents(_calendarEvents.Where(x => MatchesCalendarTextFilters(x)
+            && _calendarColumnFilters.All(f => f.Value.Contains(CalendarValue(x, f.Key))))))
         { SeriesCalendarEvents.Add(item); }
         SelectedSeriesCalendarEvent = SeriesCalendarEvents.FirstOrDefault(x => x.Id == selectedId);
         OnPropertyChanged(nameof(CalendarFiltersVersion));
@@ -56,6 +57,7 @@ public sealed partial class MainViewModel
         {
             SeriesCalendarSeason = FisSeason.FromSeries(Season, DateOnly.FromDateTime(DateTime.Today)).ToString(CultureInfo.InvariantCulture);
             _calendarColumnFilters.Clear();
+            _calendarTextFilters.Clear();
             if (!string.IsNullOrWhiteSpace(Nation)) { _calendarColumnFilters[CalendarColumn.Nation] = new(StringComparer.OrdinalIgnoreCase) { Nation.Trim() }; }
             IsSeriesCalendarOpen = true;
         }
@@ -147,7 +149,7 @@ public sealed partial class MainViewModel
     {
         ++_calendarBrowseGeneration; IsSeriesCalendarOpen = false;
         _pendingCalendarCompetitions = null; _calendarEvents = [];
-        _calendarColumnFilters.Clear(); _calendarSortColumn = null;
+        _calendarColumnFilters.Clear(); _calendarTextFilters.Clear(); _calendarSortColumn = null;
         SeriesCalendarEvents.Clear(); SelectedSeriesCalendarEvent = null;
     }
 }

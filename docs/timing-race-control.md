@@ -8,6 +8,10 @@ Follow-up validation: 77 tests (66 core/integration, 11 desktop), including mono
 
 The remaining paragraphs record the earlier race-board revision.
 
+For the 2026-10-02 addition of optional DSQ details and the post-run classification editor, see [post-run classification review](post-run-classification.md).
+
+RANKING uses the same separate sort and filter buttons as Competitors, Competitions and Browse FIS calendar. Column filters match every entered word without case sensitivity; filters combine across columns. Clicking an active filter clears it. Sorting uses numeric timing values and preserves category groups. Visible selections survive presentation changes, and live timing updates remain supported while filtering and sorting are active.
+
 Operator feedback replaces the capture/debug-first layout with a three-pane race board. Device/clock settings move to Settings, with machine-local non-secret preferences. Start order, actual on-course order, checkpoint queues and recent finishes remain visible together. Classification works from every competitor pane; the selected identity stays visible beside quick actions. Detailed pulse attribution/history opens separately while capture continues.
 
 Application-level queue advancement runs under the capture state gate after durable assignments. It does not depend on a UI timer. Overrides choose the next bib without altering the draw. Hold preserves unassigned input; classification removes ineligible arrivals; undoing/ignoring a false finish restores that racer to the expected queue. Original raw input and append-only audit remain authoritative. No database schema change or dependency was introduced.

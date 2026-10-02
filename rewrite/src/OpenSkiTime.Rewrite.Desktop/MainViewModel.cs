@@ -169,6 +169,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     partial void OnSelectedCompetitionChanged(CompetitionDetails? value)
     {
+        if (IsChangingCompetitionPresentation) { return; }
         SaveCourseToAllRaces = false;
         SaveTdToAllRaces = false;
         if (value is null) { return; }

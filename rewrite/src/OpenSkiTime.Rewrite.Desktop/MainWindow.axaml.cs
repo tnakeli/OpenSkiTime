@@ -58,6 +58,8 @@ public partial class MainWindow : Window
         RebuildCompetitionColumns();
         RebuildRecentMenu();
         UpdateCompetitorGridHeight();
+        InstallCompetitionColumnControls();
+        InstallCalendarHeaders();
         UpdateCalendarHeaders();
     }
 

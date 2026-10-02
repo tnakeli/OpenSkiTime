@@ -12,6 +12,48 @@ namespace OpenSkiTime.Rewrite.Tests;
 public sealed class TimingStorageTests
 {
     [Fact]
+    public async Task PostRunClassificationsRetainOptionalDsqDetailsAndRestoreTimesThroughUndoAndReopen()
+    {
+        using var folder = new Folder();
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var file = folder.PathFor("review.ost");
+        var list = await SeedAsync(workspace, file, 2);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        foreach (var row in timing.Snapshot!.Results)
+        { await timing.CorrectAsync(new(DecisionKind.Time, CompetitorId: row.CompetitorId, Hundredths: 6000 + row.Bib), "Timer", "Synthetic verified time"); }
+        Assert.True(timing.Snapshot!.Complete);
+        var originalAudit = timing.Snapshot.AuditVersion;
+        await Assert.ThrowsAsync<DomainValidationException>(() => timing.CorrectStatusesAsync([1, 2], TimingStatus.DSQ,
+            "Operator", "Judges reviewed finish", new DisqualificationDetails(0, "629.3", "Test judge")));
+        Assert.Equal(originalAudit, timing.Snapshot.AuditVersion);
+        Assert.All(timing.Snapshot.Results, row => Assert.Equal(TimingStatus.Finished, row.Status));
+
+        var details = new DisqualificationDetails(17, "629.3", "Test judge");
+        await timing.CorrectStatusesAsync([1], TimingStatus.DSQ, "Operator", "Judges reviewed finish", details);
+        var dsqAudit = timing.Snapshot.Audit[^1];
+        Assert.Equal(details, timing.Snapshot.Results.Single(x => x.Bib == 1).Disqualification);
+        Assert.Null(timing.Snapshot.Results.Single(x => x.Bib == 1).Hundredths);
+        await timing.CorrectStatusesAsync([2], TimingStatus.DNF, "Operator", "Did not complete course");
+        await workspace.OpenAsync(file);
+        timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        Assert.Equal(details, timing.Snapshot!.Results.Single(x => x.Bib == 1).Disqualification);
+        Assert.Equal(TimingStatus.DNF, timing.Snapshot.Results.Single(x => x.Bib == 2).Status);
+        Assert.Null(timing.Snapshot.Results.Single(x => x.Bib == 2).Disqualification);
+        Assert.Equal("Operator", timing.Snapshot.Audit.Single(x => x.Id == dsqAudit.Id).Operator);
+        await timing.UndoAsync(dsqAudit.Id, "Operator", "Jury withdrew disqualification");
+        var restored = timing.Snapshot.Results.Single(x => x.Bib == 1);
+        Assert.Equal(TimingStatus.Finished, restored.Status);
+        Assert.Equal(6001, restored.Hundredths);
+        Assert.Null(restored.Disqualification);
+        Assert.Equal(dsqAudit.Id, timing.Snapshot.Audit[^1].ReversesId);
+        await timing.CorrectStatusesAsync([1], TimingStatus.DSQ, "Operator", "Classification without optional details");
+        Assert.Equal(TimingStatus.DSQ, timing.Snapshot.Results.Single(x => x.Bib == 1).Status);
+        Assert.Null(timing.Snapshot.Results.Single(x => x.Bib == 1).Disqualification);
+    }
+
+    [Fact]
     public async Task CapturedBytesAssignmentsCorrectionsUndoAndTransferReplayExactly()
     {
         using var folder = new Folder();

@@ -10,6 +10,24 @@ public sealed record CalendarFilterValue(string Value, string Label, bool Select
 public sealed partial class MainViewModel
 {
     private readonly Dictionary<CalendarColumn, HashSet<string>> _calendarColumnFilters = [];
+    private readonly Dictionary<CalendarColumn, string> _calendarTextFilters = [];
+    public string CalendarTextFilter(CalendarColumn column) => _calendarTextFilters.TryGetValue(column, out var text) ? text
+        : _calendarColumnFilters.TryGetValue(column, out var accepted) ? string.Join(", ", accepted.Order(StringComparer.OrdinalIgnoreCase)) : "";
+    public bool? CalendarSortDirection(CalendarColumn column) => _calendarSortColumn == column ? _calendarSortDescending : null;
+    public void SetCalendarTextFilter(CalendarColumn column, string text)
+    {
+        _calendarColumnFilters.Remove(column);
+        if (string.IsNullOrWhiteSpace(text)) { _calendarTextFilters.Remove(column); }
+        else { _calendarTextFilters[column] = text; }
+        FilterSeriesCalendar();
+    }
+    private bool MatchesCalendarTextFilters(FisCalendarEvent item) => _calendarTextFilters.All(filter =>
+        ColumnGridController<FisCalendarEvent>.Matches(filter.Key switch
+        {
+            CalendarColumn.Start => item.StartDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture),
+            CalendarColumn.End => item.EndDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture),
+            _ => CalendarValue(item, filter.Key)
+        }, filter.Value));
     private CalendarColumn? _calendarSortColumn;
     private bool _calendarSortDescending;
     // Notification for header controls; no mutable row or persistence state participates in filtering.
@@ -37,9 +55,10 @@ public sealed partial class MainViewModel
         else { _calendarColumnFilters[column] = accepted; }
         FilterSeriesCalendar();
     }
-    public void ClearCalendarFilter(CalendarColumn column) { _calendarColumnFilters.Remove(column); FilterSeriesCalendar(); }
+    public void ClearCalendarFilter(CalendarColumn column)
+    { _calendarColumnFilters.Remove(column); _calendarTextFilters.Remove(column); FilterSeriesCalendar(); }
     [RelayCommand]
-    private void ClearCalendarFilters() { _calendarColumnFilters.Clear(); FilterSeriesCalendar(); }
+    private void ClearCalendarFilters() { _calendarColumnFilters.Clear(); _calendarTextFilters.Clear(); FilterSeriesCalendar(); }
     public void SortCalendar(CalendarColumn column, bool descending)
     { _calendarSortColumn = column; _calendarSortDescending = descending; FilterSeriesCalendar(); }
 

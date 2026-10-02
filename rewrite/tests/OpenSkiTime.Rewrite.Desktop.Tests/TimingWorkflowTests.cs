@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Desktop;
 using OpenSkiTime.Rewrite.Devices;
@@ -280,6 +281,106 @@ public partial class DesktopWorkflowTests
             if (Path.GetFullPath(root).StartsWith(Path.Combine(Path.GetTempPath(), "openskitime-timing-ui") + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             { Directory.Delete(root, true); }
         }
+    }
+
+    [AvaloniaFact]
+    public async Task ClassificationEditorSavesPostFinishDsqWithOptionalFieldsAndDnf()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-classification-ui", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "Synthetic.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(SyntheticFisArchive());
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var date = new DateOnly(2026, 9, 27);
+            var series = await workspace.CreateAsync(file, new("Synthetic race", "Test slope", "Test club", date, date, "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null, new("Slalom", "SL", date, Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);
+            var competition = series.Competitions[0];
+            var revision = series.Revision;
+            for (var i = 0; i < 12; i++)
+            { revision = (await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Athlete", 2000, $"{123456 + i}", "FIN", "Test club", Gender.Female), competition.Id, true, null, revision)).Revision; }
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
+                fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            Assert.True(vm.CanPrepareDraw, vm.DrawEntryIssue + " / " + vm.StatusMessage);
+            await vm.PrepareDrawCommand.ExecuteAsync(null);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
+            Assert.False(vm.IsError, vm.StatusMessage);
+            var timing = workspace.Timing!;
+            foreach (var row in timing.Snapshot!.Results)
+            { await timing.CorrectAsync(new(OpenSkiTime.Rewrite.Timing.DecisionKind.Time, CompetitorId: row.CompetitorId, Hundredths: 6000 + row.Bib), "Timer", "Synthetic time"); }
+            vm.RefreshTiming();
+            var window = new MainWindow { DataContext = vm, Width = 1280, Height = 850 };
+            window.Show();
+            try
+            {
+                var view = window.FindControl<TimingView>("TimingWorkspace")!;
+                vm.SelectTimingBibs([1], 1);
+                window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+                var ranking = view.FindControl<DataGrid>("RankingGrid")!;
+                Button RankingIcon(string name) => ranking.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name);
+                void PressRanking(Button button)
+                { button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                PressRanking(RankingIcon("RankingSort_Bib"));
+                Assert.Equal(1, vm.RankingView.OfType<TimingGridRow>().First().Bib);
+                PressRanking(RankingIcon("RankingSort_Bib"));
+                Assert.Equal(12, vm.RankingView.OfType<TimingGridRow>().First().Bib);
+                Assert.Equal(1, vm.SelectedTimingRow!.Bib);
+                PressRanking(RankingIcon("RankingFilterButton_Bib"));
+                var filterPanel = (StackPanel)view.RankingFilterMenu!.Content!;
+                filterPanel.Children.OfType<TextBox>().Single().Text = "1";
+                PressRanking(filterPanel.Children.OfType<StackPanel>().Single().Children.OfType<Button>().Single(x => Equals(x.Content, "Apply")));
+                Assert.Equal([12, 11, 10, 1], vm.RankingView.OfType<TimingGridRow>().Select(x => x.Bib));
+                await timing.CorrectAsync(new(OpenSkiTime.Rewrite.Timing.DecisionKind.Time,
+                    CompetitorId: timing.Snapshot!.Results.Single(x => x.Bib == 2).CompetitorId, Hundredths: 6999), "Timer", "Synthetic update during filtering");
+                vm.RefreshTiming();
+                Assert.Equal([12, 11, 10, 1], vm.RankingView.OfType<TimingGridRow>().Select(x => x.Bib));
+                PressRanking(RankingIcon("RankingFilterButton_Bib"));
+                Assert.Equal(12, vm.RankingView.OfType<TimingGridRow>().Count());
+                PressRanking(RankingIcon("RankingSort_DisplayTime"));
+                Assert.Equal(2, vm.RankingView.OfType<TimingGridRow>().Last().Bib);
+                vm.ShowTimingClassificationEditor = true;
+                vm.TimingClassification = "DSQ";
+                vm.TimingDsqGate = "18"; vm.TimingDsqReason = "629.3"; vm.TimingDsqJudge = "Synthetic judge";
+                Dispatcher.UIThread.RunJobs();
+                var save = view.FindControl<Button>("SaveTimingClassification")!;
+                Assert.Same(vm.SaveTimingClassificationCommand, save.Command);
+                Assert.True(save.IsEffectivelyEnabled);
+                save.Command!.Execute(save.CommandParameter);
+                await vm.SaveTimingClassificationCommand.ExecutionTask!;
+                Assert.False(vm.IsError, vm.StatusMessage);
+                var dsq = timing.Snapshot!.Results.Single(x => x.Bib == 1);
+                Assert.Equal(OpenSkiTime.Rewrite.Timing.TimingStatus.DSQ, dsq.Status);
+                Assert.Equal(18, dsq.Disqualification!.Gate);
+                Assert.Equal("Synthetic judge", dsq.Disqualification.Judge);
+                Assert.Contains("Gate 18", vm.TimingHistory[0].Summary, StringComparison.Ordinal);
+                Assert.Equal(1, vm.SelectedTimingRow!.Bib);
+
+                vm.SelectTimingBibs([2], 2);
+                Assert.Equal("", vm.TimingDsqGate);
+                vm.TimingClassification = "DSQ";
+                await vm.SaveTimingClassificationCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                Assert.Null(timing.Snapshot.Results.Single(x => x.Bib == 2).Disqualification!.Gate);
+                vm.TimingClassification = "DNF";
+                await vm.SaveTimingClassificationCommand.ExecuteAsync(null);
+                Assert.Equal(OpenSkiTime.Rewrite.Timing.TimingStatus.DNF, timing.Snapshot.Results.Single(x => x.Bib == 2).Status);
+                Assert.Null(timing.Snapshot.Results.Single(x => x.Bib == 2).Disqualification);
+                vm.TimingClassification = "Clear";
+                await vm.SaveTimingClassificationCommand.ExecuteAsync(null);
+                Assert.Equal(6999, timing.Snapshot.Results.Single(x => x.Bib == 2).Hundredths);
+                var listId = timing.ListId!.Value;
+                await workspace.OpenAsync(file);
+                await workspace.Timing!.SelectRunAsync(listId);
+                Assert.Equal("629.3", workspace.Timing.Snapshot!.Results.Single(x => x.Bib == 1).Disqualification!.Reason);
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(root, true); }
     }
 
     private static async Task WaitTimingAsync(MainViewModel vm, Func<bool> condition)
