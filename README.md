@@ -16,7 +16,7 @@ OpenSkiTime is a desktop race-office application for alpine skiing. It brings re
 
 ### 1 · Event series
 
-One portable file holds the series and its race data.
+One portable file holds the series and its race data. **Browse FIS calendar** lets you filter alpine events by season, nation and location, review an event's races, and fill both the series and its competitions from the selection. Save a public FIS API key in Settings to use this optional online feature; missing details remain editable.
 
 ![Event series details for a fictional alpine weekend](docs/screenshots/01-event-series.png)
 

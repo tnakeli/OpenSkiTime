@@ -6,17 +6,19 @@ using OpenSkiTime.Rewrite.Timing;
 
 namespace OpenSkiTime.Rewrite.Application;
 
-public sealed record FisPerson(string FirstName, string LastName, string Nation);
+public sealed record FisPerson(string FirstName, string LastName, string Nation, string Number = "");
 public sealed record FisRunXmlDetails(int Gates, int TurningGates, string StartTime, FisPerson CourseSetter);
 public sealed record FisXmlDetails(string Category, FisPerson TechnicalDelegate, FisPerson ChiefOfRace,
-    IReadOnlyList<FisRunXmlDetails> Runs);
+    IReadOnlyList<FisRunXmlDetails> Runs, RaceInformation? Information = null);
 
 public static class FisResultXml
 {
     public static string FileName(FisRaceResult race, SeriesValues series)
     {
         ArgumentNullException.ThrowIfNull(race); ArgumentNullException.ThrowIfNull(series);
-        return series.Nation.ToUpperInvariant() + ValidCodex(race.FirstList.Plan.Competition.FisCode) + ".xml";
+        var nation = race.FirstList.Plan.Competition.Calendar?.Nation;
+        return (string.IsNullOrWhiteSpace(nation) ? series.Nation : nation).ToUpperInvariant()
+            + ValidCodex(race.FirstList.Plan.Competition.FisCode) + ".xml";
     }
 
     public static byte[] Create(FisRaceResult race, SeriesValues series, FisPenaltyResult penalty, FisXmlDetails details)
@@ -26,26 +28,45 @@ public static class FisResultXml
         var plan = race.FirstList.Plan;
         if (plan.Competition.RaceType != RaceType.Fis) { throw new DomainValidationException("FIS XML is for a FIS competition."); }
         var codex = ValidCodex(plan.Competition.FisCode);
-        var category = Required(details.Category, "FIS calendar category");
         var competition = plan.Competition;
-        var nation = Required(series.Nation, "organizing nation");
+        details = details with { Information = details.Information?.WithCompetitionCourse(competition) };
+        var calendar = competition.Calendar?.Validated();
+        var category = Required(string.IsNullOrWhiteSpace(calendar?.Category) ? details.Category : calendar.Category, "FIS calendar category in Competitions");
+        var technicalDelegate = calendar?.TechnicalDelegate is { } sharedTd
+            ? new FisPerson(sharedTd.FirstName, sharedTd.LastName, sharedTd.Nation, sharedTd.Number) : details.TechnicalDelegate;
+        var nation = Required(string.IsNullOrWhiteSpace(calendar?.Nation) ? series.Nation : calendar.Nation, "organizing nation");
+        var gender = plan.Gender == Gender.Male ? "M" : "W";
+        if (!string.IsNullOrWhiteSpace(calendar?.Gender) && calendar.Gender != gender)
+        { throw new DomainValidationException("Competition calendar gender differs from the drawn starter group. Review Competitions and the start list."); }
         if (nation.Length != 3) { throw new DomainValidationException("Use a three-letter organizing nation."); }
         if (race.Rows.Count == 0 || race.Rows.Any(x => x.Entry.Entrant.Athlete.FederationCode is null
             || string.IsNullOrWhiteSpace(x.Entry.Entrant.Athlete.Surname)
             || string.IsNullOrWhiteSpace(x.Entry.Entrant.Athlete.FirstName)
             || string.IsNullOrWhiteSpace(x.Entry.Entrant.Athlete.Nation)))
         { throw new DomainValidationException("All starters need FIS code, name and nation before FIS XML can be created."); }
-        if (details.Runs.Count != competition.RunCount || competition.HomologationNumber is null
-            || competition.StartAltitudeMeters is null || competition.FinishAltitudeMeters is null)
+        details.Information?.Validate(competition.RunCount);
+        if (details.Runs.Count != competition.RunCount)
         { throw new DomainValidationException("Enter homologation, start/finish elevations and information for every run."); }
-        foreach (var run in details.Runs)
+        for (var i = 0; i < details.Runs.Count; i++)
         {
+            var run = details.Runs[i];
+            var report = details.Information?.Runs[i];
+            if (string.IsNullOrWhiteSpace(report?.Homologation ?? competition.HomologationNumber)
+                || (report?.StartAltitude ?? competition.StartAltitudeMeters) is null
+                || (report?.FinishAltitude ?? competition.FinishAltitudeMeters) is null)
+            { throw new DomainValidationException("Every run needs homologation and start/finish elevations."); }
             if (run.Gates <= 0 || run.TurningGates <= 0 || run.TurningGates > run.Gates
                 || !TimeOnly.TryParseExact(run.StartTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
             { throw new DomainValidationException("Each run needs gate counts and a 24-hour HH:mm start time."); }
             Validate(run.CourseSetter);
+            foreach (var runner in report?.Forerunners ?? []) { Validate(runner.Person); }
         }
-        Validate(details.TechnicalDelegate); Validate(details.ChiefOfRace);
+        Validate(technicalDelegate); Validate(details.ChiefOfRace);
+        foreach (var member in details.Information?.Jury ?? [])
+        {
+            if (member.Person.FirstName.Length + member.Person.LastName.Length + member.Person.Nation.Length > 0)
+            { Validate(member.Person); }
+        }
         if (race.Rows.Count(x => x.Status == TimingStatus.Finished) != penalty.RacePoints.Count)
         { throw new DomainValidationException("Penalty and classified results do not match."); }
 
@@ -55,34 +76,58 @@ public static class FisResultXml
         {
             writer.WriteStartDocument(); writer.WriteStartElement("Fisresults");
             writer.WriteStartElement("Raceheader"); writer.WriteAttributeString("Sector", "AL");
-            writer.WriteAttributeString("Gender", plan.Gender == Gender.Male ? "M" : "W");
-            E(writer, "Season", (competition.Date.Month >= 6 ? competition.Date.Year + 1 : competition.Date.Year).ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("Gender", gender);
+            E(writer, "Season", (calendar?.Season ?? (competition.Date.Month >= 6 ? competition.Date.Year + 1 : competition.Date.Year)).ToString(CultureInfo.InvariantCulture));
             E(writer, "Codex", codex); E(writer, "Nation", nation); E(writer, "Discipline", DisciplineCode(competition.Discipline));
             E(writer, "Category", category); E(writer, "Type", "Official");
-            E(writer, "Eventname", competition.Name); E(writer, "Place", series.Location);
+            E(writer, "Eventname", competition.Name); E(writer, "Place", string.IsNullOrWhiteSpace(calendar?.Location) ? series.Location : calendar.Location);
             writer.WriteStartElement("Racedate"); E(writer, "Day", competition.Date.Day.ToString(CultureInfo.InvariantCulture));
             E(writer, "Month", competition.Date.Month.ToString(CultureInfo.InvariantCulture));
             E(writer, "Year", competition.Date.Year.ToString(CultureInfo.InvariantCulture)); writer.WriteEndElement();
+            E(writer, "Tempunit", "C"); E(writer, "Longunit", "m");
             writer.WriteEndElement();
             writer.WriteStartElement("AL_race"); writer.WriteStartElement("AL_raceinfo");
             E(writer, "Usedfislist", FisListNumber(plan.PointsList.Code));
             E(writer, "Appliedpenalty", D(penalty.Applied)); E(writer, "Calculatedpenalty", D(penalty.Calculated));
             E(writer, "Fvalue", penalty.FValue.ToString(CultureInfo.InvariantCulture));
-            Person(writer, "Jury", "TechnicalDelegate", details.TechnicalDelegate);
+            Person(writer, "Jury", "TechnicalDelegate", technicalDelegate);
             Person(writer, "Jury", "ChiefRace", details.ChiefOfRace);
+            foreach (var member in details.Information?.Jury ?? [])
+            {
+                if (member.Function is "TechnicalDelegate" or "ChiefRace" || string.IsNullOrWhiteSpace(member.Person.LastName)) { continue; }
+                var function = member.Function switch { "StartReferee" => "Startreferee", "FinishReferee" => "Finishreferee", _ => member.Function };
+                Person(writer, "Jury", function, member.Person);
+            }
             for (var i = 0; i < details.Runs.Count; i++)
             {
                 var run = details.Runs[i]; writer.WriteStartElement("Runinfo");
+                var report = details.Information?.Runs[i];
                 writer.WriteAttributeString("No", (i + 1).ToString(CultureInfo.InvariantCulture));
                 writer.WriteStartElement("Course");
-                if (!string.IsNullOrWhiteSpace(competition.CourseName)) { E(writer, "Name", competition.CourseName); }
-                E(writer, "Homologation", competition.HomologationNumber);
+                var courseName = report?.Course ?? competition.CourseName;
+                if (!string.IsNullOrWhiteSpace(courseName)) { E(writer, "Name", courseName); }
+                E(writer, "Homologation", report?.Homologation ?? competition.HomologationNumber!);
+                if ((report?.Length ?? competition.CourseLengthMeters) is { } length) { E(writer, "Length", length.ToString(CultureInfo.InvariantCulture)); }
                 E(writer, "Gates", run.Gates.ToString(CultureInfo.InvariantCulture));
                 E(writer, "Turninggates", run.TurningGates.ToString(CultureInfo.InvariantCulture));
-                E(writer, "Startelev", competition.StartAltitudeMeters.Value.ToString(CultureInfo.InvariantCulture));
-                E(writer, "Finishelev", competition.FinishAltitudeMeters.Value.ToString(CultureInfo.InvariantCulture));
+                E(writer, "Startelev", (report?.StartAltitude ?? competition.StartAltitudeMeters)!.Value.ToString(CultureInfo.InvariantCulture));
+                E(writer, "Finishelev", (report?.FinishAltitude ?? competition.FinishAltitudeMeters)!.Value.ToString(CultureInfo.InvariantCulture));
                 Person(writer, "Coursesetter", null, run.CourseSetter);
-                writer.WriteEndElement(); E(writer, "Starttime", run.StartTime); writer.WriteEndElement();
+                var runners = report?.Forerunners ?? [];
+                for (var n = 0; n < runners.Count; n++)
+                {
+                    writer.WriteStartElement("Forerunner"); writer.WriteAttributeString("Order", (n + 1).ToString(CultureInfo.InvariantCulture));
+                    E(writer, "Lastname", runners[n].Person.LastName); E(writer, "Firstname", runners[n].Person.FirstName);
+                    E(writer, "Nation", runners[n].Person.Nation); writer.WriteEndElement();
+                }
+                writer.WriteEndElement(); E(writer, "Starttime", run.StartTime);
+                if (report?.Weather is { } weather)
+                {
+                    // Two weather records preserve the reporting location of each measured air temperature.
+                    WriteWeather(writer, weather, "Start", weather.StartTemperature, true);
+                    WriteWeather(writer, weather, "Finish", weather.FinishTemperature, false);
+                }
+                writer.WriteEndElement();
             }
             E(writer, "Softwarename", "OpenSkiTime"); writer.WriteEndElement();
             writer.WriteStartElement("AL_classified");
@@ -120,6 +165,15 @@ public static class FisResultXml
     }
 
     private static void E(XmlWriter w, string name, string value) => w.WriteElementString(name, value);
+    private static void WriteWeather(XmlWriter writer, RaceWeather weather, string place, decimal? temperature, bool includeConditions)
+    {
+        if (temperature is null && (!includeConditions || (weather.Conditions.Length == 0 && weather.Snow.Length == 0))) { return; }
+        writer.WriteStartElement("Weather"); E(writer, "Place", place);
+        if (includeConditions && weather.Conditions.Length > 0) { E(writer, "Weather", weather.Conditions); }
+        if (includeConditions && weather.Snow.Length > 0) { E(writer, "Snow", weather.Snow); }
+        if (temperature is { } air) { E(writer, "Temperatureair", air.ToString(CultureInfo.InvariantCulture)); }
+        writer.WriteEndElement();
+    }
     private static string D(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
     private static string T(long value) => $"{value / 6000:00}:{value / 100 % 60:00}:{value % 100:00}";
     private static string Required(string? value, string label) => !string.IsNullOrWhiteSpace(value) ? value.Trim()
@@ -138,6 +192,7 @@ public static class FisResultXml
     private static void Person(XmlWriter w, string element, string? function, FisPerson person)
     {
         w.WriteStartElement(element); if (function is not null) { w.WriteAttributeString("Function", function); }
+        if (!string.IsNullOrWhiteSpace(person.Number)) { E(w, "Number", person.Number); }
         E(w, "Lastname", person.LastName.Trim()); E(w, "Firstname", person.FirstName.Trim());
         E(w, "Nation", person.Nation.Trim().ToUpperInvariant()); w.WriteEndElement();
     }

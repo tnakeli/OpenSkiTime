@@ -60,11 +60,13 @@ public sealed class ApprovedResultStorageTests
             var metadata = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"),
                 new("C", "Chief", "FIN"), [new(42, 40, "12:00", new("S", "Setter", "FIN"))]);
             var xml = FisResultXml.Create(race, (await workspace.ReadAsync()).Values, penalty, metadata);
+            var information = RaceInformation.Empty(values) with { Category = "FIS" };
             var request = new ApproveResultRequest(competition.Id, list.Id, null,
                 ResultSourceFingerprint.Create(raw), (await workspace.ReadAsync()).Revision, "TD",
-                "FIN1234.xml", xml, penalty.Calculated, penalty.Applied);
+                "FIN1234.xml", xml, penalty.Calculated, penalty.Applied, information);
             await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApproveResultAsync(
                 request with { SourceFingerprint = new string('0', 64) }));
+            Assert.Null(await workspace.ReadRaceInformationAsync(competition.Id));
             var approved = await workspace.ApproveResultAsync(request);
             Assert.Equal(xml, approved.Xml);
             await workspace.CloseAsync();
@@ -72,6 +74,8 @@ public sealed class ApprovedResultStorageTests
             var reopened = Assert.Single(await workspace.ReadApprovedResultsAsync(competition.Id));
             Assert.Equal(approved.Id, reopened.Id);
             Assert.Equal(xml, reopened.Xml);
+            Assert.Equal("FIS", reopened.Information!.Category);
+            Assert.Equal("FIS", (await workspace.ReadRaceInformationAsync(competition.Id))!.Values.Category);
             await Assert.ThrowsAsync<SeriesConflictException>(() => workspace.ApproveResultAsync(request));
             await using var sql = new SqliteConnection($"Data Source={path};Pooling=False");
             await sql.OpenAsync();

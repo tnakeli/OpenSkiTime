@@ -1,12 +1,11 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
 using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Persistence;
 
 public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> options) : DbContext(options)
 {
-    internal const string Format = "OpenSkiTime.New/1";
+    internal const string Format = "OpenSkiTime.Development/3";
     internal DbSet<SeriesRow> Series => Set<SeriesRow>();
     internal DbSet<CompetitionRow> Competitions => Set<CompetitionRow>();
     internal DbSet<CompetitorRow> Competitors => Set<CompetitorRow>();
@@ -21,11 +20,15 @@ public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> op
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
+        var information = modelBuilder.Entity<RaceInformationRow>();
+        information.ToTable("RaceInformation", t => t.HasCheckConstraint("CK_RaceInformation_Revision", "Revision > 0"));
+        information.HasKey(x => new { x.CompetitionId, x.Revision });
+        information.HasOne<CompetitionRow>().WithMany().HasForeignKey(x => x.CompetitionId).OnDelete(DeleteBehavior.Restrict);
         var series = modelBuilder.Entity<SeriesRow>();
         series.ToTable("Series", table =>
         {
             table.HasCheckConstraint("CK_Series_OneRow", "SingleRow = 1");
-            table.HasCheckConstraint("CK_Series_Format", "FormatId = 'OpenSkiTime.New/1'");
+            table.HasCheckConstraint("CK_Series_Format", $"FormatId = '{Format}'");
         });
         series.HasKey(x => x.SingleRow);
         series.Property(x => x.SingleRow).ValueGeneratedNever();
@@ -43,6 +46,7 @@ public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> op
         {
             table.HasCheckConstraint("CK_Competition_Runs", "RunCount BETWEEN 1 AND 9");
             table.HasCheckConstraint("CK_Competition_Intermediates", "IntermediateCount BETWEEN 0 AND 20");
+            table.HasCheckConstraint("CK_Competition_RaceType", "RaceType IN ('Club','Fis')");
         });
         competition.HasKey(x => x.Id);
         competition.Property(x => x.Id).ValueGeneratedNever();
@@ -56,7 +60,6 @@ public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> op
         competition.Property(x => x.Discipline).HasConversion<string>().HasMaxLength(30);
         competition.Property(x => x.RaceType).HasConversion<string>().HasMaxLength(30);
         competition.Property(x => x.FisCode).HasMaxLength(50);
-        competition.Property(x => x.LocalRaceCode).HasMaxLength(50);
         competition.Property(x => x.CourseName).HasMaxLength(160);
         competition.Property(x => x.HomologationNumber).HasMaxLength(50);
 
@@ -168,12 +171,13 @@ internal sealed class CompetitionRow
     public int RunCount { get; set; }
     public int IntermediateCount { get; set; }
     public string? FisCode { get; set; }
-    public string? LocalRaceCode { get; set; }
     public string? CourseName { get; set; }
     public int? StartAltitudeMeters { get; set; }
     public int? FinishAltitudeMeters { get; set; }
     public int? VerticalDropMeters { get; set; }
     public string? HomologationNumber { get; set; }
+    public string? CalendarJson { get; set; }
+    public int? CourseLengthMeters { get; set; }
 }
 
 internal sealed class CompetitorRow
@@ -251,15 +255,4 @@ internal sealed class StartListEntryRow
     public int Bib { get; set; }
     public Guid CompetitorId { get; set; }
     public string EntryJson { get; set; } = string.Empty;
-}
-
-public sealed class SeriesDbContextFactory : IDesignTimeDbContextFactory<SeriesDbContext>
-{
-    public SeriesDbContext CreateDbContext(string[] args)
-    {
-        var options = new DbContextOptionsBuilder<SeriesDbContext>()
-            .UseSqlite("Data Source=openskitime-rewrite-design.db")
-            .Options;
-        return new SeriesDbContext(options);
-    }
 }

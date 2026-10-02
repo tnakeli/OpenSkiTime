@@ -5,11 +5,11 @@ namespace OpenSkiTime.Rewrite.Application;
 
 public sealed record ApprovedResult(Guid Id, Guid CompetitionId, int Revision, Guid FirstListId, Guid? SecondListId,
     string SourceFingerprint, DateTimeOffset ApprovedAt, string ApprovedBy, string XmlFileName, byte[] Xml,
-    decimal CalculatedPenalty, decimal AppliedPenalty);
+    decimal CalculatedPenalty, decimal AppliedPenalty, RaceInformation? Information = null);
 
 public sealed record ApproveResultRequest(Guid CompetitionId, Guid FirstListId, Guid? SecondListId,
     string SourceFingerprint, long ExpectedSeriesRevision, string ApprovedBy,
-    string XmlFileName, byte[] Xml, decimal CalculatedPenalty, decimal AppliedPenalty);
+    string XmlFileName, byte[] Xml, decimal CalculatedPenalty, decimal AppliedPenalty, RaceInformation? Information = null);
 
 public interface IResultStore
 {

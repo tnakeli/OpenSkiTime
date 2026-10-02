@@ -4,7 +4,8 @@ namespace OpenSkiTime.Rewrite.Application;
 
 public interface ISeriesFileStore
 {
-    Task<ISeriesFileSession> CreateAsync(string filePath, SeriesValues values, CancellationToken ct = default);
+    Task<ISeriesFileSession> CreateAsync(string filePath, SeriesValues values,
+        IReadOnlyList<CompetitionValues>? competitions = null, CancellationToken ct = default);
     Task<ISeriesFileSession> OpenAsync(string filePath, CancellationToken ct = default);
 }
 
@@ -13,6 +14,8 @@ public interface ISeriesFileSession : IAsyncDisposable
     string FilePath { get; }
     Task<SeriesDetails> ReadAsync(CancellationToken ct = default);
     Task<SeriesDetails> SaveSeriesAsync(SeriesValues values, long expectedRevision, CancellationToken ct = default);
+    Task<SeriesDetails> ApplyCalendarAsync(SeriesValues values, IReadOnlyList<CompetitionValues> competitions,
+        long expectedRevision, CancellationToken ct = default);
     Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision, CancellationToken ct = default);
     Task<SeriesDetails> RemoveCompetitionAsync(Guid id, long expectedRevision, CancellationToken ct = default);
     Task<CompetitorDeskDetails> ReadCompetitorDeskAsync(CancellationToken ct = default);
@@ -48,13 +51,19 @@ public sealed class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactor
         => WithSessionAsync(s => (s as IResultStore ?? throw new SeriesFileException("Result storage is unavailable.")).ApproveResultAsync(request, ct), ct);
     public string? FilePath => _session?.FilePath;
     public bool IsOpen => _session is not null;
+    public Task<SavedRaceInformation?> ReadRaceInformationAsync(Guid competitionId, CancellationToken ct = default)
+        => WithSessionAsync(s => (s as IRaceInformationStore ?? throw new SeriesFileException("Race information storage is unavailable.")).ReadRaceInformationAsync(competitionId, ct), ct);
+    public Task<long> SaveRaceInformationAsync(Guid competitionId, RaceInformation values, long expectedRevision,
+        DateTimeOffset at, CancellationToken ct = default)
+        => WithSessionAsync(s => (s as IRaceInformationStore ?? throw new SeriesFileException("Race information storage is unavailable.")).SaveRaceInformationAsync(competitionId, values, expectedRevision, at, ct), ct);
 
-    public async Task<SeriesDetails> CreateAsync(string path, SeriesValues values, CancellationToken ct = default)
+    public async Task<SeriesDetails> CreateAsync(string path, SeriesValues values,
+        IReadOnlyList<CompetitionValues>? competitions = null, CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct);
         try
         {
-            var replacement = await store.CreateAsync(path, values, ct);
+            var replacement = await store.CreateAsync(path, values, competitions, ct);
             return await SwitchAsync(replacement, ct);
         }
         finally { _gate.Release(); }
@@ -111,6 +120,9 @@ public sealed class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactor
     public Task<SeriesDetails> ReadAsync(CancellationToken ct = default) => WithSessionAsync(s => s.ReadAsync(ct), ct);
     public Task<SeriesDetails> SaveSeriesAsync(SeriesValues values, long expectedRevision, CancellationToken ct = default)
         => WithSessionAsync(s => s.SaveSeriesAsync(values, expectedRevision, ct), ct);
+    public Task<SeriesDetails> ApplyCalendarAsync(SeriesValues values, IReadOnlyList<CompetitionValues> competitions,
+        long expectedRevision, CancellationToken ct = default)
+        => WithSessionAsync(s => s.ApplyCalendarAsync(values, competitions, expectedRevision, ct), ct);
     public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision, CancellationToken ct = default)
         => WithSessionAsync(s => s.SaveCompetitionAsync(id, values, expectedRevision, ct), ct);
     public Task<SeriesDetails> RemoveCompetitionAsync(Guid id, long expectedRevision, CancellationToken ct = default)

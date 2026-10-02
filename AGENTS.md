@@ -9,7 +9,7 @@
 - Record manual timing changes with operator, reason, time, old/new values and source references. Commit correction/audit together; undo adds history rather than erasing it.
 - Validate complete changes before mutation. Use explicit transactions, short-lived persistence contexts, database constraints and recoverable failures.
 - Apply exactly the accepted import preview. Absent columns and blank cells preserve values by default; clearing and ambiguous matches require explicit review. Normalize surnames consistently.
-- Protect existing race data. Test schema upgrades and backup/restore; never reset an operator database as an error-recovery shortcut.
+- Protect existing race data. During pre-release development, create new series files directly from the current model; do not implement database migrations or automatic schema upgrades. Reject incompatible development files without modifying them. Introduce migrations only when releases begin. Test backup/restore; never reset an operator database as an error-recovery shortcut.
 - Store each event series in its own portable local database, including raw timing input and audit history. Keep user preferences separate; transferring a series must not depend on the original machine or user profile.
 - Prioritize operator speed: dense consistent keyboard-friendly UI, preserved focus, clear status and actionable errors. Rendering and optional online integrations must not block capture.
 - Test behavior through the boundary claimed, including critical failure/replay paths. Run relevant build/tests and report unverified checks honestly. Update affected documentation with behavior changes.

@@ -132,7 +132,7 @@ public partial class DesktopWorkflowTests
             window.Show();
             var competitionGrid = window.GetVisualDescendants().OfType<DataGrid>()
                 .Single(x => ReferenceEquals(x.ItemsSource, vm.Competitions));
-            Assert.Contains(competitionGrid.Columns, x => Equals(x.Header, "PUBLIC NAME"));
+            Assert.Contains(competitionGrid.Columns, x => Equals(x.Header, "EVENT NAME"));
             CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "competitions-public-name.png");
             var activeRaceButton = window.FindControl<Button>("ActiveRaceButton")!;
             Assert.Equal("Choose competition  ▾", activeRaceButton.Content);
@@ -619,6 +619,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Add competition");
             vm.CompetitionName = "Slalom";
             vm.CompetitionShortLabel = "3.1 SL";
+            vm.CompetitionFisCode = "1234";
             AssertNumericDates(window);
             window.Width = 980;
             AssertFieldSpacing(window);
@@ -629,6 +630,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Add competition");
             vm.CompetitionName = "Giant slalom";
             vm.CompetitionShortLabel = "3.2 GS";
+            vm.CompetitionFisCode = "1235";
             Click(window, "Save competition");
             await vm.SaveCompetitionCommand.ExecutionTask!;
             Assert.Equal(2, vm.Competitions.Count);
@@ -939,7 +941,7 @@ public partial class DesktopWorkflowTests
     {
         window.UpdateLayout();
         foreach (var field in window.GetVisualDescendants().OfType<StackPanel>()
-            .Where(panel => panel.IsVisible && panel.Classes.Contains("field")))
+            .Where(panel => panel.IsEffectivelyVisible && panel.Classes.Contains("field")))
         {
             var children = field.Children.OfType<Control>().ToArray();
             Assert.Equal(2, children.Length);
@@ -949,7 +951,7 @@ public partial class DesktopWorkflowTests
         foreach (var grid in window.GetVisualDescendants().OfType<Grid>())
         {
             var fields = grid.Children.OfType<StackPanel>()
-                .Where(panel => panel.IsVisible && panel.Classes.Contains("field"))
+                .Where(panel => panel.IsEffectivelyVisible && panel.Classes.Contains("field"))
                 .OrderBy(panel => panel.Bounds.Left).ToArray();
             for (var i = 1; i < fields.Length; i++)
             {

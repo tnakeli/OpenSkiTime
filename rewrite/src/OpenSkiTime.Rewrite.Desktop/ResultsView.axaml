@@ -1,5 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="OpenSkiTime.Rewrite.Desktop.ResultsView" x:CompileBindings="False">
+             xmlns:local="using:OpenSkiTime.Rewrite.Desktop" x:Class="OpenSkiTime.Rewrite.Desktop.ResultsView" x:CompileBindings="False">
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <StackPanel Spacing="12">
       <Border Classes="workSurface" Padding="16">
@@ -13,7 +13,14 @@
                     Classes="secondaryAction" Margin="8,0,0,0" />
           </Grid>
           <TextBlock Text="{Binding ResultsState}" Classes="supportingText" />
-          <TextBlock Text="{Binding ResultsPointsList}" Classes="supportingText" />
+
+        </StackPanel>
+      </Border>
+      <Border Name="ResultsFisInformation" Classes="workSurface" Padding="16" IsVisible="{Binding ResultsIsFis}"><local:RaceInformationView /></Border>
+      <Border Classes="workSurface" Padding="16" IsVisible="{Binding ResultsIsFis}">
+        <StackPanel Spacing="10">
+          <StackPanel Spacing="2"><TextBlock Text="TD REVIEW / PENALTY" Classes="eyebrow" />
+            <TextBlock Text="Penalty calculation" Classes="sectionTitle" /></StackPanel>
           <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultRows}" AutoGenerateColumns="False" IsReadOnly="True"
                     Height="260" RowHeight="28" ColumnHeaderHeight="28" HeadersVisibility="Column">
             <DataGrid.Columns>
@@ -28,12 +35,6 @@
               <DataGridTextColumn Header="RACE PTS" Binding="{Binding RacePoints}" Width="100" />
             </DataGrid.Columns>
           </DataGrid>
-        </StackPanel>
-      </Border>
-      <Border Classes="workSurface" Padding="16">
-        <StackPanel Spacing="10">
-          <StackPanel Spacing="2"><TextBlock Text="TD REVIEW / PENALTY" Classes="eyebrow" />
-            <TextBlock Text="Penalty calculation" Classes="sectionTitle" /></StackPanel>
           <TextBlock Text="Enter the category values from the FIS points list effective on race day. No values are assumed." Classes="supportingText" />
           <StackPanel Orientation="Horizontal" Spacing="8">
             <StackPanel Classes="field" Width="115"><TextBlock Text="MINIMUM" Classes="fieldLabel" /><TextBox Text="{Binding ResultsMinimum}" Watermark="0.00" /></StackPanel>
@@ -56,47 +57,29 @@
           </Grid>
         </StackPanel>
       </Border>
-      <Border Classes="workSurface" Padding="16">
+      <Border Classes="workSurface" Padding="16" IsVisible="{Binding ResultsIsFis}">
         <StackPanel Spacing="10">
-          <StackPanel Spacing="2"><TextBlock Text="FIS ALPINE XML / APPROVAL" Classes="eyebrow" />
-            <TextBlock Text="Race information" Classes="sectionTitle" /></StackPanel>
-          <TextBlock Text="Check the codex, course and elevations in Competitions. Enter the FIS calendar category and required jury/run details here." Classes="supportingText" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <StackPanel Classes="field" Width="115"><TextBlock Text="CATEGORY" Classes="fieldLabel" /><TextBox Text="{Binding ResultsCategory}" Watermark="FIS" /></StackPanel>
-            <StackPanel Classes="field" Width="160"><TextBlock Text="TD FIRST NAME" Classes="fieldLabel" /><TextBox Text="{Binding ResultsTdFirstName}" /></StackPanel>
-            <StackPanel Classes="field" Width="160"><TextBlock Text="TD LAST NAME" Classes="fieldLabel" /><TextBox Text="{Binding ResultsTdLastName}" /></StackPanel>
-            <StackPanel Classes="field" Width="80"><TextBlock Text="TD NAT" Classes="fieldLabel" /><TextBox Text="{Binding ResultsTdNation}" /></StackPanel>
-            <StackPanel Classes="field" Width="160"><TextBlock Text="CHIEF FIRST NAME" Classes="fieldLabel" /><TextBox Text="{Binding ResultsChiefFirstName}" /></StackPanel>
-            <StackPanel Classes="field" Width="160"><TextBlock Text="CHIEF LAST NAME" Classes="fieldLabel" /><TextBox Text="{Binding ResultsChiefLastName}" /></StackPanel>
-            <StackPanel Classes="field" Width="80"><TextBlock Text="CHIEF NAT" Classes="fieldLabel" /><TextBox Text="{Binding ResultsChiefNation}" /></StackPanel>
-          </StackPanel>
-          <TextBlock Text="RUN 1 COURSE" Classes="fieldLabel" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <StackPanel Classes="field" Width="80"><TextBlock Text="GATES" Classes="fieldLabel" /><TextBox Text="{Binding ResultsRun1Gates}" /></StackPanel>
-            <StackPanel Classes="field" Width="80"><TextBlock Text="TURNS" Classes="fieldLabel" /><TextBox Text="{Binding ResultsRun1Turns}" /></StackPanel>
-            <StackPanel Classes="field" Width="100"><TextBlock Text="START HH:mm" Classes="fieldLabel" /><TextBox Text="{Binding ResultsRun1Start}" Watermark="10:00" /></StackPanel>
-            <StackPanel Classes="field" Width="160"><TextBlock Text="SETTER FIRST" Classes="fieldLabel" /><TextBox Text="{Binding ResultsSetter1FirstName}" /></StackPanel>
-            <StackPanel Classes="field" Width="160"><TextBlock Text="SETTER LAST" Classes="fieldLabel" /><TextBox Text="{Binding ResultsSetter1LastName}" /></StackPanel>
-            <StackPanel Classes="field" Width="80"><TextBlock Text="SETTER NAT" Classes="fieldLabel" /><TextBox Text="{Binding ResultsSetter1Nation}" /></StackPanel>
-          </StackPanel>
-          <StackPanel Spacing="6" IsVisible="{Binding ResultsHasSecondRun}">
-            <TextBlock Text="RUN 2 COURSE" Classes="fieldLabel" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <StackPanel Classes="field" Width="80"><TextBlock Text="GATES" Classes="fieldLabel" /><TextBox Text="{Binding ResultsRun2Gates}" /></StackPanel>
-              <StackPanel Classes="field" Width="80"><TextBlock Text="TURNS" Classes="fieldLabel" /><TextBox Text="{Binding ResultsRun2Turns}" /></StackPanel>
-              <StackPanel Classes="field" Width="100"><TextBlock Text="START HH:mm" Classes="fieldLabel" /><TextBox Text="{Binding ResultsRun2Start}" Watermark="13:00" /></StackPanel>
-              <StackPanel Classes="field" Width="160"><TextBlock Text="SETTER FIRST" Classes="fieldLabel" /><TextBox Text="{Binding ResultsSetter2FirstName}" /></StackPanel>
-              <StackPanel Classes="field" Width="160"><TextBlock Text="SETTER LAST" Classes="fieldLabel" /><TextBox Text="{Binding ResultsSetter2LastName}" /></StackPanel>
-              <StackPanel Classes="field" Width="80"><TextBlock Text="SETTER NAT" Classes="fieldLabel" /><TextBox Text="{Binding ResultsSetter2Nation}" /></StackPanel>
-            </StackPanel>
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="TD approves · create XML" Command="{Binding ApproveFisResultsCommand}" IsEnabled="{Binding ResultsReady}" Classes="primaryAction" />
-            <ComboBox Width="300" ItemsSource="{Binding ResultApprovals}" SelectedItem="{Binding SelectedResultApproval}"
-                      DisplayMemberBinding="{Binding XmlFileName}" />
+          <TextBlock Text="XML file" Classes="sectionTitle" />
+          <WrapPanel>
+            <Button Content="TD approves · create XML" Command="{Binding ApproveFisResultsCommand}" IsEnabled="{Binding ResultsReady}" Classes="primaryAction" Margin="0,0,8,0" />
+            <ComboBox Width="300" ItemsSource="{Binding ResultApprovals}" SelectedItem="{Binding SelectedResultApproval}" DisplayMemberBinding="{Binding XmlFileName}" Margin="0,0,8,0" />
             <Button Content="Export approved XML" Command="{Binding ExportApprovedXmlCommand}" Classes="secondaryAction" />
-          </StackPanel>
-          <TextBlock Text="Approved revisions remain in the event file. XML is exported locally; FIS submission is a later step." Classes="supportingText" />
+          </WrapPanel>
+          <TextBlock Text="Approval stores the exact XML and race information as an immutable revision in the event file." Classes="supportingText" TextWrapping="Wrap" />
+          <TextBlock Text="FIS upload · TEST MODE" Classes="sectionTitle" />
+          <TextBlock Text="Test mode is always on: FIS validates the upload without forwarding results for processing. Codex 9991 simulates success; 9992 simulates a permission failure. Other codices simulate an unknown race. The approved XML is sent unchanged." Classes="supportingText" TextWrapping="Wrap" />
+          <WrapPanel>
+            <Button Name="SendApprovedXmlTestButton" Content="Send XML · test mode" Command="{Binding SendApprovedXmlTestCommand}" IsEnabled="{Binding CanSendResultsXml}" Classes="primaryAction" Margin="0,0,8,0" />
+            <Button Content="Check status" Command="{Binding CheckResultsSubmissionCommand}" IsEnabled="{Binding CanCheckResultsSubmission}" Classes="secondaryAction" Margin="0,0,8,0" />
+            <Button Content="Stop waiting" Command="{Binding StopResultsSubmissionPollingCommand}" IsEnabled="{Binding IsSubmissionBusy}" Classes="secondaryAction" />
+          </WrapPanel>
+          <StackPanel Classes="field" MaxWidth="440" HorizontalAlignment="Left"><TextBlock Text="SUBMISSION ID (UUID)" Classes="fieldLabel" />
+            <TextBox Text="{Binding ResultSubmissionId}" Watermark="Returned UUID · paste to resume a test submission" IsReadOnly="{Binding IsSubmissionBusy}" /></StackPanel>
+          <TextBlock Text="{Binding ResultSubmissionStatus}" TextWrapping="Wrap" />
+          <Expander Header="FIS API response" IsExpanded="True">
+            <TextBox Name="FisSubmissionResponseBox" Text="{Binding ResultSubmissionResponse}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" MaxHeight="260" />
+          </Expander>
+          <TextBlock Text="Test status expires at FIS after 24 hours. The submission ID and response are retained in this session; copy the UUID to resume after restarting. Polling stops on completion or after two minutes. Member Section token permissions are configured in Settings." Classes="supportingText" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
     </StackPanel>

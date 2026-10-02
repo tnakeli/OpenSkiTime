@@ -1,7 +1,5 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
+using System.Text.Json;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Domain;
 using OpenSkiTime.Rewrite.Persistence;
@@ -166,6 +164,39 @@ public sealed class StartListTests
     }
 
     [Fact]
+    public async Task ClubCanBecomeFisAfterRunStartedWithoutRewritingTheDraw()
+    {
+        using var folder = new TestFolder();
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        var plan = await SeedAsync(workspace, folder.PathFor("type-change.ost"));
+        var series = await workspace.ReadAsync();
+        var club = plan.Competition with { RaceType = RaceType.Club, FisCode = null };
+        series = await workspace.SaveCompetitionAsync(plan.CompetitionId, club, series.Revision);
+        plan = plan with { Competition = club };
+        var desk = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Club draw", s_at));
+        var first = Assert.Single(desk.Revisions);
+        desk = await workspace.MarkRunStartedAsync(first.Id, desk.SeriesRevision, "Starter", s_at);
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveCompetitionAsync(plan.CompetitionId,
+            club with { RaceType = RaceType.Fis }, desk.SeriesRevision));
+        var fis = club with { RaceType = RaceType.Fis, FisCode = "5678" };
+        series = await workspace.SaveCompetitionAsync(plan.CompetitionId, fis, desk.SeriesRevision);
+        Assert.Equal(fis, Assert.Single(series.Competitions).Values);
+        var preserved = Assert.Single((await workspace.ReadStartListsAsync(plan.CompetitionId)).Revisions);
+        Assert.Equal(JsonSerializer.Serialize(plan), JsonSerializer.Serialize(preserved.Plan));
+        Assert.Equal(first.Id, preserved.Id); Assert.Equal(s_at, preserved.StartedAt);
+        foreach (var forbidden in new[] { fis with { Date = fis.Date.AddDays(1) },
+            fis with { Discipline = Discipline.GiantSlalom }, fis with { RunCount = 1 } })
+        { await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveCompetitionAsync(plan.CompetitionId, forbidden, series.Revision)); }
+        var results = first.Plan.Entries.Select((x, i) => new RunFinish(x.Entrant.CompetitorId, FinishStatus.Finished, 6000 + i)).ToArray();
+        var second = FisStartOrder.SecondRun(preserved, results);
+        var saved = await workspace.SaveStartListAsync(new(second, series.Revision, "Operator", "Run 2", s_at));
+        Assert.Equal(2, saved.Revisions.Count);
+        var transfer = folder.PathFor("transferred.ost"); await workspace.BackupAsync(transfer); await workspace.OpenAsync(transfer);
+        Assert.Equal(RaceType.Fis, Assert.Single((await workspace.ReadAsync()).Competitions).Values.RaceType);
+        Assert.Equal(RaceType.Club, (await workspace.ReadStartListsAsync(plan.CompetitionId)).Revisions[0].Plan.Competition.RaceType);
+    }
+
+    [Fact]
     public async Task FisDrawCannotSilentlyOmitTheOtherGenderFromACompetition()
     {
         using var folder = new TestFolder();
@@ -184,20 +215,19 @@ public sealed class StartListTests
     }
 
     [Fact]
-    public async Task M4UpgradePreservesApprovedListsWithoutInventingAStart()
+    public async Task ReopenPreservesApprovedListsWithoutInventingAStart()
     {
         using var folder = new TestFolder();
         var path = folder.PathFor("m4.ost");
         await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
         var plan = await SeedAsync(workspace, path);
         var series = await workspace.ReadAsync();
-        var draft = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Before upgrade", s_at));
+        var draft = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Before reopen", s_at));
         var id = Assert.Single(draft.Revisions).Id;
         await workspace.CloseAsync();
         var options = new DbContextOptionsBuilder<SeriesDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options;
         await using (var db = new SeriesDbContext(options))
         {
-            await db.GetService<IMigrator>().MigrateAsync("20260927144413_StartLists");
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE StartLists SET ApprovedAt = {s_at} WHERE Id = {id}");
         }
         await workspace.OpenAsync(path);
@@ -206,28 +236,6 @@ public sealed class StartListTests
         Assert.Equal(s_at, reopened.ApprovedAt);
         Assert.Null(reopened.StartedAt);
         Assert.Equal(plan.Entries, reopened.Plan.Entries);
-        Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "m4.ost.before-upgrade-*.ost"));
-    }
-
-    [Fact]
-    public async Task M3FileUpgradeKeepsOldDataAndCreatesStartListConstraints()
-    {
-        using var folder = new TestFolder();
-        var path = folder.PathFor("m3.ost");
-        var options = new DbContextOptionsBuilder<SeriesDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options;
-        await using (var db = new SeriesDbContext(options))
-        {
-            await db.GetService<IMigrator>().MigrateAsync("20260926161344_ImportReceipts");
-            await db.Database.ExecuteSqlRawAsync("INSERT INTO Series (SingleRow,FormatId,Id,Name,Location,Organizer,StartDate,EndDate,Nation,Season,Revision) VALUES (1,'OpenSkiTime.New/1','11111111-1111-1111-1111-111111111111','Synthetic','Test','Test','2026-09-27','2026-09-27','FIN','2026/27',1)");
-        }
-        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
-        Assert.Equal("Synthetic", (await workspace.OpenAsync(path)).Values.Name);
-        Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "m3.ost.before-upgrade-*.ost"));
-        await using var connection = new SqliteConnection($"Data Source={path};Pooling=False");
-        await connection.OpenAsync();
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('Runs','StartLists','StartListEntries')";
-        Assert.Equal(3L, await command.ExecuteScalarAsync());
     }
 
     private static async Task<StartListPlan> SeedAsync(SeriesWorkspace workspace, string path)
