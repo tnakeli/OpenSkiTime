@@ -159,6 +159,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty] private int _competitionIntermediateCount;
     [ObservableProperty] private string _competitionFisCode = string.Empty;
     [ObservableProperty] private string _competitionCourseName = string.Empty;
+    [ObservableProperty] private bool _saveCourseToAllRaces;
+    [ObservableProperty] private bool _saveTdToAllRaces;
     [ObservableProperty] private string _competitionCourseLength = string.Empty;
     [ObservableProperty] private string _competitionStartAltitude = string.Empty;
     [ObservableProperty] private string _competitionFinishAltitude = string.Empty;
@@ -167,6 +169,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     partial void OnSelectedCompetitionChanged(CompetitionDetails? value)
     {
+        SaveCourseToAllRaces = false;
+        SaveTdToAllRaces = false;
         if (value is null) { return; }
         DeskCompetition = value;
         _editingCompetitionId = value.Id;
@@ -376,6 +380,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     private void NewCompetition()
     {
         if (!CanEditCompetitions) { return; }
+        SaveCourseToAllRaces = false;
+        SaveTdToAllRaces = false;
         SelectedCompetition = null;
         _editingCompetitionId = null;
         CompetitionEditorTitle = "New competition";
@@ -393,7 +399,9 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     }
 
     [RelayCommand]
-    private async Task SaveCompetitionAsync()
+    private Task SaveCompetitionAsync() => SaveCompetitionCoreAsync(SaveCourseToAllRaces, SaveTdToAllRaces);
+
+    private async Task SaveCompetitionCoreAsync(bool shareCourse, bool shareTd = false)
     {
         await GuardAsync(async () =>
         {
@@ -403,15 +411,24 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
                 ? (await workspace.ReadAsync()).Revision
                 : _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
             var values = DraftCompetition().Validated();
-            var details = await workspace.SaveCompetitionAsync(_editingCompetitionId, values, revision);
+            var details = await workspace.SaveCompetitionAsync(_editingCompetitionId, values, revision, shareCourse, shareTd);
             var id = _editingCompetitionId;
-            if (id is { } savedId) { InvalidateCompetitionInformation([savedId]); }
+            if (shareCourse || shareTd) { InvalidateCompetitionInformation(details.Competitions.Select(c => c.Id)); }
+            else if (id is { } savedId) { InvalidateCompetitionInformation([savedId]); }
             Apply(details);
             SelectedCompetition = id is null
                 ? details.Competitions.Single(c => c.Values.ShortLabel.Equals(values.ShortLabel, StringComparison.OrdinalIgnoreCase))
                 : details.Competitions.FirstOrDefault(c => c.Id == id);
             await LoadCompetitorDeskAsync();
-            SetStatus("Competition saved.");
+            SaveCourseToAllRaces = false;
+            SaveTdToAllRaces = false;
+            SetStatus((shareCourse, shareTd) switch
+            {
+                (true, true) => "Competition saved. Course, homologation and TD saved to all races.",
+                (true, false) => "Competition saved. Course and homologation saved to all races.",
+                (false, true) => "Competition saved. TD saved to all races.",
+                _ => "Competition saved."
+            });
         });
     }
 

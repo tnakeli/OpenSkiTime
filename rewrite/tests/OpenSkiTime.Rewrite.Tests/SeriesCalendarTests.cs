@@ -16,7 +16,7 @@ public sealed class SeriesCalendarTests
         => new("Synthetic race", "SL W " + codex, new(2026, 3, 21), discipline, RaceType.Fis, 2, 0, codex,
             Calendar: new(2026, "Test place", "FIN", "FIS", "W", new("TESTLAST", "Testfirst", "FIN", "1047")));
 
-    private static byte[] Archive(bool duplicate = false)
+    private static byte[] Archive(bool duplicate = false, string additionalRaces = "")
     {
         using var output = new MemoryStream();
         using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
@@ -28,7 +28,7 @@ public sealed class SeriesCalendarTests
                 var first = "123\t456\t2026\t0034\tSL\tFIS\tW\t\0" + "2026-03-21 00:00:00\0\tTest place\tFIN\tTestlast Testfirst (FIN)\tFIN\t1047\t123/10/26\n";
                 writer.Write("Raceid\tEventid\tSeasoncode\tRacecodex\tDisciplinecode\tCatcode\tGender\tRacedate\tPlace\tNationcode\tTd1name\tTd1nation\tTd1code\tHomol\n" + first
                     + "124\t456\t2026\t0035\tDH\tMAS\tM\t2026-03-22\tTest place\tFIN\t\t\t\t\n"
-                    + "125\t456\t2026\t0036\tPAR\tFIS\tW\t2026-03-22\tTest place\tFIN\t\t\t\t\n" + (duplicate ? first : ""));
+                    + "125\t456\t2026\t0036\tPAR\tFIS\tW\t2026-03-22\tTest place\tFIN\t\t\t\t\n" + additionalRaces + (duplicate ? first : ""));
             }
         }
         return output.ToArray();
@@ -50,6 +50,10 @@ public sealed class SeriesCalendarTests
         Assert.Equal(s_series.Location, item.Location); Assert.Equal(s_series.Nation, item.Nation);
         Assert.Equal(s_series.StartDate, item.StartDate); Assert.Equal(s_series.EndDate, item.EndDate);
         Assert.Equal(2, item.Competitions.Count); Assert.Equal("0034", item.Competitions[0].FisCode);
+        Assert.Equal("SL1 W 21.3", item.Competitions[0].ShortLabel);
+        Assert.Equal("Synthetic weekend - SL Women 0034", item.Competitions[0].Name);
+        Assert.Equal("DH1 M 22.3", item.Competitions[1].ShortLabel);
+        Assert.Equal("Synthetic weekend - DH Men 0035", item.Competitions[1].Name);
         Assert.Equal("TESTLAST", item.Competitions[0].Calendar!.TechnicalDelegate!.LastName);
         Assert.Equal("1047", item.Competitions[0].Calendar!.TechnicalDelegate!.Number);
         Assert.Equal("123/10/26", item.Competitions[0].HomologationNumber);
@@ -57,6 +61,25 @@ public sealed class SeriesCalendarTests
         Assert.Equal("MAS", item.Competitions[1].Calendar!.Category);
         Assert.Empty(FisRaceInformationClient.ReadCalendarEvents(Archive(), 2027, "synthetic"));
         Assert.Throws<DomainValidationException>(() => FisRaceInformationClient.ReadCalendarEvents(Archive(true), 2026, "synthetic"));
+    }
+
+    [Fact]
+    public void CalendarNamesNumberEachDisciplineAndGenderByDateThenCodex()
+    {
+        var archive = Archive(additionalRaces:
+            "126\t456\t2026\t0798\tSL\tFIS\tW\t2026-01-05\tTest place\tFIN\t\t\t\t\n"
+            + "127\t456\t2026\t0797\tSL\tFIS\tW\t2026-01-04\tTest place\tFIN\t\t\t\t\n"
+            + "128\t456\t2026\t0796\tSL\tFIS\tW\t2026-01-05\tTest place\tFIN\t\t\t\t\n"
+            + "129\t456\t2026\t0799\tSL\tFIS\tM\t2026-01-04\tTest place\tFIN\t\t\t\t\n"
+            + "130\t456\t2026\t0800\tGS\tFIS\tW\t2026-01-04\tTest place\tFIN\t\t\t\t\n");
+        var races = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(archive, 2026, "synthetic")).Competitions;
+        Assert.Equal("SL1 W 4.1", races.Single(x => x.FisCode == "0797").ShortLabel);
+        Assert.Equal("Synthetic weekend - SL Women 0797", races.Single(x => x.FisCode == "0797").Name);
+        Assert.Equal("SL2 W 5.1", races.Single(x => x.FisCode == "0796").ShortLabel);
+        Assert.Equal("SL3 W 5.1", races.Single(x => x.FisCode == "0798").ShortLabel);
+        Assert.Equal("SL4 W 21.3", races.Single(x => x.FisCode == "0034").ShortLabel);
+        Assert.Equal("SL1 M 4.1", races.Single(x => x.FisCode == "0799").ShortLabel);
+        Assert.Equal("GS1 W 4.1", races.Single(x => x.FisCode == "0800").ShortLabel);
     }
 
     [Fact]
@@ -87,6 +110,7 @@ public sealed class SeriesCalendarTests
             Assert.Equal(2, created.Competitions.Count);
             await workspace.CloseAsync(); var reopened = await workspace.OpenAsync(file);
             Assert.Equal(s_series, reopened.Values); Assert.Equal(item.Competitions.Select(x => x.FisCode), reopened.Competitions.Select(x => x.Values.FisCode));
+            Assert.Equal(item.Competitions.Select(x => (x.Name, x.ShortLabel)), reopened.Competitions.Select(x => (x.Values.Name, x.Values.ShortLabel)));
             var invalid = Path.Combine(folder, "invalid.ost");
             await Assert.ThrowsAsync<DomainValidationException>(() => workspace.CreateAsync(invalid, s_series, [Race("0034"), Race("0034")]));
             Assert.False(File.Exists(invalid)); Assert.Equal(file, workspace.FilePath);

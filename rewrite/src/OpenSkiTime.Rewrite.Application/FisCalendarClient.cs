@@ -89,12 +89,35 @@ public sealed partial class FisRaceInformationClient
                     var location = string.IsNullOrWhiteSpace(summary.PlaceName) ? Value(e, "Place") : summary.PlaceName;
                     var calendar = new CompetitionCalendarData(season, location!, summary.PlaceNationCode ?? "",
                         summary.CategoryCode, summary.GenderCode ?? "", CalendarTechnicalDelegate(r), source).Validated();
-                    var name = string.IsNullOrWhiteSpace(Value(e, "Eventname")) ? $"{location} {code}" : Value(e, "Eventname");
-                    competitions.Add(new CompetitionValues(name!, $"{code} {calendar.Gender} {codex:0000}", date, discipline.Value,
+                    var eventName = string.IsNullOrWhiteSpace(Value(e, "Eventname")) ? location : Value(e, "Eventname");
+                    var genderName = calendar.Gender switch { "W" => "Women", "M" => "Men", "A" => "Mixed", _ => calendar.Gender };
+                    var name = $"{eventName} - {code} {genderName} {codex:0000}";
+                    competitions.Add(new CompetitionValues(name, $"{code} {calendar.Gender} {codex:0000}", date, discipline.Value,
                         RaceType.Fis, discipline is Discipline.Downhill or Discipline.SuperG ? 1 : 2, 0, codex.ToString("0000", CultureInfo.InvariantCulture),
                         HomologationNumber: Value(r, "Homol"), Calendar: calendar).Validated());
                 }
                 if (competitions.Count == 0) { continue; }
+                // Number each discipline/gender chronologically, with codex as a stable same-day tie-breaker.
+                competitions = competitions.OrderBy(x => x.Date).ThenBy(x => x.FisCode, StringComparer.Ordinal).ToList();
+                var raceNumbers = new Dictionary<(Discipline, string), int>();
+                for (var i = 0; i < competitions.Count; i++)
+                {
+                    var race = competitions[i];
+                    var gender = race.Calendar!.Gender;
+                    var key = (race.Discipline, gender);
+                    var number = raceNumbers.GetValueOrDefault(key) + 1;
+                    raceNumbers[key] = number;
+                    var code = race.Discipline switch
+                    {
+                        Discipline.Slalom => "SL", Discipline.GiantSlalom => "GS", Discipline.SuperG => "SG",
+                        Discipline.Downhill => "DH", Discipline.AlpineCombined => "AC",
+                        _ => throw new DomainValidationException("Unsupported calendar discipline.")
+                    };
+                    competitions[i] = (race with
+                    {
+                        ShortLabel = FormattableString.Invariant($"{code}{number} {gender} {race.Date.Day}.{race.Date.Month}")
+                    }).Validated();
+                }
                 var locationName = Value(e, "Place");
                 var nameValue = Value(e, "Eventname");
                 result.Add(new(id, season, string.IsNullOrWhiteSpace(nameValue) ? locationName : nameValue,

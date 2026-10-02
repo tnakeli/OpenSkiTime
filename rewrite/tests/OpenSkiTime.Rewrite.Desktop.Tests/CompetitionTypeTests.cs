@@ -14,6 +14,49 @@ namespace OpenSkiTime.Rewrite.Tests;
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
+    public async Task CategoryCanBeEditedThroughTheFormAndReopenedIndependentlyOfFisRules()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-category-edit-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var path = Path.Combine(folder, "test.ost"); var date = new DateOnly(2026, 10, 2);
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var series = await workspace.CreateAsync(path, new("Test", "Test place", "Club", date, date, "FIN", "2026/27"));
+            await workspace.SaveCompetitionAsync(null, new("Synthetic race", "SL1 W 2.10", date, Discipline.Slalom,
+                RaceType.Fis, 2, 0, "0034", Calendar: new(2027, "Test place", "FIN", "NJR", "W", null)), series.Revision);
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = path, OpenPath = path, BackupPath = path + ".bak" },
+                fisStore: new FisLocalStore(folder), recentSeriesStore: new RecentSeriesStore(folder));
+            await vm.OpenSeriesCommand.ExecuteAsync(null); vm.ShowCompetitionsCommand.Execute(null);
+            vm.SelectedCompetition = Assert.Single(vm.Competitions);
+            var window = new MainWindow { DataContext = vm, Width = 1280, Height = 900, WindowState = WindowState.Normal };
+            window.Show(); window.UpdateLayout();
+            var input = window.FindControl<TextBox>("CompetitionCategoryInput")!;
+            var rules = window.FindControl<CheckBox>("CompetitionFisCheckBox")!;
+            Assert.Equal("NJR", input.Text); Assert.False(input.IsReadOnly); Assert.True(input.IsEnabled);
+            foreach (var category in new[] { "FIS", "NC", "NJR" })
+            {
+                input.Text = category.ToLowerInvariant();
+                Assert.Equal(category.ToLowerInvariant(), vm.CompetitionCalendarCategory);
+                await vm.SaveCompetitionCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError);
+                var saved = Assert.Single((await workspace.ReadAsync()).Competitions).Values;
+                Assert.Equal(category, saved.Calendar!.Category); Assert.Equal(RaceType.Fis, saved.RaceType);
+                Assert.Equal(category, Assert.Single(vm.Competitions).Values.Calendar!.Category);
+            }
+            rules.IsChecked = false; window.UpdateLayout();
+            Assert.False(input.IsEnabled); Assert.Equal("NJR", vm.CompetitionCalendarCategory);
+            rules.IsChecked = true; window.UpdateLayout();
+            Assert.True(input.IsEnabled); Assert.Equal("NJR", input.Text);
+            await vm.OpenSeriesCommand.ExecuteAsync(null); vm.ShowCompetitionsCommand.Execute(null);
+            vm.SelectedCompetition = Assert.Single(vm.Competitions); window.UpdateLayout();
+            Assert.Equal("NJR", input.Text); Assert.True(rules.IsChecked);
+            window.Close();
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
     public async Task CompetitionCalendarFieldsAreSharedAndPersistFromTheCompetitionEditor()
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-calendar-ui-" + Guid.NewGuid().ToString("N"));
@@ -76,7 +119,7 @@ public partial class DesktopWorkflowTests
             var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1280, Height = 820 };
             window.Show(); window.UpdateLayout();
             var picker = window.FindControl<CheckBox>("CompetitionFisCheckBox")!;
-            Assert.Equal(false, picker.IsChecked); Assert.Equal("FIS competition", picker.Content);
+            Assert.Equal(false, picker.IsChecked); Assert.Equal("Use FIS rules", picker.Content);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "LOCAL RACE CODE" || x.Text == "RACE TYPE");
             Assert.False(window.FindControl<StackPanel>("CompetitionFisCodeField")!.IsVisible);
             picker.IsChecked = true; window.UpdateLayout();

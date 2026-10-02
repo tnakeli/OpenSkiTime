@@ -19,6 +19,58 @@ namespace OpenSkiTime.Rewrite.Tests;
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
+    public async Task SharedCourseCheckboxUpdatesAllRacesAndResetsAfterSaveAndSelectionChange()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-shared-course-ui-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var path = Path.Combine(folder, "test.ost"); var date = new DateOnly(2026, 10, 2);
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var race = new CompetitionValues("Synthetic race", "SL1 W", date, Discipline.Slalom, RaceType.Fis, 2, 0, "0034");
+            await workspace.CreateAsync(path, new("Test", "Test place", "Club", date, date, "FIN", "2026/27"),
+                [race, race with { ShortLabel = "SL2 W", FisCode = "0035" }]);
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = path, OpenPath = path, BackupPath = path + ".bak" },
+                fisStore: new FisLocalStore(folder), recentSeriesStore: new RecentSeriesStore(folder));
+            await vm.OpenSeriesCommand.ExecuteAsync(null); vm.ShowCompetitionsCommand.Execute(null);
+            vm.SelectedCompetition = vm.Competitions[0];
+            var window = new MainWindow { DataContext = vm, Width = 1280, Height = 1000, WindowState = WindowState.Normal };
+            window.Show(); window.UpdateLayout();
+            var checkbox = window.FindControl<CheckBox>("SaveCourseToAllRacesCheckBox")!;
+            var tdCheckbox = window.FindControl<CheckBox>("SaveTdToAllRacesCheckBox")!;
+            Assert.False(tdCheckbox.IsChecked);
+            Assert.True(tdCheckbox.Bounds.X > checkbox.Bounds.X);
+            Assert.False(checkbox.IsChecked); checkbox.IsChecked = true;
+            Assert.True(vm.SaveCourseToAllRaces);
+            vm.SelectedCompetition = vm.Competitions[1]; Assert.False(vm.SaveCourseToAllRaces);
+            vm.CompetitionCourseName = "Shared slope"; vm.CompetitionHomologation = "123/10/26";
+            vm.CompetitionStartAltitude = "500"; vm.CompetitionFinishAltitude = "300";
+            vm.CompetitionVerticalDrop = "200"; vm.CompetitionCourseLength = "640";
+            checkbox.IsChecked = true;
+            tdCheckbox.IsChecked = true;
+            vm.CompetitionTdLastName = "TESTLAST"; vm.CompetitionTdFirstName = "Testfirst";
+            vm.CompetitionTdNation = "FIN"; vm.CompetitionTdNumber = "1047";
+            var save = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save competition"));
+            Assert.Same(vm.SaveCompetitionCommand, save.Command);
+            await vm.SaveCompetitionCommand.ExecuteAsync(null);
+            Assert.False(vm.IsError); Assert.False(vm.SaveCourseToAllRaces); Assert.False(checkbox.IsChecked);
+            Assert.False(vm.SaveTdToAllRaces); Assert.False(tdCheckbox.IsChecked);
+            Assert.Contains("all races", vm.StatusMessage);
+            Assert.All((await workspace.ReadAsync()).Competitions, x =>
+            {
+                Assert.Equal("Shared slope", x.Values.CourseName); Assert.Equal("123/10/26", x.Values.HomologationNumber);
+                Assert.Equal(500, x.Values.StartAltitudeMeters); Assert.Equal(640, x.Values.CourseLengthMeters);
+                Assert.Equal("1047", x.Values.Calendar!.TechnicalDelegate!.Number);
+            });
+            tdCheckbox.IsChecked = true;
+            vm.SelectedCompetition = vm.Competitions.First(x => x.Id != vm.SelectedCompetition!.Id);
+            Assert.False(vm.SaveTdToAllRaces);
+            window.Close();
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
     public async Task LateHomologationResponseCannotFillAnotherLocation()
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-late-course-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder);
@@ -123,6 +175,7 @@ public partial class DesktopWorkflowTests
             var grid = window.FindControl<DataGrid>("CompetitionsGrid")!;
             Assert.Equal(DataGridSelectionMode.Single, grid.SelectionMode);
             Assert.Contains(grid.Columns, x => Equals(x.Header, "CODEX")); Assert.Contains(grid.Columns, x => Equals(x.Header, "HOMOLOGATION"));
+            Assert.Contains(grid.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "123/10/26 500m - 300m");
             grid.SelectedItem = target; window.UpdateLayout();
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "COPY FROM COMPETITION");
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Copy to selected competitions"));

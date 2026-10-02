@@ -97,7 +97,7 @@ public sealed partial class MainViewModel
             CompetitionName = values.Name; CompetitionShortLabel = values.ShortLabel; CompetitionDateText = FormatDate(values.Date);
             CompetitionDiscipline = values.Discipline; CompetitionRunCount = values.RunCount;
             LoadCompetitionCalendar(values);
-            await SaveCompetitionAsync();
+            await SaveCompetitionCoreAsync(false);
             CompetitionCalendarStatus = IsError ? "Competition data could not be saved. " + StatusMessage : data.Note + " Saved in the event file.";
         }
         catch (Exception ex) when (ex is DomainValidationException or HttpRequestException or IOException or OperationCanceledException

@@ -4,6 +4,9 @@
         x:Class="OpenSkiTime.Rewrite.Desktop.MainWindow" x:CompileBindings="False"
         Title="{Binding WindowTitle}" Width="1280" Height="820" MinWidth="980" MinHeight="680" WindowState="Maximized"
         Background="{DynamicResource CanvasBrush}">
+  <Window.Resources>
+    <local:HomologationDisplayConverter x:Key="HomologationDisplayConverter" />
+  </Window.Resources>
   <Window.Styles>
     <Style Selector="DataGrid#CompetitorGrid DataGridColumnHeader">
       <Setter Property="Padding" Value="4,0" />
@@ -207,7 +210,7 @@
                 <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Calendar.Gender}" Width="85" />
                 <DataGridTextColumn Header="LOCATION" Binding="{Binding Values.Calendar.Location}" Width="100" />
                 <DataGridTextColumn Header="COURSE" Binding="{Binding Values.CourseName}" Width="105" />
-                <DataGridTextColumn Header="HOMOLOGATION" Binding="{Binding Values.HomologationNumber}" Width="140" />
+                <DataGridTextColumn Header="HOMOLOGATION" Binding="{Binding Values, Converter={StaticResource HomologationDisplayConverter}}" Width="240" />
                 <DataGridTextColumn Header="TD SURNAME" Binding="{Binding Values.Calendar.TechnicalDelegate.LastName}" Width="150" />
                 <DataGridTextColumn Header="TD NUMBER" Binding="{Binding Values.Calendar.TechnicalDelegate.Number}" Width="110" />
                 <DataGridTextColumn Header="RUNS" Binding="{Binding Values.RunCount}" Width="75" />
@@ -250,7 +253,15 @@
                       <TextBlock Text="DISCIPLINE" Classes="fieldLabel" />
                       <ComboBox ItemsSource="{Binding Disciplines}" SelectedItem="{Binding CompetitionDiscipline}" />
                     </StackPanel>
-                    <CheckBox Name="CompetitionFisCheckBox" Grid.Column="2" Content="FIS competition" IsChecked="{Binding IsCompetitionFis}" VerticalAlignment="Bottom" MinHeight="34" />
+                    <Grid Grid.Column="2" ColumnDefinitions="*,12,Auto">
+                      <StackPanel Classes="field">
+                        <TextBlock Text="FIS CATEGORY" Classes="fieldLabel" />
+                        <TextBox Name="CompetitionCategoryInput" Text="{Binding CompetitionCalendarCategory, Mode=TwoWay}"
+                                 IsEnabled="{Binding IsCompetitionFis}" Watermark="e.g. NJR, FIS, NC"
+                                 ToolTip.Tip="Enter the FIS calendar category code. This is separate from the FIS rules setting." />
+                      </StackPanel>
+                      <CheckBox Name="CompetitionFisCheckBox" Grid.Column="2" Content="Use FIS rules" IsChecked="{Binding IsCompetitionFis}" VerticalAlignment="Bottom" MinHeight="34" />
+                    </Grid>
                     <StackPanel Grid.Column="4" Classes="field">
                       <TextBlock Text="RUNS" Classes="fieldLabel" />
                       <NumericUpDown Value="{Binding CompetitionRunCount}" Minimum="1" Maximum="9" FormatString="0" />
@@ -269,11 +280,10 @@
                       <Button Name="GetCompetitionDataButton" Content="Get competition data" Command="{Binding GetCompetitionDataCommand}" IsEnabled="{Binding !IsCompetitionDataBusy}" Classes="secondaryAction" VerticalAlignment="Bottom" />
                     </WrapPanel>
                     <TextBlock Text="{Binding CompetitionCalendarStatus}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding HasCompetitionCalendarStatus}" />
-                    <Grid ColumnDefinitions="2*,12,110,12,140,12,110">
+                    <Grid ColumnDefinitions="2*,12,110,12,110">
                       <StackPanel Grid.Column="0" Classes="field"><TextBlock Text="LOCATION" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionLocation}" /></StackPanel>
                       <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionNation}" MaxLength="3" /></StackPanel>
-                      <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="FIS CATEGORY" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionCalendarCategory}" /></StackPanel>
-                      <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="GENDER" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding CompetitionGenders}" SelectedItem="{Binding CompetitionGender}" /></StackPanel>
+                      <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="GENDER" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding CompetitionGenders}" SelectedItem="{Binding CompetitionGender}" /></StackPanel>
                     </Grid>
                     <TextBlock Text="TECHNICAL DELEGATE" Classes="fieldLabel" />
                     <Grid ColumnDefinitions="*,12,*,12,110,12,110">
@@ -326,6 +336,13 @@
                       </StackPanel>
                     </Grid>
                   </StackPanel>
+                <WrapPanel>
+                  <CheckBox Name="SaveCourseToAllRacesCheckBox" Content="Save Course &amp; Homologation to all races" Margin="0,0,20,0"
+                          IsChecked="{Binding SaveCourseToAllRaces}"
+                          ToolTip.Tip="Also replace course name, homologation, start/finish altitudes, vertical drop and course length in every race in this series, including blank values." />
+                  <CheckBox Name="SaveTdToAllRacesCheckBox" Content="Save TD to all races" IsChecked="{Binding SaveTdToAllRaces}"
+                            ToolTip.Tip="Also replace TD surname, first name, nation and number in every race in this series, including blank values." />
+                </WrapPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <Button Content="Save competition" Command="{Binding SaveCompetitionCommand}" Classes="primaryAction" />
                   <Button Content="Remove competition" Command="{Binding RemoveCompetitionCommand}" Classes="dangerAction" IsVisible="{Binding SelectedCompetition}" />
