@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Desktop;
 using OpenSkiTime.Rewrite.Persistence;
@@ -54,24 +55,22 @@ public partial class DesktopWorkflowTests
             var selected = vm.SelectedSeriesCalendarEvent;
             vm.SortCalendar(CalendarColumn.Start, true);
             Assert.Same(selected, vm.SelectedSeriesCalendarEvent);
-            var nationHeader = Assert.IsType<Button>(grid.Columns[3].Header);
+            window.UpdateLayout(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var nationHeader = grid.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "CalendarFilterButton_Nation");
             nationHeader.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             var filterPanel = Assert.IsType<StackPanel>(window.CalendarFilterMenu!.Content);
             var search = filterPanel.Children.OfType<TextBox>().Single();
-            var selectAll = filterPanel.Children.OfType<CheckBox>().Single();
-            Assert.True(selectAll.IsChecked);
-            selectAll.IsChecked = false;
+            search.Text = "SWE";
             var actions = filterPanel.Children.OfType<StackPanel>().Last();
             actions.Children.OfType<Button>().Single(x => x.Name == "CalendarFilterCancel").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Single(vm.SeriesCalendarEvents); Assert.Same(selected, vm.SelectedSeriesCalendarEvent);
             nationHeader.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             filterPanel = Assert.IsType<StackPanel>(window.CalendarFilterMenu!.Content);
-            search = filterPanel.Children.OfType<TextBox>().Single(); search.Text = "FIN";
-            selectAll = filterPanel.Children.OfType<CheckBox>().Single(); selectAll.IsChecked = false;
+            search = filterPanel.Children.OfType<TextBox>().Single(); search.Text = "SWE";
             actions = filterPanel.Children.OfType<StackPanel>().Last();
             actions.Children.OfType<Button>().Single(x => x.Name == "CalendarFilterApply").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Empty(vm.SeriesCalendarEvents); Assert.Null(vm.SelectedSeriesCalendarEvent); Assert.Empty(vm.SeriesCalendarCompetitions);
-            Assert.Contains("●", nationHeader.Content!.ToString(), StringComparison.Ordinal);
+            Assert.Equal("SWE", vm.CalendarTextFilter(CalendarColumn.Nation));
             vm.ClearCalendarFiltersCommand.Execute(null); Assert.Single(vm.SeriesCalendarEvents);
             grid.SelectedItem = vm.SeriesCalendarEvents.Single(); window.UpdateLayout();
             Assert.Equal(2, vm.SeriesCalendarCompetitions.Count);
@@ -154,25 +153,22 @@ public partial class DesktopWorkflowTests
                 Assert.Same(selected, vm.SelectedSeriesCalendarEvent); Assert.Equal(2, vm.SeriesCalendarCompetitions.Count);
                 vm.ApplyCalendarFilter(CalendarColumn.Nation, ["SWE"]); Assert.Empty(vm.SeriesCalendarEvents); Assert.Null(vm.SelectedSeriesCalendarEvent);
                 vm.ClearCalendarFiltersCommand.Execute(null); Assert.Equal(2, vm.SeriesCalendarEvents.Count);
-                var nation = Assert.IsType<Button>(grid.Columns[3].Header);
+                window.UpdateLayout(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                var nation = grid.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "CalendarFilterButton_Nation");
                 nation.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 var panel = Assert.IsType<StackPanel>(window.CalendarFilterMenu!.Content);
                 panel.Children.OfType<TextBox>().Single().Text = "swe";
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                var list = Assert.IsType<StackPanel>(panel.Children.OfType<ScrollViewer>().Single().Content);
-                Assert.Equal("SWE", Assert.Single(list.Children.OfType<CheckBox>()).Content);
+                Assert.Empty(panel.Children.OfType<CheckBox>());
                 panel.Children.OfType<StackPanel>().Last().Children.OfType<Button>().Single(x => x.Name == "CalendarFilterApply")
                     .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal("SWE", Assert.Single(vm.SeriesCalendarEvents).Nation);
-                Assert.Contains("●", nation.Content!.ToString(), StringComparison.Ordinal);
+                Assert.Equal("swe", vm.CalendarTextFilter(CalendarColumn.Nation));
                 grid.SelectedItem = vm.SeriesCalendarEvents.Single(); selected = vm.SelectedSeriesCalendarEvent;
                 await vm.BrowseSeriesCalendarCommand.ExecuteAsync(null);
                 Assert.Equal(selected!.Id, vm.SelectedSeriesCalendarEvent!.Id); Assert.Equal(12, vm.SeriesCalendarCompetitions.Count);
                 nation.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-                panel = Assert.IsType<StackPanel>(window.CalendarFilterMenu!.Content);
-                panel.Children.OfType<StackPanel>().Last().Children.OfType<Button>().Single(x => x.Name == "CalendarFilterClear")
-                    .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-                Assert.Equal(2, vm.SeriesCalendarEvents.Count); Assert.DoesNotContain("●", nation.Content!.ToString(), StringComparison.Ordinal);
+                Assert.Equal(2, vm.SeriesCalendarEvents.Count); Assert.Equal("", vm.CalendarTextFilter(CalendarColumn.Nation));
             }
             finally { window.Close(); }
         }

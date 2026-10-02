@@ -6,7 +6,7 @@ namespace OpenSkiTime.Rewrite.Application;
 public sealed record RaceOfficial(string Function, FisPerson Person);
 public sealed record RaceForerunner(string Letter, FisPerson Person);
 public sealed record RaceWeather(string Conditions = "", string Snow = "", decimal? StartTemperature = null,
-    decimal? FinishTemperature = null, string Source = "");
+    decimal? FinishTemperature = null, string Source = "", decimal? UnlocatedTemperature = null);
 public sealed record RaceRunInformation(int Number, FisPerson CourseSetter, int? Gates = null,
     int? TurningGates = null, string StartTime = "", string Course = "", int? StartAltitude = null,
     int? FinishAltitude = null, int? Drop = null, int? Length = null, string Homologation = "",
@@ -82,7 +82,8 @@ public sealed record RaceInformation(string Category, IReadOnlyList<RaceOfficial
             { throw new DomainValidationException("Use HH:mm for run start times."); }
             if (new[] { run.StartAltitude, run.FinishAltitude, run.Drop, run.Length }.Any(x => x is < 0 or > 9000))
             { throw new DomainValidationException("Course dimensions must be between 0 and 9000 metres."); }
-            if ((run.Weather?.StartTemperature is < -100 or > 100) || (run.Weather?.FinishTemperature is < -100 or > 100))
+            if ((run.Weather?.StartTemperature is < -100 or > 100) || (run.Weather?.FinishTemperature is < -100 or > 100)
+                || (run.Weather?.UnlocatedTemperature is < -100 or > 100))
             { throw new DomainValidationException("Temperatures must be between -100 and 100 °C."); }
             var runners = run.Forerunners ?? [];
             if (runners.Any(x => x.Letter.Length is < 1 or > 16 || !x.Letter.All(char.IsAsciiLetterOrDigit))

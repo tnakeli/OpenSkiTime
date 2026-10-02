@@ -104,6 +104,27 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _observationBibText = "";
     [ObservableProperty] private string _timingReason = "";
     [ObservableProperty] private string _correctedTimeText = "";
+    [ObservableProperty] private bool _showTimingClassificationEditor;
+    [ObservableProperty] private string _timingClassification = "DSQ";
+    [ObservableProperty] private string _timingDsqGate = "";
+    [ObservableProperty] private string _timingDsqReason = "";
+    [ObservableProperty] private string _timingDsqJudge = "";
+    private int? _classificationEditorBib;
+    public IReadOnlyList<string> TimingClassifications { get; } = ["DSQ", "DNF", "DNS", "NPS", "Clear"];
+    public bool IsTimingDsq => TimingClassification == "DSQ";
+    partial void OnTimingClassificationChanged(string value) => OnPropertyChanged(nameof(IsTimingDsq));
+    partial void OnShowTimingClassificationEditorChanged(bool value)
+    { if (value) { LoadTimingClassificationEditor(SelectedTimingRow); } }
+
+    private void LoadTimingClassificationEditor(TimingGridRow? row)
+    {
+        _classificationEditorBib = row?.Bib;
+        TimingClassification = row?.Result.Status is TimingStatus.DSQ or TimingStatus.DNF or TimingStatus.DNS or TimingStatus.NPS
+            ? row.Result.Status.ToString() : "DSQ";
+        TimingDsqGate = row?.Result.Disqualification?.Gate?.ToString(CultureInfo.InvariantCulture) ?? "";
+        TimingDsqReason = row?.Result.Disqualification?.Reason ?? "";
+        TimingDsqJudge = row?.Result.Disqualification?.Judge ?? "";
+    }
     [ObservableProperty] private string _simulationTime = "12:00:00.0000";
     [ObservableProperty] private TimingGridRow? _selectedTimingRow;
     public IReadOnlyList<int> SelectedTimingBibs { get; private set; } = [];
@@ -157,6 +178,8 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(HasSelectedTimingProblem));
         ReturnToStartCommand.NotifyCanExecuteChanged();
         if (value is null) { return; }
+        if (!ShowTimingClassificationEditor || value.Bib != _classificationEditorBib)
+        { LoadTimingClassificationEditor(value); }
         ObservationBibText = value.Bib.ToString(CultureInfo.InvariantCulture);
         CorrectedTimeText = value.Result.Hundredths is null ? "" : value.Time;
     }
@@ -205,6 +228,12 @@ public sealed partial class MainViewModel
             if (changingRun || !timing.IsActive) { await timing.SelectRunAsync(list.Id); }
             else if (_timingList?.Plan.Competition.IntermediateCount != currentCompetition.Values.IntermediateCount)
             { await timing.RefreshIntermediateCountAsync(); }
+            if (changingRun)
+            {
+                ShowTimingClassificationEditor = false;
+                LoadTimingClassificationEditor(null);
+                TimingReason = "";
+            }
             TimingCompetition = currentCompetition;
             TimingRun = destination.Run;
             SetActiveRace(TimingCompetition, destination.Run, WorkspaceSection.Timing);
@@ -445,6 +474,38 @@ public sealed partial class MainViewModel
     }
 
     [RelayCommand]
+    private async Task SaveTimingClassificationAsync()
+    {
+        await GuardAsync(async () =>
+        {
+            if (SelectedTimingRow is not { } row || workspace.Timing is not { } timing)
+            { throw new DomainValidationException("Select a competitor in this run."); }
+            TimingStatus? status = TimingClassification == "Clear" ? null
+                : TimingClassifications.Contains(TimingClassification) ? Enum.Parse<TimingStatus>(TimingClassification)
+                : throw new DomainValidationException("Choose DSQ, DNF, DNS, NPS or Clear.");
+            DisqualificationDetails? dsq = null;
+            if (status == TimingStatus.DSQ)
+            {
+                int? gate = null;
+                if (!string.IsNullOrWhiteSpace(TimingDsqGate))
+                {
+                    if (!int.TryParse(TimingDsqGate.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+                    { throw new DomainValidationException("Enter a whole gate number or leave it empty."); }
+                    gate = parsed;
+                }
+                dsq = new(gate, TimingDsqReason.Trim(), TimingDsqJudge.Trim());
+                dsq.Validate();
+            }
+            var reason = string.IsNullOrWhiteSpace(TimingReason)
+                ? status is null ? "Operator cleared classification" : "Operator reviewed " + status
+                : TimingReason.Trim();
+            await timing.CorrectStatusesAsync([row.Bib], status, TimingOperator, reason, disqualification: dsq);
+            RefreshTiming();
+            SetStatus($"Bib {row.Bib}: classification saved with correction history.");
+        });
+    }
+
+    [RelayCommand]
     private async Task CorrectTimingTimeAsync()
     {
         await GuardAsync(async () =>
@@ -544,7 +605,11 @@ public sealed partial class MainViewModel
     private static string Describe(TimingDecision value) => value.Kind switch
     {
         DecisionKind.Assignment => value.Ignored ? "Ignored" : value.Bib?.ToString(CultureInfo.InvariantCulture) ?? "Unassigned",
-        DecisionKind.Status => value.Status?.ToString() ?? "Use recorded times",
+        DecisionKind.Status => value.Status is null ? "Use recorded times" : value.Status
+            + (value.Disqualification is { } dsq ? string.Concat(
+                dsq.Gate is { } gate ? $" · Gate {gate}" : "",
+                dsq.Reason.Length > 0 ? " · " + dsq.Reason : "",
+                dsq.Judge.Length > 0 ? " · Judge " + dsq.Judge : "") : ""),
         DecisionKind.StartOrder => value.StartOrder ?? "Draw order",
         _ => value.Hundredths is null ? "Use recorded times" : TimingTime.Format(value.Hundredths)
     };
@@ -572,6 +637,7 @@ public sealed partial class MainViewModel
         TimingCheckpoints.Clear(); ShowTimingCorrection = false;
         SelectedTimingRow = null; SelectedTimingObservation = null; SelectedTimingHistory = null;
         SelectedTimingBibs = [];
+        ShowTimingClassificationEditor = false; LoadTimingClassificationEditor(null);
         StartBibText = FinishBibText = TimingReason = CorrectedTimeText = "";
         IsTimingConnected = false; RefreshRaceQueues(); NotifyTiming();
     }

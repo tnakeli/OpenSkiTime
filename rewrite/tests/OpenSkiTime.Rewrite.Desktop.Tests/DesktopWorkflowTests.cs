@@ -137,7 +137,7 @@ public partial class DesktopWorkflowTests
             var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1280, Height = 800 };
             window.Show();
             var competitionGrid = window.GetVisualDescendants().OfType<DataGrid>()
-                .Single(x => ReferenceEquals(x.ItemsSource, vm.Competitions));
+                .Single(x => ReferenceEquals(x.ItemsSource, vm.CompetitionView));
             Assert.Contains(competitionGrid.Columns, x => Equals(x.Header, "EVENT NAME"));
             CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "competitions-public-name.png");
             var activeRaceButton = window.FindControl<Button>("ActiveRaceButton")!;

@@ -85,7 +85,8 @@ public static class TimingEngine
                 return new TimingSplit(number, pulse.Key, valid ? (pulse.DeviceTicks - starts[0].DeviceTicks) / TimingTime.TicksPerHundredth : null,
                     valid ? "" : "Review intermediate impulses / clock continuity");
             }).ToArray();
-            rows.Add(new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail) { Splits = splits });
+            rows.Add(new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
+            { Splits = splits, Disqualification = status == TimingStatus.DSQ ? classification?.Disqualification : null });
         }
         var ranked = rows.Where(x => x.Status == TimingStatus.Finished).OrderBy(x => x.Hundredths).ThenBy(x => x.Bib).ToArray();
         var ranks = ranked.Select((x, i) => (x.CompetitorId, Rank: Array.FindIndex(ranked, r => r.Hundredths == x.Hundredths) + 1))
@@ -164,6 +165,12 @@ public static class TimingEngine
     public static void ValidateDecisionShape(TimingDecision decision)
     {
         ArgumentNullException.ThrowIfNull(decision);
+        if (decision.Disqualification is { } dsq)
+        {
+            if (decision.Kind != DecisionKind.Status || decision.Status != TimingStatus.DSQ)
+            { throw new DomainValidationException("Gate, disqualification reason and judge belong to a DSQ classification only."); }
+            dsq.Validate();
+        }
         var valid = decision.Kind switch
         {
             DecisionKind.Assignment => !string.IsNullOrWhiteSpace(decision.ObservationKey) && decision.ObservationKey.Split(':').Length >= 2

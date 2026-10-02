@@ -14,7 +14,16 @@ public sealed record TimingObservation(string Key, Guid SessionId, long PacketSe
 
 public sealed record TimingDecision(DecisionKind Kind, string? ObservationKey = null, Guid? CompetitorId = null,
     int? Bib = null, bool Ignored = false, TimingStatus? Status = null, long? Hundredths = null,
-    string? StartOrder = null);
+    string? StartOrder = null, DisqualificationDetails? Disqualification = null);
+
+public sealed record DisqualificationDetails(int? Gate = null, string Reason = "", string Judge = "")
+{
+    public void Validate()
+    {
+        if (Gate is <= 0 or > 1000 || Reason is null || Judge is null || Reason.Length > 1000 || Judge.Length > 160)
+        { throw new DomainValidationException("DSQ gate must be 1–1000; reason at most 1000 characters and judge at most 160."); }
+    }
+}
 
 public sealed record TimingAudit(long Id, Guid ListId, DateTimeOffset At, string Operator, string Reason,
     TimingDecision Before, TimingDecision After, long? ReversesId = null);
@@ -23,6 +32,7 @@ public sealed record TimingResult(StartListEntry Entry, TimingStatus Status, lon
     int? Rank, string? StartKey, string? FinishKey, string Detail)
 {
     public IReadOnlyList<TimingSplit> Splits { get; init; } = [];
+    public DisqualificationDetails? Disqualification { get; init; }
     public int Bib => Entry.Bib;
     public Guid CompetitorId => Entry.Entrant.CompetitorId;
     public string Name => Entry.Entrant.Athlete.Surname + " " + Entry.Entrant.Athlete.FirstName;

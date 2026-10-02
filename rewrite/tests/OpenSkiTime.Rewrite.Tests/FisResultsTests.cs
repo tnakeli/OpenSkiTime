@@ -135,8 +135,11 @@ public sealed class FisResultsTests
         Assert.Equal(10, FisRaceResults.Assemble(list, withExtra).Rows.Count);
     }
 
-    [Fact]
-    public void TwoRunNonFinisherRetainsRunAndFirstBibInXml()
+    [Theory]
+    [InlineData(TimingStatus.DNS)]
+    [InlineData(TimingStatus.DNF)]
+    [InlineData(TimingStatus.DSQ)]
+    public void TwoRunNonFinisherRetainsRunAndFirstBibInXml(TimingStatus status)
     {
         var (oneRunList, firstTiming) = Fixture();
         var first = oneRunList with { Plan = oneRunList.Plan with
@@ -144,10 +147,11 @@ public sealed class FisResultsTests
         var secondPlan = FisStartOrder.SecondRun(first, firstTiming.ToRunFinishes());
         var second = first with { Id = Guid.NewGuid(), Plan = secondPlan };
         var secondTiming = new TimingSnapshot(second.Id, 0, secondPlan.Entries.Select(entry =>
-            new TimingResult(entry, entry.Bib == 1 ? TimingStatus.DNS : TimingStatus.Finished,
-                entry.Bib == 1 ? null : 5100 + entry.Bib * 100, null, null, null, "")).ToArray(), [], []);
+            new TimingResult(entry, entry.Bib == 1 ? status : TimingStatus.Finished,
+                entry.Bib == 1 ? null : 5100 + entry.Bib * 100, null, null, null, "")
+            { Disqualification = entry.Bib == 1 && status == TimingStatus.DSQ ? new(19, "629.3", "Test judge") : null }).ToArray(), [], []);
         var race = FisRaceResults.Assemble(first, firstTiming with { ListId = first.Id }, second, secondTiming);
-        Assert.Equal(TimingStatus.DNS, race.Rows.Single(x => x.Entry.Bib == 1).Status);
+        Assert.Equal(status, race.Rows.Single(x => x.Entry.Bib == 1).Status);
         Assert.Equal(2, race.Rows.Single(x => x.Entry.Bib == 1).StatusRun);
         var penalty = FisPenalty.Calculate(Discipline.Slalom, race.PenaltyCompetitors, new(0, 999, 0));
         var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"),
@@ -156,11 +160,38 @@ public sealed class FisResultsTests
         var doc = XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race,
             new("Series", "Ruka", "Club", s_race.Date, s_race.Date, "FIN", "2026-27"), penalty, details)));
         var notRanked = Assert.Single(doc.Descendants("AL_notranked"));
-        Assert.Equal("DNS2", notRanked.Attribute("Status")?.Value);
+        Assert.Equal(status + "2", notRanked.Attribute("Status")?.Value);
         Assert.Equal("1", notRanked.Element("Bib")?.Value);
         Assert.Equal("2", notRanked.Element("Run")?.Value);
         Assert.Equal("00:50:00", notRanked.Element("AL_result")?.Element("Timerun1")?.Value);
+        Assert.Equal(status == TimingStatus.DSQ ? "19" : null, notRanked.Element("Gate")?.Value);
+        Assert.Equal(status == TimingStatus.DSQ ? "629.3" : null, notRanked.Element("Reason")?.Value);
+        Assert.DoesNotContain("Test judge", doc.ToString(), StringComparison.Ordinal);
         Assert.Equal(9, doc.Descendants("AL_ranked").Count());
+    }
+
+    [Fact]
+    public void AuditedRun1DisqualificationAfterRun2KeepsSavedOrderAndRecalculatesFinalRanks()
+    {
+        var (oneRun, original) = Fixture();
+        var first = oneRun with { Plan = oneRun.Plan with { Competition = oneRun.Plan.Competition with { RunCount = 2 } } };
+        var secondPlan = FisStartOrder.SecondRun(first, original.ToRunFinishes());
+        var second = first with { Id = Guid.NewGuid(), Plan = secondPlan };
+        var secondTiming = new TimingSnapshot(second.Id, 0, secondPlan.Entries.Select(entry =>
+            new TimingResult(entry, TimingStatus.Finished, 5000, null, null, null, "")).ToArray(), [], []);
+        var id = original.Results[0].CompetitorId;
+        var dsq = new DisqualificationDetails(12, "629.3", "Test judge");
+        var reviewed = original with { Results = original.Results.Select(x => x.CompetitorId == id
+            ? x with { Status = TimingStatus.DSQ, Hundredths = null, Rank = null, Disqualification = dsq } : x).ToArray(),
+            Audit = [new(1, first.Id, first.CreatedAt, "Operator", "Post-run jury decision",
+                new(DecisionKind.Status, CompetitorId: id), new(DecisionKind.Status, CompetitorId: id, Status: TimingStatus.DSQ, Disqualification: dsq))] };
+        var result = FisRaceResults.Assemble(first, reviewed, second, secondTiming);
+        var disqualified = result.Rows.Single(x => x.Entry.Bib == 1);
+        Assert.Equal(TimingStatus.DSQ, disqualified.Status); Assert.Equal(1, disqualified.StatusRun);
+        Assert.Equal(dsq, disqualified.Disqualification); Assert.Null(disqualified.TotalHundredths);
+        Assert.Equal(1, result.Rows.Single(x => x.Entry.Bib == 2).Rank);
+        Assert.Throws<DomainValidationException>(() => FisRaceResults.Assemble(first, original with {
+            Results = original.Results.Select(x => x.CompetitorId == id ? x with { Hundredths = 9000 } : x).ToArray() }, second, secondTiming));
     }
 
     [Fact]
@@ -181,6 +212,24 @@ public sealed class FisResultsTests
         Assert.Equal(10, doc.Descendants("AL_ranked").Count());
         Assert.Equal("00:50:00", doc.Descendants("Totaltime").First().Value);
         Assert.Equal("FIN1234.xml", FisResultXml.FileName(race, new("Series", "Ruka", "Club", s_race.Date, s_race.Date, "FIN", "2026-27")));
+    }
+
+    [Fact]
+    public void XmlDoesNotInventWeatherMeasurementPlace()
+    {
+        var (list, timing) = Fixture();
+        var race = FisRaceResults.Assemble(list, timing);
+        var penalty = FisPenalty.Calculate(Discipline.Slalom, race.PenaltyCompetitors, new(0, 999, 0));
+        var empty = RaceInformation.Empty(s_race);
+        var information = empty with { Runs = [empty.Runs[0] with
+            { Weather = new("Clear", "Hard", UnlocatedTemperature: -2.5m) }] };
+        var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"),
+            [new(45, 43, "10:00", new("S", "Setter", "FIN"))], information);
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race,
+            new("Series", "Test", "Club", s_race.Date, s_race.Date, "FIN", "2026/27"), penalty, details)));
+        var weather = Assert.Single(doc.Descendants("Runinfo").Single().Elements("Weather"));
+        Assert.Null(weather.Element("Place")); Assert.Equal("-2.5", weather.Element("Temperatureair")!.Value);
+        Assert.Equal("Clear", weather.Element("Weather")!.Value);
     }
 
     [Fact]

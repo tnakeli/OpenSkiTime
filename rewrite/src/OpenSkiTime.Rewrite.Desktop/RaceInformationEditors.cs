@@ -50,6 +50,7 @@ public sealed partial class RaceRunEditor : ObservableObject
     [ObservableProperty] private string _snow = "";
     [ObservableProperty] private string _startTemperature = "";
     [ObservableProperty] private string _finishTemperature = "";
+    [ObservableProperty] private string _unlocatedTemperature = "";
     [ObservableProperty] private string _weatherSource = "";
     [ObservableProperty] private string _forecastTemperature = "";
 
@@ -62,6 +63,7 @@ public sealed partial class RaceRunEditor : ObservableObject
         Drop = Format(run.Drop); Length = Format(run.Length); Homologation = run.Homologation;
         Conditions = run.Weather?.Conditions ?? ""; Snow = run.Weather?.Snow ?? "";
         StartTemperature = Format(run.Weather?.StartTemperature); FinishTemperature = Format(run.Weather?.FinishTemperature);
+        UnlocatedTemperature = Format(run.Weather?.UnlocatedTemperature);
         WeatherSource = run.Weather?.Source ?? "";
         foreach (var runner in run.Forerunners ?? [])
         { Forerunners.Add(new() { Letter = runner.Letter, FirstName = runner.Person.FirstName, LastName = runner.Person.LastName, Nation = runner.Person.Nation }); }
@@ -77,7 +79,7 @@ public sealed partial class RaceRunEditor : ObservableObject
     public RaceRunInformation Values => new(Number, Setter.Values, Integer(Gates, "Gates"), Integer(TurningGates, "Turns"),
         StartTime.Trim(), Course.Trim(), Integer(StartAltitude, "Start altitude"), Integer(FinishAltitude, "Finish altitude"),
         Integer(Drop, "Drop"), Integer(Length, "Length"), Homologation.Trim(), Forerunners.Select(x => x.Values).ToArray(),
-        new(Conditions.Trim(), Snow.Trim(), Temperature(StartTemperature), Temperature(FinishTemperature), WeatherSource));
+        new(Conditions.Trim(), Snow.Trim(), Temperature(StartTemperature), Temperature(FinishTemperature), WeatherSource, Temperature(UnlocatedTemperature)));
 
     [RelayCommand]
     private void AddForerunner()

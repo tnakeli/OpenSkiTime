@@ -18,7 +18,7 @@ public sealed partial class MainViewModel
     private DataGridCollectionView? _rankingView;
     public ObservableCollection<TimingGridRow> AtStartRows { get; } = [];
     public ObservableCollection<TimingGridRow> RunningRows { get; } = [];
-    public ObservableCollection<TimingGridRow> RankingRows { get; } = [];
+    public TimingRankingRows RankingRows { get; } = [];
     public DataGridCollectionView RankingView => _rankingView ??= new(RankingRows);
     public bool HasTimingCategories => _desk?.Categories.Count > 0;
     public ObservableCollection<TimingGridRow> OnCourseRows { get; } = [];
@@ -189,10 +189,10 @@ public sealed partial class MainViewModel
             if (HasTimingCategories && RankingView.GroupDescriptions.Count == 0)
             { RankingView.GroupDescriptions.Add(new DataGridPathGroupDescription(nameof(TimingGridRow.Category))); }
             else if (!HasTimingCategories && RankingView.GroupDescriptions.Count > 0) { RankingView.GroupDescriptions.Clear(); }
-            SyncTimingRows(RankingRows, ranked.OrderBy(x => categoryOrder.GetValueOrDefault(x.Category, int.MaxValue))
+            RankingRows.UpdateRows(() => SyncTimingRows(RankingRows, ranked.OrderBy(x => categoryOrder.GetValueOrDefault(x.Category, int.MaxValue))
                 .ThenBy(x => x.Category, StringComparer.Ordinal).ThenBy(x => RankedTime(x) ?? long.MaxValue).ThenBy(x => x.Position)
                 .Select(x => x with { DisplayRank = RankedTime(x) is { } time
-                    ? ranked.Count(y => y.Category == x.Category && RankedTime(y) is { } other && other < time) + 1 : null }).ToArray());
+                    ? ranked.Count(y => y.Category == x.Category && RankedTime(y) is { } other && other < time) + 1 : null }).ToArray()));
             RaceQueueVersion++;
             OnPropertyChanged(nameof(RaceQueueVersion));
             OnCourseLabel = $"ON COURSE · {onCourse.Length}";

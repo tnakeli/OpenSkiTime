@@ -38,6 +38,7 @@ public sealed partial class TimingView : UserControl
 
     private void BindViewModel(MainViewModel? vm)
     {
+        if (!ReferenceEquals(_viewModel, vm)) { InstallRankingColumnControls(vm); }
         if (_viewModel is not null) { _viewModel.PropertyChanged -= OnViewModelChanged; }
         if (!ReferenceEquals(_viewModel, vm)) { _splitCount = -1; }
         _viewModel = vm;
