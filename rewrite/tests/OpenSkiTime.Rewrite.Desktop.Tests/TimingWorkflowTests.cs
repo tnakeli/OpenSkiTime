@@ -136,7 +136,8 @@ public partial class DesktopWorkflowTests
             menu.Hide();
             Assert.True(vm.IsTimingSection);
             Assert.Contains("Run 1", vm.TimingContext, StringComparison.Ordinal);
-            Assert.Contains("1234", vm.WindowTitle, StringComparison.Ordinal);
+            Assert.Equal(vm.FileLabel, vm.WindowTitle);
+            Assert.Equal(vm.TimingCompetition!.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             CaptureDraw(window, output, "timing-device.png");
             vm.TimingSource = "Simulator";
             vm.TimingIntermediateChannels = "2"; // A configured Timy channel must not block a race with no intermediates.

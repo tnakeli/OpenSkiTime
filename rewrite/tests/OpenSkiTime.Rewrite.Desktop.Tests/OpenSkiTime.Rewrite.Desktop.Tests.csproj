@@ -6,5 +6,7 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="Avalonia.Headless.XUnit" />
     <ProjectReference Include="../../src/OpenSkiTime.Rewrite.Desktop/OpenSkiTime.Rewrite.Desktop.csproj" />
+    <Compile Include="../OpenSkiTime.LiveTiming.Tests/ProcessFixture.cs" Link="LiveTimingProcessFixture.cs" />
   </ItemGroup>
+  <Import Project="../../LiveTimingArtifacts.targets" />
 </Project>

@@ -60,12 +60,17 @@ public sealed class SeriesCalendarTests
     }
 
     [Fact]
-    public async Task CancelledRaceRejectsEventBeforeApplication()
+    public async Task CancelledRaceAllowsEventButChangedIdentityStillRejectsIt()
     {
         var item = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(Archive(), 2026, "synthetic"));
-        using var handler = new Handler(_ => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(
-            new FisCompetitionInformation(123, 34, 2026, new(2026, 3, 21), "SL", "FIS", "FIN", true, "Test place", "W", 456))) });
+        var changed = false;
+        using var handler = new Handler(request => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(
+            request.RequestUri!.AbsolutePath.EndsWith("/34", StringComparison.Ordinal)
+                ? new FisCompetitionInformation(123, 34, 2026, new(2026, 3, changed ? 20 : 21), "SL", "FIS", "FIN", true, "Test place", "W", 456)
+                : new FisCompetitionInformation(124, 35, 2026, new(2026, 3, 22), "DH", "MAS", "FIN", true, "Test place", "M", 456))) });
         using var http = new HttpClient(handler);
+        await new FisRaceInformationClient(http).ValidateCalendarEventAsync(item, "synthetic-key");
+        changed = true;
         await Assert.ThrowsAsync<DomainValidationException>(() => new FisRaceInformationClient(http).ValidateCalendarEventAsync(item, "synthetic-key"));
     }
 

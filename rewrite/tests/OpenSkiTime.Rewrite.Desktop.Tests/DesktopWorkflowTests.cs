@@ -59,6 +59,12 @@ public partial class DesktopWorkflowTests
             Assert.Equal(RaceType.Fis, Assert.Single(vm.FisCompetitions).Values.RaceType);
             Assert.Equal("FIS", vm.ResultsCompetition?.Values.ShortLabel);
             Assert.NotEqual(club.Id, vm.ResultsCompetition?.Id);
+            var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1280, Height = 800 };
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("FIS Slalom", window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
+            Assert.Contains("FIS", window.FindControl<Button>("ActiveRaceButton")!.Content!.ToString(), StringComparison.Ordinal);
+            Assert.Equal(path, window.Title);
+            window.Close();
         }
         finally
         {
@@ -160,12 +166,19 @@ public partial class DesktopWorkflowTests
             Assert.True(activeMenu.IsSubMenuOpen);
             CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "active-start-menu.png");
             Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
+            foreach (var navigation in new[] { vm.ShowSeriesCommand, vm.ShowCompetitorsCommand, vm.ShowSettingsCommand, vm.ShowCompetitionsCommand })
+            {
+                navigation.Execute(null); Dispatcher.UIThread.RunJobs();
+                Assert.Equal(competition.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
+                Assert.Contains(competition.Values.ShortLabel, activeRaceButton.Content!.ToString(), StringComparison.Ordinal);
+            }
             vm.ShowCompetitionsCommand.Execute(null);
             activeRaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await vm.OpenDrawRunCommand.ExecutionTask!;
             Assert.True(vm.IsDrawSection);
             Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
-            Assert.Contains("1234", vm.WindowTitle, StringComparison.Ordinal);
+            Assert.Equal(vm.FileLabel, vm.WindowTitle);
+            Assert.Equal(competition.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             Assert.Equal("Waiting for draw", vm.DrawState);
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
@@ -235,9 +248,11 @@ public partial class DesktopWorkflowTests
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(competition, vm.DrawCompetition);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == vm.DrawContext && x.Text.Contains("SL NEW", StringComparison.Ordinal));
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == vm.DrawContext);
+            Assert.Equal("Corrected Slalom", window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
+            Assert.Contains("SL NEW", vm.ActiveRaceLabel, StringComparison.Ordinal);
             Assert.DoesNotContain("Corrected Slalom", vm.DrawContext, StringComparison.Ordinal);
-            Assert.Contains("SL NEW", vm.WindowTitle, StringComparison.Ordinal);
+            Assert.Equal(vm.FileLabel, vm.WindowTitle);
             dialogs.ExportPath = Path.Combine(root, "start-list.tsv");
             Click(window, "Export TSV");
             await vm.ExportDrawCommand.ExecutionTask!;
@@ -510,8 +525,8 @@ public partial class DesktopWorkflowTests
             window.UpdateLayout();
             var codeHeader = window.GetVisualDescendants().OfType<DataGridColumnHeader>()
                 .Single(x => Equals(x.Content, "CODE"));
-            var headerPoint = codeHeader.TranslatePoint(
-                new Point(codeHeader.Bounds.Width / 2, codeHeader.Bounds.Height / 2), window)!.Value;
+            var sortButton = codeHeader.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "CompetitorSort_FederationCode");
+            var headerPoint = sortButton.TranslatePoint(new Point(sortButton.Bounds.Width / 2, sortButton.Bounds.Height / 2), window)!.Value;
             Assert.True(codeHeader.IsVisible && codeHeader.Bounds.Width > 0 && codeHeader.Bounds.Height > 0,
                 $"Header not visible: window={window.Bounds}, header={codeHeader.Bounds}, point={headerPoint}");
             window.MouseDown(headerPoint, MouseButton.Left);
@@ -782,6 +797,18 @@ public partial class DesktopWorkflowTests
             window.MouseUp(checkPoint, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             Assert.All(selectedRows, x => Assert.False(x.GridEntries.Single(y => y.Label == "3.1 SL").IsParticipating));
+            Assert.Equal(selectedRows.Length, grid.SelectedItems.Count);
+            Assert.All(selectedRows, x => Assert.Contains(x, grid.SelectedItems.Cast<object>()));
+            // Repeat the actual pointer click: the retained selection must remain usable.
+            window.MouseDown(checkPoint, MouseButton.Left);
+            window.MouseUp(checkPoint, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.All(selectedRows, x => Assert.True(x.GridEntries.Single(y => y.Label == "3.1 SL").IsParticipating));
+            Assert.Equal(selectedRows.Length, grid.SelectedItems.Count);
+            window.MouseDown(checkPoint, MouseButton.Left);
+            window.MouseUp(checkPoint, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(selectedRows.Length, grid.SelectedItems.Count);
             Assert.Equal(2, vm.DeskChangeLog.Count(x => x.Kind == DeskChangeKind.Entry));
             Assert.All(vm.DeskChangeLog, x => Assert.Contains(" → ", x.DisplayLabel));
             selectedSl.IsParticipating = true;

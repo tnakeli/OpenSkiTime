@@ -4,7 +4,6 @@
     <Grid RowDefinitions="Auto,Auto,*">
       <Grid Margin="0,0,0,10">
         <StackPanel Spacing="3" VerticalAlignment="Center">
-          <TextBlock Text="{Binding DrawContext}" Classes="sectionTitle" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DrawContext}" />
           <TextBlock Text="{Binding DrawState}" Classes="supportingText" />
         </StackPanel>
       </Grid>

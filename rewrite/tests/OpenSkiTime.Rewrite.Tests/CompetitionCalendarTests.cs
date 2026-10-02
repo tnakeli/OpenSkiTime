@@ -27,8 +27,10 @@ public sealed class CompetitionCalendarTests
         return stream.ToArray();
     }
 
-    [Fact]
-    public async Task CodexAndDatedCalendarProvideAllSharedFieldsWithoutOauth()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CodexAndDatedCalendarProvideAllSharedFieldsWithoutOauth(bool cancelled)
     {
         var calls = new List<string>();
         using var handler = new Handler(request =>
@@ -37,7 +39,7 @@ public sealed class CompetitionCalendarTests
             Assert.Null(request.Headers.Authorization);
             Assert.Equal("synthetic-key", Assert.Single(request.Headers.GetValues("X-Api-Key")));
             return new(HttpStatusCode.OK) { Content = calls.Count == 1
-                ? new StringContent(JsonSerializer.Serialize(s_summary), Encoding.UTF8, "application/json") : new ByteArrayContent(CalendarZip()) };
+                ? new StringContent(JsonSerializer.Serialize(s_summary with { IsCancelled = cancelled }), Encoding.UTF8, "application/json") : new ByteArrayContent(CalendarZip()) };
         });
         using var http = new HttpClient(handler);
         var data = await new FisRaceInformationClient(http).GetCompetitionAsync(2026, "0034", "synthetic-key", new(2026, 10, 2));
@@ -46,6 +48,8 @@ public sealed class CompetitionCalendarTests
         Assert.Equal("FIN", data.Competition.PlaceNationCode); Assert.Equal("W", data.Competition.GenderCode);
         Assert.Equal("Synthetic FIS event", data.EventName); Assert.Equal("FIS", data.Competition.CategoryCode);
         Assert.Equal(new CompetitionTechnicalDelegateInfo("Testlastname", "Testfirst", "FIN", "1047"), data.TechnicalDelegate);
+        Assert.Equal(cancelled, data.Competition.IsCancelled);
+        Assert.Equal(cancelled, data.Note.Contains("cancelled", StringComparison.Ordinal));
     }
 
     [Fact]

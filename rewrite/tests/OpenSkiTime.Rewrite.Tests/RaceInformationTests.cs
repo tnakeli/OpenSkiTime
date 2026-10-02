@@ -58,11 +58,13 @@ public sealed class RaceInformationTests
         finally { Directory.Delete(folder, true); }
     }
 
-    [Fact]
-    public async Task FisPublicLookupUsesExplicitSeasonAndOnlyApiKey()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FisPublicLookupUsesExplicitSeasonAndOnlyApiKey(bool cancelled)
     {
         var requests = new List<string>();
-        var detail = new FisCompetitionInformation(123, 34, 2027, s_date, "SL", "NC", "FIN", false);
+        var detail = new FisCompetitionInformation(123, 34, 2027, s_date, "SL", "NC", "FIN", cancelled);
         using var handler = new ResponseHandler(request =>
         {
             requests.Add(request.RequestUri!.ToString());
@@ -75,6 +77,7 @@ public sealed class RaceInformationTests
         Assert.EndsWith("/AL/34?season=2027", Assert.Single(requests));
         Assert.Equal("NC", Assert.Single(preview.Suggestions).Value);
         Assert.DoesNotContain("OAuth", preview.Note);
+        Assert.Equal(cancelled, preview.Note.Contains("cancelled", StringComparison.Ordinal));
     }
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]

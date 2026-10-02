@@ -16,7 +16,7 @@ namespace OpenSkiTime.Rewrite.Tests;
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
-    public async Task CalendarBrowserSelectionCreatesSeriesAndAllRacesAndCanRefreshWithoutDuplicates()
+    public async Task CalendarBrowserSelectionCreatesCancelledRacesAndCanRefreshWithoutDuplicates()
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-series-calendar-ui-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder);
         try
@@ -33,7 +33,7 @@ public partial class DesktopWorkflowTests
                 var codex = int.Parse(request.RequestUri.Segments[^1], System.Globalization.CultureInfo.InvariantCulture);
                 return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(
                     new FisCompetitionInformation(codex + 100, codex, 2026, new(2026, 3, codex == 34 ? 21 : 22),
-                        "SL", "FIS", "FIN", false, "Test place", "W", 456))) };
+                        "SL", "FIS", "FIN", true, "Test place", "W", 456))) };
             });
             using var http = new HttpClient(handler);
             await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
@@ -47,9 +47,32 @@ public partial class DesktopWorkflowTests
             await vm.BrowseSeriesCalendarCommand.ExecuteAsync(null);
             Assert.True(vm.IsSeriesCalendarOpen); Assert.Equal("2026", vm.SeriesCalendarSeason); Assert.Single(requests);
             Assert.Single(vm.SeriesCalendarEvents);
-            vm.SeriesCalendarNation = "SWE"; Assert.Empty(vm.SeriesCalendarEvents);
-            vm.SeriesCalendarNation = ""; vm.SeriesCalendarSearch = "Test place"; Assert.Single(vm.SeriesCalendarEvents);
+            vm.ApplyCalendarFilter(CalendarColumn.Nation, []); Assert.Empty(vm.SeriesCalendarEvents);
+            vm.ClearCalendarFilter(CalendarColumn.Nation); Assert.Single(vm.SeriesCalendarEvents);
             var grid = window.FindControl<DataGrid>("SeriesCalendarEventsGrid")!;
+            grid.SelectedItem = vm.SeriesCalendarEvents.Single(); window.UpdateLayout();
+            var selected = vm.SelectedSeriesCalendarEvent;
+            vm.SortCalendar(CalendarColumn.Start, true);
+            Assert.Same(selected, vm.SelectedSeriesCalendarEvent);
+            var nationHeader = Assert.IsType<Button>(grid.Columns[3].Header);
+            nationHeader.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var filterPanel = Assert.IsType<StackPanel>(window.CalendarFilterMenu!.Content);
+            var search = filterPanel.Children.OfType<TextBox>().Single();
+            var selectAll = filterPanel.Children.OfType<CheckBox>().Single();
+            Assert.True(selectAll.IsChecked);
+            selectAll.IsChecked = false;
+            var actions = filterPanel.Children.OfType<StackPanel>().Last();
+            actions.Children.OfType<Button>().Single(x => x.Name == "CalendarFilterCancel").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(vm.SeriesCalendarEvents); Assert.Same(selected, vm.SelectedSeriesCalendarEvent);
+            nationHeader.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            filterPanel = Assert.IsType<StackPanel>(window.CalendarFilterMenu!.Content);
+            search = filterPanel.Children.OfType<TextBox>().Single(); search.Text = "FIN";
+            selectAll = filterPanel.Children.OfType<CheckBox>().Single(); selectAll.IsChecked = false;
+            actions = filterPanel.Children.OfType<StackPanel>().Last();
+            actions.Children.OfType<Button>().Single(x => x.Name == "CalendarFilterApply").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Empty(vm.SeriesCalendarEvents); Assert.Null(vm.SelectedSeriesCalendarEvent); Assert.Empty(vm.SeriesCalendarCompetitions);
+            Assert.Contains("●", nationHeader.Content!.ToString(), StringComparison.Ordinal);
+            vm.ClearCalendarFiltersCommand.Execute(null); Assert.Single(vm.SeriesCalendarEvents);
             grid.SelectedItem = vm.SeriesCalendarEvents.Single(); window.UpdateLayout();
             Assert.Equal(2, vm.SeriesCalendarCompetitions.Count);
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_M7_VISUAL_DIR");
@@ -99,15 +122,69 @@ public partial class DesktopWorkflowTests
         finally { Directory.Delete(folder, true); }
     }
 
-    private static byte[] CalendarUiZip()
+    [AvaloniaFact]
+    public async Task CalendarHeaderSearchCombinesFiltersSortsNumericallyAndPreservesVisibleSelection()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-calendar-filters-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder);
+        try
+        {
+            var path = Path.Combine(folder, "test.ost");
+            using var handler = new CalendarUiHandler(_ => new(HttpStatusCode.OK) { Content = new ByteArrayContent(CalendarUiZip(true)) });
+            using var http = new HttpClient(handler);
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = path, OpenPath = path, BackupPath = path + ".bak" },
+                fisStore: new FisLocalStore(folder, new CalendarTestCredential()), recentSeriesStore: new RecentSeriesStore(folder), informationHttp: http);
+            vm.Season = "2025/26"; vm.Nation = "";
+            var window = new MainWindow { DataContext = vm, Width = 1366, Height = 1100 }; window.Show();
+            try
+            {
+                await vm.BrowseSeriesCalendarCommand.ExecuteAsync(null); Assert.Equal(2, vm.SeriesCalendarEvents.Count);
+                vm.SortCalendar(CalendarColumn.Races, true); Assert.Equal(12, vm.SeriesCalendarEvents[0].CompetitionCount);
+                vm.SortCalendar(CalendarColumn.Races, false); Assert.Equal(2, vm.SeriesCalendarEvents[0].CompetitionCount);
+                vm.SortCalendar(CalendarColumn.Start, false); Assert.Equal(new DateOnly(2026, 2, 1), vm.SeriesCalendarEvents[0].StartDate);
+                var grid = window.FindControl<DataGrid>("SeriesCalendarEventsGrid")!;
+                grid.SelectedItem = vm.SeriesCalendarEvents.Single(x => x.Id == 456);
+                var selected = vm.SelectedSeriesCalendarEvent;
+                vm.ApplyCalendarFilter(CalendarColumn.Location, ["Test place"]);
+                Assert.Same(selected, vm.SelectedSeriesCalendarEvent); Assert.Equal(2, vm.SeriesCalendarCompetitions.Count);
+                vm.ApplyCalendarFilter(CalendarColumn.Nation, ["SWE"]); Assert.Empty(vm.SeriesCalendarEvents); Assert.Null(vm.SelectedSeriesCalendarEvent);
+                vm.ClearCalendarFiltersCommand.Execute(null); Assert.Equal(2, vm.SeriesCalendarEvents.Count);
+                var nation = Assert.IsType<Button>(grid.Columns[3].Header);
+                nation.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                var panel = Assert.IsType<StackPanel>(window.CalendarFilterMenu!.Content);
+                panel.Children.OfType<TextBox>().Single().Text = "swe";
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                var list = Assert.IsType<StackPanel>(panel.Children.OfType<ScrollViewer>().Single().Content);
+                Assert.Equal("SWE", Assert.Single(list.Children.OfType<CheckBox>()).Content);
+                panel.Children.OfType<StackPanel>().Last().Children.OfType<Button>().Single(x => x.Name == "CalendarFilterApply")
+                    .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal("SWE", Assert.Single(vm.SeriesCalendarEvents).Nation);
+                Assert.Contains("●", nation.Content!.ToString(), StringComparison.Ordinal);
+                grid.SelectedItem = vm.SeriesCalendarEvents.Single(); selected = vm.SelectedSeriesCalendarEvent;
+                await vm.BrowseSeriesCalendarCommand.ExecuteAsync(null);
+                Assert.Equal(selected!.Id, vm.SelectedSeriesCalendarEvent!.Id); Assert.Equal(12, vm.SeriesCalendarCompetitions.Count);
+                nation.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                panel = Assert.IsType<StackPanel>(window.CalendarFilterMenu!.Content);
+                panel.Children.OfType<StackPanel>().Last().Children.OfType<Button>().Single(x => x.Name == "CalendarFilterClear")
+                    .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(2, vm.SeriesCalendarEvents.Count); Assert.DoesNotContain("●", nation.Content!.ToString(), StringComparison.Ordinal);
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    private static byte[] CalendarUiZip(bool additionalEvent = false)
     {
         using var output = new MemoryStream();
         using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
         {
             using (var writer = new StreamWriter(zip.CreateEntry("A_event.csv").Open(), new UTF8Encoding(false)))
-            { writer.Write("Eventid\tSeasoncode\tSectorcode\tEventname\tStartdate\tEnddate\tPlace\tNationcodeplace\tOrgaddressL1\n456\t2026\tAL\tSynthetic weekend\t2026-03-21\t2026-03-22\tTest place\tFIN\tSynthetic club\n"); }
+            { writer.Write("Eventid\tSeasoncode\tSectorcode\tEventname\tStartdate\tEnddate\tPlace\tNationcodeplace\tOrgaddressL1\n456\t2026\tAL\tSynthetic weekend\t2026-03-21\t2026-03-22\tTest place\tFIN\tSynthetic club\n");
+              if (additionalEvent) { writer.Write("457\t2026\tAL\tOther synthetic event\t2026-02-01\t2026-02-01\tOther slope\tSWE\tSynthetic club\n"); } }
             using (var writer = new StreamWriter(zip.CreateEntry("A_raceal.csv").Open(), new UTF8Encoding(false)))
-            { writer.Write("Raceid\tEventid\tSeasoncode\tRacecodex\tDisciplinecode\tCatcode\tGender\tRacedate\tPlace\tNationcode\tTd1name\tTd1nation\tTd1code\n134\t456\t2026\t0034\tSL\tFIS\tW\t2026-03-21\tTest place\tFIN\tTestlast Testfirst (FIN)\tFIN\t1047\n135\t456\t2026\t0035\tSL\tFIS\tW\t2026-03-22\tTest place\tFIN\tTestlast Testfirst (FIN)\tFIN\t1047\n"); }
+            { writer.Write("Raceid\tEventid\tSeasoncode\tRacecodex\tDisciplinecode\tCatcode\tGender\tRacedate\tPlace\tNationcode\tTd1name\tTd1nation\tTd1code\n134\t456\t2026\t0034\tSL\tFIS\tW\t2026-03-21\tTest place\tFIN\tTestlast Testfirst (FIN)\tFIN\t1047\n135\t456\t2026\t0035\tSL\tFIS\tW\t2026-03-22\tTest place\tFIN\tTestlast Testfirst (FIN)\tFIN\t1047\n");
+              if (additionalEvent) { for (var i = 0; i < 12; i++) { writer.Write($"{200 + i}\t457\t2026\t{1000 + i}\tSL\tFIS\tM\t2026-02-01\tOther slope\tSWE\t\t\t\n"); } } }
         }
         return output.ToArray();
     }

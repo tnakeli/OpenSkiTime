@@ -1,12 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- x:Class="OpenSkiTime.Rewrite.Desktop.TimingView" x:CompileBindings="False">
+ xmlns:local="using:OpenSkiTime.Rewrite.Desktop" x:Class="OpenSkiTime.Rewrite.Desktop.TimingView" x:CompileBindings="False">
  <UserControl.Resources>
   <x:Double x:Key="DataGridSortIconMinWidth">14</x:Double>
   <ControlTheme x:Key="DataGridCellTextBlockTheme" TargetType="TextBlock"><Setter Property="Margin" Value="6,0" /><Setter Property="VerticalAlignment" Value="Center" /></ControlTheme>
  </UserControl.Resources>
  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
   <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
-   <StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Text="{Binding TimingContext}" Classes="sectionTitle" /><TextBlock Text="{Binding TimingSummary}" Classes="supportingText" VerticalAlignment="Center" /></StackPanel>
+   <StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Text="{Binding TimingSummary}" Classes="supportingText" VerticalAlignment="Center" /></StackPanel>
    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5">
     <TextBlock Text="STATUS" Classes="eyebrow" VerticalAlignment="Center" Margin="0,0,5,0" />
     <Button Name="StatusDropDNS" Tag="DNS" Content="DNS" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNS" Classes="statusDrop" ToolTip.Tip="Did not start · Ctrl+D. Drag a competitor here." />
@@ -19,8 +19,9 @@
   </Grid>
   <StackPanel Grid.Row="1" Spacing="4" Margin="0,0,0,4">
    <Border Classes="raceConnection"><StackPanel Spacing="2">
-    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding TimingConnection}" TextTrimming="CharacterEllipsis" />
-     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"><TextBlock Text="DEVICE TIME" Opacity="0.72" />
+    <Grid ColumnDefinitions="*,Auto,Auto"><TextBlock Text="{Binding TimingConnection}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+     <local:LiveTimingView Grid.Column="1" Margin="8,0,12,0" />
+     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center"><TextBlock Text="DEVICE TIME" Opacity="0.72" />
       <TextBlock Text="{Binding TimingDeviceClock}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" FontWeight="SemiBold" /></StackPanel></Grid>
     <StackPanel Orientation="Horizontal" Spacing="5">
      <ToggleButton Content="START" IsChecked="{Binding StartInputOn, Mode=OneWay}" Command="{Binding ToggleTimingChannelCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" />

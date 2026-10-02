@@ -21,16 +21,16 @@ public sealed partial class FisRaceInformationClient
         var code = int.Parse(codex, CultureInfo.InvariantCulture);
         var lookup = $"https://api.fis-ski.com/competitions/find-by-codex/AL/{code}?season={season}";
         var summary = await GetAsync(lookup, apiKey, ct);
-        if (summary.Id <= 0 || summary.Codex != code || summary.SeasonCode != season || summary.Date == default || summary.IsCancelled
+        if (summary.Id <= 0 || summary.Codex != code || summary.SeasonCode != season || summary.Date == default
             || string.IsNullOrWhiteSpace(summary.CategoryCode) || string.IsNullOrWhiteSpace(summary.EventCode))
-        { throw new DomainValidationException("FIS returned a cancelled competition or a different season/codex. No fields were changed."); }
+        { throw new DomainValidationException("FIS returned invalid competition data or a different season/codex. No fields were changed."); }
         var exportDate = summary.Date < today ? summary.Date : today;
         var feed = $"https://api.fis-ski.com/data-feeds/calendar?date={exportDate:yyyy-MM-dd}";
         using var request = new HttpRequestMessage(HttpMethod.Get, feed);
         request.Headers.Add("X-Api-Key", apiKey);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-        { return new(summary, null, null, lookup, "Competition loaded. Calendar archive unavailable; event name and TD fields were preserved."); }
+        { return new(summary, null, null, lookup, "Competition loaded. Calendar archive unavailable; event name and TD fields were preserved." + CancellationNote(summary)); }
         if (!response.IsSuccessStatusCode)
         { throw new DomainValidationException($"FIS calendar download failed (HTTP {(int)response.StatusCode}). No fields were changed."); }
         using var output = new MemoryStream();
@@ -53,7 +53,7 @@ public sealed partial class FisRaceInformationClient
             using var zip = new ZipArchive(input, ZipArchiveMode.Read);
             var races = ReadRows(zip, "A_raceal.csv");
             var matches = races.Where(x => Int(x, "Seasoncode") == summary.SeasonCode && Int(x, "Racecodex") == summary.Codex).ToArray();
-            if (matches.Length == 0) { return new(summary, null, null, source, "Competition loaded. This calendar archive has no matching race; event name and TD fields were preserved."); }
+            if (matches.Length == 0) { return new(summary, null, null, source, "Competition loaded. This calendar archive has no matching race; event name and TD fields were preserved." + CancellationNote(summary)); }
             if (matches.Length != 1) { throw new DomainValidationException("FIS calendar contains ambiguous season/codex matches. No fields were changed."); }
             var race = matches[0];
             var date = Value(race, "Racedate");
@@ -74,7 +74,7 @@ public sealed partial class FisRaceInformationClient
                 : "Competition and TD data loaded.";
             if (td is not null && td.Number.Length == 0) { note += " This calendar export has no TD number; review the number manually."; }
             if (string.IsNullOrWhiteSpace(eventName)) { note += " This calendar export has no event name; the current name was preserved when available."; }
-            return new(summary, string.IsNullOrWhiteSpace(eventName) ? null : eventName, td, source, note);
+            return new(summary, string.IsNullOrWhiteSpace(eventName) ? null : eventName, td, source, note + CancellationNote(summary));
         }
         catch (Exception ex) when (ex is InvalidDataException or DecoderFallbackException)
         { throw new DomainValidationException("FIS calendar archive is unreadable. No fields were changed."); }

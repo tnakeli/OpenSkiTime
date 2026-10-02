@@ -14,8 +14,6 @@ public sealed partial class MainViewModel
     [NotifyCanExecuteChangedFor(nameof(UseSeriesCalendarEventCommand))]
     private bool _isSeriesCalendarBusy;
     [ObservableProperty] private string _seriesCalendarSeason = "";
-    [ObservableProperty] private string _seriesCalendarNation = "";
-    [ObservableProperty] private string _seriesCalendarSearch = "";
     [ObservableProperty] private string _seriesCalendarStatus = "";
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(UseSeriesCalendarEventCommand))]
@@ -27,8 +25,6 @@ public sealed partial class MainViewModel
     private int _calendarBrowseGeneration;
     private long? _calendarPreviewRevision;
 
-    partial void OnSeriesCalendarNationChanged(string value) => FilterSeriesCalendar();
-    partial void OnSeriesCalendarSearchChanged(string value) => FilterSeriesCalendar();
     partial void OnSelectedSeriesCalendarEventChanged(FisCalendarEvent? value)
     {
         SeriesCalendarCompetitions.Clear();
@@ -46,12 +42,10 @@ public sealed partial class MainViewModel
     {
         var selectedId = SelectedSeriesCalendarEvent?.Id;
         SeriesCalendarEvents.Clear();
-        foreach (var item in _calendarEvents.Where(x => (string.IsNullOrWhiteSpace(SeriesCalendarNation)
-            || x.Nation.Equals(SeriesCalendarNation.Trim(), StringComparison.OrdinalIgnoreCase))
-            && (string.IsNullOrWhiteSpace(SeriesCalendarSearch)
-                || $"{x.Name} {x.Location} {x.Id}".Contains(SeriesCalendarSearch.Trim(), StringComparison.OrdinalIgnoreCase))))
+        foreach (var item in SortCalendarEvents(_calendarEvents.Where(x => _calendarColumnFilters.All(f => f.Value.Contains(CalendarValue(x, f.Key))))))
         { SeriesCalendarEvents.Add(item); }
         SelectedSeriesCalendarEvent = SeriesCalendarEvents.FirstOrDefault(x => x.Id == selectedId);
+        OnPropertyChanged(nameof(CalendarFiltersVersion));
     }
 
     [RelayCommand]
@@ -61,7 +55,8 @@ public sealed partial class MainViewModel
         if (!IsSeriesCalendarOpen)
         {
             SeriesCalendarSeason = FisSeason.FromSeries(Season, DateOnly.FromDateTime(DateTime.Today)).ToString(CultureInfo.InvariantCulture);
-            SeriesCalendarNation = Nation;
+            _calendarColumnFilters.Clear();
+            if (!string.IsNullOrWhiteSpace(Nation)) { _calendarColumnFilters[CalendarColumn.Nation] = new(StringComparer.OrdinalIgnoreCase) { Nation.Trim() }; }
             IsSeriesCalendarOpen = true;
         }
         var generation = ++_calendarBrowseGeneration;
@@ -152,6 +147,7 @@ public sealed partial class MainViewModel
     {
         ++_calendarBrowseGeneration; IsSeriesCalendarOpen = false;
         _pendingCalendarCompetitions = null; _calendarEvents = [];
+        _calendarColumnFilters.Clear(); _calendarSortColumn = null;
         SeriesCalendarEvents.Clear(); SelectedSeriesCalendarEvent = null;
     }
 }
