@@ -10,6 +10,20 @@ namespace OpenSkiTime.Rewrite.Tests;
 public sealed class FisResultsTests
 {
     [Fact]
+    public void PenaltyUsesListFactorCapAdderAndBounds()
+    {
+        var (list, timing) = Fixture();
+        var race = FisRaceResults.Assemble(list, timing);
+        var entrants = race.PenaltyCompetitors.Select(x => x with { Entry = x.Entry with { Entrant = x.Entry.Entrant with { Points = 10m } } }).ToArray();
+        var profile = new FisPenaltyProfile("TEST", 3, 1000, 20, 0, 7, 29, 888);
+        var penalty = FisPenalty.Calculate(profile, entrants);
+        Assert.Equal(1000, penalty.FValue); Assert.Equal(20m, penalty.MaximumPoints);
+        Assert.Equal(20m, penalty.RacePoints[2]); Assert.Equal(100m, penalty.SumC);
+        Assert.Equal(0m, penalty.Calculated); Assert.Equal(29m, penalty.Applied);
+        var ceiling = FisPenalty.Calculate(profile with { Minimum = 0, Maximum = 5 }, entrants);
+        Assert.Equal(5m, ceiling.Applied);
+    }
+    [Fact]
     public void XmlUsesSharedCompetitionCalendarAndTdNumberInsteadOfSeriesDefaults()
     {
         var (list, timing) = Fixture();
