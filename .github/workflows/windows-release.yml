@@ -15,7 +15,7 @@ jobs:
     outputs:
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Validate release source
@@ -34,6 +34,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+      - run: dotnet restore rewrite/OpenSkiTime.Rewrite.slnx -p:SecurityAudit=true
       - run: dotnet test rewrite/OpenSkiTime.Rewrite.slnx -c Release
       - name: Build unsigned Windows installer and portable package
         shell: pwsh
@@ -60,8 +61,28 @@ jobs:
             artifacts/windows/SHA256SUMS.txt
           retention-days: 7
           if-no-files-found: error
-  publish:
+  security:
     needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/scan-windows
+        with:
+          artifact: windows-release
+      - name: Include security reports and their checksums in release
+        run: |
+          cp artifacts/security/windows/* artifacts/windows/
+          cd artifacts/windows
+          sha256sum sbom.cdx.json cve.json cve-gate.txt provenance.txt >> SHA256SUMS.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-reviewed-release
+          path: artifacts/windows/*
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    needs: [package, security]
     environment: production-release
     runs-on: ubuntu-latest
     permissions:
@@ -69,7 +90,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: windows-release
+          name: windows-reviewed-release
           path: release
       - name: Publish immutable release files
         env:
@@ -84,6 +105,8 @@ jobs:
           **Unsigned build:** Windows may show an unknown-publisher warning. Code signing is not enabled yet.
 
           Rehearse before race day and back up event files before updating. Incompatible development series files are preserved and rejected; automatic schema upgrades are not available. ALGE native USB needs the vendor driver and SDK separately.
+
+          The attached CycloneDX SBOM describes detected runtime dependencies. CVE reports include all severities; high and critical findings block publication. Native vendor components may need separate advisories.
 
           Compare downloaded files with SHA256SUMS.txt. Checksums verify file integrity, not publisher identity.
           EOF
