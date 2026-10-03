@@ -42,7 +42,12 @@ if (!$WebsiteOnly) {
 }
 function Inspect-Record($Record) {
     $name = [Uri]::EscapeDataString($Record.name)
-    $current = @(Cloudflare "zones/$CloudflareZoneId/dns_records?name=$name&per_page=100")
+    $current = @(Cloudflare "zones/$CloudflareZoneId/dns_records?name=$name&type=$($Record.type)&per_page=100")
+    if ($Record.type -eq 'CNAME') {
+        $addresses = @(Cloudflare "zones/$CloudflareZoneId/dns_records?name=$name&type=A&per_page=100")
+        $addresses += @(Cloudflare "zones/$CloudflareZoneId/dns_records?name=$name&type=AAAA&per_page=100")
+        if ($addresses.Count) { throw "Existing address records at $($Record.name) conflict with the proposed CNAME. Review them explicitly." }
+    }
     if ($current.Count -gt 1 -or ($current.Count -and ($current[0].type -ne $Record.type -or $current[0].content.Trim('"').TrimEnd('.') -ne $Record.content.TrimEnd('.')))) {
         throw "Existing DNS at $($Record.name) conflicts with the proposed record. Review it explicitly; this script never replaces a different target."
     }
@@ -60,8 +65,11 @@ foreach ($domain in @('openskiti.me','www.openskiti.me')) {
     $existing = @(Azure @('staticwebapp','hostname','list','--name',$WebsiteName,'--resource-group',$ResourceGroup,'--output','json') | ConvertFrom-Json | Where-Object domainName -eq $domain)
     if ($existing.Count -and $existing[0].status -eq 'Ready') { continue }
     if (!$existing.Count) {
-        Azure @('staticwebapp','hostname','set','--name',$WebsiteName,'--resource-group',$ResourceGroup,'--hostname',$domain,'--validation-method','dns-txt-token','--no-wait','--output','none')
+        $method = if ($domain -eq 'openskiti.me') { 'dns-txt-token' } else { 'cname-delegation' }
+        Azure @('staticwebapp','hostname','set','--name',$WebsiteName,'--resource-group',$ResourceGroup,'--hostname',$domain,'--validation-method',$method,'--no-wait','--output','none')
     }
+    # The Free plan validates www directly through its publicly resolvable CNAME.
+    if ($domain -eq 'www.openskiti.me') { continue }
     $token = $null
     for ($attempt=0; $attempt -lt 12 -and !$token; $attempt++) {
         $details = Azure @('staticwebapp','hostname','show','--name',$WebsiteName,'--resource-group',$ResourceGroup,'--hostname',$domain,'--output','json') | ConvertFrom-Json
@@ -71,8 +79,7 @@ foreach ($domain in @('openskiti.me','www.openskiti.me')) {
     }
     if ($details.status -eq 'Ready') { continue }
     if (!$token) { throw 'Azure TXT validation token is not ready. Retry this script later.' }
-    $txtName = if ($domain -eq 'openskiti.me') { '_dnsauth.openskiti.me' } else { '_dnsauth.www.openskiti.me' }
-    Ensure-Record @{type='TXT';name=$txtName;content=$token;ttl=1}
+    Ensure-Record @{type='TXT';name=$domain;content=$token;ttl=1}
 }
 if ($WebsiteOnly) {
     Write-Host 'Website DNS records and domain validation submitted. Retry after propagation if certificates are pending.'
