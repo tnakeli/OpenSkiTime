@@ -27,11 +27,19 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(SecurityAudit)' == 'true'">
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>high</NuGetAuditLevel>
+    <WarningsNotAsErrors>NU1901;NU1902</WarningsNotAsErrors>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1900;NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+
   <PropertyGroup>
     <Authors>Open Ski Time contributors</Authors>
     <Product>Open Ski Time</Product>
     <Copyright>Open Ski Time contributors</Copyright>
-    <RepositoryUrl>https://example.invalid/openskitime</RepositoryUrl>
+    <RepositoryUrl>https://github.com/tnakeli/OpenSkiTime</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 

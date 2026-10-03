@@ -1,5 +1,8 @@
 name: Checks
 on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
   pull_request:
   push:
     branches: [master]
@@ -32,6 +35,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+      - name: Audit all NuGet dependencies (including test tools)
+        run: dotnet restore rewrite/OpenSkiTime.Rewrite.slnx -p:SecurityAudit=true
       - run: dotnet test rewrite/OpenSkiTime.Rewrite.slnx -c Release --logger "trx;LogFileName=tests.trx"
       - name: Compile and verify a review installer
         shell: pwsh
@@ -65,3 +70,29 @@ jobs:
           az bicep build --file deploy/azure/main.bicep --stdout > /dev/null
           az bicep build --file deploy/azure/budget.bicep --stdout > /dev/null
           az bicep build --file deploy/live-timing/containerapp.bicep --stdout > /dev/null
+  windows-security:
+    name: Windows security
+    needs: application
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/scan-windows
+        with:
+          artifact: windows-review-package
+  container-security:
+    name: Container security
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-trivy
+      - run: docker build -f rewrite/src/OpenSkiTime.LiveTiming.Server/Dockerfile -t openskitime-scan:ci .
+      - run: bash scripts/scan-security.sh image openskitime-scan:ci artifacts/security/container
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: container-security
+          path: artifacts/security/container/
+          retention-days: 14
+          if-no-files-found: error
