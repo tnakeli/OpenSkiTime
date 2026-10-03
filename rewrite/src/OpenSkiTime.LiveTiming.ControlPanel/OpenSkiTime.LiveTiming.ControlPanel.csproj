@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>../../../assets/icons/live-timing.ico</ApplicationIcon>
     <AssemblyName>OpenSkiTime.LiveTiming.ControlPanel</AssemblyName>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
@@ -14,4 +15,5 @@
     <ProjectReference Include="../OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <Import Project="../../LiveTimingArtifacts.targets" />
+  <ItemGroup><AvaloniaResource Include="../../../assets/icons/live-timing.ico" Link="Assets/live-timing.ico" /></ItemGroup>
 </Project>

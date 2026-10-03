@@ -1,5 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenSkiTime.LiveTiming.ControlPanel.PanelWindow"
- Title="OpenSkiTime · Live timing control panel" Width="940" Height="790" MinWidth="760" MinHeight="560" ShowActivated="False">
+ Title="OpenSkiTime · Live timing control panel" Icon="avares://OpenSkiTime.LiveTiming.ControlPanel/Assets/live-timing.ico" Width="940" Height="790" MinWidth="760" MinHeight="560" ShowActivated="False">
  <Grid RowDefinitions="Auto,*,Auto">
   <Border Background="#102F3B" Padding="22,17">
    <Grid ColumnDefinitions="*,Auto">
