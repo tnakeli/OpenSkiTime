@@ -12,7 +12,7 @@ function Invoke-Azure([string[]] $Arguments) {
     return $result
 }
 $app = Invoke-Azure @('containerapp','show','--name',$AppName,'--resource-group',$ResourceGroup,'--output','json') | ConvertFrom-Json
-if ($app.location -ne 'swedencentral') { throw 'Live deployment must target Sweden Central.' }
+if ($app.location.Replace(' ','').ToLowerInvariant() -ne 'swedencentral') { throw 'Live deployment must target Sweden Central.' }
 if ($app.properties.template.scale.maxReplicas -ne 1 -or $app.properties.configuration.activeRevisionsMode -ne 'Single') {
     throw 'Live service requires a single replica and single active revision.'
 }
