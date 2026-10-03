@@ -8,7 +8,7 @@ For the current Sweden Central, scale-to-zero, website and GitHub automation run
 
 OpenSkiTime's dedicated cloud publisher creates a session over REST, retains its session-scoped bearer credential, sends a full snapshot and then result events. The browser reads the public snapshot and watches its session through ASP.NET Core SignalR JSON/WebSocket. All authoritative race data and raw timing remain in the portable local series; cloud stores only an in-memory view.
 
-The single `OpenSkiTime.LiveTiming.Server` project is used for managed Local, independently hosted LAN service, locally simulated Cloud and eventual Azure. There is one container image, using the .NET 10 ASP.NET runtime and the same published assembly/web assets. No database, Redis, Azure SignalR Service, Dapr or race-data volume is needed. The [Dockerfile](../rewrite/src/OpenSkiTime.LiveTiming.Server/Dockerfile) and .NET SDK container metadata both package this service. It listens on HTTP 8080 inside the container; Azure ingress terminates public HTTPS 443. REST and WebSocket share that origin/port.
+The single `OpenSkiTime.LiveTiming.Server` project is used for managed Local, independently hosted LAN service, locally simulated Cloud and eventual Azure. There is one container image, using the .NET 10 ASP.NET runtime and the same published assembly/web assets. No database, Redis, Azure SignalR Service, Dapr or race-data volume is needed. The [Dockerfile](../src/OpenSkiTime.LiveTiming.Server/Dockerfile) and .NET SDK container metadata both package this service. It listens on HTTP 8080 inside the container; Azure ingress terminates public HTTPS 443. REST and WebSocket share that origin/port.
 
 State, session membership and revocation markers are RAM-only. Use `minReplicas=0`, `maxReplicas=1`, single active revision and all traffic to that revision. More than one active replica would have different caches and SignalR groups; scaling requires a shared state/backplane design that is deliberately absent. [Azure scaling settings](https://learn.microsoft.com/en-us/azure/container-apps/scale-app) document these limits.
 
@@ -42,17 +42,17 @@ These steps are for the future operator. Replace placeholders in a private worki
 1. **Build and validate the service** from the repository root:
 
    ```powershell
-   dotnet test rewrite/OpenSkiTime.Rewrite.slnx -c Release
-   dotnet publish rewrite/src/OpenSkiTime.LiveTiming.Server -c Release --no-self-contained -o artifacts/live-timing/server
+   dotnet test OpenSkiTime.slnx -c Release
+   dotnet publish src/OpenSkiTime.LiveTiming.Server -c Release --no-self-contained -o artifacts/live-timing/server
    ```
 
 2. **Build the one container image** using either Docker or the SDK:
 
    ```powershell
-   docker build -f rewrite/src/OpenSkiTime.LiveTiming.Server/Dockerfile -t openskitime-live-timing:<version> .
+   docker build -f src/OpenSkiTime.LiveTiming.Server/Dockerfile -t openskitime-live-timing:<version> .
 
    # Without a Docker daemon: generate an image archive locally.
-   dotnet publish rewrite/src/OpenSkiTime.LiveTiming.Server -c Release --os linux --arch x64 --no-self-contained `
+   dotnet publish src/OpenSkiTime.LiveTiming.Server -c Release --os linux --arch x64 --no-self-contained `
      /t:PublishContainer -p:ContainerImageTag=<version> -p:ContainerArchiveOutputPath=artifacts/live-timing/image.tar.gz
    # On a machine with Docker, load this exact archive:
    docker load -i artifacts/live-timing/image.tar.gz

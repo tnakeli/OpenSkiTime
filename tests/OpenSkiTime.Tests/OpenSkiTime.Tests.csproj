@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <Content Include="Fixtures/timing-receipt.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/timing-receipt-column.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/timing-receipt-noisy.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures/timing-receipt-clipped.png" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../../src/OpenSkiTime.TimyUsbHost/TimySdkEvent.cs" Link="DeviceHost/TimySdkEvent.cs" />
+    <Compile Include="../../src/OpenSkiTime.TimyUsbHost/TimyUsbSelection.cs" Link="DeviceHost/TimyUsbSelection.cs" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <ProjectReference Include="../../src/OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.Devices/OpenSkiTime.Devices.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.Recognition/OpenSkiTime.Recognition.csproj" />
+  </ItemGroup>
+</Project>

@@ -18,18 +18,18 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $app = Join-Path $output 'app'
 $assemblyVersion = ($Version -split '-')[0] + '.0'
 function Publish-Project([string] $Project, [string] $Destination) {
-    & $Dotnet publish (Join-Path $repository "rewrite/src/$Project/$Project.csproj") -c Release -r win-x64 --self-contained true `
+    & $Dotnet publish (Join-Path $repository "src/$Project/$Project.csproj") -c Release -r win-x64 --self-contained true `
         -p:SkipLiveTimingArtifacts=true -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false `
         "-p:Version=$Version" "-p:AssemblyVersion=$assemblyVersion" "-p:FileVersion=$assemblyVersion" -o $Destination
     if ($LASTEXITCODE -ne 0) { throw "Publish failed: $Project" }
 }
-Publish-Project 'OpenSkiTime.Rewrite.Desktop' $app
+Publish-Project 'OpenSkiTime.Desktop' $app
 Publish-Project 'OpenSkiTime.LiveTiming.ControlPanel' (Join-Path $app 'LiveTiming/ControlPanel')
 Publish-Project 'OpenSkiTime.LiveTiming.Worker' (Join-Path $app 'LiveTiming/Worker')
 Publish-Project 'OpenSkiTime.LiveTiming.Server' (Join-Path $app 'LiveTiming/Server')
 Copy-Item -LiteralPath (Join-Path $repository 'LICENSE') -Destination (Join-Path $app 'LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $repository 'deploy/windows/NOTICE.txt') -Destination (Join-Path $app 'NOTICE.txt')
-foreach ($relative in @('OpenSkiTime.Rewrite.Desktop.exe','TimyUsbHost.exe','tessdata/eng.traineddata',
+foreach ($relative in @('OpenSkiTime.Desktop.exe','TimyUsbHost.exe','tessdata/eng.traineddata',
     'LiveTiming/ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.exe','LiveTiming/Worker/OpenSkiTime.LiveTiming.Worker.exe',
     'LiveTiming/Server/OpenSkiTime.LiveTiming.Server.exe','LiveTiming/Server/wwwroot/live.js')) {
     if (!(Test-Path -LiteralPath (Join-Path $app $relative))) { throw "Missing package component: $relative" }

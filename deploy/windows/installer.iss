@@ -26,7 +26,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=../../assets/icons/openskitime.ico
-UninstallDisplayIcon={app}\OpenSkiTime.Rewrite.Desktop.exe
+UninstallDisplayIcon={app}\OpenSkiTime.Desktop.exe
 LicenseFile={#SourceDir}\LICENSE.txt
 InfoBeforeFile={#SourceDir}\NOTICE.txt
 CloseApplications=yes
@@ -44,10 +44,10 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\OpenSkiTime"; Filename: "{app}\OpenSkiTime.Rewrite.Desktop.exe"
-Name: "{autodesktop}\OpenSkiTime"; Filename: "{app}\OpenSkiTime.Rewrite.Desktop.exe"; Tasks: desktopicon
+Name: "{group}\OpenSkiTime"; Filename: "{app}\OpenSkiTime.Desktop.exe"
+Name: "{autodesktop}\OpenSkiTime"; Filename: "{app}\OpenSkiTime.Desktop.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\OpenSkiTime.Rewrite.Desktop.exe"; Description: "Launch OpenSkiTime"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\OpenSkiTime.Desktop.exe"; Description: "Launch OpenSkiTime"; Flags: nowait postinstall skipifsilent
 
 ; No uninstall deletion rules: event files and user preferences are never removed.

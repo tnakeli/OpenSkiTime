@@ -97,12 +97,12 @@ The GitHub links below are pinned to the reviewed commit. Their contents will no
 
 | Item to inspect | Source and method |
 | --- | --- |
-| Generation of a new seed | [MainViewModel.Draw.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/rewrite/src/OpenSkiTime.Rewrite.Desktop/MainViewModel.Draw.cs#L303-L340), `PrepareDrawAsync` |
-| Points grouping and group draws | [StartLists.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/rewrite/src/OpenSkiTime.Rewrite.Domain/StartLists.cs#L30-L74), `FisStartOrder.FirstRun` |
-| SHA-256, rejection sampling and double draw | [StartLists.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/rewrite/src/OpenSkiTime.Rewrite.Domain/StartLists.cs#L115-L150), `DrawRandom.Next` and `DoubleDraw` |
-| Run 2 order | [StartLists.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/rewrite/src/OpenSkiTime.Rewrite.Domain/StartLists.cs#L76-L104), `SecondRun` |
-| Save validation and revisions | [StartListStore.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/rewrite/src/OpenSkiTime.Rewrite.Persistence/StartListStore.cs), `SaveStartListAsync` and `ValidateStartPlanAsync` |
-| Reproducibility and persistence tests | [StartListTests.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/rewrite/tests/OpenSkiTime.Rewrite.Tests/StartListTests.cs) |
+| Generation of a new seed | [MainViewModel.Draw.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/src/OpenSkiTime.Desktop/MainViewModel.Draw.cs#L303-L340), `PrepareDrawAsync` |
+| Points grouping and group draws | [StartLists.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/src/OpenSkiTime.Domain/StartLists.cs#L30-L74), `FisStartOrder.FirstRun` |
+| SHA-256, rejection sampling and double draw | [StartLists.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/src/OpenSkiTime.Domain/StartLists.cs#L115-L150), `DrawRandom.Next` and `DoubleDraw` |
+| Run 2 order | [StartLists.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/src/OpenSkiTime.Domain/StartLists.cs#L76-L104), `SecondRun` |
+| Save validation and revisions | [StartListStore.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/src/OpenSkiTime.Persistence/StartListStore.cs), `SaveStartListAsync` and `ValidateStartPlanAsync` |
+| Reproducibility and persistence tests | [StartListTests.cs](https://github.com/tnakeli/OpenSkiTime/blob/468fa52a8b2cf49efa2ba0eec3a632553015c186/tests/OpenSkiTime.Tests/StartListTests.cs) |
 
 ### Run the public verification example
 

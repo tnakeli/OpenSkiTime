@@ -6,4 +6,4 @@
 /website/ @tnakeli
 /Directory.Build.props @tnakeli
 /Directory.Packages.props @tnakeli
-/rewrite/LiveTimingArtifacts.targets @tnakeli
+/LiveTimingArtifacts.targets @tnakeli
