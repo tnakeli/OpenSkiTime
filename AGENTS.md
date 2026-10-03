@@ -30,3 +30,20 @@
 - Review the final diff for correctness, unnecessary changes, accidental regressions, secrets, personal data, and generated artifacts.
 - Update relevant developer documentation when architecture, behavior, protocols, file formats, or operational procedures change.
 - At completion, summarize what changed, what was tested, and any remaining risks or unverified areas.
+
+## Code review priorities
+
+When reviewing changes, prioritize:
+
+- correctness of timing calculations and race rules
+- preservation of full timestamp precision
+- deterministic behavior
+- concurrency, race conditions and process isolation
+- durable persistence before acknowledging saved data
+- preservation of original raw timing input
+- auditability of manual timing corrections
+- backwards compatibility of `.ost` files
+- security issues, secrets and unsafe external input handling
+- adequate automated tests for changed behavior
+
+Treat timing, persistence and data-integrity regressions as high-severity findings.
