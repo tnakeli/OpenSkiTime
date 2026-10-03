@@ -2,6 +2,8 @@
 
 Every pull request and master build scans the actual self-contained Windows portable package and a freshly built live server container. Checks also run weekly on Mondays and can be started manually. Jobs have read-only repository permissions and do not use Azure credentials or deployment environments.
 
+The production branch rules require both `Windows security` and `Container security` in addition to the existing website, application and infrastructure checks.
+
 Trivy 0.75.0 is downloaded from its upstream release and verified against a checksum pinned in the repository. Changing the scanner requires reviewing both the version and checksum. GitHub Actions remain pinned to commit SHAs and Dependabot proposes updates.
 
 Each scan produces `sbom.cdx.json` (CycloneDX), `cve.json` (all reported severities), `cve-gate.txt` and `provenance.txt` (source commit, scan target, scanner and database details). CI retains reports for 14 days; live deployment retains reports for 30 days. Reports remain available when the vulnerability gate fails. Empty inventories, database download failures and scanner errors fail the job. There is no vulnerability ignore list. High and critical findings, including those without fixes, block successful checks and publication.
