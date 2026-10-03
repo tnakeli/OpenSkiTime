@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ x:Class="OpenSkiTime.Desktop.TimingReportPersonView" x:CompileBindings="False">
+ <StackPanel Spacing="8">
+  <Grid ColumnDefinitions="*,8,*,8,90,8,110">
+   <StackPanel Classes="field"><TextBlock Text="FIRST NAME" Classes="fieldLabel"/><TextBox Text="{Binding FirstName}" MaxLength="150"/></StackPanel>
+   <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="SURNAME" Classes="fieldLabel"/><TextBox Text="{Binding LastName}" MaxLength="150"/></StackPanel>
+   <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel"/><TextBox Text="{Binding Nation}" MaxLength="3"/></StackPanel>
+   <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="FIS NUMBER" Classes="fieldLabel"/><TextBox Text="{Binding Number}" MaxLength="30"/></StackPanel>
+  </Grid>
+  <Grid ColumnDefinitions="2*,8,*,8,2*">
+   <StackPanel Classes="field"><TextBlock Text="EMAIL" Classes="fieldLabel"/><TextBox Text="{Binding Email}" MaxLength="250"/></StackPanel>
+   <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="PHONE" Classes="fieldLabel"/><TextBox Text="{Binding Phone}" MaxLength="80"/></StackPanel>
+   <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="COMPANY" Classes="fieldLabel"/><TextBox Text="{Binding Company}" MaxLength="200"/></StackPanel>
+  </Grid>
+ </StackPanel>
+</UserControl>

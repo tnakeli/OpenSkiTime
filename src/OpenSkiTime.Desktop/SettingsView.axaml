@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:OpenSkiTime.Desktop"
+ x:Class="OpenSkiTime.Desktop.SettingsView" x:CompileBindings="False">
+ <StackPanel Spacing="12">
+  <TextBlock Text="Settings" Classes="sectionTitle"/>
+  <TabControl Name="SettingsTabs" SelectedIndex="{Binding SelectedSettingsTab}">
+   <TabItem Header="FIS">
+    <StackPanel Spacing="12" Margin="0,12,0,0">
+     <TextBlock Text="FIS API key" FontWeight="SemiBold"/>
+     <TextBlock Text="One API key for FIS data, equipment homologations, results and timing reports." Classes="supportingText"/>
+     <Grid ColumnDefinitions="340,8,Auto,8,Auto" HorizontalAlignment="Left">
+      <TextBox Name="FisApiKeyInputBox" PasswordChar="•" Text="{Binding FisApiKeyInput}" Watermark="{Binding FisApiKeyWatermark}" MaxLength="1024"/>
+      <Button Grid.Column="2" Content="Save key" Command="{Binding SaveFisApiKeyCommand}" Classes="primaryAction"/>
+      <Button Grid.Column="4" Content="Remove key" Command="{Binding RemoveFisApiKeyCommand}" Classes="secondaryAction"/>
+     </Grid>
+     <TextBlock Text="{Binding FisApiKeyStatus}" Classes="supportingText"/>
+     <TextBlock Text="Create the key in FIS Member Section → API Access. XML test uploads require competition.files.write and competition.files.read permissions." TextWrapping="Wrap" Classes="supportingText"/>
+     <TextBlock Text="XML transmission remains in test mode. The key stays in this Windows account's credential store." TextWrapping="Wrap" Classes="supportingText"/>
+     <Separator/>
+     <TextBlock Text="Equipment homologations" FontWeight="SemiBold"/>
+     <Button Content="Refresh homologations" Command="{Binding RefreshTimingDeviceHomologationsCommand}" IsEnabled="{Binding !IsTimingDeviceLookupBusy}" Classes="secondaryAction" HorizontalAlignment="Left"/>
+     <TextBlock Text="{Binding TimingDeviceCatalogueStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+    </StackPanel>
+   </TabItem>
+   <TabItem Header="Timing devices">
+    <StackPanel Spacing="16" Margin="0,12,0,0">
+     <local:TimingSettingsView/>
+     <Separator/>
+     <local:AuxiliaryConnectionView/>
+    </StackPanel>
+   </TabItem>
+   <TabItem Header="Timing report">
+    <StackPanel Spacing="14" Margin="0,12,0,0">
+     <TextBlock Text="Report equipment defaults" FontWeight="SemiBold"/>
+     <DataGrid Name="ReportEquipmentDefaultsGrid" ItemsSource="{Binding ReportDefaultDevices}" SelectedItem="{Binding SelectedReportDefaultDevice}"
+       AutoGenerateColumns="False" CanUserSortColumns="False" CanUserReorderColumns="False" MinHeight="240">
+      <DataGrid.Columns>
+       <DataGridTextColumn Header="EQUIPMENT" Binding="{Binding Label}" IsReadOnly="True" Width="150"/>
+       <DataGridTextColumn Header="BRAND" Binding="{Binding Brand}" Width="*"/>
+       <DataGridTextColumn Header="MODEL" Binding="{Binding Model}" Width="*"/>
+       <DataGridTextColumn Header="SERIAL" Binding="{Binding Serial}" Width="*"/>
+       <DataGridTextColumn Header="HOMOLOGATION" Binding="{Binding Homologation}" Width="*"/>
+       <DataGridTextColumn Header="VALID THROUGH" Binding="{Binding Validity}" IsReadOnly="True" Width="145"/>
+      </DataGrid.Columns>
+     </DataGrid>
+     <Grid ColumnDefinitions="*,8,Auto">
+      <ComboBox ItemsSource="{Binding TimingDeviceHomologations}" SelectedItem="{Binding SelectedTimingDeviceHomologation}" PlaceholderText="Cached FIS homologations" HorizontalAlignment="Stretch">
+       <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Display}"/></DataTemplate></ComboBox.ItemTemplate>
+      </ComboBox>
+      <Button Grid.Column="2" Content="Apply to selected equipment" Command="{Binding ApplyTimingDeviceHomologationCommand}" Classes="secondaryAction"/>
+     </Grid>
+     <TextBlock Text="{Binding TimingDeviceCatalogueStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+     <Separator/>
+     <TextBlock Text="Chief of timing and calculations" FontWeight="SemiBold"/>
+     <local:TimingReportPersonView DataContext="{Binding ReportDefaultChief}"/>
+     <Separator/>
+     <TextBlock Text="Timekeeper" FontWeight="SemiBold"/>
+     <local:TimingReportPersonView DataContext="{Binding ReportDefaultTimekeeper}"/>
+     <Grid ColumnDefinitions="*,8,*,8,*">
+      <StackPanel Classes="field"><TextBlock Text="CONNECTION A" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultConnectionA}" HorizontalAlignment="Stretch"/></StackPanel>
+      <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="CONNECTION B" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultConnectionB}" HorizontalAlignment="Stretch"/></StackPanel>
+      <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="VOICE" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultVoice}" HorizontalAlignment="Stretch"/></StackPanel>
+     </Grid>
+     <TextBlock Text="Results software: OpenSkiTime. The version is filled automatically." Classes="supportingText"/>
+     <Button Content="Save report defaults" Command="{Binding SaveTimingReportDefaultsCommand}" Classes="primaryAction" HorizontalAlignment="Left"/>
+     <TextBlock Text="{Binding ReportDefaultsStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+    </StackPanel>
+   </TabItem>
+  </TabControl>
+ </StackPanel>
+</UserControl>

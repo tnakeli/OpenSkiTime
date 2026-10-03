@@ -73,7 +73,7 @@ AlgeTimyUsb*.dll
 AlgeTimyUsbDLLExample.zip
 TimyUSB_Driver_Setup*.exe
 
-# --- Secrets & local-only configuration (Constitution Principle VI) ---
+# --- Secrets & local-only configuration ---
 appsettings.Local.json
 appsettings.*.Local.json
 *.secrets.json

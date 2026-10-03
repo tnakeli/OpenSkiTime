@@ -16,11 +16,7 @@
 - Prioritize operator speed: dense consistent keyboard-friendly UI, preserved focus, clear status and actionable errors. Rendering and optional online integrations must not block capture.
 - Test behavior through the boundary claimed, including critical failure/replay paths. Run relevant build/tests and report unverified checks honestly. Update affected documentation with behavior changes.
 - Keep credentials, downloaded FIS lists and personal race data out of Git, committed fixtures, configuration and diagnostic logs. Use synthetic/anonymized examples.
-- Legacy Spec Kit files and legacy source code are historical reference material.
-  Do not execute old Spec Kit workflows or treat completed tasks as proof of
-  correct behavior. Use them only when relevant to the current task.
 - The root README.md is public user-facing documentation for the OpenSkiTime
   open-source project. Keep developer planning, architecture notes and agent
   instructions under docs/ or other appropriate development files.
-- Do not expose internal agent workflows, rewrite planning or historical Spec Kit
-  process in user-facing documentation.
+- Do not expose internal agent workflows or development planning in user-facing documentation.

@@ -4,7 +4,7 @@ Prepared 2026-10-03. Status: implemented and verified locally following the oper
 
 ## Outcome and scope
 
-Add **7 Timing report** to the active `rewrite/` desktop application. Prepare, review, save and submit the FIS Timing and Data Technical Report using race data already available in OpenSkiTime. Optimize for minimal repeated entry, keyboard operation and visible unresolved work.
+Add **7 Timing report** to the desktop application. Prepare, review, save and submit the FIS Timing and Data Technical Report using race data already available in OpenSkiTime. Optimize for minimal repeated entry, keyboard operation and visible unresolved work.
 
 The proposed initial discipline scope matches current Results: DH, SG, GS and SL, with the run formats currently supported by the application. Parallel, combined and additional alpine formats require an explicit scope decision. Do not implement other sports, Timing Support Systems, PDF generation or EET calculation. Results Software is populated from OpenSkiTime's product name and build version.
 
@@ -123,7 +123,7 @@ Resolve these interoperability points during implementation:
 - Shared credential use for Results/report; exact approved bytes, response isolation, redaction, rejected uploads, uncertain delivery and resumable polling.
 - Keyboard navigation, compact layout at 1280x800 and 980x680, focus preservation, B overlay expiry and persistent warnings.
 - Real SQLite backup/restore on a reopened file, original evidence portability and non-mutating rejection of incompatible files.
-- Relevant .NET 10 build/tests, then the active rewrite solution suite after integration. Physical dual-device operation and external FIS acceptance remain explicitly unverified until actually exercised.
+- Relevant .NET 10 build/tests, then the application solution suite after integration. Physical dual-device operation and external FIS acceptance remain explicitly unverified until actually exercised.
 
 ## Resolved operator choices
 

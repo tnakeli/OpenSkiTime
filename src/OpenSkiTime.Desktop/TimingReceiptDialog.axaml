@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenSkiTime.Desktop.TimingReceiptDialog" x:CompileBindings="False" Title="Read timing receipts" Width="1100" Height="720" MinWidth="800" MinHeight="500" CanResize="True" WindowStartupLocation="CenterOwner">
+ <Window.Resources>
+  <x:Double x:Key="DataGridSortIconMinWidth">10</x:Double>
+ </Window.Resources>
+ <Window.Styles>
+  <Style Selector="DataGridColumnHeader"><Setter Property="Padding" Value="5,0"/></Style>
+ </Window.Styles>
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="8">
+     <WrapPanel IsEnabled="{Binding !IsReportBusy}">
+      <StackPanel IsEnabled="False" Width="90" Margin="0,0,8,4"><TextBlock Text="RUN" Classes="eyebrow"/><ComboBox Name="ReportImportRunPicker" ItemsSource="{Binding ReportImportRuns}" SelectedItem="{Binding ReportImportRun}"/></StackPanel>
+      <StackPanel IsEnabled="False" Width="135" Margin="0,0,8,4"><TextBlock Text="SOURCE" Classes="eyebrow"/><ComboBox ItemsSource="{Binding ReportImageRoles}" SelectedItem="{Binding ReportImageRole}"/></StackPanel>
+      <StackPanel IsEnabled="False" Width="100" Margin="0,0,8,4"><TextBlock Text="MATCH ± SECONDS" Classes="eyebrow"/><TextBox Text="{Binding ReportMatchTolerance}"/></StackPanel>
+      <Button Name="OpenReceiptImagesButton" Content="Open images…" Click="OpenImages_Click" VerticalAlignment="Bottom" Margin="0,0,8,4"/><Button Content="Paste image" Click="PasteImage_Click" VerticalAlignment="Bottom" Margin="0,0,8,4"/>
+     </WrapPanel>
+     <TextBlock Grid.Row="1" Text="{Binding ReportImportStatus}" TextWrapping="Wrap" Classes="supportingText" Margin="0,4,0,8"/>
+     <Grid Name="ReceiptPanels" Grid.Row="2" DragDrop.AllowDrop="True">
+      <Grid.ColumnDefinitions>
+       <ColumnDefinition Width="1.8*" MinWidth="480"/>
+       <ColumnDefinition Width="8"/>
+       <ColumnDefinition Width="*" MinWidth="240"/>
+      </Grid.ColumnDefinitions>
+      <DataGrid Name="ReportImportGrid" MinWidth="480" ItemsSource="{Binding ReportImportPreview}" SelectedItem="{Binding SelectedReportImportRow}" AutoGenerateColumns="False" CanUserResizeColumns="True" CanUserSortColumns="False" HorizontalScrollBarVisibility="Auto" Classes="raceGrid">
+       <DataGrid.Columns><DataGridCheckBoxColumn Header="USE" Binding="{Binding Accept}" Width="60" MinWidth="60"/><DataGridTextColumn Header="SAMPLE" Binding="{Binding Sample}" IsReadOnly="True" Width="95" MinWidth="95"/>
+        <DataGridTextColumn Header="POSITION" Binding="{Binding Position}" IsReadOnly="True" Width="90" MinWidth="90"/><DataGridTextColumn Header="CURRENT" Binding="{Binding Current}" IsReadOnly="True" Width="150" MinWidth="130"/><DataGridTextColumn Header="PROPOSED" Binding="{Binding Proposed}" IsReadOnly="True" Width="160" MinWidth="130"/>
+        <DataGridTextColumn Header="Δ A (s)" Binding="{Binding Difference}" IsReadOnly="True" Width="110" MinWidth="100"/><DataGridTextColumn Header="STATE" Binding="{Binding State}" IsReadOnly="True" Width="200" MinWidth="180"/></DataGrid.Columns>
+      </DataGrid>
+      <GridSplitter Name="ReceiptPanelSplitter" Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" HorizontalAlignment="Stretch" Background="{DynamicResource LineBrush}"/>
+      <Grid Grid.Column="2" MinWidth="240" RowDefinitions="Auto,*,Auto,Auto">
+       <Grid ColumnDefinitions="*,Auto">
+        <ComboBox Name="ReportImagePicker" ItemsSource="{Binding ReportImages}" SelectedItem="{Binding SelectedReportImage}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding FileName}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+        <ToggleButton Grid.Column="1" Content="Original size" IsChecked="{Binding ReportImageOriginalSize}" Margin="6,0,0,0"/>
+       </Grid>
+       <ScrollViewer Name="ReportImageScroll" Grid.Row="1" HorizontalScrollBarVisibility="{Binding ReportImageHorizontalScrolling}"><Image Source="{Binding ReportImagePreview}" Width="{Binding ReportImageWidth}" Stretch="Uniform"/></ScrollViewer>
+       <TextBlock Grid.Row="2" Text="{Binding SelectedReportImportRow.SourceText}" TextWrapping="Wrap" Classes="supportingText"/>
+       <Expander Name="ReportRecognizedTextExpander" Grid.Row="3" Header="Detected timestamps / review flags" IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+        <TextBox Name="ReportRecognizedText" Text="{Binding SelectedReportImage.RecognizedText, Mode=OneWay}" HorizontalAlignment="Stretch" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="180" AcceptsReturn="True"/>
+       </Expander>
+      </Grid>
+     </Grid>
+     <StackPanel Grid.Row="3" Spacing="4" Margin="0,8,0,0">
+
+      <WrapPanel><CheckBox Name="SelectAllReceiptMatches" Content="Select all" IsChecked="{Binding AllReportMatchesSelected, Mode=OneWay}" Click="SelectAll_Click" Margin="0,0,14,0"/>
+       <Button Name="AcceptReportImagesButton" Content="OK" Click="Accept_Click" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction"/>
+       <Button Content="Cancel" Click="Cancel_Click" Margin="8,0,0,0"/><Button Content="Cancel reading" Command="{Binding CancelReportImagesCommand}" Margin="8,0,0,0" IsVisible="{Binding IsReportBusy}"/>
+     </WrapPanel>
+     </StackPanel>
+    </Grid>
+</Window>

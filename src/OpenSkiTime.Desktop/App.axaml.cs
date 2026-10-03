@@ -1,29 +1,50 @@
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Microsoft.Extensions.DependencyInjection;
-using OpenSkiTime.Desktop.Shell;
-using OpenSkiTime.Desktop.ViewModels;
+using OpenSkiTime.Application;
+using OpenSkiTime.Persistence;
 
 namespace OpenSkiTime.Desktop;
 
-public class App : Avalonia.Application
+public sealed class App : Avalonia.Application, IDisposable
 {
-    public override void Initialize()
-    {
-        AvaloniaXamlLoader.Load(this);
-    }
+    private SeriesWorkspace? _workspace;
+    private MainViewModel? _viewModel;
 
-    public override async void OnFrameworkInitializationCompleted()
+    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+
+    public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var shellVm = Program.ServiceProvider.GetRequiredService<ShellViewModel>();
-            var window = new ShellWindow { DataContext = shellVm };
+            _workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new Devices.AlgeDecoderFactory());
+            var window = new MainWindow();
+            _viewModel = new MainViewModel(_workspace, new AvaloniaFileDialogs(window),
+                new AvaloniaEntryExchange(window), timingPreferencesStore: new TimingPreferencesStore());
+            _viewModel.LoadTimingPreferences();
+            window.DataContext = _viewModel;
             desktop.MainWindow = window;
-            window.Show();
-            await shellVm.LoadAsync();
+            desktop.Exit += OnExit;
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
+    {
+        if (_workspace is not null)
+        {
+            Dispose();
+        }
+    }
+
+    public void Dispose()
+    {
+        _viewModel?.Dispose();
+        _viewModel = null;
+        if (_workspace is not null)
+        {
+            _workspace.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _workspace = null;
+        }
     }
 }
