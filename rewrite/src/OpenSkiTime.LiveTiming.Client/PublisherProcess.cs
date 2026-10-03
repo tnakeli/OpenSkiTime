@@ -48,11 +48,13 @@ public sealed class PublisherProcess : IAsyncDisposable
             var pipeName = "OpenSkiTime-live-" + Guid.NewGuid().ToString("N");
             _pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
                 PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            var executable = Path.ChangeExtension(workerAssembly, OperatingSystem.IsWindows() ? ".exe" : null);
+            var useAppHost = dotnetHost is null && File.Exists(executable);
             var host = dotnetHost ?? ResolveDotnetHost();
-            var start = new ProcessStartInfo(host)
+            var start = new ProcessStartInfo(useAppHost ? executable : host)
             { UseShellExecute = false, CreateNoWindow = true };
-            start.ArgumentList.Add(workerAssembly); start.ArgumentList.Add("--pipe"); start.ArgumentList.Add(pipeName);
-            start.Environment["DOTNET_HOST_PATH"] = host;
+            if (!useAppHost) { start.ArgumentList.Add(workerAssembly); start.Environment["DOTNET_HOST_PATH"] = host; }
+            start.ArgumentList.Add("--pipe"); start.ArgumentList.Add(pipeName);
             _health = new(PublisherState.Starting, options.Endpoint);
             try
             {

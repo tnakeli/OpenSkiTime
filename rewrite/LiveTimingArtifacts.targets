@@ -1,5 +1,5 @@
 <Project>
-  <Target Name="CopyLiveTimingProcesses" AfterTargets="Build">
+  <Target Name="CopyLiveTimingProcesses" AfterTargets="Build" Condition="'$(SkipLiveTimingArtifacts)' != 'true'">
     <ItemGroup>
       <LiveWorkerFiles Include="$(MSBuildThisFileDirectory)src/OpenSkiTime.LiveTiming.Worker/bin/$(Configuration)/$(TargetFramework)/**/*" />
       <LiveServerFiles Include="$(MSBuildThisFileDirectory)src/OpenSkiTime.LiveTiming.Server/bin/$(Configuration)/$(TargetFramework)/**/*" />
@@ -11,7 +11,7 @@
     </ItemGroup>
     <Copy SourceFiles="@(LivePanelFiles)" DestinationFiles="@(LivePanelFiles->'$(OutDir)LiveTiming/ControlPanel/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
-  <Target Name="PublishLiveTimingProcesses" AfterTargets="Publish" DependsOnTargets="CopyLiveTimingProcesses">
+  <Target Name="PublishLiveTimingProcesses" AfterTargets="Publish" DependsOnTargets="CopyLiveTimingProcesses" Condition="'$(SkipLiveTimingArtifacts)' != 'true'">
     <Copy SourceFiles="@(LiveWorkerFiles)" DestinationFiles="@(LiveWorkerFiles->'$(PublishDir)LiveTiming/Worker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(LiveServerFiles)" DestinationFiles="@(LiveServerFiles->'$(PublishDir)LiveTiming/Server/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(LivePanelFiles)" DestinationFiles="@(LivePanelFiles->'$(PublishDir)LiveTiming/ControlPanel/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />

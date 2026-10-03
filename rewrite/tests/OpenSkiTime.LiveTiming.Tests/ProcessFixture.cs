@@ -11,9 +11,14 @@ internal static class ProcessFixture
     public static string Artifact(string project)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        // The SDK artifacts layout allows validation while the normal desktop build is open.
+        var sibling = Path.Combine(directory.Parent?.Parent?.FullName ?? directory.FullName,
+            "OpenSkiTime.LiveTiming." + project, directory.Name, $"OpenSkiTime.LiveTiming.{project}.dll");
+        if (File.Exists(sibling)) { return sibling; }
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName,"OpenSkiTime.LiveTiming.slnx"))) { directory = directory.Parent; }
+        if (directory is null) { throw new FileNotFoundException("Live timing build artifacts were not found. Build the solution before running process tests."); }
         var config = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
-        return Path.Combine(directory!.FullName,"src", "OpenSkiTime.LiveTiming." + project,"bin",config,"net10.0",$"OpenSkiTime.LiveTiming.{project}.dll");
+        return Path.Combine(directory.FullName,"src", "OpenSkiTime.LiveTiming." + project,"bin",config,"net10.0",$"OpenSkiTime.LiveTiming.{project}.dll");
     }
     public static int Port()
     {

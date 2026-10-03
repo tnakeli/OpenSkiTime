@@ -1,0 +1,38 @@
+name: Website deployment
+on:
+  push:
+    branches: [master]
+    paths: [website/**, docs/screenshots/**, LICENSE, .github/workflows/website.yml]
+  release:
+    types: [published]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: production-website
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.repository == 'tnakeli/OpenSkiTime' && vars.WEBSITE_DEPLOY_ENABLED == 'true'
+    environment: production-website
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Read the published stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/read-release.mjs
+      - run: node website/build.mjs && node website/check.mjs
+        env:
+          OPENSKITIME_RELEASE_FILE: ${{ env.OPENSKITIME_RELEASE_FILE }}
+      - uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: website/dist
+          skip_app_build: true
