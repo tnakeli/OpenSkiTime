@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 const output = path.join(root, 'dist');
 const repo = 'https://github.com/tnakeli/OpenSkiTime';
 const pages = [
-  ['index', '/', 'Alpine race timing, on your terms', 'Offline alpine race management, timing and optional live results. Open source. Built for the race office.'],
+  ['index', '/', 'Alpine timing with less busywork', 'Automation and integrations that help alpine timekeepers prepare races, capture timing and share live results faster. Open source, Windows-first and offline-ready.'],
   ['download', '/download/', 'Download OpenSkiTime', 'Windows downloads, release notes and installation requirements for OpenSkiTime.'],
   ['guide', '/guide/', 'Your first race', 'Get started with event series, competitors, start lists, timing and optional live publishing.'],
   ['privacy', '/privacy/', 'Privacy & your race data', 'How local race data and optional online integrations work in OpenSkiTime.'],
