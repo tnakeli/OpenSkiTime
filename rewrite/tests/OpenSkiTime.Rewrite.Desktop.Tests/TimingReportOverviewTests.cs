@@ -14,7 +14,7 @@ namespace OpenSkiTime.Rewrite.Tests;
 public partial class DesktopWorkflowTests
 {
     [Fact]
-    public void KeyboardATimestampsExplainMissingBestWithoutChangingMeasuredTime()
+    public void KeyboardATimestampsPopulateBestWithoutChangingMeasuredTime()
     {
         var date = new DateOnly(2026, 10, 3);
         var at = new DateTimeOffset(2026, 10, 3, 12, 0, 0, TimeSpan.Zero);
@@ -35,10 +35,10 @@ public partial class DesktopWorkflowTests
         Assert.Equal(128, Assert.Single(snapshot.Results).Hundredths);
         var source = TimingReportProjection.FromTiming(data, snapshot);
         var editor = TimingReportRunEditor.FromTiming(source, snapshot);
-        Assert.Null(source.BestBib);
+        Assert.Equal(plan.Entries[0].Bib, source.BestBib); Assert.Equal(128, source.BestHundredths);
         Assert.NotNull(source.First.AStart); Assert.NotNull(source.First.AFinish);
-        Assert.Contains("manual", editor.Best, StringComparison.Ordinal);
-        Assert.Contains("C0M/C1M", editor.BestExplanation, StringComparison.Ordinal);
+        Assert.Contains("0:01.28", editor.Best, StringComparison.Ordinal);
+        Assert.Contains("manual", editor.BestExplanation, StringComparison.Ordinal);
         Assert.Single(source.MissedA);
     }
 
@@ -52,6 +52,7 @@ public partial class DesktopWorkflowTests
         window.Show(); window.UpdateLayout();
         try
         {
+            var tabs = view.FindControl<TabControl>("TimingReportTabs")!; Assert.Equal(2, tabs.Items.Count); Assert.Null(view.FindControl<DataGrid>("TimingReportOverviewGrid")); tabs.SelectedIndex = 1; window.UpdateLayout();
             var level = view.FindControl<ComboBox>("TimingReportLevel")!;
             var help = Assert.IsType<TextBlock>(ToolTip.GetTip(level));
             Assert.Contains("0 -", help.Text, StringComparison.Ordinal);
