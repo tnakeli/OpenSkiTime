@@ -300,7 +300,7 @@ public sealed class TimingReportTests
     }
 
     private static async Task Until(Func<bool> condition)
-    { for (var n = 0; n < 200 && !condition(); n++) { await Task.Delay(10); } Assert.True(condition()); }
+        => await TimingStorageTests.UntilAsync(condition);
 
     private static TimingReportDraft ValidDraft()
     {
