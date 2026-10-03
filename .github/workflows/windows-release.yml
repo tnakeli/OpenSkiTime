@@ -46,6 +46,11 @@ jobs:
       - name: Test packaged child processes without an installed .NET runtime
         shell: pwsh
         run: ./scripts/Test-WindowsPackage.ps1 -PackageDirectory artifacts/windows/app
+      - name: Verify installer, reinstall and uninstall preservation
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/Test-WindowsInstaller.ps1 -Installer "artifacts/windows/OpenSkiTime-$env:RELEASE_VERSION-win-x64-setup.exe"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-release

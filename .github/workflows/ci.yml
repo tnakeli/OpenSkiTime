@@ -22,14 +22,34 @@ jobs:
       - run: node --test scripts/tests/*.test.mjs
   application:
     name: Windows tests
-    runs-on: windows-latest
-    timeout-minutes: 20
+    runs-on: windows-2025
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
       - run: dotnet test rewrite/OpenSkiTime.Rewrite.slnx -c Release --logger "trx;LogFileName=tests.trx"
+      - name: Compile and verify a review installer
+        shell: pwsh
+        run: |
+          $version = "0.0.0-preview.$env:GITHUB_RUN_NUMBER"
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (!(Test-Path -LiteralPath $compiler)) { throw 'Windows runner must provide Inno Setup 6.' }
+          ./scripts/Package-Windows.ps1 -Version $version -Iscc $compiler
+          ./scripts/Test-WindowsInstaller.ps1 -Installer "artifacts/windows/OpenSkiTime-$version-win-x64-setup.exe"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-review-package
+          path: |
+            artifacts/windows/*.exe
+            artifacts/windows/*.zip
+            artifacts/windows/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
