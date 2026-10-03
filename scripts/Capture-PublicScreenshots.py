@@ -84,7 +84,7 @@ def main():
                 subprocess.run(['node', 'website/check.mjs'], cwd=root, check=True)
                 website = subprocess.Popen(['node', 'website/preview.mjs'], cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 wait_ready('http://127.0.0.1:4173/', website)
-                context = browser.new_context(viewport={'width': 1440, 'height': 1000}, locale='en-GB')
+                context = browser.new_context(viewport={'width': 1440, 'height': 1000}, locale='en-GB', reduced_motion='reduce')
                 context.route('**/*', lambda route: route.continue_() if route.request.url.startswith('http://127.0.0.1:4173/') else route.abort())
                 page = context.new_page()
                 page.on('pageerror', lambda error: errors.append(str(error)))
