@@ -115,7 +115,9 @@ public partial class DesktopWorkflowTests
             await ReportUntil(() => vm.ReportEvidence.Count == 1 && vm.ReportEvidence[0].Net == "1:01.00");
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal("1:01.00", Assert.Single(vm.ReportEvidence).Net);
-            Assert.Single(vm.ReportMissed);
+            // A saved all-System-A declaration never gains replacement rows automatically.
+            Assert.Empty(vm.ReportMissed);
+            Assert.True(Assert.Single(vm.ReportRuns).AllResultsA);
             Assert.Equal("12:00:00.01", Assert.Single(vm.ReportEvidence).BStart);
             Assert.True(await vm.FlushTimingReportAsync(), vm.StatusMessage);
 
@@ -125,15 +127,16 @@ public partial class DesktopWorkflowTests
             try
             {
                 Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Save report") || Equals(x.Content, "Refresh A / B"));
-                view.FindControl<TabControl>("TimingReportTabs")!.SelectedIndex = 3;
+                view.FindControl<TabControl>("TimingReportTabs")!.SelectedIndex = 1;
                 window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-                var picker = view.FindControl<ComboBox>("ReportImportRunPicker")!;
+                var receipt = new TimingReceiptDialog { DataContext = vm }; receipt.Show(window); receipt.UpdateLayout();
+                var picker = receipt.FindControl<ComboBox>("ReportImportRunPicker")!;
                 Assert.NotNull(picker);
                 picker.SelectedIndex = -1; Dispatcher.UIThread.RunJobs();
                 Assert.Null(vm.ReportImportRun);
                 Assert.False(DataValidationErrors.GetHasErrors(picker));
                 vm.ReportImportRun = 1; Dispatcher.UIThread.RunJobs();
-                Assert.Equal(1, picker.SelectedItem);
+                Assert.Equal(1, picker.SelectedItem); receipt.Close();
                 Assert.False(DataValidationErrors.GetHasErrors(picker));
             }
             finally { window.Close(); }

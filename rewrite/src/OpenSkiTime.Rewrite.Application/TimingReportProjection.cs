@@ -41,7 +41,8 @@ public static class TimingReportProjection
         bool IsSystemA(TimingResult result) => Find(result.StartKey) is { Manual: false }
             && Find(result.FinishKey) is { Manual: false }
             && (!timeDecisions.TryGetValue(result.CompetitorId, out var decision) || decision.Hundredths is null);
-        var best = complete.Where(x => x.Status == TimingStatus.Finished && IsSystemA(x)).OrderBy(x => x.Hundredths).ThenBy(x => x.Entry.Position).FirstOrDefault();
+        var best = snapshot.Results.Where(x => x.Status == TimingStatus.Finished && x.Hundredths is > 0)
+            .OrderBy(x => x.Hundredths).ThenBy(x => x.Entry.Position).FirstOrDefault();
         var timed = snapshot.Results.Where(x => x.Hundredths is not null).Concat(complete).DistinctBy(x => x.CompetitorId);
         var missed = timed.Where(x => !IsSystemA(x))
             .Select(x => new TimingReportMissed(x.Bib, "", "")).ToArray();

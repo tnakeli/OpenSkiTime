@@ -1,41 +1,38 @@
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using Avalonia.Platform.Storage;
 using OpenSkiTime.Rewrite.Application;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
 public partial class TimingReportView : UserControl
 {
-    public TimingReportView()
+    public TimingReportView() => AvaloniaXamlLoader.Load(this);
+
+    private void ReplacementReason_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        AvaloniaXamlLoader.Load(this);
-        foreach (var (name, role) in new[] { ("BackupImageDrop", TimingReportImageRole.B), ("HandStartImageDrop", TimingReportImageRole.HandStart), ("HandFinishImageDrop", TimingReportImageRole.HandFinish) })
-        {
-            var area = this.FindControl<Border>(name)!;
-            area.AddHandler(DragDrop.DragOverEvent, (_, e) => { e.DragEffects = e.Data.Contains(DataFormats.Files) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; });
-            area.AddHandler(DragDrop.DropEvent, async (_, e) =>
-            {
-                e.Handled = true;
-                if (DataContext is MainViewModel vm)
-                {
-                    vm.ReportImageRole = role;
-                    this.FindControl<TabControl>("TimingReportTabs")!.SelectedIndex = 3;
-                    await vm.ImportReportImagesAsync(e.Data.GetFiles()?.Select(x => x.TryGetLocalPath()).OfType<string>().ToArray() ?? []);
-                }
-            });
-        }
+        if (sender is ComboBox { DataContext: TimingReportMissedEditor row, SelectedItem: string reason })
+        { row.Reason = reason; }
     }
+
+    private void RemoveReplacement_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: TimingReportMissedEditor row }
+            && DataContext is MainViewModel vm)
+        { vm.RemoveReportReplacementCommand.Execute(row); }
+    }
+
     private async void ChooseImages_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string tag } || DataContext is not MainViewModel vm || TopLevel.GetTopLevel(this) is not { } top) { return; }
-        var images = await top.StorageProvider.OpenFilePickerAsync(new() { Title = "Timing receipt / screen images", AllowMultiple = true,
-            FileTypeFilter = [new("Images") { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.tif", "*.tiff"] }] });
-        if (images.Count == 0) { return; }
+        if (sender is not Button { Tag: string tag, CommandParameter: int run }
+            || DataContext is not MainViewModel vm || vm.IsReportBusy
+            || TopLevel.GetTopLevel(this) is not Window owner) { return; }
+        vm.ResetReportImport();
+        vm.ReportImportRun = run;
         vm.ReportImageRole = Enum.Parse<TimingReportImageRole>(tag);
-        this.FindControl<TabControl>("TimingReportTabs")!.SelectedIndex = 3;
-        await vm.ImportReportImagesAsync(images.Select(x => x.TryGetLocalPath()).OfType<string>().ToArray());
+        vm.ReportImportStatus = "Open images, drop images here, or paste an image (Ctrl+V / Ctrl+C). Review the matched timestamps, then press OK.";
+        var dialog = new TimingReceiptDialog { DataContext = vm };
+        try { await dialog.ShowDialog(owner); }
+        finally { vm.ResetReportImport(); }
     }
 }
