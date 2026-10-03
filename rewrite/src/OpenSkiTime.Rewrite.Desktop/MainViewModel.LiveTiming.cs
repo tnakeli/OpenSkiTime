@@ -1,13 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.LiveTiming;
+using OpenSkiTime.LiveTiming.Client;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Devices;
 using OpenSkiTime.Rewrite.Domain;
@@ -19,7 +18,7 @@ public sealed partial class MainViewModel
 {
     private ObservableCollection<LiveTimingChannel>? _liveChannels;
     public ObservableCollection<LiveTimingChannel> LiveChannels => _liveChannels ??= [
-        new(this, "FIS Live Timing", PublisherKind.FisHttps), new(this, "Standalone Local", PublisherKind.Local), new(this, "Standalone Cloud", PublisherKind.Cloud)];
+        new(this, "Local", PublisherKind.Local), new(this, "Cloud", PublisherKind.Cloud), new(this, "FIS", PublisherKind.FisHttps)];
     [ObservableProperty] private string _liveCloudEndpoint = "https://live.openskiti.me";
     [ObservableProperty] private string _liveLocalEndpoint = "http://localhost:5078";
     [ObservableProperty] private string _liveFisHttpsEndpoint = "https://livedata.fis-ski.com/al/";
@@ -28,7 +27,8 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _liveFisPassword = "";
     [ObservableProperty] private bool _liveFisUseTcp;
     [ObservableProperty] private string _liveTimeZone = TimeZoneInfo.Local.Id;
-    [ObservableProperty] private string _liveTimingError = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasLiveTimingError))] private string _liveTimingError = "";
+    public bool HasLiveTimingError => !string.IsNullOrEmpty(LiveTimingError);
     private readonly SemaphoreSlim _liveControlGate = new(1,1);
     private DispatcherTimer? _liveTimer;
     private Guid? _liveCompetitionId;
@@ -37,63 +37,90 @@ public sealed partial class MainViewModel
     private StartListRevision[] _liveLists = [];
     private long _liveVersion;
     private bool _liveDisposed;
+    private ControlPanelProcess? _livePanel;
+    public int? LiveControlPanelProcessId => _livePanel?.ProcessId;
+    private LiveConnectionSettings LiveSettings() => new(LiveLocalEndpoint, LiveCloudEndpoint, LiveFisHttpsEndpoint,
+        LiveFisTcpHost, LiveFisTcpPort, LiveFisPassword, LiveFisUseTcp, LiveTimeZone);
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Live timing is an optional downstream boundary; failures must not escape into timing UI/capture.")]
-    internal async Task StartLiveChannelAsync(LiveTimingChannel channel)
+    [RelayCommand]
+    private async Task OpenLiveTimingAsync()
     {
-        channel.Busy = true;
-        await _liveControlGate.WaitAsync();
-        try
+        await RunLiveControlAsync(async () =>
         {
-            if (TimingCompetition is null || _timingList is null || workspace.Timing?.Snapshot is null)
-            { throw new LiveValidationException("Choose a timing run with a saved start list first."); }
-            if (channel.IsFis && TimingCompetition.Values.RaceType != RaceType.Fis)
-            { throw new LiveValidationException("FIS Live Timing is available only for FIS competitions."); }
-            if (_liveCompetitionId != TimingCompetition.Id)
-            {
-                await ResetLivePublishersAsync();
-                _liveCompetitionId = TimingCompetition.Id;
-                _liveSnapshot = null;
-            }
-            await BuildLiveSnapshotAsync();
-            var options = channel.Kind switch
-            {
-                PublisherKind.Local => new PublisherOptions(PublisherKind.Local, LiveLocalEndpoint, LocalServerAssembly: LiveArtifact("Server")),
-                PublisherKind.Cloud => new(PublisherKind.Cloud, LiveCloudEndpoint),
-                _ => new(LiveFisUseTcp ? PublisherKind.FisTcp : PublisherKind.FisHttps, LiveFisUseTcp ? LiveFisTcpHost : LiveFisHttpsEndpoint, LiveFisPassword, LiveFisTcpPort)
-            };
-            if (_liveDisposed) { return; }
-            if (channel.Options is not null && channel.Options != options)
-            { await channel.Process.DisposeAsync(); channel.Process = new(); channel.Process.Offer(_liveSnapshot!); channel.SavedToken = null; }
-            channel.Options = options;
-            if (channel.Kind == PublisherKind.Cloud && OperatingSystem.IsWindows())
-            {
-                channel.CredentialTarget = "OpenSkiTime.LiveTiming:" + TimingCompetition.Id.ToString("N") + ":" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(options.Endpoint)))[..16];
-                if (channel.Process.ResumeSession is null && new WindowsCredentialStore(channel.CredentialTarget).Read() is { } saved)
-                { channel.Process.ResumeSession = JsonSerializer.Deserialize<LiveSession>(saved, LiveJson.Options); }
-            }
-            await channel.Process.StartAsync(LiveArtifact("Worker"), options);
-            _liveTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => PollLiveTiming());
-            _liveTimer.Start(); LiveTimingError = "";
-        }
-        catch (Exception ex) when (ex is LiveValidationException or IOException or InvalidOperationException or ArgumentException or TimeZoneNotFoundException or TimeoutException or SeriesFileException or JsonException)
-        { LiveTimingError = ex is LiveValidationException ? ex.Message : "Live timing could not start. Check endpoint, time zone and installed worker/server files."; }
-        catch (Exception) { LiveTimingError = "Live timing could not start. Timing capture continues; check installed live timing components."; }
-        finally { _liveControlGate.Release(); channel.Busy = false; channel.Update(); }
+            if (TimingCompetition is not null && _timingList is not null && workspace.Timing?.Snapshot is not null)
+            { await BuildLiveSnapshotAsync(); }
+            var existing = _livePanel?.IsConnected == true;
+            await EnsureLivePanelAsync();
+            if (existing) { await _livePanel!.RequestAsync(new(Guid.NewGuid(), ControlPanelAction.Activate)); }
+        });
     }
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Optional process control cannot interrupt authoritative capture.")]
-    internal async Task ControlLiveChannelAsync(LiveTimingChannel channel, string command)
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Read-only live projection requests cannot crash timing capture.")]
+    private async Task EnsureLivePanelAsync()
     {
-        channel.Busy = true;
-        await _liveControlGate.WaitAsync();
-        try
+        if (_livePanel?.IsConnected == true) { return; }
+        if (_livePanel is not null) { await _livePanel.DisposeAsync(); }
+        foreach (var channel in LiveChannels) { channel.Update(new(channel.Kind, new(PublisherState.Stopped), null)); }
+        _livePanel = new ControlPanelProcess();
+        _livePanel.PrepareSnapshot = settings =>
         {
-            if (command == "refresh") { await BuildLiveSnapshotAsync(); }
-            await channel.Process.CommandAsync(command); LiveTimingError = "";
-        }
-        catch (IOException) { LiveTimingError = "Live timing worker is stopped. Press Start."; }
-        catch (Exception) { LiveTimingError = "Live timing control failed. Timing capture continues; restart the live publisher."; }
-        finally { _liveControlGate.Release(); channel.Busy = false; channel.Update(); }
+            var completion = new TaskCompletionSource<ControlPanelInput>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    await _liveControlGate.WaitAsync();
+                    try
+                    {
+                        _ = TimeZoneInfo.FindSystemTimeZoneById(settings.TimeZone);
+                        LiveTimeZone = settings.TimeZone;
+                        await BuildLiveSnapshotAsync();
+                        LiveLocalEndpoint = settings.LocalEndpoint; LiveCloudEndpoint = settings.CloudEndpoint;
+                        LiveFisHttpsEndpoint = settings.FisHttpsEndpoint; LiveFisTcpHost = settings.FisTcpHost;
+                        LiveFisTcpPort = settings.FisTcpPort; LiveFisUseTcp = settings.FisUseTcp; LiveFisPassword = settings.FisPassword;
+                        completion.TrySetResult(new(Guid.Empty, ControlPanelAction.State, _liveCompetitionId, _liveSnapshot));
+                    }
+                    finally { _liveControlGate.Release(); }
+                }
+                catch (Exception)
+                { completion.TrySetResult(new(Guid.Empty, ControlPanelAction.State, PreparationError: "Select a saved timing run and check the race time zone.")); }
+            });
+            return completion.Task;
+        };
+        var suffix = OperatingSystem.IsWindows() ? ".exe" : "";
+        var path = Path.Combine(AppContext.BaseDirectory, "LiveTiming", "ControlPanel", "OpenSkiTime.LiveTiming.ControlPanel" + suffix);
+        if (!File.Exists(path)) { throw new IOException("Live timing control panel executable missing."); }
+        await _livePanel.StartAsync(path, LiveSettings());
+        if (_liveCompetitionId is { } id && _liveSnapshot is { } snapshot) { _livePanel.Offer(id, snapshot); }
+        _liveTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => PollLiveTiming());
+        _liveTimer.Start();
+    }
+    internal Task StartLiveChannelAsync(LiveTimingChannel channel) => RunLiveControlAsync(async () =>
+    {
+        await BuildLiveSnapshotAsync();
+        await EnsureLivePanelAsync();
+        var result = await _livePanel!.RequestAsync(new(Guid.NewGuid(), ControlPanelAction.Start, _liveCompetitionId, _liveSnapshot, channel.Kind, LiveSettings()));
+        ApplyLivePanelState(result);
+    });
+    internal Task ControlLiveChannelAsync(LiveTimingChannel channel, string command) => RunLiveControlAsync(async () =>
+    {
+        if (_livePanel?.IsConnected != true) { throw new IOException("Live timing panel is closed."); }
+        if (command == "refresh") { await BuildLiveSnapshotAsync(); }
+        var action = command switch
+        {
+            "stop" => ControlPanelAction.Stop, "refresh" => ControlPanelAction.Refresh,
+            "delete" => ControlPanelAction.Delete, "delete-all" => ControlPanelAction.DeleteAll,
+            _ => throw new LiveValidationException("Unknown live command.")
+        };
+        ApplyLivePanelState(await _livePanel.RequestAsync(new(Guid.NewGuid(), action, _liveCompetitionId, _liveSnapshot, channel.Kind)));
+    });
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Live timing cannot interrupt authoritative timing capture.")]
+    private async Task RunLiveControlAsync(Func<Task> action)
+    {
+        await _liveControlGate.WaitAsync();
+        try { if (!_liveDisposed) { LiveTimingError = ""; await action(); } }
+        catch (LiveValidationException ex) { LiveTimingError = ex.Message; }
+        catch (Exception) { LiveTimingError = "Live timing control failed. Reopen the panel and check the selected run, time zone and installed components. Timing capture continues."; }
+        finally { _liveControlGate.Release(); }
     }
     private async Task BuildLiveSnapshotAsync()
     {
@@ -126,36 +153,37 @@ public sealed partial class MainViewModel
             c.Date, c.RaceType == RaceType.Fis, c.FisCode ?? "", activeList.Plan.Gender == Gender.Female ? "L" : "M", c.Calendar?.Category ?? "FIS", c.IntermediateCount, c.CourseName ?? ""),
             LiveSnapshotMapper.Competitors(selected), activeList.Plan.RunNumber, runs.ToArray(), DateTimeOffset.UtcNow);
         state.Validate(); _liveSnapshot = state; _liveLists = selected; _liveObservedTiming = current;
-        foreach (var item in LiveChannels) { item.Process.Offer(state); }
+        _liveCompetitionId = race.Id; _livePanel?.Offer(race.Id, state);
     }
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Isolate optional projection/IPC/health errors from the authoritative timing UI.")]
+    private void ApplyLivePanelState(ControlPanelOutput state, bool updateError = true)
+    {
+        foreach (var channel in LiveChannels)
+        {
+            var health = state.Channels.FirstOrDefault(x => x.Kind == channel.Kind);
+            if (health is not null) { channel.Update(health); }
+        }
+        if (updateError) { LiveTimingError = state.Error; }
+    }
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Optional state projection cannot interrupt capture.")]
     private void PollLiveTiming()
     {
-        if (_liveChannels is null) { return; }
+        if (_livePanel is null || _liveDisposed) { return; }
         try
         {
-        foreach (var channel in _liveChannels)
-        {
-            channel.Update();
-            if (channel.CredentialTarget is { } target && OperatingSystem.IsWindows())
-            {
-                try
-                {
-                    if (channel.Process.ResumeSession is { } session && session.PublisherToken != channel.SavedToken)
-                    { new WindowsCredentialStore(target).Save(JsonSerializer.Serialize(session,LiveJson.Options)); channel.SavedToken = session.PublisherToken; }
-                    else if (channel.Process.ResumeSession is null && channel.SavedToken is not null)
-                    { new WindowsCredentialStore(target).Remove(); channel.SavedToken = null; }
-                }
-                catch (IOException) { LiveTimingError = "Could not retain the cloud session credential in Windows Credential Manager. Publishing continues."; }
-            }
-        }
-        try
-        {
+            ApplyLivePanelState(_livePanel.State, _livePanel.IsConnected);
+            if (!_livePanel.IsConnected) { return; }
             if (_liveCompetitionId != TimingCompetition?.Id)
             {
-                _liveTimer?.Stop();
-                _liveCompetitionId = null; _liveSnapshot = null;
-                _ = ResetAfterSelectionChangeAsync(); return;
+                _liveCompetitionId = TimingCompetition?.Id; _liveSnapshot = null;
+                _livePanel.ClearSnapshot();
+                _ = RunLiveControlAsync(async () =>
+                {
+                    if (_livePanel?.IsConnected != true) { return; }
+                    await _livePanel.RequestAsync(new(Guid.NewGuid(), ControlPanelAction.Reset));
+                    if (TimingCompetition is not null && _timingList is not null && workspace.Timing?.Snapshot is not null)
+                    { await BuildLiveSnapshotAsync(); }
+                });
+                return;
             }
             var current = workspace.Timing?.Snapshot;
             if (current is null || ReferenceEquals(current, _liveObservedTiming) || _liveSnapshot is null || _timingList is null || current.ListId != _timingList.Id) { return; }
@@ -166,41 +194,17 @@ public sealed partial class MainViewModel
                 Competitors = LiveSnapshotMapper.Competitors(_liveLists),
                 Runs = _liveSnapshot.Runs.Where(x => x.Number != run.Number).Append(run).OrderBy(x => x.Number).ToArray(), UpdatedAt = DateTimeOffset.UtcNow };
             _liveSnapshot.Validate(); _liveObservedTiming = current;
-            foreach (var channel in _liveChannels) { channel.Process.Offer(_liveSnapshot); }
+            _livePanel.Offer(_liveCompetitionId!.Value, _liveSnapshot);
         }
-        catch (Exception ex) when (ex is LiveValidationException or ArgumentException or InvalidOperationException or TimeZoneNotFoundException)
-        { LiveTimingError = "Live state needs review. Check race time zone and bib consistency. Timing capture continues."; }
-        }
-        catch (Exception) { LiveTimingError = "Live timing projection failed. Timing capture continues; stop and restart the publisher."; }
-    }
-    private async Task ResetLivePublishersAsync()
-    {
-        if (_liveChannels is null) { return; }
-        foreach (var channel in _liveChannels) { await channel.Process.DisposeAsync(); channel.Process = new(); channel.Options = null; channel.CredentialTarget = null; channel.SavedToken = null; channel.Update(); }
-    }
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Background cleanup cannot escape into capture or dispose a newly started publisher.")]
-    private async Task ResetAfterSelectionChangeAsync()
-    {
-        await _liveControlGate.WaitAsync();
-        try { if (_liveCompetitionId is null && !_liveDisposed) { await ResetLivePublishersAsync(); } }
-        catch (Exception) { LiveTimingError = "Live timing cleanup failed. Restart the live publisher; timing capture continues."; }
-        finally { _liveControlGate.Release(); }
+        catch (Exception) { LiveTimingError = "Live timing state could not update. Reopen the panel and check race settings. Timing capture continues."; }
     }
     private void DisposeLiveTiming()
     {
-        _liveDisposed = true;
-        _liveTimer?.Stop();
-        // Dispose closes private pipes and kills only owned downstream process trees. No timing lock is acquired.
-        if (_liveChannels is not null) { foreach (var c in _liveChannels) { _ = c.Process.DisposeAsync().AsTask(); } }
+        _liveDisposed = true; _liveTimer?.Stop();
+        if (_livePanel is not null) { _ = _livePanel.DisposeAsync().AsTask(); }
     }
     private static string DisciplineCode(Discipline value) => value switch
     { Discipline.Slalom => "SL", Discipline.GiantSlalom => "GS", Discipline.SuperG => "SG", Discipline.Downhill => "DH", Discipline.AlpineCombined => "SC", _ => "Other" };
-    private static string LiveArtifact(string name)
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, "LiveTiming", name, $"OpenSkiTime.LiveTiming.{name}.dll");
-        if (!File.Exists(path)) { throw new IOException("Live timing artifact missing."); }
-        return path;
-    }
     internal static async Task CopyLiveUrlAsync(string url)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop

@@ -1,5 +1,18 @@
 # Live timing verification — 2026-10-02
 
+## Separate control panel verification — 2026-10-03
+
+Windows and .NET 10 verification after moving publisher ownership into `OpenSkiTime.LiveTiming.ControlPanel.exe`:
+
+- Desktop workflow, layout and connection tests: **42 passed**, zero failures or skips.
+- Live timing process/protocol tests: **6 passed**, zero failures or skips.
+- Desktop build: passed with zero warnings and errors. Desktop publish: passed; verified the panel executable/runtime configuration, its nested worker/server assemblies and server browser assets in the published package.
+- Rendered the separate control panel at 940 × 790 and 760 × 560, including both columns scrolled to the bottom. Verified channel command bindings, readable TCP port, compact three-color timing strip, full hover information and no horizontal overflow. Synthetic rendered images remain outside Git.
+- The desktop workflow starts the actual named panel executable and verifies its own window handle/title. Reopening the panel button retains its process ID. Terminating only the panel process closes both publisher workers and its local server; timing capture subsequently commits a fourth raw impulse. Reopening creates a new panel and restores the Cloud session with the current on-course state. Closing the panel's main window also exits the process while timing remains connected.
+- A real private-pipe connection test exercises the panel's Start command requesting current settings and a fresh snapshot before Local publishing. A stale snapshot cannot overwrite the newer result. Parent-pipe disconnection stops the worker.
+
+Linux forced-exit cleanup, physical-device acceptance and external cloud/FIS deployment were not repeated for this UI/process change. The earlier results below describe their original verification scope.
+
 All race data used here was synthetic. No Azure resources or DNS were deployed. Supplied FIS passwords, downloaded PDFs, protocol logs and browser screenshots remain outside Git.
 
 ## Automated acceptance

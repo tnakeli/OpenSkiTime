@@ -2,55 +2,41 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.LiveTiming;
-using OpenSkiTime.LiveTiming.Client;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
 public sealed partial class LiveTimingChannel(MainViewModel owner, string label, PublisherKind kind) : ObservableObject
 {
-    internal PublisherProcess Process { get; set; } = new();
+    private PublisherHealth _health = new(PublisherState.Stopped);
     internal PublisherKind Kind { get; } = kind;
-    internal PublisherOptions? Options { get; set; }
-    internal string? CredentialTarget { get; set; }
-    internal string? SavedToken { get; set; }
     public string Label { get; } = label;
-    public string Summary
-    {
-        get
-        {
-            var health = Process.Health;
-            var last = health.LastSuccessfulPublish ?? health.LastConnected;
-            var label = Kind == PublisherKind.Local ? "Local" : Kind == PublisherKind.Cloud ? "Cloud" : "FIS";
-            var summary = $"{label} · {Status}" + (last is { } at ? " · " + at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "");
-            return health.Error is null ? summary : summary + " · " + (health.State == PublisherState.Reconnecting ? "Check network" : "Restart / settings");
-        }
-    }
     public bool IsFis => Kind is PublisherKind.FisTcp or PublisherKind.FisHttps;
     public bool IsStandalone => !IsFis;
-    public int? WorkerProcessId => Process.ProcessId;
+    public int? WorkerProcessId { get; private set; }
+    public string IndicatorColor => Status == "Stopped" ? "#DCE6E9" : Status == "Running" ? "#49BA91" : "#EF7777";
+    public string Summary => $"{Label} · {Status}";
+    public string StatusToolTip => Summary + "\n" + Detail + (Expiration.Length > 0 ? "\n" + Expiration : "");
     [ObservableProperty] private string _status = "Stopped";
     [ObservableProperty] private string _detail = "";
     [ObservableProperty] private string _publicUrl = "";
     [ObservableProperty] private string _expiration = "";
     [ObservableProperty] private bool _busy;
-    internal void Update()
+    partial void OnStatusChanged(string value)
+    { OnPropertyChanged(nameof(IndicatorColor)); OnPropertyChanged(nameof(Summary)); OnPropertyChanged(nameof(StatusToolTip)); }
+    partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(StatusToolTip));
+    internal void Update(LiveChannelHealth channel)
     {
-        var h = Process.Health;
-        Status = h.State.ToString(); PublicUrl = h.PublicUrl ?? "";
-        Expiration = h.ExpiresAt is { } expires ? "Expires " + expires.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) : "";
-        var last = h.LastSuccessfulPublish ?? h.LastConnected;
-        Detail = (last is null ? "" : "Last OK " + last.Value.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) + " · ") + (h.Error ?? h.Endpoint);
-        OnPropertyChanged(nameof(Summary));
+        _health = channel.Health; WorkerProcessId = channel.ProcessId;
+        Status = _health.State.ToString(); PublicUrl = _health.PublicUrl ?? "";
+        Expiration = _health.ExpiresAt is { } expires ? "Expires " + expires.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) : "";
+        var last = _health.LastSuccessfulPublish ?? _health.LastConnected;
+        Detail = _health.Endpoint + (last is { } at ? "\nLast OK " + at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "")
+            + (_health.Error is { } error ? "\n" + error : "");
+        OnPropertyChanged(nameof(StatusToolTip)); OnPropertyChanged(nameof(WorkerProcessId));
     }
     [RelayCommand] private Task StartAsync() => owner.StartLiveChannelAsync(this);
     [RelayCommand] private Task StopAsync() => owner.ControlLiveChannelAsync(this, "stop");
     [RelayCommand] private Task RefreshAsync() => owner.ControlLiveChannelAsync(this, "refresh");
     [RelayCommand] private Task DeleteAsync() => owner.ControlLiveChannelAsync(this, "delete");
     [RelayCommand] private Task DeleteAllDataAsync() => owner.ControlLiveChannelAsync(this, "delete-all");
-    [RelayCommand] private Task CopyUrlAsync() => MainViewModel.CopyLiveUrlAsync(PublicUrl);
-    [RelayCommand] private void OpenUrl()
-    {
-        if (Uri.TryCreate(PublicUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
-        { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
-    }
 }

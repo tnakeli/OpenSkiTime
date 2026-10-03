@@ -40,7 +40,7 @@ public partial class DesktopWorkflowTests
             try
             {
                 vm.LiveTimeZone="Europe/Helsinki"; vm.LiveLocalEndpoint=$"http://localhost:{ProcessFixture.Port()}"; vm.LiveCloudEndpoint=cloudServer.Endpoint;
-                var local=vm.LiveChannels[1]; var cloud=vm.LiveChannels[2];
+                var local=vm.LiveChannels[0]; var cloud=vm.LiveChannels[1];
                 await local.StartCommand.ExecuteAsync(null); await cloud.StartCommand.ExecuteAsync(null);
                 await LiveUiUntil(()=>local.Status=="Running"&&cloud.Status=="Running");
                 Assert.Equal("",vm.LiveTimingError); Assert.NotEmpty(cloud.Expiration);
@@ -66,11 +66,44 @@ public partial class DesktopWorkflowTests
                 await LiveApiUntil(http,vm.LiveCloudEndpoint,cloudId,s=>s.Runs[0].Results.First(r=>r.Bib==bib).Hundredths==6087);
                 var raw=await workspace.ReadTimingAsync(workspace.Timing.ListId!.Value);
                 Assert.Equal(3,raw.Packets.Count); Assert.Contains(raw.Packets,p=>Encoding.ASCII.GetString(p.Bytes).Contains("1234567",StringComparison.Ordinal));
+                var panelId=vm.LiveControlPanelProcessId!.Value;
+                await vm.OpenLiveTimingCommand.ExecuteAsync(null);
+                Assert.Equal(panelId,vm.LiveControlPanelProcessId);
+                using var localWorker=System.Diagnostics.Process.GetProcessById(local.WorkerProcessId!.Value);
+                using var cloudWorker=System.Diagnostics.Process.GetProcessById(cloud.WorkerProcessId!.Value);
+                var localHealth=await http.GetFromJsonAsync<System.Text.Json.JsonElement>(vm.LiveLocalEndpoint+"/health");
+                using var localServer=System.Diagnostics.Process.GetProcessById(localHealth.GetProperty("processId").GetInt32());
+                using(var panel=System.Diagnostics.Process.GetProcessById(panelId))
+                {
+                    Assert.Equal("OpenSkiTime.LiveTiming.ControlPanel",panel.ProcessName);
+                    Assert.NotEqual(IntPtr.Zero,panel.MainWindowHandle);
+                    Assert.Contains("Live timing control panel",panel.MainWindowTitle);
+                    panel.Kill(); await panel.WaitForExitAsync();
+                }
+                await LiveUiUntil(()=>local.Status=="Stopped"&&cloud.Status=="Stopped");
+                await localWorker.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                await cloudWorker.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                await localServer.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.True(vm.IsTimingConnected); Assert.True(workspace.Timing.IsActive);
+                vm.SimulationTime="12:02:00.1234567"; await vm.SimulatePulseCommand.ExecuteAsync("start");
+                await WaitTimingAsync(vm,()=>vm.OnCourseRows.Count==1);
+                Assert.Equal(4,(await workspace.ReadTimingAsync(workspace.Timing.ListId!.Value)).Packets.Count);
+                await local.StartCommand.ExecuteAsync(null); await cloud.StartCommand.ExecuteAsync(null);
+                await LiveUiUntil(()=>local.Status=="Running"&&cloud.Status=="Running");
+                Assert.NotEqual(panelId,vm.LiveControlPanelProcessId);
+                Assert.Equal(cloudId,new Uri(cloud.PublicUrl).Segments[^1]);
+                await LiveApiUntil(http,vm.LiveCloudEndpoint,cloudId,s=>s.Runs[0].Results.Any(r=>r.Status==LiveStatus.OnCourse));
                 await cloud.StopCommand.ExecuteAsync(null); await LiveUiUntil(()=>cloud.Status=="Stopped");
                 await cloud.RefreshCommand.ExecuteAsync(null); await LiveUiUntil(()=>cloud.Status=="Running");
                 await local.DeleteCommand.ExecuteAsync(null); await cloud.DeleteAllDataCommand.ExecuteAsync(null);
                 await LiveUiUntil(()=>local.PublicUrl==""&&cloud.PublicUrl=="");
                 using var missing=await http.GetAsync(vm.LiveCloudEndpoint+$"/api/sessions/{cloudId}/state"); Assert.Equal(HttpStatusCode.NotFound,missing.StatusCode);
+                using(var panel=System.Diagnostics.Process.GetProcessById(vm.LiveControlPanelProcessId!.Value))
+                {
+                    Assert.True(panel.CloseMainWindow());
+                    await panel.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                }
+                await LiveUiUntil(()=>local.Status=="Stopped"&&cloud.Status=="Stopped");
                 Assert.True(vm.IsTimingConnected); await vm.DisconnectTimingCommand.ExecuteAsync(null);
             }
             finally { if(workspace.Timing?.IsActive==true) { await vm.DisconnectTimingCommand.ExecuteAsync(null); } window.Close(); }

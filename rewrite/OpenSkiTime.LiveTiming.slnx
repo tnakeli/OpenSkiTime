@@ -5,6 +5,7 @@
     <Project Path="src/OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" />
     <Project Path="src/OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" />
     <Project Path="src/OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.csproj" />
     <Project Path="src/OpenSkiTime.LiveTiming.Harness/OpenSkiTime.LiveTiming.Harness.csproj" />
   </Folder>
   <Folder Name="/tests/"><Project Path="tests/OpenSkiTime.LiveTiming.Tests/OpenSkiTime.LiveTiming.Tests.csproj" /></Folder>

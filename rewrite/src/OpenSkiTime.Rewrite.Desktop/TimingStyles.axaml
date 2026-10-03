@@ -60,7 +60,7 @@
   <Setter Property="Background" Value="{DynamicResource NavyBrush}" /><Setter Property="Padding" Value="10,3" />
   <Setter Property="CornerRadius" Value="4" />
  </Style>
- <Style Selector="Border.raceConnection TextBlock"><Setter Property="Foreground" Value="#E1F1EF" /><Setter Property="FontSize" Value="11" /></Style>
+ <Style Selector="TextBlock.raceConnectionText"><Setter Property="Foreground" Value="#E1F1EF" /><Setter Property="FontSize" Value="11" /></Style>
  <Style Selector="TextBlock.raceHeading">
   <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" /><Setter Property="Padding" Value="8,7" />
   <Setter Property="FontSize" Value="10" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
