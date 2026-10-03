@@ -12,7 +12,7 @@ resource environment 'Microsoft.App/managedEnvironments@2025-01-01' = {
   location: location
   tags: { project: 'OpenSkiTime', purpose: 'live-timing' }
   properties: {
-    appLogsConfiguration: { destination: 'none' }
+    appLogsConfiguration: { destination: null }
     workloadProfiles: [{ name: 'Consumption', workloadProfileType: 'Consumption' }]
     zoneRedundant: false
   }

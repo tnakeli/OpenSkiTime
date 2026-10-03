@@ -4,7 +4,7 @@
 
 This repository contains the website, infrastructure, deployment workflows and unsigned Windows packaging. Keep them beside the application: source changes, release metadata and deployment reviews then refer to the same commit. No separate private deployment repository is required. Secrets are in Azure and GitHub environment secrets, never source.
 
-The target domain is **openskiti.me**, not openskitime.me. The live service runs in **Sweden Central** (`swedencentral`). The website's default control-plane region is West Europe, subject to the subscription's supported Static Web Apps regions. Static Web Apps distributes static content globally; this website has no Functions backend. It does not promise Sweden-only delivery of website assets. See [Static Web Apps FAQ](https://learn.microsoft.com/en-us/azure/static-web-apps/faq).
+The target domain is **openskiti.me**, not openskitime.me. The live service runs in **Sweden Central** (`swedencentral`). The website's template default control-plane region is West Europe, subject to subscription eligibility and capacity. On 2026-10-03 Azure rejected West Europe for this subscription; East US 2 passed live ARM validation and was selected explicitly for bootstrap. Use `-WebsiteLocation eastus2` when repeating this deployment. Static Web Apps distributes static content globally; this website has no Functions backend. It does not promise Sweden-only delivery of website assets. See [Static Web Apps FAQ](https://learn.microsoft.com/en-us/azure/static-web-apps/faq).
 
 Infrastructure scripts are prepared for authenticated bootstrap. A successful local build does not establish an Azure deployment, DNS change or production acceptance. Record actual acceptance below after bootstrap.
 
@@ -90,7 +90,7 @@ Prerequisites: PowerShell 7, .NET 10 SDK for local packaging, Node 22+, Azure CL
 3. Provision in the selected subscription, using the exact image digest:
 
    ```powershell
-   ./deploy/azure/Initialize-Azure.ps1 -SubscriptionId YOUR-SUBSCRIPTION-ID `
+   ./deploy/azure/Initialize-Azure.ps1 -SubscriptionId YOUR-SUBSCRIPTION-ID -WebsiteLocation eastus2 `
      -Image ghcr.io/tnakeli/openskitime-live@sha256:YOUR-64-HEX-DIGEST
    ./deploy/azure/Configure-GitHub.ps1 -SubscriptionId YOUR-SUBSCRIPTION-ID
    ```
@@ -154,3 +154,5 @@ No production release/tag is created automatically by merging this setup. Rehear
 Prepared on 2026-10-03. Local website build/link checks, Node failure-cleanup tests, Bicep compilation and self-contained ZIP/live process checks were performed. GitHub Windows CI also verified installer compilation, installation, packaged processes, reinstall and uninstall preservation. Azure provisioning, Cloudflare mutation and production HTTPS/load tests remain unverified. Desktop website preview was reviewed; mobile visual acceptance remains pending.
 
 Core boundary test scenarios run sequentially to avoid unrelated OCR and durable SQLite workloads competing for CI resources. Each scenario retains its own capture/concurrency assertions and production drain deadlines. Live coalescing tests wait for the worker to acknowledge the complete snapshot batch: an event timestamp alone can also identify the first event of that batch.
+
+Live ARM validation requires `appLogsConfiguration.destination: null` to disable persistent logs; the string `'none'` is rejected even though Bicep compilation accepts it. No Log Analytics workspace is provisioned.
