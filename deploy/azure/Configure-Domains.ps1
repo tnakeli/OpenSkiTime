@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{32}$')][string] $CloudflareZoneId,
     [string] $ResourceGroup = 'openskitime-production',
     [string] $WebsiteName = 'openskitime-website',
-    [string] $AppName = 'openskitime-live'
+    [string] $AppName = 'openskitime-live',
+    [switch] $WebsiteOnly
 )
 $ErrorActionPreference = 'Stop'
 if (!$env:CLOUDFLARE_API_TOKEN) { throw 'Supply CLOUDFLARE_API_TOKEN privately in the local shell: Zone Read and DNS Edit for openskiti.me only.' }
@@ -24,18 +25,21 @@ function Cloudflare([string] $Route, [string] $Method = 'GET', $Body = $null) {
 $zone = Cloudflare "zones/$CloudflareZoneId"
 if ($zone.name -ne 'openskiti.me') { throw 'Refusing to modify a zone other than openskiti.me.' }
 $website = Azure @('staticwebapp','show','--name',$WebsiteName,'--resource-group',$ResourceGroup,'--output','json') | ConvertFrom-Json
-$app = Azure @('containerapp','show','--name',$AppName,'--resource-group',$ResourceGroup,'--output','json') | ConvertFrom-Json
-if ($app.location -ne 'swedencentral') { throw 'The live app must be in Sweden Central.' }
 $websiteHost = $website.defaultHostname
-$liveHost = $app.properties.configuration.ingress.fqdn
-$verification = $app.properties.customDomainVerificationId
-if (!$websiteHost -or !$liveHost -or !$verification) { throw 'Azure hostnames or verification ID are missing.' }
+if (!$websiteHost) { throw 'Azure website hostname is missing.' }
 $records = @(
     @{type='CNAME';name='openskiti.me';content=$websiteHost;ttl=1;proxied=$false},
-    @{type='CNAME';name='www.openskiti.me';content=$websiteHost;ttl=1;proxied=$false},
-    @{type='CNAME';name='live.openskiti.me';content=$liveHost;ttl=1;proxied=$false},
-    @{type='TXT';name='asuid.live.openskiti.me';content=$verification;ttl=1}
+    @{type='CNAME';name='www.openskiti.me';content=$websiteHost;ttl=1;proxied=$false}
 )
+if (!$WebsiteOnly) {
+    $app = Azure @('containerapp','show','--name',$AppName,'--resource-group',$ResourceGroup,'--output','json') | ConvertFrom-Json
+    if ($app.location.Replace(' ','').ToLowerInvariant() -ne 'swedencentral') { throw 'The live app must be in Sweden Central.' }
+    $liveHost = $app.properties.configuration.ingress.fqdn
+    $verification = $app.properties.customDomainVerificationId
+    if (!$liveHost -or !$verification) { throw 'Azure live hostname or verification ID is missing.' }
+    $records += @{type='CNAME';name='live.openskiti.me';content=$liveHost;ttl=1;proxied=$false}
+    $records += @{type='TXT';name='asuid.live.openskiti.me';content=$verification;ttl=1}
+}
 function Inspect-Record($Record) {
     $name = [Uri]::EscapeDataString($Record.name)
     $current = @(Cloudflare "zones/$CloudflareZoneId/dns_records?name=$name&per_page=100")
@@ -69,6 +73,10 @@ foreach ($domain in @('openskiti.me','www.openskiti.me')) {
     if (!$token) { throw 'Azure TXT validation token is not ready. Retry this script later.' }
     $txtName = if ($domain -eq 'openskiti.me') { '_dnsauth.openskiti.me' } else { '_dnsauth.www.openskiti.me' }
     Ensure-Record @{type='TXT';name=$txtName;content=$token;ttl=1}
+}
+if ($WebsiteOnly) {
+    Write-Host 'Website DNS records and domain validation submitted. Retry after propagation if certificates are pending.'
+    return
 }
 $domains = @($app.properties.configuration.ingress.customDomains | Where-Object name -eq 'live.openskiti.me')
 if (!$domains.Count) { Azure @('containerapp','hostname','add','--name',$AppName,'--resource-group',$ResourceGroup,'--hostname','live.openskiti.me','--output','none') }
