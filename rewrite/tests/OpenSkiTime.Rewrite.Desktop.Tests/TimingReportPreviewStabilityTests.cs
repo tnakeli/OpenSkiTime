@@ -58,7 +58,7 @@ public partial class DesktopWorkflowTests
                 { RunNumber = 1 };
             var second = first with { Id = Guid.NewGuid(), FileName = "second.png", ImportedAt = DateTimeOffset.UnixEpoch.AddSeconds(1),
                 RecognizedText = "3 C0 12:00:00.01\n4 C1 12:01:00.01" };
-            await workspace.SaveTimingReportImagesAsync([first, second], (await workspace.ReadAsync()).Revision);
+            // Recognition batches live only in dialog memory.
             using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
                 fisStore: new FisLocalStore(folder), recentSeriesStore: new RecentSeriesStore(folder));
             await vm.OpenSeriesCommand.ExecuteAsync(null);
@@ -68,18 +68,18 @@ public partial class DesktopWorkflowTests
             Assert.True(await vm.FlushTimingReportAsync(), vm.StatusMessage);
             await vm.ShowTimingReportCommand.ExecuteAsync(null);
             vm.ReportImportRun = 1;
-            var view = new TimingReportView { DataContext = vm };
-            var window = new Window { Width = 1280, Height = 850, Content = view };
+            vm.ReportImages.Add(first); vm.ReportImages.Add(second); var view = new TimingReceiptDialog { DataContext = vm };
+            var window = view; window.Width = 1280; window.Height = 850;
             window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             try
             {
-                view.FindControl<TabControl>("TimingReportTabs")!.SelectedIndex = 3;
+
                 window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
                 var picker = view.FindControl<ComboBox>("ReportImagePicker")!;
                 Assert.NotNull(picker);
                 picker.SelectedItem = vm.ReportImages.Single(x => x.Id == first.Id);
                 Dispatcher.UIThread.RunJobs();
-                await vm.PreviewSavedReportImagesCommand.ExecuteAsync(null);
+                await vm.RebuildReportReceiptMatchesAsync();
                 Assert.False(vm.IsError, vm.StatusMessage);
                 Assert.Equal(first.Id, vm.SelectedReportImage!.Id);
                 Assert.Equal(4, vm.ReportImportPreview.Count(x => x.CanAccept));
@@ -103,6 +103,21 @@ public partial class DesktopWorkflowTests
                 var beforeNoise = workspace.Timing.SavedPackets;
                 await noise.PulseAsync(0, TimeSpan.FromHours(13).Ticks);
                 await ReportUntil(() => workspace.Timing.SavedPackets > beforeNoise);
+                // Accept directly against the displayed snapshot without reopening.
+                // Neither the desktop nor persistence may recheck raw timing packets.
+                await vm.AcceptReportImageMatchesCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                Assert.Equal(3, (await workspace.ReadTimingReportAsync(competition.Id))!.Values.Associations.Length);
+                Assert.Equal("1:00.00", vm.ReportEvidence.Single(x => x.Bib == plan.Entries[0].Bib).Net);
+                await vm.RebuildReportReceiptMatchesAsync();
+                rows = vm.ReportImportPreview.ToArray();
+                rows[0].Accept = false;
+                vm.SelectedReportImportRow = rows[1];
+                picker.SelectedItem = vm.ReportImages.Single(x => x.Id == first.Id);
+                Dispatcher.UIThread.RunJobs();
+                selectedRow = vm.SelectedReportImportRow;
+                vm.ReportImportVerified = true;
+                savedBefore = (await workspace.ReadTimingReportAsync(competition.Id))!;
                 await vm.ShowTimingReportCommand.ExecuteAsync(null);
                 Assert.False(vm.ReportImportPreviewStale);
                 Assert.True(vm.ReportImportVerified);
@@ -144,10 +159,10 @@ public partial class DesktopWorkflowTests
                 Assert.True(vm.IsError);
                 var rejected = (await workspace.ReadTimingReportAsync(competition.Id))!;
                 Assert.Equal(savedBefore.Revision, rejected.Revision);
-                Assert.Empty(rejected.Values.Associations);
+                Assert.Equal(3, rejected.Values.Associations.Length);
                 Assert.Equal(rows.Length, vm.ReportImportPreview.Count);
 
-                await vm.PreviewSavedReportImagesCommand.ExecuteAsync(null);
+                await vm.RebuildReportReceiptMatchesAsync();
                 Assert.False(vm.IsError, vm.StatusMessage);
                 Assert.False(vm.ReportImportPreviewStale);
                 Assert.Equal(first.Id, vm.SelectedReportImage!.Id);

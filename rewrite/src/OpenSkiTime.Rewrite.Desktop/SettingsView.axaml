@@ -3,7 +3,7 @@
  x:Class="OpenSkiTime.Rewrite.Desktop.SettingsView" x:CompileBindings="False">
  <StackPanel Spacing="12">
   <TextBlock Text="Settings" Classes="sectionTitle"/>
-  <TabControl Name="SettingsTabs">
+  <TabControl Name="SettingsTabs" SelectedIndex="{Binding SelectedSettingsTab}">
    <TabItem Header="FIS">
     <StackPanel Spacing="12" Margin="0,12,0,0">
      <TextBlock Text="FIS API key" FontWeight="SemiBold"/>

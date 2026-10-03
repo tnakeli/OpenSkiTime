@@ -15,6 +15,8 @@ public sealed partial class MainViewModel
     private bool _reportSettingsLoaded;
     private DateTimeOffset? _timingDeviceCatalogueRetrievedAt;
     public TimingReportDefaults ReportDefaults { get { EnsureReportSettingsLoaded(); return _reportDefaults ?? new(); } }
+    [ObservableProperty] private int _selectedSettingsTab;
+    [RelayCommand] private void ShowTimingReportSettings() { SelectedSettingsTab = 2; ShowSettings(); }
     public TimingReportPersonEditor ReportDefaultChief { get; } = new();
     public TimingReportPersonEditor ReportDefaultTimekeeper { get; } = new();
     public IReadOnlyList<string> ReportConnectionModes { get; } = ["Cable", "Radio", "LAN", "WLAN", "Mobile", "USB", "Other"];
@@ -26,7 +28,7 @@ public sealed partial class MainViewModel
     [ObservableProperty] private FisTimingDevice? _selectedTimingDeviceHomologation;
     [ObservableProperty] private bool _isTimingDeviceLookupBusy;
     [ObservableProperty] private string _timingDeviceCatalogueStatus = "No catalogue downloaded. Equipment can be entered manually.";
-    [ObservableProperty] private string _reportDefaultsStatus = "Defaults are copied into new reports; existing reports keep their saved values.";
+    [ObservableProperty] private string _reportDefaultsStatus = "Timing reports use the equipment and officials saved here.";
     [ObservableProperty] private string _reportDefaultConnectionA = "Cable";
     [ObservableProperty] private string _reportDefaultConnectionB = "Cable";
     [ObservableProperty] private string _reportDefaultVoice = "Radio";
@@ -67,7 +69,12 @@ public sealed partial class MainViewModel
                 TimerStartB = OptionalReportDevice(ReportDefaultDevices[7].Values),
                 ConnectionB = ReportDefaultConnectionB, Voice = ReportDefaultVoice });
             LoadReportDefaultsEditors(_reportDefaults);
-            ReportDefaultsStatus = "Saved for new timing reports. Existing reports were preserved.";
+            if (_reportDraft is not null)
+            {
+                _reportDraft = _reportDraft with { Defaults = _reportDefaults };
+                NotifyReportDefaults(); ReportChanged();
+            }
+            ReportDefaultsStatus = "Saved. Timing reports use the equipment and officials from Settings.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DomainValidationException)
         { ReportDefaultsStatus = "Not saved: " + ex.Message; }
