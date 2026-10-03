@@ -20,3 +20,13 @@
   open-source project. Keep developer planning, architecture notes and agent
   instructions under docs/ or other appropriate development files.
 - Do not expose internal agent workflows or development planning in user-facing documentation.
+## Agent workflow
+
+- Before making substantial changes, inspect the relevant existing code, tests, and documentation.
+- For non-trivial work, create an implementation plan and break it into concrete tasks before editing code.
+- Prefer extending existing architecture and patterns over introducing parallel implementations.
+- Work through the tasks systematically and keep the plan updated if discoveries require changes.
+- Do not stop after implementation: build the affected projects, run relevant tests, and fix failures caused by the change.
+- Review the final diff for correctness, unnecessary changes, accidental regressions, secrets, personal data, and generated artifacts.
+- Update relevant developer documentation when architecture, behavior, protocols, file formats, or operational procedures change.
+- At completion, summarize what changed, what was tested, and any remaining risks or unverified areas.
