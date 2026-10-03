@@ -38,7 +38,7 @@
       </Grid>
      </Grid>
      <StackPanel Grid.Row="3" Spacing="4" Margin="0,8,0,0">
-      
+
       <WrapPanel><CheckBox Name="SelectAllReceiptMatches" Content="Select all" IsChecked="{Binding AllReportMatchesSelected, Mode=OneWay}" Click="SelectAll_Click" Margin="0,0,14,0"/>
        <Button Name="AcceptReportImagesButton" Content="OK" Click="Accept_Click" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction"/>
        <Button Content="Cancel" Click="Cancel_Click" Margin="8,0,0,0"/><Button Content="Cancel reading" Command="{Binding CancelReportImagesCommand}" Margin="8,0,0,0" IsVisible="{Binding IsReportBusy}"/>
