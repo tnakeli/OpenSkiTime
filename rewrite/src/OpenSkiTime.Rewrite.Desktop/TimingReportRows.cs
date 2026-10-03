@@ -43,34 +43,35 @@ public sealed partial class TimingReportRunEditor : ObservableObject
 {
     public TimingReportRun Source { get; init; } = new();
     public int Run => Source.Run;
+    [ObservableProperty] private TimingReportEvidenceRow? _first;
+    [ObservableProperty] private TimingReportEvidenceRow? _last;
     public string BestUnavailableReason { get; init; } = "no eligible result";
-    public string BestExplanation { get; init; } = "Best A is the fastest classified result measured with unmodified electronic A impulses.";
+    public string BestExplanation { get; init; } = "Fastest classified result, including the active audited replacement time.";
     public string Best => Source.BestBib is { } bib ? $"Best A: bib {bib} / {TimingTime.Format(Source.BestHundredths)}" : $"Best A: {BestUnavailableReason}";
 
     public static TimingReportRunEditor FromTiming(TimingReportRun run, TimingSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(run); ArgumentNullException.ThrowIfNull(snapshot);
-        var classified = snapshot.Results.Where(x => x.Status == TimingStatus.Finished).ToArray();
-        var replacementOnly = classified.Length > 0 && classified.All(x => run.MissedA.Any(m => m.Bib == x.Bib));
         return new()
         {
-            Source = run, Comment = run.Comment,
-            BestUnavailableReason = classified.Length == 0 ? "no classified finisher"
-                : replacementOnly ? "manual / corrected times" : "no valid electronic pair",
+            Source = run, Comment = run.Comment, AllResultsA = run.AllResultsA,
+            BestUnavailableReason = "no classified finisher",
             BestExplanation = run.BestBib is not null
-                ? "Fastest classified result measured with unmodified electronic A impulses."
-                : classified.Length == 0 ? "No competitor has a classified finished result in this run."
-                : replacementOnly ? "The classified results use device keyboard impulses (such as Timy C0M/C1M) or replacement net times. Their timestamps remain visible in the A grid, but they are not eligible as Best A. Verify and explain the replacement sources below."
-                : "No classified result has an eligible electronic A start/finish pair with the required source precision. Check the original impulses and timing review."
+                ? "Fastest classified result, including manual impulses and the active audited replacement time."
+                : "No competitor has a classified finished result with a time in this run."
         };
     }
     [ObservableProperty] private string _comment = "";
+    [ObservableProperty] private bool _allResultsA = true;
 }
 
 public sealed partial class TimingReportMissedEditor : ObservableObject
 {
-    public int Run { get; init; }
-    public int Bib { get; init; }
+    [ObservableProperty] private int _run;
+    [ObservableProperty] private int _bib;
+    [ObservableProperty] private IReadOnlyList<int> _runs = [];
+    public IReadOnlyList<string> Reasons { get; } = ["Batteries", "Snow obscuration", "Wire break", "Photocell alignment", "Other"];
+    public IReadOnlyList<string> Sources { get; } = ["System B", "Manual"];
     [ObservableProperty] private string _reason = "";
     [ObservableProperty] private string _timeFrom = "";
 }
@@ -80,12 +81,15 @@ public sealed partial class TimingReportImportRow : ObservableObject
     public TimingReportEvidenceRow Target { get; init; } = null!;
     public int Run => Target.Run;
     public int Bib => Target.Bib;
+    public string Sample => Target.Sample.Trim();
     public int Channel { get; init; }
     public string Position => Channel == 0 ? "Start" : "Finish";
     public TimingReportImageRole Role { get; init; }
     public TimingReportStamp? Stamp { get; init; }
     public string A => Channel == 0 ? Target.AStart : Target.AFinish;
     public string Proposed => TimingReportEvidenceRow.Format(Stamp);
+    public string Current => Role == TimingReportImageRole.B ? Channel == 0 ? Target.BStart : Target.BFinish
+        : Role == TimingReportImageRole.HandStart ? Target.HandStart : Target.HandFinish;
     public string Difference { get; init; } = "";
     public string State { get; init; } = "";
     public string SourceText { get; init; } = "";

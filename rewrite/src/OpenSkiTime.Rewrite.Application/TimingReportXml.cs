@@ -89,6 +89,8 @@ public static class TimingReportXml
             if (r.BestBib is not > 0 || r.BestHundredths is not > 0) { errors.Add($"Run {r.Run} best A time is missing."); }
             if (r.AllResultsA && r.MissedA.Length > 0 || !r.AllResultsA && r.MissedA.Length == 0)
             { errors.Add($"Run {r.Run} missed A declarations are inconsistent."); }
+            if (r.MissedA.GroupBy(m => m.Bib).Any(g => g.Count() > 1))
+            { errors.Add($"Run {r.Run} contains duplicate replacement bibs."); }
             foreach (var m in r.MissedA)
             {
                 if (m.Bib <= 0) { errors.Add($"Run {r.Run} missed A bib is invalid."); }
