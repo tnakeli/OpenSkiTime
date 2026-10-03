@@ -1,0 +1,16 @@
+{
+  "routes": [
+    { "route": "/download", "redirect": "/download/", "statusCode": 301 },
+    { "route": "/guide", "redirect": "/guide/", "statusCode": 301 },
+    { "route": "/privacy", "redirect": "/privacy/", "statusCode": 301 }
+  ],
+  "responseOverrides": { "404": { "rewrite": "/404.html" } },
+  "globalHeaders": {
+    "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Strict-Transport-Security": "max-age=31536000"
+  },
+  "mimeTypes": { ".svg": "image/svg+xml" }
+}

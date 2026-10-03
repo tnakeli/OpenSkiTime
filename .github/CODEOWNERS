@@ -1,0 +1,9 @@
+# Enforced by the repository ruleset configured during bootstrap.
+* @tnakeli
+/.github/ @tnakeli
+/deploy/ @tnakeli
+/scripts/ @tnakeli
+/website/ @tnakeli
+/Directory.Build.props @tnakeli
+/Directory.Packages.props @tnakeli
+/rewrite/LiveTimingArtifacts.targets @tnakeli

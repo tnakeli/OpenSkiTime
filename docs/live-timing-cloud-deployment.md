@@ -1,6 +1,8 @@
-# Live Timing Server: future Azure Container Apps deployment
+# Live Timing Server: Azure Container Apps deployment
 
 This is a prepared deployment procedure, not an executed deployment. Development acceptance uses independent local processes and the real REST/SignalR/session-token APIs. No Azure resources, subscriptions, login, custom domain or Azure E2E test were used.
+
+For the current Sweden Central, scale-to-zero, website and GitHub automation runbook, see [website and releases](website-and-releases.md). The following documents the service protocol and underlying deployment operations.
 
 ## Architecture and artifact
 
@@ -8,7 +10,7 @@ OpenSkiTime's dedicated cloud publisher creates a session over REST, retains its
 
 The single `OpenSkiTime.LiveTiming.Server` project is used for managed Local, independently hosted LAN service, locally simulated Cloud and eventual Azure. There is one container image, using the .NET 10 ASP.NET runtime and the same published assembly/web assets. No database, Redis, Azure SignalR Service, Dapr or race-data volume is needed. The [Dockerfile](../rewrite/src/OpenSkiTime.LiveTiming.Server/Dockerfile) and .NET SDK container metadata both package this service. It listens on HTTP 8080 inside the container; Azure ingress terminates public HTTPS 443. REST and WebSocket share that origin/port.
 
-State, session membership and revocation markers are RAM-only. Keep `minReplicas=1`, `maxReplicas=1`, single active revision and all traffic to that revision. More than one active replica would have different caches and SignalR groups; scaling requires a shared state/backplane design that is deliberately absent. [Azure scaling settings](https://learn.microsoft.com/en-us/azure/container-apps/scale-app) document these limits.
+State, session membership and revocation markers are RAM-only. Use `minReplicas=0`, `maxReplicas=1`, single active revision and all traffic to that revision. More than one active replica would have different caches and SignalR groups; scaling requires a shared state/backplane design that is deliberately absent. [Azure scaling settings](https://learn.microsoft.com/en-us/azure/container-apps/scale-app) document these limits.
 
 Session tokens are HMAC-SHA256 signed, session-scoped and valid for fourteen days by default. Supply a stable random signing key through an Azure secret and reference it from the environment; a restart can then validate an existing token without a credential database. Full snapshot PUT restores its missing cache entry. A new signing key invalidates outstanding tokens and requires new sessions/URLs. Deleted-session token revocation lasts in RAM until expiry; see the [explicit stateless-revocation limitation](live-timing.md#credentials-expiry-and-deletion).
 
@@ -86,7 +88,7 @@ These steps are for the future operator. Replace placeholders in a private worki
    # LIVE_SIGNING_KEY is supplied privately to this shell, not committed or printed.
    az containerapp create --name <app-name> --resource-group <resource-group> --environment <environment-name> `
      --image <registry>/openskitime-live-timing:<version> --ingress external --target-port 8080 `
-     --min-replicas 1 --max-replicas 1 --revisions-mode single --cpu 0.5 --memory 1Gi `
+     --min-replicas 0 --max-replicas 1 --revisions-mode single --cpu 0.5 --memory 1Gi `
      --secrets "live-signing-key=$env:LIVE_SIGNING_KEY" `
      --env-vars LiveTiming__SigningKey=secretref:live-signing-key LiveTiming__TokenDays=14 `
        LiveTiming__PublicBaseUrl=https://<app-fqdn> ASPNETCORE_HTTP_PORTS=8080 Logging__LogLevel__Default=Warning
@@ -94,7 +96,7 @@ These steps are for the future operator. Replace placeholders in a private worki
 
    Do not use shell tracing or CLI debug logging with secret arguments. Alternatively deploy the Bicep template using a private, secured parameter source. The template contains no secret value. Creation/update options are described by [the official Azure CLI reference](https://learn.microsoft.com/en-us/cli/azure/containerapp).
 
-7. **Set all environment variables/limits** from the table and confirm secret references are used for the key. Set HTTP startup/readiness/liveness probes to `/health` on port 8080. The template prepares startup every two seconds (30 failures), readiness every five seconds and liveness every ten seconds. Keep min/max replicas both one and single-revision traffic.
+7. **Set all environment variables/limits** from the table and confirm secret references are used for the key. Set HTTP startup/readiness/liveness probes to `/health` on port 8080. The template prepares startup every two seconds (30 failures), readiness every five seconds and liveness every ten seconds. Keep minimum replicas zero, maximum one and single-revision traffic. Cold starts and scaling to zero discard RAM state; active publishers restore it with a full snapshot.
 
 8. **Publish HTTPS ingress** with insecure public HTTP disabled. Test REST and WebSocket against the autogenerated FQDN before adding DNS; the container's internal HTTP port is not an Internet TCP service. Set `LiveTiming__PublicBaseUrl` to this confirmed HTTPS origin.
 
