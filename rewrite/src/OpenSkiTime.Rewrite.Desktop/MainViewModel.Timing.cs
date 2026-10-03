@@ -228,6 +228,9 @@ public sealed partial class MainViewModel
             if (changingRun || !timing.IsActive) { await timing.SelectRunAsync(list.Id); }
             else if (_timingList?.Plan.Competition.IntermediateCount != currentCompetition.Values.IntermediateCount)
             { await timing.RefreshIntermediateCountAsync(); }
+            if (changingRun && workspace.Auxiliary is { } auxiliary
+                && auxiliary.State(AuxiliaryTimingRole.B) is { IsActive: true, Live: true })
+            { QueueLiveBackupRunSwitch(auxiliary, list.Id); }
             if (changingRun)
             {
                 ShowTimingClassificationEditor = false;
@@ -333,6 +336,7 @@ public sealed partial class MainViewModel
                 IsTimingSimulator || IsTimingReplay, TimingFirmware, Mt1StartDevice.Trim(), Mt1FinishDevice.Trim(), since)
                 { BaudRate = TimingBaud, IntermediateChannels = ReadIntermediateChannels() };
             options.Validate();
+            ValidateAuthoritativeTimingEndpoint(options);
             if (IsAlgeResults && options.IntermediateChannels.Length > 0)
             { throw new DomainValidationException("ALGE Results supports start/finish only. Use USB/serial for intermediate capture."); }
             ITimingSource source;
@@ -378,6 +382,13 @@ public sealed partial class MainViewModel
 
     public async Task<bool> StopTimingForCloseAsync()
     {
+        if (!await FlushTimingReportAsync()) { return false; }
+        if (workspace.Auxiliary is { IsActive: true } auxiliary)
+        {
+            var stopped = false;
+            await GuardAsync(async () => { await auxiliary.StopAllAsync(); stopped = true; });
+            if (!stopped) { return false; }
+        }
         if (workspace.Timing?.IsActive != true) { return true; }
         await DisconnectTimingAsync();
         return workspace.Timing?.IsActive != true;
@@ -548,7 +559,7 @@ public sealed partial class MainViewModel
         var refreshing = IsRefreshingTimingUi;
         IsRefreshingTimingUi = true;
         try { RefreshTimingCore(); }
-        finally { RefreshRunningTimes(); RefreshTimestamps(); IsRefreshingTimingUi = refreshing; if (!refreshing) { OnPropertyChanged(nameof(IsRefreshingTimingUi)); } }
+        finally { RefreshRunningTimes(); RefreshTimestamps(); RefreshBackupMonitor(); IsRefreshingTimingUi = refreshing; if (!refreshing) { OnPropertyChanged(nameof(IsRefreshingTimingUi)); } }
     }
 
     private void RefreshTimingCore()
@@ -631,6 +642,8 @@ public sealed partial class MainViewModel
 
     private void ResetTimingUi()
     {
+        ResetBackupMonitor();
+        ResetReportUi();
         _timingDragWorkspace = Guid.NewGuid(); _timestampSnapshot = null; TimestampRows.Clear();
         _timingTimer?.Stop(); _timingList = null; _shownTiming = null; _previousTiming = null;
         TimingCompetition = null; TimingRows.Clear(); TimingObservations.Clear(); TimingHistory.Clear();
@@ -642,5 +655,5 @@ public sealed partial class MainViewModel
         IsTimingConnected = false; RefreshRaceQueues(); NotifyTiming();
     }
 
-    private void DisposeTimingUi() { DisposeLiveTiming(); _timingTimer?.Stop(); _timingHttp.Dispose(); }
+    private void DisposeTimingUi() { ResetBackupMonitor(); DisposeLiveTiming(); _timingTimer?.Stop(); _timingHttp.Dispose(); }
 }

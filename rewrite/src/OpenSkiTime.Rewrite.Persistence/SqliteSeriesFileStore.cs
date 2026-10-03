@@ -37,12 +37,22 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
                 await db.Database.ExecuteSqlRawAsync("""
                     CREATE TRIGGER RawTimingPackets_NoUpdate BEFORE UPDATE ON RawTimingPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     CREATE TRIGGER RawTimingPackets_NoDelete BEFORE DELETE ON RawTimingPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER AuxiliaryRawPackets_NoUpdate BEFORE UPDATE ON AuxiliaryRawPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER AuxiliaryRawPackets_NoDelete BEFORE DELETE ON AuxiliaryRawPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     CREATE TRIGGER TimingAudit_NoUpdate BEFORE UPDATE ON TimingAudit BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     CREATE TRIGGER TimingAudit_NoDelete BEFORE DELETE ON TimingAudit BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     CREATE TRIGGER ApprovedResults_NoUpdate BEFORE UPDATE ON ApprovedResults BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     CREATE TRIGGER ApprovedResults_NoDelete BEFORE DELETE ON ApprovedResults BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     CREATE TRIGGER RaceInformation_NoUpdate BEFORE UPDATE ON RaceInformation BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     CREATE TRIGGER RaceInformation_NoDelete BEFORE DELETE ON RaceInformation BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReports_NoUpdate BEFORE UPDATE ON TimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReports_NoDelete BEFORE DELETE ON TimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReportImages_NoUpdate BEFORE UPDATE ON TimingReportImages BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReportImages_NoDelete BEFORE DELETE ON TimingReportImages BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER ApprovedTimingReports_NoUpdate BEFORE UPDATE ON ApprovedTimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER ApprovedTimingReports_NoDelete BEFORE DELETE ON ApprovedTimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReportSubmissions_NoUpdate BEFORE UPDATE ON TimingReportSubmissions BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReportSubmissions_NoDelete BEFORE DELETE ON TimingReportSubmissions BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     """, ct);
                 var row = new SeriesRow { Id = Guid.NewGuid(), Revision = 1 };
                 Assign(row, validated);

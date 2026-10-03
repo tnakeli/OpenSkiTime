@@ -16,6 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="Tesseract" Version="5.2.0" />
     <!-- Avalonia (UI) -->
     <PackageVersion Include="Avalonia"                          Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Desktop"                  Version="$(AvaloniaVersion)" />

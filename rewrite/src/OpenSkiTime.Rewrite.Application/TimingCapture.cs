@@ -12,6 +12,9 @@ public sealed record CaptureOptions(string Device, string Endpoint, DateOnly Dev
     public string Operator { get; init; } = string.Empty;
     public int BaudRate { get; init; } = 38400;
     public int[] IntermediateChannels { get; init; } = [];
+    // Explicit local-clock offset used only when comparing auxiliary UTC and local device timestamps.
+    // Original device ticks and raw packets are never rewritten.
+    public int? ComparisonUtcOffsetMinutes { get; init; }
 
     public void Validate()
     {

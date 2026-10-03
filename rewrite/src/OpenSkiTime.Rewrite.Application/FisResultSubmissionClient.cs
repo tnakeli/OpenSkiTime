@@ -11,6 +11,7 @@ public sealed record FisSubmissionFile(string FileName, string Status, string? C
 public sealed record FisSubmission(Guid Uuid, bool TestMode, string Outcome, string? Message,
     FisSubmissionSummary Summary, FisSubmissionFile[] Files);
 public sealed record FisSubmissionResponse(FisSubmission Submission, string ResponseText);
+public sealed record ApprovedFisXmlArtifact(Guid ApprovalId, string FileName, byte[] Xml);
 
 public sealed class FisSubmissionException(string message, string responseText, bool uploadMayHaveCompleted = false)
     : IOException(message)
@@ -19,7 +20,7 @@ public sealed class FisSubmissionException(string message, string responseText, 
     public bool UploadMayHaveCompleted { get; } = uploadMayHaveCompleted;
 }
 
-/// <summary>Member Section personal access token API. Production submissions are deliberately unavailable.</summary>
+/// <summary>Shared FIS XML submission API for approved results and timing reports. Production submissions are unavailable.</summary>
 public sealed class FisResultSubmissionClient(HttpClient client, TimeProvider? timeProvider = null) : IDisposable
 {
     public const bool TestMode = true;
@@ -28,6 +29,13 @@ public sealed class FisResultSubmissionClient(HttpClient client, TimeProvider? t
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private DateTimeOffset _nextPoll;
+
+    public Task<FisSubmissionResponse> UploadAsync(ApprovedFisXmlArtifact artifact, string apiKey, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(artifact);
+        if (artifact.ApprovalId == Guid.Empty) { throw new DomainValidationException("Approve the XML before sending it to FIS."); }
+        return UploadAsync(artifact.FileName, artifact.Xml, apiKey, ct);
+    }
 
     public async Task<FisSubmissionResponse> UploadAsync(string fileName, byte[] xml, string token, CancellationToken ct = default)
     {
@@ -75,7 +83,7 @@ public sealed class FisResultSubmissionClient(HttpClient client, TimeProvider? t
     private static void ValidateToken(string token)
     {
         if (string.IsNullOrWhiteSpace(token) || token.Any(char.IsWhiteSpace) || token.Any(char.IsControl))
-        { throw new DomainValidationException("Save a valid FIS Member Section personal access token in Settings first."); }
+        { throw new DomainValidationException("Save a valid FIS API key in Settings first."); }
     }
 
     public void Dispose() => _gate.Dispose();
@@ -112,8 +120,8 @@ public sealed class FisResultSubmissionClient(HttpClient client, TimeProvider? t
         {
             var message = response.StatusCode switch
             {
-                HttpStatusCode.Unauthorized => "FIS rejected the Member Section token. Check Settings.",
-                HttpStatusCode.Forbidden => "FIS token lacks competition file permissions. Required scopes: competition.files.write and competition.files.read.",
+                HttpStatusCode.Unauthorized => "FIS rejected the API key. Check Settings.",
+                HttpStatusCode.Forbidden => "The FIS API key lacks competition file permissions. Required scopes: competition.files.write and competition.files.read.",
                 HttpStatusCode.UnprocessableEntity => "FIS rejected the upload validation. Review the response below.",
                 HttpStatusCode.NotFound => "FIS submission was not found. Test submissions expire after 24 hours.",
                 HttpStatusCode.TooManyRequests => "FIS rate limit reached. Wait before checking status again.",

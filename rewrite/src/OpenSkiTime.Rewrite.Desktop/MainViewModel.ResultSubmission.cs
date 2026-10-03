@@ -7,14 +7,16 @@ namespace OpenSkiTime.Rewrite.Desktop;
 
 public sealed partial class MainViewModel
 {
-    private readonly HttpClient _submissionHttp = new(new HttpClientHandler { AllowAutoRedirect = false })
+    private readonly bool _ownsSubmissionHttp = submissionHttp is null;
+    private readonly HttpClient _submissionHttp = submissionHttp ?? new(new HttpClientHandler { AllowAutoRedirect = false })
         { Timeout = TimeSpan.FromSeconds(30) };
     private FisResultSubmissionClient? _submissionClient;
     private CancellationTokenSource? _submissionCancellation;
     private bool _submissionDisposed;
+    private int _submissionOperations;
+    private bool _submissionClientDisposed;
     private readonly Dictionary<(string?, Guid), (string Id, string Status, string Response)> _submissionDisplays = [];
     private (string?, Guid)? _submissionDisplayKey;
-    [ObservableProperty] private string _fisMemberTokenInput = "";
     [ObservableProperty] private bool _isSubmissionBusy;
     [ObservableProperty] private string _resultSubmissionId = "";
     [ObservableProperty] private string _resultSubmissionStatus = "Test mode is fixed on. Select an approved XML revision to send.";
@@ -22,6 +24,24 @@ public sealed partial class MainViewModel
     public bool CanSendResultsXml => SelectedResultApproval is not null && !IsSubmissionBusy;
     public bool CanCheckResultsSubmission => SelectedResultApproval is not null && !IsSubmissionBusy
         && Guid.TryParse(ResultSubmissionId, out var id) && id != Guid.Empty;
+
+    internal Task<FisSubmissionResponse> UploadApprovedFisArtifactTestAsync(ApprovedFisXmlArtifact artifact, CancellationToken ct = default)
+        => SharedFisRequestAsync((client, key) => client.UploadAsync(artifact, key, ct));
+
+    internal Task<FisSubmissionResponse> PollFisArtifactTestAsync(Guid uuid, CancellationToken ct = default)
+        => SharedFisRequestAsync((client, key) => client.PollAsync(uuid, key, ct));
+
+    private async Task<FisSubmissionResponse> SharedFisRequestAsync(Func<FisResultSubmissionClient, string, Task<FisSubmissionResponse>> action)
+    {
+        ObjectDisposedException.ThrowIf(_submissionDisposed, this);
+        _submissionOperations++;
+        try
+        {
+            _submissionClient ??= new(_submissionHttp);
+            return await action(_submissionClient, _fisStore.ReadApiKey() ?? "");
+        }
+        finally { _submissionOperations--; TryDisposeSubmissionClient(); }
+    }
 
     partial void OnIsSubmissionBusyChanged(bool value)
     { OnPropertyChanged(nameof(CanSendResultsXml)); OnPropertyChanged(nameof(CanCheckResultsSubmission)); }
@@ -46,17 +66,6 @@ public sealed partial class MainViewModel
         { _submissionDisplays[key] = (ResultSubmissionId, ResultSubmissionStatus, ResultSubmissionResponse); }
     }
 
-    [RelayCommand] private void SaveFisMemberToken()
-    {
-        try { _fisStore.SaveMemberToken(FisMemberTokenInput); FisMemberTokenInput = ""; SetStatus("FIS Member Section token saved in Windows Credential Manager."); }
-        catch (Exception ex) when (ex is IOException or ArgumentException or PlatformNotSupportedException) { SetStatus(ex.Message, error: true); }
-    }
-    [RelayCommand] private void RemoveFisMemberToken()
-    {
-        try { _fisStore.RemoveMemberToken(); FisMemberTokenInput = ""; SetStatus("FIS Member Section token removed."); }
-        catch (Exception ex) when (ex is IOException or PlatformNotSupportedException) { SetStatus(ex.Message, error: true); }
-    }
-
     [RelayCommand]
     private async Task SendApprovedXmlTestAsync()
     {
@@ -66,7 +75,7 @@ public sealed partial class MainViewModel
         {
             PublishSubmission(key, "", "Uploading approved XML · testMode=true…", "");
             // Exact approved bytes and filename; no codex replacement and no retry of POST.
-            var response = await client.UploadAsync(approval.XmlFileName, approval.Xml, token, ct);
+            var response = await client.UploadAsync(new ApprovedFisXmlArtifact(approval.Id, approval.XmlFileName, approval.Xml), token, ct);
             await FollowSubmissionAsync(key, client, token, response, ct);
         });
     }
@@ -118,11 +127,12 @@ public sealed partial class MainViewModel
     {
         if (IsSubmissionBusy) { return; }
         IsSubmissionBusy = true;
+        _submissionOperations++;
         using var cancellation = new CancellationTokenSource();
         _submissionCancellation = cancellation;
         try
         {
-            var token = _fisStore.ReadMemberToken() ?? "";
+            var token = _fisStore.ReadApiKey() ?? "";
             _submissionClient ??= new(_submissionHttp);
             await action(_submissionClient, token, cancellation.Token);
         }
@@ -138,13 +148,19 @@ public sealed partial class MainViewModel
             };
             PublishSubmission(key, previous.Id ?? "", message, ex is FisSubmissionException failure ? failure.ResponseText : previous.Response ?? "");
         }
-        finally { _submissionCancellation = null; IsSubmissionBusy = false; if (_submissionDisposed) { _submissionClient?.Dispose(); } }
+        finally { _submissionCancellation = null; IsSubmissionBusy = false; _submissionOperations--; TryDisposeSubmissionClient(); }
     }
 
     [RelayCommand] private void StopResultsSubmissionPolling() => _submissionCancellation?.Cancel();
     private void DisposeResultSubmission()
     {
-        _submissionDisposed = true; _submissionCancellation?.Cancel(); _submissionHttp.Dispose();
-        if (!IsSubmissionBusy) { _submissionClient?.Dispose(); }
+        _submissionDisposed = true; _submissionCancellation?.Cancel(); if (_ownsSubmissionHttp) { _submissionHttp.Dispose(); }
+        TryDisposeSubmissionClient();
+    }
+
+    private void TryDisposeSubmissionClient()
+    {
+        if (_submissionDisposed && _submissionOperations == 0 && !_submissionClientDisposed)
+        { _submissionClientDisposed = true; _submissionClient?.Dispose(); }
     }
 }

@@ -4,6 +4,9 @@
   <x:Double x:Key="DataGridSortIconMinWidth">14</x:Double>
   <ControlTheme x:Key="DataGridCellTextBlockTheme" TargetType="TextBlock"><Setter Property="Margin" Value="6,0" /><Setter Property="VerticalAlignment" Value="Center" /></ControlTheme>
  </UserControl.Resources>
+ <UserControl.Styles>
+  <Style Selector="Button.backupWarning"><Setter Property="Background" Value="#F3C969" /><Setter Property="Foreground" Value="#3B2C00" /></Style>
+ </UserControl.Styles>
  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
   <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
    <StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Text="{Binding TimingSummary}" Classes="supportingText" VerticalAlignment="Center" /></StackPanel>
@@ -28,9 +31,11 @@
      <StackPanel Name="TimingIntermediateSwitches" Orientation="Horizontal" Spacing="5" />
      <ToggleButton Content="FINISH" IsChecked="{Binding FinishInputOn, Mode=OneWay}" Command="{Binding ToggleTimingChannelCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" />
      <TextBlock Classes="raceConnectionText" Text="{Binding TimingHoldSummary}" VerticalAlignment="Center" Margin="6,0,0,0" FontWeight="SemiBold" />
+     <Button Name="ShowBackupButton" Content="{Binding BackupButtonText}" Command="{Binding ShowBackupCommand}" IsEnabled="{Binding CanShowBackup}" Classes.backupWarning="{Binding HasBackupWarning}" MinHeight="19" Padding="7,1" FontSize="10" Focusable="False" ToolTip.Tip="Show independent B timestamps for 30 seconds. A timing remains unchanged." />
     </StackPanel>
    </StackPanel></Border>
    <TextBlock Text="{Binding LiveTimingError}" IsVisible="{Binding HasLiveTimingError}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
+   <TextBlock Name="BackupWarningText" Text="{Binding BackupWarning}" IsVisible="{Binding HasBackupWarning}" Foreground="{DynamicResource ErrorBrush}" FontWeight="SemiBold" TextWrapping="Wrap" />
    <Border IsVisible="{Binding HasTimingAlarm}" BorderBrush="{DynamicResource ErrorBrush}" BorderThickness="1" Padding="8">
     <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
    </Border>
@@ -107,6 +112,18 @@
     </DataGrid>
    </Grid></Border>
   </Grid>
+  <Border Grid.Row="2" Name="BackupTimesPanel" IsVisible="{Binding ShowBackupTimes}" Classes="racePane" Padding="6" VerticalAlignment="Bottom" MaxHeight="180">
+   <Grid RowDefinitions="Auto,Auto">
+    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding BackupDisplayLabel}" Classes="eyebrow" VerticalAlignment="Center" /><Button Name="HideBackupButton" Grid.Column="1" Content="Hide B" Command="{Binding HideBackupCommand}" MinHeight="19" Padding="7,1" FontSize="10" Focusable="False" /></Grid>
+    <DataGrid Grid.Row="1" Name="BackupTimesGrid" ItemsSource="{Binding BackupMonitorRows}" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="24" MaxHeight="145" Focusable="False">
+     <DataGrid.Columns>
+      <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="48" /><DataGridTextColumn Header="POINT" Binding="{Binding Position}" Width="70" />
+      <DataGridTextColumn Header="A" Binding="{Binding A}" Width="160" /><DataGridTextColumn Header="B" Binding="{Binding B}" Width="160" />
+      <DataGridTextColumn Header="B − A (s)" Binding="{Binding Difference}" Width="116" /><DataGridTextColumn Header="CHECK" Binding="{Binding Status}" Width="*" MinWidth="90" />
+     </DataGrid.Columns>
+    </DataGrid>
+   </Grid>
+  </Border>
   <StackPanel Grid.Row="3" Spacing="3" Margin="0,5,0,0">
    <Grid ColumnDefinitions="*,Auto">
     <TextBlock Text="{Binding SelectedTimingIdentity}" Classes="supportingText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />

@@ -46,6 +46,7 @@ public sealed partial class MainViewModel
 
     private void RefreshFisSettingsStatus()
     {
+        EnsureReportSettingsLoaded();
         try
         {
             var configured = _fisStore.HasApiKey();

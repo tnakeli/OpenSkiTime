@@ -11,6 +11,21 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
 {
     private FileStream? _captureLease;
     private Guid? _activeCaptureId;
+    private readonly SemaphoreSlim _captureOwnership = new(1, 1);
+
+    // One process owns the file lease, while A and independent auxiliary sessions own their own lifetimes.
+    private void EnsureCaptureLease()
+    {
+        if (_captureLease is not null) { return; }
+        try { _captureLease = new(FilePath + ".capture.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read); }
+        catch (IOException ex) { throw new SeriesFileException("Another instance is capturing this event file.", ex); }
+    }
+
+    private void ReleaseCaptureLeaseIfIdle()
+    {
+        if (_activeCaptureId is not null || !_auxiliaryCaptureIds.IsEmpty) { return; }
+        _captureLease?.Dispose(); _captureLease = null;
+    }
 
     private void RequireIdleCapture()
     {
@@ -72,14 +87,13 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
         options.Validate();
         if (string.IsNullOrWhiteSpace(operatorName)) { throw new DomainValidationException("An operator identity is required."); }
         options = options with { Operator = operatorName.Trim() };
-        if (previousSessionId is null)
-        {
-            RequireIdleCapture();
-            try { _captureLease = new(FilePath + ".capture.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read); }
-            catch (IOException ex) { throw new SeriesFileException("Another instance is capturing this event file.", ex); }
-        }
+        await _captureOwnership.WaitAsync(ct);
         try
         {
+            if (previousSessionId is null && _activeCaptureId is not null)
+            { throw new SeriesFileException("Disconnect the active A source before connecting another."); }
+            if (previousSessionId is { } previousOwner) { RequireCaptureOwner(previousOwner); }
+            EnsureCaptureLease();
             var capture = await TimingWriteAsync(async db =>
             {
                 var listRow = await db.StartLists.SingleOrDefaultAsync(x => x.Id == listId, ct)
@@ -109,9 +123,10 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
         }
         catch
         {
-            if (previousSessionId is null) { _captureLease!.Dispose(); _captureLease = null; }
+            ReleaseCaptureLeaseIfIdle();
             throw;
         }
+        finally { _captureOwnership.Release(); }
     }
 
     public Task AppendRawAsync(RawTimingPacket packet, CancellationToken ct = default)
@@ -141,14 +156,20 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
 
     public async Task EndCaptureAsync(Guid sessionId, DateTimeOffset at, CancellationToken ct = default)
     {
-        RequireCaptureOwner(sessionId);
-        await TimingWriteAsync(async db =>
+        await _captureOwnership.WaitAsync(ct);
+        try
         {
-            var session = await db.Captures.SingleAsync(x => x.Id == sessionId, ct);
-            session.StoppedAt = at; session.CleanStop = true;
-            return true;
-        }, ct);
-        _captureLease?.Dispose(); _captureLease = null; _activeCaptureId = null;
+            RequireCaptureOwner(sessionId);
+            await TimingWriteAsync(async db =>
+            {
+                var session = await db.Captures.SingleAsync(x => x.Id == sessionId, ct);
+                session.StoppedAt = at; session.CleanStop = true;
+                return true;
+            }, ct);
+            _activeCaptureId = null;
+            ReleaseCaptureLeaseIfIdle();
+        }
+        finally { _captureOwnership.Release(); }
     }
 
     public async Task<TimingAudit> AppendTimingAuditAsync(Guid listId, long expectedVersion, TimingDecision before,

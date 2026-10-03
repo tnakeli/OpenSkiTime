@@ -4,12 +4,10 @@
     <StackPanel Spacing="12">
       <Border Classes="workSurface" Padding="16">
         <StackPanel Spacing="10">
-          <Grid ColumnDefinitions="*,240,Auto">
+          <Grid ColumnDefinitions="*,Auto">
             <StackPanel Spacing="2"><TextBlock Text="RACE / OFFICIAL RESULTS" Classes="eyebrow" />
               <TextBlock Text="Results &amp; FIS penalty" Classes="sectionTitle" /></StackPanel>
-            <ComboBox Grid.Column="1" ItemsSource="{Binding FisCompetitions}" SelectedItem="{Binding ResultsCompetition}"
-                      VerticalAlignment="Center" DisplayMemberBinding="{Binding Values.ShortLabel}" />
-            <Button Grid.Column="2" Content="Refresh timing" Command="{Binding LoadResultsCommand}"
+            <Button Grid.Column="1" Content="Refresh timing" Command="{Binding LoadResultsCommand}"
                     Classes="secondaryAction" Margin="8,0,0,0" />
           </Grid>
           <TextBlock Text="{Binding ResultsState}" Classes="supportingText" />

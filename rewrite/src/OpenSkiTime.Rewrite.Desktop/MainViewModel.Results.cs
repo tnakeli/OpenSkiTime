@@ -19,6 +19,7 @@ public sealed partial class MainViewModel
     private FisPenaltyResult? _reviewedPenalty;
     private string? _resultFingerprint;
     private int _resultsLoad;
+    private bool _selectingResultsCompetition;
     private FisPenaltyProfile? _resultsRuleProfile;
     public ObservableCollection<ResultReviewRow> ResultRows { get; } = [];
     public ObservableCollection<PenaltyReviewRow> ResultBestClassified { get; } = [];
@@ -42,7 +43,7 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(ResultsHasSecondRun));
         OnPropertyChanged(nameof(ResultsIsFis));
         OnPropertyChanged(nameof(WindowTitle));
-        if (IsResultsSection)
+        if (IsResultsSection && !_selectingResultsCompetition)
         {
             if (value is not null) { SetActiveRace(value, _activeRaceId == value.Id ? _activeRaceRun : 1, _activeRaceSection); }
             _ = LoadResultsAsync();
@@ -54,6 +55,28 @@ public sealed partial class MainViewModel
             foreach (var row in empty.Jury.Where(x => x.Function != "TechnicalDelegate")) { ResultsJury.Add(new(row.Function, row.Person)); }
             foreach (var row in empty.Runs) { ResultsRuns.Add(new(row)); }
         }
+    }
+
+    private async Task SelectResultsCompetitionAsync(CompetitionDetails? competition)
+    {
+        if (!await FlushRaceInformationAsync()) { return; }
+        _selectingResultsCompetition = true;
+        try { ResultsCompetition = competition; }
+        finally { _selectingResultsCompetition = false; }
+        if (competition is not null)
+        {
+            SetActiveRace(competition, _activeRaceId == competition.Id ? _activeRaceRun : 1, _activeRaceSection);
+        }
+        await LoadResultsAsync();
+    }
+
+    [RelayCommand]
+    private async Task SelectActiveCompetitionAsync(CompetitionDetails competition)
+    {
+        ArgumentNullException.ThrowIfNull(competition);
+        if (!FisCompetitions.Any(x => x.Id == competition.Id)) { return; }
+        if (IsResultsSection) { await SelectResultsCompetitionAsync(competition); }
+        else if (IsTimingReportSection) { await SelectReportCompetitionAsync(competition); }
     }
 
     [RelayCommand]

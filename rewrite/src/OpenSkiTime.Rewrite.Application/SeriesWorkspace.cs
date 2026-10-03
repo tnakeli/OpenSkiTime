@@ -41,11 +41,23 @@ public interface ISeriesFileSession : IAsyncDisposable
 public sealed class SeriesFileException(string message, Exception? inner = null) : Exception(message, inner);
 public sealed class SeriesConflictException() : Exception("The series changed since it was displayed. Reopen it and review the latest data.");
 
-public sealed class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactory? timingDecoders = null) : IAsyncDisposable
+public sealed partial class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactory? timingDecoders = null) : IAsyncDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ISeriesFileSession? _session;
     public TimingWorkspace? Timing { get; private set; }
+    public AuxiliaryTimingWorkspace? Auxiliary { get; private set; }
+
+    public Task<AuxiliaryTimingData> ReadAuxiliaryTimingAsync(Guid listId, CancellationToken ct = default)
+        => WithSessionAsync(s => (s as IAuxiliaryTimingStore ?? throw new SeriesFileException("Auxiliary timing storage is unavailable.")).ReadAuxiliaryTimingAsync(listId, ct), ct);
+
+    private async Task DisposeCaptureWorkspacesAsync()
+    {
+        // Request both drains even if one needs operator recovery; do not dispose either workspace until both succeed.
+        await Task.WhenAll(Timing?.StopAsync() ?? Task.CompletedTask, Auxiliary?.StopAllAsync() ?? Task.CompletedTask);
+        if (Timing is not null) { await Timing.DisposeAsync(); Timing = null; }
+        if (Auxiliary is not null) { await Auxiliary.DisposeAsync(); Auxiliary = null; }
+    }
 
     public Task<TimingReplayData> ReadTimingAsync(Guid listId, CancellationToken ct = default)
         => WithSessionAsync(s => (s as ITimingStore ?? throw new SeriesFileException("Timing storage is unavailable.")).ReadTimingAsync(listId, ct), ct);
@@ -91,12 +103,13 @@ public sealed class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactor
             var details = await replacement.ReadAsync(ct);
             if (_session is not null)
             {
-                if (Timing is not null) { await Timing.DisposeAsync(); Timing = null; }
+                await DisposeCaptureWorkspacesAsync();
                 await _session.DisposeAsync();
             }
 
             _session = replacement;
             if (timingDecoders is not null && replacement is ITimingStore timingStore) { Timing = new(timingStore, timingDecoders); }
+            if (timingDecoders is not null && replacement is IAuxiliaryTimingStore auxiliaryStore) { Auxiliary = new(auxiliaryStore, timingDecoders); }
             return details;
         }
         catch
@@ -113,7 +126,7 @@ public sealed class SeriesWorkspace(ISeriesFileStore store, ITimingDecoderFactor
         {
             if (_session is not null)
             {
-                if (Timing is not null) { await Timing.DisposeAsync(); Timing = null; }
+                await DisposeCaptureWorkspacesAsync();
                 await _session.DisposeAsync();
                 _session = null;
             }

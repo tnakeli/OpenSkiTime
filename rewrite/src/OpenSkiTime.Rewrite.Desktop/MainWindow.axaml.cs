@@ -32,7 +32,6 @@ public partial class MainWindow : Window
             if (!vm.CanLeaveDrawInput()) { e.Cancel = true; return; }
             e.Cancel = true;
             if (!await vm.FlushRaceInformationAsync()) { return; }
-            if (!vm.IsTimingConnected) { _timingCloseReady = true; Close(); return; }
             if (await vm.StopTimingForCloseAsync()) { _timingCloseReady = true; Close(); }
         };
         AddHandler(KeyDownEvent, OnGridKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -72,8 +71,46 @@ public partial class MainWindow : Window
     private void ActiveRace_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel vm) { return; }
+        if ((vm.IsResultsSection || vm.IsTimingReportSection) && sender is Button button)
+        {
+            ShowCompetitionMenu(button, vm);
+            return;
+        }
         if (vm.ActiveRaceUsesTiming) { TimingMenu_Click(sender, e); }
         else { DrawMenu_Click(sender, e); }
+    }
+
+    private async void ResultsMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel vm || vm.IsDrawBusy) { return; }
+        await vm.ShowResultsCommand.ExecuteAsync(null);
+        if (vm.IsResultsSection) { ShowCompetitionMenu(button, vm); }
+    }
+
+    private async void TimingReportMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel vm || vm.IsDrawBusy) { return; }
+        await vm.ShowTimingReportCommand.ExecuteAsync(null);
+        if (vm.IsTimingReportSection) { ShowCompetitionMenu(button, vm); }
+    }
+
+    private static void ShowCompetitionMenu(Button button, MainViewModel vm)
+    {
+        var menu = new MenuFlyout { Placement = Avalonia.Controls.PlacementMode.Bottom };
+        foreach (var competition in vm.FisCompetitions)
+        {
+            var item = new MenuItem { Header = competition.Values.ShortLabel,
+                Command = vm.SelectActiveCompetitionCommand, CommandParameter = competition };
+            if (vm.ActiveRaceDestination?.Competition.Id == competition.Id)
+            {
+                item.Header = $"{competition.Values.ShortLabel}  ·  ACTIVE";
+                item.Icon = new TextBlock { Text = "●", Foreground = Avalonia.Media.Brushes.Teal };
+                item.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+            }
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count == 0) { menu.Items.Add(new MenuItem { Header = "Add a FIS competition first", IsEnabled = false }); }
+        ShowRaceMenu(button, menu, null);
     }
 
     private async void DrawMenu_Click(object? sender, RoutedEventArgs e)

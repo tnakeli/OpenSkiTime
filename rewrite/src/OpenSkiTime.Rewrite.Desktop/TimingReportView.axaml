@@ -1,0 +1,151 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="using:OpenSkiTime.Rewrite.Desktop" x:Class="OpenSkiTime.Rewrite.Desktop.TimingReportView" x:CompileBindings="False">
+ <UserControl.Resources>
+  <x:Double x:Key="DataGridSortIconMinWidth">10</x:Double>
+ </UserControl.Resources>
+ <UserControl.Styles>
+  <Style Selector="DataGridColumnHeader"><Setter Property="Padding" Value="5,0"/></Style>
+ </UserControl.Styles>
+ <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+   <StackPanel><TextBlock Text="Timing report" Classes="sectionTitle"/><TextBlock Text="{Binding ReportIdentity}" Classes="supportingText"/></StackPanel>
+  </Grid>
+  <StackPanel Grid.Row="1" Margin="0,0,0,8">
+   <TextBlock Text="{Binding ReportStatus}" Classes="supportingText" TextWrapping="Wrap"/>
+   <TextBlock Text="{Binding ReportAuxiliaryClockWarning}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap"/>
+  </StackPanel>
+  <TabControl Name="TimingReportTabs" Grid.Row="2">
+   <TabItem Header="Overview">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+     <StackPanel Spacing="12" Margin="4,8">
+      <Border Classes="subtleSurface" Padding="10"><StackPanel Spacing="6">
+       <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ReportEquipmentSummary}" TextWrapping="Wrap"/>
+        <Button Grid.Column="1" Content="Use saved Settings defaults" Command="{Binding UseReportDefaultsCommand}" IsEnabled="{Binding !IsReportBusy}"/></Grid>
+       <TextBlock Text="{Binding ReportSoftware}" Classes="supportingText"/>
+       <TextBlock Text="Equipment and officials are copied into this report. Edit reusable defaults in Settings." Classes="supportingText"/>
+      </StackPanel></Border>
+      <WrapPanel Name="ReportSynchronizationFields" Orientation="Horizontal">
+       <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Synchronize A and B to local time of day using one common source impulse before the first or only run. At least one minute later, send another impulse from the same source and enter each timer's recorded time here. A and B must agree within 0.001 s; otherwise repeat synchronization and the check before racing. Include separate start timers when used. Hand clocks must also be synchronized before the run. Never re-synchronize during a run. Connection time does not establish synchronization.&#10;&#10;FIS Timing Booklet 2.67, section 3, page 8."/></ToolTip.Tip>
+       <StackPanel Width="110" Margin="0,0,12,0"><TextBlock Text="FIS TIMING LEVEL" Classes="eyebrow"/><ComboBox Name="TimingReportLevel" ItemsSource="{Binding ReportLevels}" SelectedItem="{Binding ReportLevel}">
+        <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Choose the level for the alpine race category:&#10;&#10;0 - Olympic Winter Games, World Ski Championships and World Cup, including World Cup qualification and speed events (OWG, WSC, WC, WQUA, COM).&#10;&#10;1 - Continental Cups: Australian New Zealand, European (including speed and qualification), Far East, Nor-Am and South American; Universiade and Junior World Championships (ANC, EC, ECOM, EQUA, FEC, NAC, SAC, UVS, WJC).&#10;&#10;2 - National Championships (NC).&#10;&#10;3 - FIS and FIS qualification, junior, national junior, university and CIT races; Youth Olympic Winter Games, Asian Winter Games, military/police and European Youth Olympic Festival (FIS, FQUA, JUN, NJC, NJR, UNI, CIT, CITWC, YOG, AWG, CISM, EYOF).&#10;&#10;4 - Entry League FIS races (ENL).&#10;&#10;FIS Timing Booklet 2.67, section 1.1, page 4. Alpine categories; Para Alpine has a separate table."/></ToolTip.Tip>
+       </ComboBox></StackPanel>
+       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="ELECTRONIC SYNC" Classes="eyebrow"/><TextBox Text="{Binding ReportSync}" Watermark="HH:mm:ss.0000"/></StackPanel>
+       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="HAND SYNC" Classes="eyebrow"/><TextBox Text="{Binding ReportHandSync}" Watermark="HH:mm:ss.00"/></StackPanel>
+       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="A SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckA}" Watermark="HH:mm:ss.0000"/></StackPanel>
+       <StackPanel Width="165"><TextBlock Text="B SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckB}" Watermark="HH:mm:ss.0000"/></StackPanel>
+      </WrapPanel>
+      <WrapPanel>
+       <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Enter the separate start timer's time from the same common-impulse synchronization check as A and B. Check at least one minute after synchronization, with a maximum 0.001 s difference. Synchronize before racing; never re-synchronize during a run.&#10;&#10;FIS Timing Booklet 2.67, section 3, page 8."/></ToolTip.Tip>
+       <StackPanel Width="200" IsVisible="{Binding ReportHasStartTimerA}" Margin="0,0,12,0"><TextBlock Text="A START TIMER SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckAStart}"/></StackPanel>
+       <StackPanel Width="200" IsVisible="{Binding ReportHasStartTimerB}"><TextBlock Text="B START TIMER SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckBStart}"/></StackPanel>
+      </WrapPanel>
+      <DataGrid Name="TimingReportOverviewGrid" ItemsSource="{Binding ReportEvidence}" AutoGenerateColumns="False" IsReadOnly="True" Height="230" Classes="raceGrid" CanUserResizeColumns="True">
+       <DataGrid.Columns>
+        <DataGridTextColumn Header="RUN" Binding="{Binding Run}" Width="45"/><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="48"/>
+        <DataGridTextColumn Header="SAMPLE" Binding="{Binding Sample}" Width="65"/><DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="110"/>
+        <DataGridTextColumn Header="A START" Binding="{Binding AStart}" Width="143"/><DataGridTextColumn Header="A FINISH" Binding="{Binding AFinish}" Width="143"/>
+        <DataGridTextColumn Header="NET" Binding="{Binding Net}" Width="85"/>
+       </DataGrid.Columns>
+      </DataGrid>
+      <ItemsControl ItemsSource="{Binding ReportRuns}"><ItemsControl.ItemTemplate><DataTemplate>
+       <Grid ColumnDefinitions="55,230,*" Margin="0,3"><TextBlock Text="{Binding Run, StringFormat='Run {0}'}" VerticalAlignment="Center"/><TextBlock Grid.Column="1" Text="{Binding Best}" VerticalAlignment="Center"><ToolTip.Tip><TextBlock Text="{Binding BestExplanation}" MaxWidth="430" TextWrapping="Wrap"/></ToolTip.Tip></TextBlock>
+        <TextBox Grid.Column="2" Text="{Binding Comment}" Watermark="Run comments / timing problems"/></Grid>
+      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      <TextBlock Text="Replacement times needing explanation" FontWeight="SemiBold"/>
+      <DataGrid ItemsSource="{Binding ReportMissed}" AutoGenerateColumns="False" Height="100" Classes="raceGrid">
+       <DataGrid.Columns><DataGridTextColumn Header="RUN" Binding="{Binding Run}" IsReadOnly="True" Width="55"/><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" IsReadOnly="True" Width="55"/>
+        <DataGridTextColumn Header="REASON" Binding="{Binding Reason}" Width="*"/><DataGridTextColumn Header="REPLACEMENT SOURCE" Binding="{Binding TimeFrom}" Width="220"/></DataGrid.Columns>
+      </DataGrid>
+      <CheckBox Content="I reviewed the report and verified the timestamps against the original timing records." IsChecked="{Binding ReportReviewed}"/>
+      <CheckBox Content="We certify that the timing and calculations adhered to the FIS rules." IsChecked="{Binding ReportCertified}"/>
+      <TextBlock Text="{Binding ReportValidation}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap"/>
+      <WrapPanel><Button Name="ApproveTimingReportButton" Content="Create approved XML" Command="{Binding ApproveTimingReportCommand}" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction" Margin="0,0,6,4"/>
+       <Button Content="Export approved XML" Command="{Binding ExportTimingReportCommand}" Margin="0,0,6,4"/>
+       <Button Name="SendTimingReportTestButton" Content="Send XML · test mode" Command="{Binding SendTimingReportTestCommand}" IsEnabled="{Binding !IsReportBusy}" Margin="0,0,6,4"/>
+       <Button Content="Check FIS status" Command="{Binding CheckTimingReportSubmissionCommand}" IsEnabled="{Binding !IsReportBusy}" Margin="0,0,6,4"/>
+       <Button Content="Stop FIS check" Command="{Binding StopTimingReportStatusCheckCommand}" IsEnabled="{Binding IsReportBusy}" Margin="0,0,6,4"/>
+      </WrapPanel>
+      <ComboBox ItemsSource="{Binding ReportApprovals}" SelectedItem="{Binding SelectedReportApproval}"><ComboBox.ItemTemplate><DataTemplate>
+       <TextBlock><Run Text="{Binding Revision, StringFormat='XML revision {0}'}"/><Run Text="  "/><Run Text="{Binding ApprovedAt}"/></TextBlock>
+      </DataTemplate></ComboBox.ItemTemplate></ComboBox>
+      <TextBlock Text="{Binding ReportSubmissionStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+      <Expander Header="Report history"><StackPanel Spacing="6"><ComboBox ItemsSource="{Binding ReportHistory}" SelectedItem="{Binding SelectedReportHistory}"><ComboBox.ItemTemplate><DataTemplate>
+       <TextBlock><Run Text="{Binding Revision, StringFormat='Revision {0}'}"/><Run Text="  "/><Run Text="{Binding Operator}"/><Run Text=" · "/><Run Text="{Binding Reason}"/></TextBlock>
+      </DataTemplate></ComboBox.ItemTemplate></ComboBox><Button Content="Restore selected as a new revision" Command="{Binding RestoreReportRevisionCommand}" HorizontalAlignment="Left"/></StackPanel></Expander>
+     </StackPanel>
+    </ScrollViewer>
+   </TabItem>
+   <TabItem Header="B system">
+    <ScrollViewer><StackPanel Spacing="8" Margin="4,8">
+     <TextBlock Text="B is optional in OpenSkiTime and never changes A results. Connect in Settings or import the clock's output below." TextWrapping="Wrap" Classes="supportingText"/>
+     <DataGrid Name="ReportBackupGrid" ItemsSource="{Binding ReportEvidence}" AutoGenerateColumns="False" Height="240" Classes="raceGrid">
+      <DataGrid.Columns><DataGridTextColumn Header="RUN" Binding="{Binding Run}" IsReadOnly="True" Width="45"/><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" IsReadOnly="True" Width="50"/>
+       <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" IsReadOnly="True" Width="*" MinWidth="120"/>
+       <DataGridTextColumn Header="A START" Binding="{Binding AStart}" IsReadOnly="True" Width="150"/><DataGridTextColumn Header="B START" Binding="{Binding BStart}" Width="150"/>
+       <DataGridTextColumn Header="A FINISH" Binding="{Binding AFinish}" IsReadOnly="True" Width="150"/><DataGridTextColumn Header="B FINISH" Binding="{Binding BFinish}" Width="150"/></DataGrid.Columns>
+     </DataGrid>
+     <Border Name="BackupImageDrop" DragDrop.AllowDrop="True" Classes="subtleSurface" Padding="18"><StackPanel Spacing="6">
+      <TextBlock Text="Drop B receipt / screen images here" FontWeight="SemiBold"/><TextBlock Text="One or more images from the same clock. The receipt may contain both C0 (start) and C1 (finish)." TextWrapping="Wrap"/>
+      <Button Content="Choose B images…" Tag="B" Click="ChooseImages_Click" HorizontalAlignment="Left"/></StackPanel></Border>
+     <Expander Header="Temporary device connection"><local:AuxiliaryConnectionView/></Expander>
+    </StackPanel></ScrollViewer>
+   </TabItem>
+   <TabItem Header="Hand timing">
+    <ScrollViewer><StackPanel Spacing="8" Margin="4,8">
+     <DataGrid Name="ReportHandGrid" ItemsSource="{Binding ReportEvidence}" AutoGenerateColumns="False" Height="260" Classes="raceGrid">
+      <DataGrid.Columns><DataGridTextColumn Header="RUN" Binding="{Binding Run}" IsReadOnly="True" Width="45"/><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" IsReadOnly="True" Width="50"/>
+       <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" IsReadOnly="True" Width="*" MinWidth="120"/>
+       <DataGridTextColumn Header="A START" Binding="{Binding AStart}" IsReadOnly="True" Width="150"/><DataGridTextColumn Header="HAND START" Binding="{Binding HandStart}" Width="150"/>
+       <DataGridTextColumn Header="A FINISH" Binding="{Binding AFinish}" IsReadOnly="True" Width="150"/><DataGridTextColumn Header="HAND FINISH" Binding="{Binding HandFinish}" Width="150"/></DataGrid.Columns>
+     </DataGrid>
+     <Grid ColumnDefinitions="*,12,*">
+      <Border Name="HandStartImageDrop" DragDrop.AllowDrop="True" Classes="subtleSurface" Padding="18"><StackPanel Spacing="6"><TextBlock Text="Hand start clock" FontWeight="SemiBold"/>
+       <TextBlock Text="Drop 1–N receipt / screen images from the start clock." TextWrapping="Wrap"/><Button Content="Choose start images…" Tag="HandStart" Click="ChooseImages_Click" HorizontalAlignment="Left"/></StackPanel></Border>
+      <Border Name="HandFinishImageDrop" Grid.Column="2" DragDrop.AllowDrop="True" Classes="subtleSurface" Padding="18"><StackPanel Spacing="6"><TextBlock Text="Hand finish clock" FontWeight="SemiBold"/>
+       <TextBlock Text="Drop 1–N receipt / screen images from the finish clock." TextWrapping="Wrap"/><Button Content="Choose finish images…" Tag="HandFinish" Click="ChooseImages_Click" HorizontalAlignment="Left"/></StackPanel></Border>
+     </Grid>
+    </StackPanel></ScrollViewer>
+   </TabItem>
+   <TabItem Header="Import review">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="4,8">
+     <WrapPanel IsEnabled="{Binding !IsReportBusy}">
+      <StackPanel Width="90" Margin="0,0,8,4"><TextBlock Text="RUN" Classes="eyebrow"/><ComboBox Name="ReportImportRunPicker" ItemsSource="{Binding ReportImportRuns}" SelectedItem="{Binding ReportImportRun}"/></StackPanel>
+      <StackPanel Width="135" Margin="0,0,8,4"><TextBlock Text="SOURCE" Classes="eyebrow"/><ComboBox ItemsSource="{Binding ReportImageRoles}" SelectedItem="{Binding ReportImageRole}"/></StackPanel>
+      <StackPanel Width="180" Margin="0,0,8,4"><TextBlock Text="DEVICE LABEL (OPTIONAL)" Classes="eyebrow"/><TextBox Text="{Binding ReportImageDevice}"/></StackPanel>
+      <StackPanel Width="100" Margin="0,0,8,4"><TextBlock Text="MATCH ± SECONDS" Classes="eyebrow"/><TextBox Text="{Binding ReportMatchTolerance}"/></StackPanel>
+      <Button Content="Preview saved images" Command="{Binding PreviewSavedReportImagesCommand}" VerticalAlignment="Bottom" Margin="0,0,8,4"/>
+     </WrapPanel>
+     <TextBlock Grid.Row="1" Text="{Binding ReportImportStatus}" TextWrapping="Wrap" Classes="supportingText" Margin="0,4,0,8"/>
+     <Grid Grid.Row="2" ColumnDefinitions="1.4*,8,*">
+      <DataGrid Name="ReportImportGrid" ItemsSource="{Binding ReportImportPreview}" SelectedItem="{Binding SelectedReportImportRow}" AutoGenerateColumns="False" Classes="raceGrid">
+       <DataGrid.Columns><DataGridCheckBoxColumn Header="USE" Binding="{Binding Accept}" Width="42"/><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" IsReadOnly="True" Width="48"/>
+        <DataGridTextColumn Header="POS" Binding="{Binding Position}" IsReadOnly="True" Width="58"/><DataGridTextColumn Header="PROPOSED" Binding="{Binding Proposed}" IsReadOnly="True" Width="145"/>
+        <DataGridTextColumn Header="Δ A (s)" Binding="{Binding Difference}" IsReadOnly="True" Width="100"/><DataGridTextColumn Header="STATE" Binding="{Binding State}" IsReadOnly="True" Width="*" MinWidth="100"/></DataGrid.Columns>
+      </DataGrid>
+      <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto,Auto">
+       <Grid ColumnDefinitions="*,Auto">
+        <ComboBox Name="ReportImagePicker" ItemsSource="{Binding ReportImages}" SelectedItem="{Binding SelectedReportImage}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding FileName}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+        <ToggleButton Grid.Column="1" Content="Original size" IsChecked="{Binding ReportImageOriginalSize}" Margin="6,0,0,0"/>
+       </Grid>
+       <ScrollViewer Name="ReportImageScroll" Grid.Row="1" HorizontalScrollBarVisibility="{Binding ReportImageHorizontalScrolling}"><Image Source="{Binding ReportImagePreview}" Width="{Binding ReportImageWidth}" Stretch="Uniform"/></ScrollViewer>
+       <TextBlock Grid.Row="2" Text="{Binding SelectedReportImportRow.SourceText}" TextWrapping="Wrap" Classes="supportingText"/>
+       <Expander Name="ReportRecognizedTextExpander" Grid.Row="3" Header="Recognized text / review flags" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+        <TextBox Name="ReportRecognizedText" Text="{Binding SelectedReportImage.RecognizedText, Mode=OneWay}" HorizontalAlignment="Stretch" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="180" AcceptsReturn="True"/>
+       </Expander>
+      </Grid>
+     </Grid>
+     <StackPanel Grid.Row="3" Spacing="4" Margin="0,8,0,0">
+      <CheckBox Content="I checked the selected timestamps against the original images." IsChecked="{Binding ReportImportVerified}"/>
+      <WrapPanel><CheckBox Content="Replace existing values explicitly" IsChecked="{Binding ReplaceReportEvidence}" Margin="0,0,14,0"/>
+       <Button Name="AcceptReportImagesButton" Content="Accept selected matches" Command="{Binding AcceptReportImageMatchesCommand}" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction"/>
+       <Button Content="Cancel reading" Command="{Binding CancelReportImagesCommand}" Margin="8,0,0,0" IsVisible="{Binding IsReportBusy}"/>
+      </WrapPanel>
+     </StackPanel>
+    </Grid>
+   </TabItem>
+  </TabControl>
+  <Grid Grid.Row="3" ColumnDefinitions="140,8,*" Margin="0,8,0,0">
+   <TextBox Text="{Binding TimingOperator}" Watermark="Operator"/><TextBox Grid.Column="2" Text="{Binding ReportChangeReason}" Watermark="Reason for change"/>
+  </Grid>
+ </Grid>
+</UserControl>
