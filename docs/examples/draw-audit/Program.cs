@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using OpenSkiTime.Rewrite.Domain;
+using OpenSkiTime.Domain;
 
 // Synthetic public inputs only. This example never opens an event database.
 var runs = args.Length == 0 ? 20_000 : int.Parse(args[0], CultureInfo.InvariantCulture);

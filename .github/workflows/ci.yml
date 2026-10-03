@@ -36,8 +36,8 @@ jobs:
         with:
           node-version: '22'
       - name: Audit all NuGet dependencies (including test tools)
-        run: dotnet restore rewrite/OpenSkiTime.Rewrite.slnx -p:SecurityAudit=true
-      - run: dotnet test rewrite/OpenSkiTime.Rewrite.slnx -c Release --logger "trx;LogFileName=tests.trx"
+        run: dotnet restore OpenSkiTime.slnx -p:SecurityAudit=true
+      - run: dotnet test OpenSkiTime.slnx -c Release --logger "trx;LogFileName=tests.trx"
       - name: Compile and verify a review installer
         shell: pwsh
         run: |
@@ -87,7 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-trivy
-      - run: docker build -f rewrite/src/OpenSkiTime.LiveTiming.Server/Dockerfile -t openskitime-scan:ci .
+      - run: docker build -f src/OpenSkiTime.LiveTiming.Server/Dockerfile -t openskitime-scan:ci .
       - run: bash scripts/scan-security.sh image openskitime-scan:ci artifacts/security/container
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

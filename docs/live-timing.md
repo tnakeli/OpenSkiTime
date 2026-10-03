@@ -100,9 +100,9 @@ An earlier-run correction during a later run triggers a full FIS replay of all r
 Install .NET 10 SDK (or compatible .NET 10 + ASP.NET Core runtimes for a framework-dependent desktop distribution). Desktop build/publish copies worker/server artifacts and local web assets under `LiveTiming/Worker` and `LiveTiming/Server`.
 
 ```powershell
-dotnet build rewrite/OpenSkiTime.Rewrite.slnx
-dotnet test rewrite/OpenSkiTime.Rewrite.slnx
-dotnet build rewrite/OpenSkiTime.LiveTiming.slnx
+dotnet build OpenSkiTime.slnx
+dotnet test OpenSkiTime.slnx
+dotnet build OpenSkiTime.LiveTiming.slnx
 ```
 
 Local cloud simulation, in a separate terminal:
@@ -110,7 +110,7 @@ Local cloud simulation, in a separate terminal:
 ```powershell
 $env:LiveTiming__SigningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 $env:LiveTiming__PublicBaseUrl = 'http://localhost:5080'
-dotnet run --project rewrite/src/OpenSkiTime.LiveTiming.Server -- --urls http://localhost:5080
+dotnet run --project src/OpenSkiTime.LiveTiming.Server -- --urls http://localhost:5080
 ```
 
 Use this as the Cloud URL in desktop. Preserve the signing key when restarting that server. Managed Local uses a separate port and does not depend on this process. For a network-local server, run the same server independently with an explicit signing key/public origin and a LAN bind address; the current publisher permits HTTP only on loopback, so use HTTPS for a publisher on another machine. Public LAN viewers may access an HTTP listener if publishing remains on loopback.
@@ -118,10 +118,10 @@ Use this as the Cloud URL in desktop. Preserve the signing key when restarting t
 The harness generates fifty synthetic competitors with deterministic starts, two intermediates, finishes, DNS/DNF/DSQ and integer times. For example after building:
 
 ```powershell
-dotnet rewrite/src/OpenSkiTime.LiveTiming.Harness/bin/Debug/net10.0/OpenSkiTime.LiveTiming.Harness.dll local `
-  rewrite/src/OpenSkiTime.LiveTiming.Worker/bin/Debug/net10.0/OpenSkiTime.LiveTiming.Worker.dll `
+dotnet src/OpenSkiTime.LiveTiming.Harness/bin/Debug/net10.0/OpenSkiTime.LiveTiming.Harness.dll local `
+  src/OpenSkiTime.LiveTiming.Worker/bin/Debug/net10.0/OpenSkiTime.LiveTiming.Worker.dll `
   http://localhost:5078 `
-  rewrite/src/OpenSkiTime.LiveTiming.Server/bin/Debug/net10.0/OpenSkiTime.LiveTiming.Server.dll
+  src/OpenSkiTime.LiveTiming.Server/bin/Debug/net10.0/OpenSkiTime.LiveTiming.Server.dll
 ```
 
 Use `cloud <absolute-worker.dll> http://localhost:5080` to target an independently started server. Use absolute assembly paths when the current directory is not the repository root. FIS modes are `fis-tcp <host> [count]` and `fis-https <https-url> [count]`, reading `OST_FIS_PASSWORD` and optional `OST_FIS_CODEX` from environment. Never put passwords in command arguments, fixtures or Git. The default synthetic codex is the supplied test race 9754; live FIS tests are manual, not part of CI.
@@ -131,7 +131,7 @@ Real Chromium E2E (requires Python + Playwright/Chromium installed outside the r
 ```powershell
 python -m pip install playwright
 python -m playwright install chromium
-python rewrite/tests/live-timing-browser-e2e.py --dotnet <dotnet-host-path>
+python tests/live-timing-browser-e2e.py --dotnet <dotnet-host-path>
 ```
 
 See [test evidence](live-timing-test-results.md) and [future cloud deployment](live-timing-cloud-deployment.md). Azure deployment, physical timing hardware and a Linux desktop race rehearsal are not acceptance claims for this feature.

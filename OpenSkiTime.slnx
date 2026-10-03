@@ -1,17 +1,24 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/OpenSkiTime.Application/OpenSkiTime.Application.csproj" />
-    <Project Path="src/OpenSkiTime.Desktop/OpenSkiTime.Desktop.csproj" />
     <Project Path="src/OpenSkiTime.Domain/OpenSkiTime.Domain.csproj" />
-    <Project Path="src/OpenSkiTime.Fis.Placeholder/OpenSkiTime.Fis.Placeholder.csproj" />
-    <Project Path="src/OpenSkiTime.Import/OpenSkiTime.Import.csproj" />
+    <Project Path="src/OpenSkiTime.Timing/OpenSkiTime.Timing.csproj" />
+    <Project Path="src/OpenSkiTime.Devices/OpenSkiTime.Devices.csproj" />
+    <Project Path="src/OpenSkiTime.Recognition/OpenSkiTime.Recognition.csproj" />
+    <Project Path="src/OpenSkiTime.TimyUsbHost/OpenSkiTime.TimyUsbHost.csproj" />
+    <Project Path="src/OpenSkiTime.Application/OpenSkiTime.Application.csproj" />
     <Project Path="src/OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj" />
+    <Project Path="src/OpenSkiTime.Desktop/OpenSkiTime.Desktop.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.Contracts/OpenSkiTime.LiveTiming.Contracts.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.Publishing/OpenSkiTime.LiveTiming.Publishing.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.Harness/OpenSkiTime.LiveTiming.Harness.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/OpenSkiTime.Application.Tests/OpenSkiTime.Application.Tests.csproj" />
+    <Project Path="tests/OpenSkiTime.LiveTiming.Tests/OpenSkiTime.LiveTiming.Tests.csproj" />
     <Project Path="tests/OpenSkiTime.Desktop.Tests/OpenSkiTime.Desktop.Tests.csproj" />
-    <Project Path="tests/OpenSkiTime.Domain.Tests/OpenSkiTime.Domain.Tests.csproj" />
-    <Project Path="tests/OpenSkiTime.Import.Tests/OpenSkiTime.Import.Tests.csproj" />
-    <Project Path="tests/OpenSkiTime.Persistence.Tests/OpenSkiTime.Persistence.Tests.csproj" />
+    <Project Path="tests/OpenSkiTime.Tests/OpenSkiTime.Tests.csproj" />
   </Folder>
 </Solution>

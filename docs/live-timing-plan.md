@@ -1,6 +1,6 @@
 # Live timing implementation plan
 
-Live timing is a disposable downstream view of committed timing state. The active application is under `rewrite/`; historical projects and Spec Kit workflows are not implementation targets.
+Live timing is a disposable downstream view of committed timing state. The application projects are under `src/`; tests are under `tests/`.
 
 1. Define typed, versioned snapshot/event/health and private IPC contracts in a separate .NET 10 library. Retain integer 100 ns source timestamps and already calculated hundredths. Support all runs and corrections.
 2. Build one ASP.NET Core server for local and cloud runtime: RAM sessions, signed session-scoped 14-day credentials, REST mutation API, bounded validation/rate/session limits, SignalR and an offline responsive browser view.
