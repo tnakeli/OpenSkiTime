@@ -98,8 +98,10 @@ def main():
                     page.evaluate('window.scrollTo(0, 0)')
                     page.screenshot(path=str(output / f'{name}-desktop.png'), full_page=True)
                     page.set_viewport_size({'width': 390, 'height': 844})
-                    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Website overflows on mobile'
                     page.screenshot(path=str(output / f'{name}-mobile.png'), full_page=True)
+                    overflow = page.evaluate('''() => Array.from(document.querySelectorAll('body *')).filter(element =>
+                        element.getBoundingClientRect().right > window.innerWidth + 1).map(element => element.tagName + '.' + element.className)''')
+                    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), f'Website overflows on mobile: {overflow}'
                     page.set_viewport_size({'width': 1440, 'height': 1000})
                 assert not errors, errors
                 context.close()
