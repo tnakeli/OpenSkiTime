@@ -66,7 +66,33 @@ public sealed partial class MainViewModel
         if (invalidateReview) { ReportReviewed = false; ReportCertified = false; }
         QueueReportSave();
     }
-    private void ReportRowChanged(object? sender, PropertyChangedEventArgs args) => ReportChanged();
+    public IReadOnlyList<int> ReportReplacementRuns => ReportRuns.Where(x => !x.AllResultsA).Select(x => x.Run).ToArray();
+    public bool CanAddReportReplacement => ReportReplacementRuns.Count > 0;
+    private void ReportRowChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (sender is TimingReportRunEditor && args.PropertyName == nameof(TimingReportRunEditor.AllResultsA))
+        { UpdateReportReplacementRuns(); }
+        ReportChanged();
+    }
+    private void UpdateReportReplacementRuns()
+    {
+        var runs = ReportReplacementRuns;
+        foreach (var row in ReportMissed.ToArray())
+        {
+            if (!runs.Contains(row.Run)) { row.PropertyChanged -= ReportRowChanged; ReportMissed.Remove(row); }
+            else { row.Runs = runs; }
+        }
+        OnPropertyChanged(nameof(ReportReplacementRuns)); OnPropertyChanged(nameof(CanAddReportReplacement));
+    }
+    [RelayCommand] private void AddReportReplacement()
+    {
+        var runs = ReportReplacementRuns;
+        if (runs.Count == 0) { return; }
+        var row = new TimingReportMissedEditor { Runs = runs, Run = runs[0] };
+        row.PropertyChanged += ReportRowChanged; ReportMissed.Add(row); ReportChanged();
+    }
+    [RelayCommand] private void RemoveReportReplacement(TimingReportMissedEditor row)
+    { row.PropertyChanged -= ReportRowChanged; ReportMissed.Remove(row); ReportChanged(); }
 
     [RelayCommand]
     private async Task ShowTimingReportAsync()
@@ -121,11 +147,14 @@ public sealed partial class MainViewModel
             var draft = saved?.Values ?? new TimingReportDraft { CompetitionId = competition.Id, Defaults = ReportDefaults };
             var runs = sources.OrderBy(s => s.List.Plan.RunNumber).Select(s => TimingReportProjection.FromTiming(s, TimingReplay.Restore(s, new AlgeDecoderFactory())))
                 .Select(run => run with { Comment = draft.Runs.FirstOrDefault(r => r.Run == run.Run)?.Comment ?? "",
-                    MissedA = run.MissedA.Select(m => draft.Runs.FirstOrDefault(r => r.Run == run.Run)?.MissedA.FirstOrDefault(x => x.Bib == m.Bib) ?? m).ToArray() }).ToArray();
+                    AllResultsA = draft.Runs.FirstOrDefault(r => r.Run == run.Run)?.AllResultsA ?? run.AllResultsA,
+                    MissedA = draft.Runs.FirstOrDefault(r => r.Run == run.Run) is { } savedRun
+                        ? savedRun.AllResultsA ? [] : savedRun.MissedA.GroupBy(m => m.Bib).Select(g => g.Last()).ToArray()
+                        : run.MissedA }).ToArray();
             var fingerprint = TimingReportProjection.Fingerprint(sources);
             header = header with { TimingLevel = draft.Header.TimingLevel };
-            var stale = draft.SourceFingerprint != fingerprint || draft.Header != header;
-            draft = draft with { Header = header, TechnicalDelegate = td is null ? new() : new(td.FirstName, td.LastName, td.Nation, Number: td.Number),
+            var stale = draft.SourceFingerprint != fingerprint || draft.Header != header || draft.Defaults != ReportDefaults;
+            draft = draft with { Defaults = ReportDefaults, Header = header, TechnicalDelegate = td is null ? new() : new(td.FirstName, td.LastName, td.Nation, Number: td.Number),
                 Runs = runs, SourceFingerprint = fingerprint, Reviewed = !stale && draft.Reviewed, CertifyFis = !stale && draft.CertifyFis };
             _reportFile = file; _reportSaved = saved; _reportDraft = draft;
             await PopulateReportAsync(draft, autoFill: true);
@@ -142,7 +171,7 @@ public sealed partial class MainViewModel
             foreach (var approval in (await workspace.ReadApprovedTimingReportsAsync(competition.Id)).Reverse()) { ReportApprovals.Add(approval); }
             SelectedReportApproval = ReportApprovals.FirstOrDefault();
             await LoadReportHistoryAsync();
-            await LoadReportImagesCoreAsync();
+
             // A and connected auxiliary evidence are projections of the current database,
             // not operator edits that require importing or saving before changing races.
             HasTimingReportEdits = false;
@@ -177,9 +206,9 @@ public sealed partial class MainViewModel
                 if (run is null) { continue; }
                 var editor = TimingReportRunEditor.FromTiming(run, snapshot);
                 editor.PropertyChanged += ReportRowChanged; ReportRuns.Add(editor);
-                foreach (var missed in run.MissedA)
+                foreach (var missed in run.AllResultsA ? [] : run.MissedA)
                 {
-                    var row = new TimingReportMissedEditor { Run = run.Run, Bib = missed.Bib, Reason = missed.Reason, TimeFrom = missed.TimeFrom };
+                    var row = new TimingReportMissedEditor { Runs = draft.Runs.Select(x => x.Run).ToArray(), Run = run.Run, Bib = missed.Bib, Reason = missed.Reason, TimeFrom = missed.TimeFrom };
                     row.PropertyChanged += ReportRowChanged; ReportMissed.Add(row);
                 }
                 var auxiliary = autoFill && workspace.Auxiliary is { } aux ? (await aux.ReadAsync(source.List.Id)).Decode(new AlgeDecoderFactory()) : [];
@@ -199,9 +228,12 @@ public sealed partial class MainViewModel
                     row.HandStart = TimingReportEvidenceRow.Format(row.OriginalHandStart); row.HandFinish = TimingReportEvidenceRow.Format(row.OriginalHandFinish);
                     ReportEvidence.Add(row);
                 }
+                editor.First = ReportEvidence.FirstOrDefault(x => x.Run == run.Run && x.Bib == run.First.Bib);
+                editor.Last = ReportEvidence.FirstOrDefault(x => x.Run == run.Run && x.Bib == run.Last.Bib);
                 if (autoFill) { ApplyAutomaticAuxiliary(run.Run, auxiliary); }
             }
             foreach (var row in ReportEvidence) { row.PropertyChanged += ReportRowChanged; }
+            UpdateReportReplacementRuns();
             if (autoFill && JsonSerializer.Serialize(ReadReportDraft().Associations) != JsonSerializer.Serialize(draft.Associations))
             { ReportReviewed = false; ReportCertified = false; }
         }
@@ -248,7 +280,7 @@ public sealed partial class MainViewModel
         { ReportAuxiliaryClockWarning = string.Join("\n", new[] { ReportAuxiliaryClockWarning }.Where(x => x.Length != 0).Concat(warnings)); }
     }
 
-    private EvidenceTarget[] ReportTargets(int run, TimingReportImageRole role) => ReportEvidence.Where(x => x.Run == run)
+    private EvidenceTarget[] ReportTargets(int run, TimingReportImageRole role) => ReportEvidence.Where(x => x.Run == run && x.Sample.Length > 0)
         .SelectMany(row => new[] { (Channel: 0, Stamp: row.AStartStamp), (Channel: 1, Stamp: row.AFinishStamp) }
             .Where(p => p.Stamp is not null && (role == TimingReportImageRole.B || p.Channel == (role == TimingReportImageRole.HandStart ? 0 : 1)))
             .Select(p => new EvidenceTarget($"{run}:{row.Bib}:{p.Channel}", row.Bib, p.Channel, p.Stamp!.Ticks))).ToArray();
@@ -289,19 +321,12 @@ public sealed partial class MainViewModel
         return draft with { Sync = parser.Read(ReportSync, draft.Sync, date), HandSync = parser.Read(ReportHandSync, draft.HandSync, date),
             SyncCheckA = parser.Read(ReportCheckA, draft.SyncCheckA, date), SyncCheckB = parser.Read(ReportCheckB, draft.SyncCheckB, date),
             SyncCheckAStart = parser.Read(ReportCheckAStart, draft.SyncCheckAStart, date), SyncCheckBStart = parser.Read(ReportCheckBStart, draft.SyncCheckBStart, date),
-            Header = draft.Header with { TimingLevel = ReportLevel },
+            Defaults = ReportDefaults, Header = draft.Header with { TimingLevel = ReportLevel },
             Reviewed = ReportReviewed, CertifyFis = ReportCertified, Associations = associations.ToArray(),
-            Runs = ReportRuns.Select(r => r.Source with { First = Sample(r.Run, r.Source.First), Last = Sample(r.Run, r.Source.Last), Comment = r.Comment,
-                MissedA = ReportMissed.Where(m => m.Run == r.Run).Select(m => new TimingReportMissed(m.Bib, m.Reason, m.TimeFrom)).ToArray() }).ToArray() };
+            Runs = ReportRuns.Select(r => r.Source with { First = Sample(r.Run, r.Source.First), Last = Sample(r.Run, r.Source.Last), Comment = r.Comment, AllResultsA = r.AllResultsA,
+                MissedA = r.AllResultsA ? [] : ReportMissed.Where(m => m.Run == r.Run).Select(m => new TimingReportMissed(m.Bib, m.Reason, m.TimeFrom)).ToArray() }).ToArray() };
     }
 
-    [RelayCommand]
-    private void UseReportDefaults()
-    {
-        if (_reportDraft is null) { return; }
-        _reportDraft = _reportDraft with { Defaults = ReportDefaults };
-        ReportChanged(); NotifyReportDefaults();
-    }
     private void NotifyReportDefaults() { OnPropertyChanged(nameof(ReportEquipmentSummary)); OnPropertyChanged(nameof(ReportHasStartTimerA)); OnPropertyChanged(nameof(ReportHasStartTimerB)); }
 
     private async Task SaveReportCoreAsync()

@@ -73,7 +73,7 @@ public sealed class TimingReportTests
     }
 
     [Fact]
-    public void ProjectionUsesFinishOrderAndDoesNotTreatManualTimeAsBestA()
+    public void ProjectionUsesFinishOrderAndFastestClassifiedTimeIncludingReplacements()
     {
         var date = new DateOnly(2026, 10, 3);
         var competition = new CompetitionValues("Test", "DH", date, Discipline.Downhill, RaceType.Fis, 1, 0, "9991");
@@ -91,7 +91,7 @@ public sealed class TimingReportTests
         var projected = TimingReportProjection.FromTiming(new(list, [], [], []), snapshot);
         Assert.Equal(plan.Entries[1].Bib, projected.First.Bib);
         Assert.Equal(plan.Entries[0].Bib, projected.Last.Bib);
-        Assert.Equal(plan.Entries[0].Bib, projected.BestBib);
+        Assert.Equal(plan.Entries[1].Bib, projected.BestBib); Assert.Equal(8000, projected.BestHundredths);
         Assert.False(projected.AllResultsA); Assert.Single(projected.MissedA);
         var electronic = observations.Select(x => new ObservationReview(x with { Manual = false }, null, false, null, "Assigned")).ToArray();
         var competitor = results[1].CompetitorId;
@@ -100,7 +100,7 @@ public sealed class TimingReportTests
         var correction = new TimingAudit(1, list.Id, DateTimeOffset.UnixEpoch, "op", "Backup correction", before, after);
         var correctedSnapshot = snapshot with { Observations = electronic, Audit = [correction], Results = [results[0], results[1] with { Hundredths = 7000 }] };
         var corrected = TimingReportProjection.FromTiming(new(list, [], [], [correction]), correctedSnapshot);
-        Assert.Equal(results[0].Bib, corrected.BestBib); Assert.False(corrected.AllResultsA); Assert.Equal(results[1].Bib, Assert.Single(corrected.MissedA).Bib);
+        Assert.Equal(results[1].Bib, corrected.BestBib); Assert.Equal(7000, corrected.BestHundredths); Assert.False(corrected.AllResultsA); Assert.Equal(results[1].Bib, Assert.Single(corrected.MissedA).Bib);
         var undo = new TimingAudit(2, list.Id, DateTimeOffset.UnixEpoch.AddSeconds(1), "op", "Undo correction", after, before, 1);
         var restored = TimingReportProjection.FromTiming(new(list, [], [], [correction, undo]), snapshot with { Observations = electronic, Audit = [correction, undo] });
         Assert.Equal(results[1].Bib, restored.BestBib); Assert.True(restored.AllResultsA); Assert.Empty(restored.MissedA);
@@ -221,9 +221,13 @@ public sealed class TimingReportTests
             await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApproveTimingReportAsync(request with { DraftRevision = 4, ExpectedSeriesRevision = revision }));
             revision = await workspace.SaveTimingReportAsync(draft, revision, "op", "Restore reviewed source", DateTimeOffset.UtcNow);
             var historyCount = (await workspace.ReadTimingReportHistoryAsync(competition.Id)).Count;
-            await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApplyTimingReportImportAsync(
-                draft with { SourceFingerprint = new string('0', 64) }, revision, "op", "Rejected stale preview", DateTimeOffset.UtcNow));
-            Assert.Equal(historyCount, (await workspace.ReadTimingReportHistoryAsync(competition.Id)).Count);
+            var beforeImportRevision = revision;
+            revision = await workspace.ApplyTimingReportImportAsync(
+                draft with { SourceFingerprint = new string('0', 64) }, revision, "op", "Accepted displayed snapshot", DateTimeOffset.UtcNow);
+            Assert.Equal(historyCount + 1, (await workspace.ReadTimingReportHistoryAsync(competition.Id)).Count);
+            await Assert.ThrowsAsync<SeriesConflictException>(() => workspace.ApplyTimingReportImportAsync(
+                draft, beforeImportRevision, "op", "Conflicting report edit", DateTimeOffset.UtcNow));
+            Assert.Equal(historyCount + 1, (await workspace.ReadTimingReportHistoryAsync(competition.Id)).Count);
             async Task RejectForged(TimingReportDraft forged)
             {
                 revision = await workspace.SaveTimingReportAsync(forged, revision, "op", "Synthetic forged draft validation", DateTimeOffset.UtcNow);
