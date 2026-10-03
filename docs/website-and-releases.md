@@ -151,4 +151,6 @@ No production release/tag is created automatically by merging this setup. Rehear
 
 ## Verification record
 
-Prepared on 2026-10-03. Local website build/link checks, Node failure-cleanup tests, Bicep compilation and self-contained ZIP/live process checks were performed. Actual CI, installer compilation/install/uninstall, Azure provisioning, Cloudflare mutation, production HTTPS/load tests and desktop/mobile website visual review require their respective environments; do not infer success from prepared configuration.
+Prepared on 2026-10-03. Local website build/link checks, Node failure-cleanup tests, Bicep compilation and self-contained ZIP/live process checks were performed. GitHub Windows CI also verified installer compilation, installation, packaged processes, reinstall and uninstall preservation. Azure provisioning, Cloudflare mutation and production HTTPS/load tests remain unverified. Desktop website preview was reviewed; mobile visual acceptance remains pending.
+
+Core boundary test scenarios run sequentially to avoid unrelated OCR and durable SQLite workloads competing for CI resources. Each scenario retains its own capture/concurrency assertions and production drain deadlines. Live coalescing tests wait for the worker to acknowledge the complete snapshot batch: an event timestamp alone can also identify the first event of that batch.
