@@ -59,11 +59,15 @@ public partial class DesktopWorkflowTests
             var series = await workspace.CreateAsync(file, new("Northern Alpine Weekend", "Summit Arena", "Demo Race Office",
                 date, date.AddDays(1), "FIN", "2026/27"));
             series = await workspace.SaveCompetitionAsync(null, new("Northern Slalom Women", "SL Women", date,
-                Discipline.Slalom, RaceType.Fis, 2, 1, "DEMO-101", CourseName: "North Face", StartAltitudeMeters: 820,
-                FinishAltitudeMeters: 430, VerticalDropMeters: 390), series.Revision);
+                Discipline.Slalom, RaceType.Fis, 2, 1, "9991", CourseName: "North Face", StartAltitudeMeters: 500,
+                FinishAltitudeMeters: 300, VerticalDropMeters: 200, HomologationNumber: "DEMO/10/26",
+                Calendar: new(2027, "Summit Arena", "FIN", "FIS", "W", new("DELEGATE", "Demo", "FIN", "9999")),
+                CourseLengthMeters: 640), series.Revision);
             series = await workspace.SaveCompetitionAsync(null, new("Northern Slalom Men", "SL Men", date.AddDays(1),
-                Discipline.Slalom, RaceType.Fis, 2, 1, "DEMO-102", CourseName: "North Face", StartAltitudeMeters: 820,
-                FinishAltitudeMeters: 430, VerticalDropMeters: 390), series.Revision);
+                Discipline.Slalom, RaceType.Fis, 2, 1, "9992", CourseName: "North Face", StartAltitudeMeters: 500,
+                FinishAltitudeMeters: 300, VerticalDropMeters: 200, HomologationNumber: "DEMO/10/26",
+                Calendar: new(2027, "Summit Arena", "FIN", "FIS", "M", new("DELEGATE", "Demo", "FIN", "9999")),
+                CourseLengthMeters: 640), series.Revision);
             var women = series.Competitions[0];
             var men = series.Competitions[1];
             var revision = series.Revision;
@@ -91,7 +95,7 @@ public partial class DesktopWorkflowTests
             {
                 vm.ShowSeriesCommand.Execute(null);
                 CaptureDraw(window, output, "01-event-series.png");
-                window.Height = 760;
+                window.Height = 1150;
                 vm.ShowCompetitionsCommand.Execute(null);
                 vm.SelectedCompetition = vm.Competitions[0];
                 CaptureDraw(window, output, "02-competitions.png");
@@ -106,7 +110,13 @@ public partial class DesktopWorkflowTests
                 CaptureDraw(window, output, "04-start-lists.png");
 
                 await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(women, 1));
-                window.Height = 1000;
+                window.Height = 1120;
+                window.UpdateLayout();
+                var ranking = window.FindControl<TimingView>("TimingWorkspace")!.FindControl<DataGrid>("RankingGrid")!;
+                // Leave room for the operator's sort/filter controls in compact numeric headers.
+                ranking.Columns[1].Width = new DataGridLength(80);
+                ranking.Columns[2].Width = new DataGridLength(80);
+                ranking.Columns[4].Width = new DataGridLength(85);
                 vm.TimingSource = "Simulator";
                 vm.TimingIntermediateChannels = "2";
                 await vm.ConnectTimingCommand.ExecuteAsync(null);
@@ -119,7 +129,8 @@ public partial class DesktopWorkflowTests
                 {
                     vm.SimulationTime = time;
                     await vm.SimulatePulseCommand.ExecuteAsync(channel);
-                    await WaitTimingAsync(vm, () => workspace.Timing!.Snapshot!.Observations.Count > expected);
+                    await WaitTimingAsync(vm, () => workspace.Timing!.Snapshot!.Observations.Count > expected
+                        && workspace.Timing.Snapshot.Unresolved == 0);
                     expected++;
                 }
                 await Pulse("start", "12:00:00.0000");
@@ -136,6 +147,44 @@ public partial class DesktopWorkflowTests
                 await Pulse("intermediate:1", "12:01:55.2700");
                 CaptureDraw(window, output, "overview.png");
                 await vm.DisconnectTimingCommand.ExecuteAsync(null);
+
+                window.Height = 1240;
+                vm.SelectTimingBibs([1], 1);
+                vm.ShowTimingClassificationEditor = true;
+                vm.TimingClassification = "DSQ";
+                vm.TimingDsqGate = "18";
+                vm.TimingDsqReason = "Missed gate (synthetic example)";
+                vm.TimingDsqJudge = "Demo judge";
+                vm.TimingOperator = "Demo race office";
+                vm.TimingReason = "Classification review for README demonstration";
+                await vm.SaveTimingClassificationCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                CaptureDraw(window, output, "06-classification.png");
+
+                await vm.ShowResultsCommand.ExecuteAsync(null);
+                await vm.LoadResultsCommand.ExecuteAsync(null);
+                for (var i = 0; i < vm.ResultsJury.Count; i++)
+                {
+                    vm.ResultsJury[i].FirstName = "Demo";
+                    vm.ResultsJury[i].LastName = "OFFICIAL " + (i + 1).ToString(CultureInfo.InvariantCulture);
+                    vm.ResultsJury[i].Nation = "FIN";
+                }
+                foreach (var run in vm.ResultsRuns)
+                {
+                    run.Setter.FirstName = "Demo"; run.Setter.LastName = "SETTER"; run.Setter.Nation = "FIN";
+                    run.Gates = "52"; run.TurningGates = "50";
+                    run.StartTime = run.Number == 1 ? "12:00" : "14:00";
+                    run.Length = "640";
+                    run.Conditions = "Clear"; run.Snow = "Hard";
+                    run.StartTemperature = "-3.0"; run.FinishTemperature = "-1.5";
+                    run.AddForerunnerCommand.Execute(null);
+                    run.Forerunners[0].FirstName = "Demo";
+                    run.Forerunners[0].LastName = "FORERUNNER";
+                    run.Forerunners[0].Nation = "FIN";
+                }
+                Assert.True(await vm.FlushRaceInformationAsync(), vm.RaceInformationStatus);
+                window.Height = 1120;
+                CaptureDraw(window, output, "07-race-information.png");
             }
             finally { window.Close(); }
         }
