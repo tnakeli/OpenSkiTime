@@ -72,11 +72,21 @@ After the required runs are complete, Results assembles classified times and rac
 
 Review A timestamps and the first, last and fastest samples for each run. An optional independent B connection supplies backup observations without changing race results. **Show B** in Timing displays the backup comparison for 30 seconds; missing signals and excessive differences remain visible as warnings.
 
-Results and Timing report follow the competition selected in the shared header; the run remains available when returning to Timing. The report reads that competition's committed timing data automatically and saves edits in the background. Bring in B or hand-clock output from a temporarily connected ALGE device, or open the B, hand-start or hand-finish receipt dialog and choose, drop or paste images there. The Times tab groups synchronization and run timestamps. Local OCR displays detected timestamps in a dialog; OK applies the checked matches. Images and recognition text remain in dialog memory only. Accepted times and report history stay in the event file. Create and export an approved XML revision or submit it to FIS in test mode. PDF generation is not included. See [timing report operation](docs/timing-report.md) and [Settings](docs/settings.md).
+Results and Timing report follow the competition selected in the shared header; the run remains available when returning to Timing. The report reads that competition's committed timing data automatically and saves edits in the background. Bring in B or hand-clock output from a temporarily connected ALGE device, or open the B, hand-start or hand-finish receipt dialog and choose, drop or paste images there. The Times tab groups synchronization and run timestamps. Local OCR displays detected timestamps in a dialog; OK applies the checked matches. Images and recognition text remain in dialog memory only. Accepted times and report history stay in the event file. Create and export an approved XML revision or submit it to FIS in test mode. Create local PDFs through PDF Factory. See [timing report operation](docs/timing-report.md) and [Settings](docs/settings.md).
 
 ![Timing report with first and last A timestamps from a simulated run](docs/screenshots/08-timing-report.png)
 
 ![Receipt OCR dialog showing a synthetic receipt, detected text and four proposed B timestamp matches for operator review](docs/screenshots/09-receipt-ocr.png)
+
+### 8 · PDF Factory
+
+Generate entry lists, saved start lists, referee forms, penalty calculations, approved official results and timing reports from one view. Each row shows its filename and Generated, Outdated or Not generated status. **Generate All** skips unavailable reports and continues after individual failures. **Open** launches the generated file directly from the event folder. Optional A4 PDF backgrounds and margins are saved with the series; **Preview** shows the margin boundaries before saving. See [PDF Factory operation](docs/pdf-factory.md).
+
+![PDF Factory showing generated report filenames and actions for a fictional slalom race](docs/screenshots/11-pdf-factory.png)
+
+Referee forms use their own FIS layout, fixed margins and no organizer background. The default form fits one A4 page. DSQ, DNS, NPS and DNF tables grow with the saved classifications and continue across pages when needed.
+
+![Referee form with fictional disqualifications and DNS, NPS and DNF bibs](docs/screenshots/12-referee-report.png)
 
 ## Timing sources and live publishing
 

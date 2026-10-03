@@ -37,7 +37,7 @@ await mkdir(path.join(output, 'assets'), { recursive: true });
 for (const name of ['site.css', 'favicon.svg', 'robots.txt', 'staticwebapp.config.json']) {
   await copyFile(path.join(root, name), path.join(output, name));
 }
-for (const name of ['overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png']) {
+for (const name of ['overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png']) {
   await copyFile(path.join(root, '..', 'docs', 'screenshots', name), path.join(output, 'assets', name));
 }
 for (const [name, route, title, description] of pages) {

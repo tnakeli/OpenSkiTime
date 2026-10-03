@@ -17,7 +17,7 @@ public partial class DesktopWorkflowTests
     [AvaloniaTheory]
     [InlineData(980, 680)]
     [InlineData(1280, 800)]
-    public async Task SevenNavigationStepsAndSettingsRemainReachableAtSupportedWindowSizes(int width, int height)
+    public async Task EightNavigationStepsAndSettingsRemainReachableAtSupportedWindowSizes(int width, int height)
     {
         var root = Path.Combine(Path.GetTempPath(), "openskitime-settings-layout", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -41,10 +41,12 @@ public partial class DesktopWorkflowTests
                 var nav = window.GetVisualDescendants().OfType<Button>()
                     .Where(x => x.Classes.Contains("sectionNav") && x.Content is string text && text.Length > 0 && char.IsAsciiDigit(text[0]))
                     .ToArray();
-                Assert.Equal(7, nav.Length);
+                Assert.Equal(8, nav.Length);
+                Assert.Contains(nav, x => Equals(x.Content, "8  PDF Factory  ▾"));
                 Assert.Contains(nav, x => Equals(x.Content, "7  Timing report  ▾"));
                 foreach (var button in nav) { WithinWindowWidth(window, button); }
                 Assert.All(nav, button => Assert.True(button.IsEffectivelyVisible));
+                Assert.Single(nav.Select(button => button.TranslatePoint(default, window)!.Value.Y).Distinct());
                 var settings = window.GetVisualDescendants().OfType<SettingsView>().Single();
                 var tabs = settings.FindControl<TabControl>("SettingsTabs")!;
                 var scroller = window.FindControl<ScrollViewer>("WorkspaceScroll")!;

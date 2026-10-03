@@ -74,6 +74,11 @@ public sealed partial class MainViewModel
     private async Task SelectActiveCompetitionAsync(CompetitionDetails competition)
     {
         ArgumentNullException.ThrowIfNull(competition);
+        if (IsPdfFactorySection)
+        {
+            if (!IsPdfBusy && Competitions.Any(x => x.Id == competition.Id)) { await SelectPdfCompetitionAsync(competition); }
+            return;
+        }
         if (!FisCompetitions.Any(x => x.Id == competition.Id)) { return; }
         if (IsResultsSection) { await SelectResultsCompetitionAsync(competition); }
         else if (IsTimingReportSection) { await SelectReportCompetitionAsync(competition); }

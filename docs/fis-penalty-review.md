@@ -14,6 +14,6 @@ Older draws without rule tables can use the locally cached list only when its co
 
 ## Review and limits
 
-Reviewed on 2026-10-02 against [FIS Alpine Points Rules 2026/27, June 2026](https://assets.fis-ski.com/f/252177/x/ddef5ebef2/fis_points_rules_01-07-2026.pdf), §§4.1, 4.4.1–4.4.8, 4.5 and 4.9. The PDF defines the calculation; list-specific published tables supply the numerical profile. The implementation currently supports SL, GS, DH and SG. The TD review is available in the UI; printing/PDF layout remains a future task.
+Reviewed on 2026-10-02 against [FIS Alpine Points Rules 2026/27, June 2026](https://assets.fis-ski.com/f/252177/x/ddef5ebef2/fis_points_rules_01-07-2026.pdf), §§4.1, 4.4.1–4.4.8, 4.5 and 4.9. The PDF defines the calculation; list-specific published tables supply the numerical profile. The implementation currently supports SL, GS, DH and SG. The TD review is available in the UI. [PDF Factory](pdf-factory.md) presents the same domain calculation in a local PDF when the drawn snapshot contains the reviewed rule tables.
 
 Synthetic tests verify list/category/gender joins, non-default F/cap/adder values, category bounds, wrong-list rejection, rule JSON round-trip and automatic desktop review after backup/reopening without a cached FIS list. Missing rule tables prevent approval. Existing penalty tests cover starter eligibility, substituted caps, rounding and tied selections. No downloaded athlete data is committed.

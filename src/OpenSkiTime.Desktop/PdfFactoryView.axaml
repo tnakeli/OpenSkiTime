@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OpenSkiTime.Desktop.PdfFactoryView" x:CompileBindings="False">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.outdated"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></Style>
+  </UserControl.Styles>
+  <Border Classes="workSurface" Padding="{DynamicResource SectionInset}">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,10">
+        <TextBlock Text="PDF Factory" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="Generating PDFs…" IsVisible="{Binding IsPdfBusy}" VerticalAlignment="Center" Margin="0,0,10,0" />
+        <Button Grid.Column="2" Content="Generate All" Command="{Binding GenerateAllPdfsCommand}" IsEnabled="{Binding !IsPdfBusy}" Classes="primaryAction" />
+      </Grid>
+      <Expander Grid.Row="1" Header="PDF settings" Margin="0,0,0,10">
+        <StackPanel Spacing="8" IsEnabled="{Binding !IsPdfBusy}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding PdfTemplateLabel}" VerticalAlignment="Center" />
+            <Button Content="Choose PDF background" Click="ChooseBackground_Click" Classes="secondaryAction" />
+            <Button Content="Remove background" Command="{Binding RemovePdfTemplateCommand}" Classes="secondaryAction" />
+          </StackPanel>
+          <TextBlock Text="A4 content margins (mm)" />
+          <WrapPanel>
+            <StackPanel Width="140" Margin="0,0,8,8"><TextBlock Text="Top" /><NumericUpDown Name="PdfTopMarginInput" Value="{Binding PdfTopMargin}" Minimum="5" Maximum="80" FormatString="0.##" /></StackPanel>
+            <StackPanel Width="140" Margin="0,0,8,8"><TextBlock Text="Bottom" /><NumericUpDown Value="{Binding PdfBottomMargin}" Minimum="5" Maximum="80" FormatString="0.##" /></StackPanel>
+            <StackPanel Width="140" Margin="0,0,8,8"><TextBlock Text="Left" /><NumericUpDown Value="{Binding PdfLeftMargin}" Minimum="5" Maximum="80" FormatString="0.##" /></StackPanel>
+            <StackPanel Width="140" Margin="0,0,8,8"><TextBlock Text="Right" /><NumericUpDown Value="{Binding PdfRightMargin}" Minimum="5" Maximum="80" FormatString="0.##" /></StackPanel>
+            <Button Content="Preview" Command="{Binding PreviewPdfProfileCommand}" ToolTip.Tip="Preview the current margins and background in your PDF reader without saving." Classes="secondaryAction" VerticalAlignment="Bottom" Margin="0,0,8,8" />
+            <Button Content="Save profile" Command="{Binding SavePdfProfileCommand}" Classes="secondaryAction" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+          </WrapPanel>
+          <TextBlock Text="Use a one-page A4 PDF and leave space for race data. The background is embedded in the .ost file. Referee Report uses its own fixed margins and FIS form layout." TextWrapping="Wrap" />
+        </StackPanel>
+      </Expander>
+      <DataGrid Name="PdfReportGrid" Grid.Row="2" ItemsSource="{Binding PdfReports}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" IsEnabled="{Binding !IsPdfBusy}">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Report" Binding="{Binding Name}" Width="2*" />
+          <DataGridTemplateColumn Header="Output file" Width="3*">
+            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <TextBlock Text="{Binding FileName}" ToolTip.Tip="{Binding OutputPath}" VerticalAlignment="Center" Margin="5" TextTrimming="CharacterEllipsis" />
+            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTemplateColumn Header="Status" Width="115">
+            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <TextBlock Text="{Binding Status}" Classes.outdated="{Binding IsOutdated}" VerticalAlignment="Center" Margin="5" FontWeight="SemiBold" ToolTip.Tip="{Binding Reason}" />
+            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTemplateColumn Header="Actions" Width="205">
+            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6" Margin="4">
+                <Button Content="{Binding GenerateLabel}" Command="{Binding GenerateCommand}" IsEnabled="{Binding CanGenerate}" ToolTip.Tip="{Binding Reason}" Classes="secondaryAction" />
+                <Button Content="{Binding OpenLabel}" Command="{Binding OpenCommand}" IsVisible="{Binding CanOpen}" ToolTip.Tip="{Binding OutputPath}" Classes="secondaryAction" />
+              </StackPanel>
+            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+        </DataGrid.Columns>
+      </DataGrid>
+      <TextBlock Grid.Row="3" Text="{Binding PdfSummary}" TextWrapping="Wrap" Margin="0,10,0,0" />
+    </Grid>
+  </Border>
+</UserControl>
