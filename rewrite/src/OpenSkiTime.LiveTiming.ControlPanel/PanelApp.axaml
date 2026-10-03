@@ -1,0 +1,21 @@
+<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenSkiTime.LiveTiming.ControlPanel.PanelApp" RequestedThemeVariant="Light">
+ <Application.Styles>
+  <FluentTheme />
+  <Style Selector="Window"><Setter Property="Background" Value="#EAF0F2" /><Setter Property="Foreground" Value="#193845" /><Setter Property="FontSize" Value="12" /></Style>
+  <Style Selector="Border.card"><Setter Property="Background" Value="White" /><Setter Property="BorderBrush" Value="#CDDCE1" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="6" /><Setter Property="Padding" Value="14" /></Style>
+  <Style Selector="TextBlock.heading"><Setter Property="FontSize" Value="14" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="#58717C" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+  <Style Selector="StackPanel.field"><Setter Property="Spacing" Value="4" /></Style>
+  <Style Selector="StackPanel.field > TextBlock"><Setter Property="Foreground" Value="#58717C" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="FontSize" Value="11" /></Style>
+  <Style Selector="TextBox, NumericUpDown"><Setter Property="MinHeight" Value="32" /><Setter Property="Foreground" Value="#193845" /><Setter Property="Background" Value="White" /><Setter Property="BorderBrush" Value="#CDDCE1" /><Setter Property="FontSize" Value="12" /></Style>
+  <Style Selector="TextBox"><Setter Property="Padding" Value="8,5" /></Style>
+  <Style Selector="Button"><Setter Property="MinHeight" Value="30" /><Setter Property="Padding" Value="10,5" /><Setter Property="Background" Value="White" /><Setter Property="Foreground" Value="#193845" /><Setter Property="BorderBrush" Value="#CDDCE1" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="4" /><Setter Property="FontSize" Value="12" /></Style>
+  <Style Selector="Button:pointerover"><Setter Property="Background" Value="#E1F1EF" /><Setter Property="BorderBrush" Value="#087E78" /></Style>
+  <Style Selector="Button.primary"><Setter Property="Background" Value="#087E78" /><Setter Property="BorderBrush" Value="#087E78" /><Setter Property="Foreground" Value="White" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="Button.primary:pointerover"><Setter Property="Background" Value="#086F6A" /></Style>
+  <Style Selector="Button.danger"><Setter Property="Foreground" Value="#A63D3D" /><Setter Property="BorderBrush" Value="#D8BCBC" /></Style>
+  <Style Selector="Button.danger:pointerover"><Setter Property="Background" Value="#FCEDEC" /></Style>
+  <Style Selector="Button:focus-visible"><Setter Property="BorderBrush" Value="#088A84" /><Setter Property="BorderThickness" Value="2" /></Style>
+  <Style Selector="Button:disabled"><Setter Property="Opacity" Value="0.52" /></Style>
+ </Application.Styles>
+</Application>

@@ -1,22 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AssemblyName>OpenSkiTime.LiveTiming.ControlPanel</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
-    <PackageReference Include="Avalonia.Controls.DataGrid" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
-    <ProjectReference Include="../OpenSkiTime.Rewrite.Application/OpenSkiTime.Rewrite.Application.csproj" />
-    <ProjectReference Include="../OpenSkiTime.Rewrite.Persistence/OpenSkiTime.Rewrite.Persistence.csproj" />
-    <ProjectReference Include="../OpenSkiTime.Rewrite.Devices/OpenSkiTime.Rewrite.Devices.csproj" />
     <ProjectReference Include="../OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" />
-    <ProjectReference Include="../OpenSkiTime.LiveTiming.ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
-  <ItemGroup><InternalsVisibleTo Include="OpenSkiTime.Rewrite.Desktop.Tests" /></ItemGroup>
   <Import Project="../../LiveTimingArtifacts.targets" />
 </Project>

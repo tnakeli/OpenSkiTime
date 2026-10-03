@@ -4,7 +4,11 @@ OpenSkiTime supplies three independent downstream channels: FIS Live Timing, Sta
 
 ## Operator workflow
 
-Open a saved timing run. The timing connection row shows FIS, Local and Cloud status, last successful publish (or health when no publish exists) and a short recovery hint on error. Hover a status for endpoint, last health/publish and the complete error. **Live timing…** opens controls and settings without an extra persistent window. All channels may run together; FIS requires an alpine FIS competition with a numeric codex, password and complete racer FIS codes/nations.
+Open a saved timing run. The timing connection row shows compact **Local**, **Cloud** and **FIS** indicators: green means Running, red means Starting, Reconnecting or Error, and pale means Stopped. Hover an indicator for the full state, endpoint, last successful publish, error and expiry. **Live timing…** launches `OpenSkiTime.LiveTiming.ControlPanel.exe` in its own window without taking focus from timing. Pressing the button again restores and activates the existing panel. All channels may run together; FIS requires an alpine FIS competition with a numeric codex, password and complete racer FIS codes/nations.
+
+The control panel uses the OpenSkiTime navy and teal palette with separate publishing-channel cards and connection-settings cards. Both columns scroll vertically in smaller windows. Sharing and deletion controls appear when a standalone session has a public URL. Settings apply on Start; Refresh also requests a fresh race snapshot with the chosen time zone.
+
+Closing the panel stops its publishers and local server. Ending only `OpenSkiTime.LiveTiming.ControlPanel.exe` in Windows Task Manager also stops the whole live timing process tree. Authoritative timing capture continues in OpenSkiTime. Reopen the panel and press Start to resume. Cloud can reuse its retained valid session; a new panel has a new Local server and creates a new Local URL. A forced exit does not send a public pause message. Use Stop when the public session should explicitly show Paused. The executable can also be opened directly, but it needs the timing application's button to establish a race connection.
 
 Set the race's time zone (Windows or IANA ID, e.g. `Europe/Helsinki`), endpoints and FIS transport/password. Defaults are local `http://localhost:5078`, FIS TCP `live.fis-ski.com:1550` and HTTPS `https://livedata.fis-ski.com/al/`. The cloud default `https://live.openskiti.me` is a future deployment address; replace it with a local cloud simulation URL now.
 
@@ -26,19 +30,20 @@ The browser shows competition/place/discipline/run, competitors, bib/name/nation
 ```mermaid
 flowchart LR
   Timing[Committed timing state / portable series] --> Projection[Read-only live projection]
-  Projection --> IPC[Private current-user named pipes]
-  IPC --> FIS[FIS worker / TCP or HTTPS]
-  IPC --> Local[Local publisher worker]
-  IPC --> Cloud[Cloud publisher worker]
+  Projection --> IPC[Private current-user named pipe]
+  IPC --> Panel[Live timing control panel / separate executable]
+  Panel --> FIS[FIS worker / TCP or HTTPS]
+  Panel --> Local[Local publisher worker]
+  Panel --> Cloud[Cloud publisher worker]
   Local --> Server[Same ASP.NET Core Live Timing Server]
   Cloud --> Remote[Same server / remote origin]
   Server --> Browser[REST + SignalR browser]
   Remote --> Browser
 ```
 
-Domain, timing, device capture and SQLite schemas do not acquire live timing dependencies. The desktop polls immutable, already committed timing snapshots. It offers one latest-state reference to each channel; serialization/IPC/network work happens asynchronously. There are no synchronous network calls on capture threads, no unbounded replay queue and no callbacks from publishers into timing.
+Domain, timing, device capture and SQLite schemas do not acquire live timing dependencies. The desktop polls immutable, already committed timing snapshots. It offers one latest-state reference to the control panel; serialization/IPC/network work happens asynchronously. The panel has no series-database or timing-device access. Start and Refresh request a fresh read-only projection from the desktop before publishing, including time-zone validation. Older projection versions cannot overwrite newer panel state. There are no synchronous network calls on capture threads or unbounded replay queues.
 
-Each publisher is an owned, independent process. A private unpredictable named pipe with `CurrentUserOnly` carries typed JSON control/state envelopes and health/credential replies. Secrets are delivered through this pipe, never process arguments. The local server is a child of the local worker. Stop preserves it; disposing the worker kills only its owned process tree. A worker crash is shown as Error; Start replaces the failed generation and sends the latest snapshot. Local server crashes are automatically restarted with the same process-lifetime signing key and restored state. A cloud server restart uses its unchanged configured signing key.
+The panel owns one independent publisher process per started channel. Private unpredictable named pipes with `CurrentUserOnly` carry typed JSON control/state envelopes and health/credential replies. Secrets are delivered through pipes, never process arguments. The local server is a child of the local worker. Stop preserves it; disposing a publisher kills its owned process tree. On Windows the panel and all descendants belong to a kill-on-close Job Object owned by the desktop; panel disconnection closes the job, including descendants orphaned by a forced exit. Desktop exit also closes the job. Linux uses pipe-disconnection cleanup and explicit process-tree termination; Windows Job Object semantics are isolated in the client library and Linux forced-exit cleanup has not been verified. A worker crash is shown as Error; Start replaces the failed generation and sends the latest snapshot. Local server crashes are automatically restarted with the same process-lifetime signing key and restored state. A cloud server restart uses its unchanged configured signing key.
 
 The latest snapshot is bounded by the contract (2,000 competitors, nine runs, twenty intermediates) and server payload limit; control queues have sixteen slots. Broken IPC, invalid clock projection and process-start failures are caught at the optional integration boundary and reported separately. Network timeout/retry cannot interrupt device capture or durable raw input commits. This does not reserve OS CPU/RAM against arbitrary system-wide resource exhaustion.
 

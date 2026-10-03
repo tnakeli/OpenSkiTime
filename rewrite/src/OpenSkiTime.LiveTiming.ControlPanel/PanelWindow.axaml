@@ -1,0 +1,85 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenSkiTime.LiveTiming.ControlPanel.PanelWindow"
+ Title="OpenSkiTime · Live timing control panel" Width="940" Height="790" MinWidth="760" MinHeight="560" ShowActivated="False">
+ <Grid RowDefinitions="Auto,*,Auto">
+  <Border Background="#102F3B" Padding="22,17">
+   <Grid ColumnDefinitions="*,Auto">
+    <StackPanel Spacing="5">
+     <TextBlock Text="OPENSKITIME  /  LIVE TIMING" Foreground="#89CFC4" FontSize="10" FontWeight="Bold" LetterSpacing="2" />
+     <TextBlock Text="Control panel" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+     <TextBlock Text="{Binding Competition}" Foreground="#DCE6E9" TextTrimming="CharacterEllipsis" />
+    </StackPanel>
+    <Border Grid.Column="1" Background="#1B4050" CornerRadius="4" Padding="12,8" VerticalAlignment="Center">
+     <TextBlock Text="LIVE OUTPUT" Foreground="#89CFC4" FontSize="11" FontWeight="Bold" />
+    </Border>
+   </Grid>
+  </Border>
+  <Grid Grid.Row="1" ColumnDefinitions="*,16,*" Margin="18,16">
+   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="10">
+     <TextBlock Text="Publishing channels" Classes="heading" />
+     <ItemsControl ItemsSource="{Binding Channels}"><ItemsControl.ItemTemplate><DataTemplate>
+      <Border Classes="card" Margin="0,0,0,10">
+       <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+         <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Bold" LetterSpacing="1" />
+         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+          <Border Width="8" Height="8" CornerRadius="4" Background="{Binding IndicatorColor}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Status}" FontWeight="SemiBold" />
+         </StackPanel>
+        </Grid>
+        <TextBlock Text="{Binding Detail}" Classes="muted" />
+        <WrapPanel IsEnabled="{Binding !$parent[Window].DataContext.Busy}">
+         <Button Content="Start" Classes="primary" Command="{Binding $parent[Window].DataContext.ControlCommand}" CommandParameter="{Binding Start}" Margin="0,0,6,0" />
+         <Button Content="Stop" Command="{Binding $parent[Window].DataContext.ControlCommand}" CommandParameter="{Binding Stop}" Margin="0,0,6,0" />
+         <Button Content="Refresh" Command="{Binding $parent[Window].DataContext.ControlCommand}" CommandParameter="{Binding Refresh}" />
+        </WrapPanel>
+        <StackPanel IsVisible="{Binding HasPublicUrl}" Spacing="6">
+         <TextBlock Text="{Binding PublicUrl}" TextWrapping="Wrap" />
+         <TextBlock Text="{Binding Expiration}" Classes="muted" FontSize="10" />
+         <WrapPanel>
+          <Button Content="Copy URL" Command="{Binding $parent[Window].DataContext.CopyUrlCommand}" CommandParameter="{Binding}" Margin="0,0,6,6" />
+          <Button Content="Open URL" Command="{Binding $parent[Window].DataContext.OpenUrlCommand}" CommandParameter="{Binding}" Margin="0,0,0,6" />
+         </WrapPanel>
+         <WrapPanel IsEnabled="{Binding !$parent[Window].DataContext.Busy}">
+          <Button Content="Delete session" Classes="danger" Command="{Binding $parent[Window].DataContext.ControlCommand}" CommandParameter="{Binding Delete}" Margin="0,0,6,0" />
+          <Button Content="Delete All Data" Classes="danger" Command="{Binding $parent[Window].DataContext.ControlCommand}" CommandParameter="{Binding DeleteAll}" />
+         </WrapPanel>
+        </StackPanel>
+       </StackPanel>
+      </Border>
+     </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+     <TextBlock Text="Stop pauses publishing. Delete removes the public session; the next Start creates a new URL." Classes="muted" FontSize="11" />
+    </StackPanel>
+   </ScrollViewer>
+   <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="10">
+     <TextBlock Text="Connection settings" Classes="heading" />
+     <Border Classes="card"><StackPanel Spacing="12">
+      <TextBlock Text="Standalone" Classes="heading" />
+      <StackPanel Classes="field"><TextBlock Text="Local URL" /><TextBox Text="{Binding LocalEndpoint}" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="Cloud URL" /><TextBox Text="{Binding CloudEndpoint}" /></StackPanel>
+     </StackPanel></Border>
+     <Border Classes="card"><StackPanel Spacing="12">
+      <TextBlock Text="FIS Live Timing" Classes="heading" />
+      <CheckBox Content="Use TCP instead of HTTPS" IsChecked="{Binding FisUseTcp}" />
+      <StackPanel Classes="field"><TextBlock Text="HTTPS URL" /><TextBox Text="{Binding FisHttpsEndpoint}" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="TCP host" /><TextBox Text="{Binding FisTcpHost}" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="TCP port" /><NumericUpDown Minimum="1" Maximum="65535" Value="{Binding FisTcpPort}" HorizontalAlignment="Stretch" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="Password" /><TextBox PasswordChar="●" Text="{Binding FisPassword}" /></StackPanel>
+     </StackPanel></Border>
+     <Border Classes="card"><StackPanel Spacing="12">
+      <TextBlock Text="Race clock" Classes="heading" />
+      <StackPanel Classes="field"><TextBlock Text="Time zone" /><TextBox Text="{Binding TimeZone}" Watermark="Windows or IANA time zone ID" /></StackPanel>
+      <TextBlock Text="Settings take effect when you press Start. The time zone is also applied when refreshing the race state." Classes="muted" FontSize="11" />
+     </StackPanel></Border>
+    </StackPanel>
+   </ScrollViewer>
+  </Grid>
+  <Border Grid.Row="2" Background="#DCE6E9" Padding="18,10">
+   <StackPanel Spacing="4">
+    <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}" Foreground="#A63D3D" TextWrapping="Wrap" />
+    <TextBlock Text="Closing this panel stops live timing. Timing capture continues in OpenSkiTime." Foreground="#58717C" FontSize="11" />
+   </StackPanel>
+  </Border>
+ </Grid>
+</Window>
