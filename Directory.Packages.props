@@ -16,6 +16,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="QuestPDF" Version="2026.9.1" />
+    <PackageVersion Include="PdfPig" Version="0.1.12" />
     <PackageVersion Include="Tesseract" Version="5.2.0" />
     <!-- Avalonia (UI) -->
     <PackageVersion Include="Avalonia"                          Version="$(AvaloniaVersion)" />

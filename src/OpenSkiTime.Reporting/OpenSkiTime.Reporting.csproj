@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="QuestPDF" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <ProjectReference Include="../OpenSkiTime.Application/OpenSkiTime.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Assets/fis-logo.svg" /></ItemGroup>
+</Project>

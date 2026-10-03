@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/OpenSkiTime.Reporting/OpenSkiTime.Reporting.csproj" />
     <Content Include="Fixtures/timing-receipt.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/timing-receipt-column.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/timing-receipt-noisy.png" CopyToOutputDirectory="PreserveNewest" />
@@ -11,6 +12,7 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <PackageReference Include="PdfPig" PrivateAssets="all" />
     <ProjectReference Include="../../src/OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj" />
     <ProjectReference Include="../../src/OpenSkiTime.Devices/OpenSkiTime.Devices.csproj" />
     <ProjectReference Include="../../src/OpenSkiTime.Recognition/OpenSkiTime.Recognition.csproj" />

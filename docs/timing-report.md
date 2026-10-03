@@ -1,6 +1,6 @@
 # Timing report
 
-**7 Timing report** prepares the FIS alpine Timing and Data Technical Report inside the event series. It supports the application's standard DH, SG, GS and SL races. XML transmission remains **test-only**, just like Results. There is no PDF output, Timing Support Systems form or automatic EET calculation.
+**7 Timing report** prepares the FIS alpine Timing and Data Technical Report inside the event series. It supports the application's standard DH, SG, GS and SL races. XML transmission remains **test-only**, just like Results. [PDF Factory](pdf-factory.md) provides a local PDF of available timing metadata and evidence summaries. The Timing Support Systems form and automatic EET calculation are not implemented.
 
 ## Prepare and review
 

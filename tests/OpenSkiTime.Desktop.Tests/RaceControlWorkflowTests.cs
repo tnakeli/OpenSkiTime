@@ -9,6 +9,7 @@ using OpenSkiTime.Desktop;
 using OpenSkiTime.Devices;
 using OpenSkiTime.Domain;
 using OpenSkiTime.Persistence;
+using OpenSkiTime.Timing;
 using Xunit;
 
 namespace OpenSkiTime.Tests;
@@ -255,7 +256,10 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "race-returned-to-start.png");
             vm.SimulationTime = "12:00:06.0000";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
-            await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 2);
+            // Capture can advance between queue and selected-row projections. Wait for the
+            // selected competitor's displayed state before checking its contextual action.
+            await WaitTimingAsync(vm, () => vm.OnCourseRows.Count == 2
+                && vm.SelectedTimingRow is { Bib: var selected, Result.Status: TimingStatus.OnCourse } && selected == d);
             Assert.True(vm.ReturnToStartCommand.CanExecute(null));
             vm.SimulationTime = "12:00:20.0000";
             Click(window, "Test I1"); await vm.SimulatePulseCommand.ExecutionTask!;

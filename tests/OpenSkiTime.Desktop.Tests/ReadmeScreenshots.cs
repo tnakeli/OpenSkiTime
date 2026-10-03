@@ -189,6 +189,11 @@ public partial class DesktopWorkflowTests
                 Assert.True(await vm.FlushRaceInformationAsync(), vm.RaceInformationStatus);
                 window.Height = 1120;
                 CaptureDraw(window, output, "07-race-information.png");
+                await vm.ShowPdfFactoryCommand.ExecuteAsync(null);
+                await vm.GenerateAllPdfsCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                window.Height = 980;
+                CaptureDraw(window, output, "11-pdf-factory.png");
             }
             finally { window.Close(); }
         }
