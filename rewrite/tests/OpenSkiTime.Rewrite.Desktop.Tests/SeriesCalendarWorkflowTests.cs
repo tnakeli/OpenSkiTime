@@ -143,9 +143,28 @@ public partial class DesktopWorkflowTests
             try
             {
                 await vm.BrowseSeriesCalendarCommand.ExecuteAsync(null); Assert.Equal(2, vm.SeriesCalendarEvents.Count);
+                window.UpdateLayout(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                var calendarGrid = window.FindControl<DataGrid>("SeriesCalendarEventsGrid")!;
+                var startSort = calendarGrid.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "CalendarSort_Start");
+                PressSettingsControl(window, startSort);
+                Assert.Equal(new DateOnly(2026, 2, 28), vm.SeriesCalendarEvents[0].StartDate);
+                PressSettingsControl(window, startSort);
+                Assert.Equal(new DateOnly(2026, 3, 21), vm.SeriesCalendarEvents[0].StartDate);
+                var startHeader = calendarGrid.GetVisualDescendants().OfType<Avalonia.Controls.DataGridColumnHeader>()
+                    .Single(x => Equals(x.Content, "START"));
+                PressSettingsControl(window, startHeader);
+                Assert.Equal(new DateOnly(2026, 2, 28), vm.SeriesCalendarEvents[0].StartDate);
+                PressSettingsControl(window, startHeader);
+                Assert.Equal(new DateOnly(2026, 3, 21), vm.SeriesCalendarEvents[0].StartDate);
+                var endHeader = calendarGrid.GetVisualDescendants().OfType<DataGridColumnHeader>()
+                    .Single(x => Equals(x.Content, "END"));
+                PressSettingsControl(window, endHeader);
+                Assert.Equal(new DateOnly(2026, 3, 22), vm.SeriesCalendarEvents[0].EndDate);
+                PressSettingsControl(window, endHeader);
+                Assert.Equal(new DateOnly(2026, 4, 1), vm.SeriesCalendarEvents[0].EndDate);
                 vm.SortCalendar(CalendarColumn.Races, true); Assert.Equal(12, vm.SeriesCalendarEvents[0].CompetitionCount);
                 vm.SortCalendar(CalendarColumn.Races, false); Assert.Equal(2, vm.SeriesCalendarEvents[0].CompetitionCount);
-                vm.SortCalendar(CalendarColumn.Start, false); Assert.Equal(new DateOnly(2026, 2, 1), vm.SeriesCalendarEvents[0].StartDate);
+                vm.SortCalendar(CalendarColumn.Start, false); Assert.Equal(new DateOnly(2026, 2, 28), vm.SeriesCalendarEvents[0].StartDate);
                 var grid = window.FindControl<DataGrid>("SeriesCalendarEventsGrid")!;
                 grid.SelectedItem = vm.SeriesCalendarEvents.Single(x => x.Id == 456);
                 var selected = vm.SelectedSeriesCalendarEvent;
@@ -182,10 +201,10 @@ public partial class DesktopWorkflowTests
         {
             using (var writer = new StreamWriter(zip.CreateEntry("A_event.csv").Open(), new UTF8Encoding(false)))
             { writer.Write("Eventid\tSeasoncode\tSectorcode\tEventname\tStartdate\tEnddate\tPlace\tNationcodeplace\tOrgaddressL1\n456\t2026\tAL\tSynthetic weekend\t2026-03-21\t2026-03-22\tTest place\tFIN\tSynthetic club\n");
-              if (additionalEvent) { writer.Write("457\t2026\tAL\tOther synthetic event\t2026-02-01\t2026-02-01\tOther slope\tSWE\tSynthetic club\n"); } }
+              if (additionalEvent) { writer.Write("457\t2026\tAL\tOther synthetic event\t2026-02-28\t2026-04-01\tOther slope\tSWE\tSynthetic club\n"); } }
             using (var writer = new StreamWriter(zip.CreateEntry("A_raceal.csv").Open(), new UTF8Encoding(false)))
             { writer.Write("Raceid\tEventid\tSeasoncode\tRacecodex\tDisciplinecode\tCatcode\tGender\tRacedate\tPlace\tNationcode\tTd1name\tTd1nation\tTd1code\n134\t456\t2026\t0034\tSL\tFIS\tW\t2026-03-21\tTest place\tFIN\tTestlast Testfirst (FIN)\tFIN\t1047\n135\t456\t2026\t0035\tSL\tFIS\tW\t2026-03-22\tTest place\tFIN\tTestlast Testfirst (FIN)\tFIN\t1047\n");
-              if (additionalEvent) { for (var i = 0; i < 12; i++) { writer.Write($"{200 + i}\t457\t2026\t{1000 + i}\tSL\tFIS\tM\t2026-02-01\tOther slope\tSWE\t\t\t\n"); } } }
+              if (additionalEvent) { for (var i = 0; i < 12; i++) { writer.Write($"{200 + i}\t457\t2026\t{1000 + i}\tSL\tFIS\tM\t2026-02-28\tOther slope\tSWE\t\t\t\n"); } } }
         }
         return output.ToArray();
     }

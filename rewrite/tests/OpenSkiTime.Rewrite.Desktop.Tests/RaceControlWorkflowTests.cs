@@ -137,6 +137,7 @@ public partial class DesktopWorkflowTests
             window.Show();
             var view = window.FindControl<TimingView>("TimingWorkspace")!;
             vm.ShowSettingsCommand.Execute(null);
+            SelectTimingSettingsTab(window);
             vm.TimingSource = "Simulator"; vm.TimingIntermediateChannels = "2,3";
             Click(window, "Save timing settings"); await vm.SaveTimingPreferencesCommand.ExecutionTask!;
             Assert.Equal("2,3", preferences.Load()!.IntermediateChannels);
@@ -301,7 +302,7 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "race-live-980.png");
             Assert.True(view.FindControl<DataGrid>("AtStartGrid")!.Bounds.Height > 100);
             Assert.True(view.FindControl<DataGrid>("RunningGrid")!.Bounds.Height > 80);
-            Assert.Equal(4, view.GetVisualDescendants().OfType<DataGrid>().Count());
+            Assert.Equal(4, view.GetVisualDescendants().OfType<DataGrid>().Count(x => x.IsEffectivelyVisible));
             Assert.True(view.FindControl<DataGrid>("RankingGrid")!.Bounds.Height >= 65);
             Assert.Contains(vm.TimestampRows, x => x.Cells.Any(cell => cell?.Review.Ignored == true));
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<CheckBox>(), x => Equals(x.Content, "Show ignored"));
@@ -350,6 +351,7 @@ public partial class DesktopWorkflowTests
             window.Width = 1366; window.Height = 850;
             CaptureDraw(window, output, "race-grouped-ranking.png");
             vm.ShowSettingsCommand.Execute(null);
+            SelectTimingSettingsTab(window);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
             vm.TimingIntermediateChannels = "2";
             await vm.SaveTimingPreferencesCommand.ExecuteAsync(null);

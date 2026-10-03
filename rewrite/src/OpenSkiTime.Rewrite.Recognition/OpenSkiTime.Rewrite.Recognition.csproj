@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Tesseract" />
+    <ProjectReference Include="../OpenSkiTime.Rewrite.Application/OpenSkiTime.Rewrite.Application.csproj" />
+    <Content Include="obj/tessdata/eng.traineddata" Link="tessdata/eng.traineddata" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Licenses/Apache-2.0.txt" Link="licenses/recognition/Apache-2.0.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Licenses/Leptonica-1.82.0.txt" Link="licenses/recognition/Leptonica-1.82.0.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Licenses/Recognition-Sources.txt" Link="licenses/recognition/Recognition-Sources.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Pinned Apache-2.0 OCR model: downloaded at build time, never at race time. -->
+  <Target Name="PrepareOfflineRecognitionModel" BeforeTargets="PrepareForBuild">
+    <MakeDir Directories="$(MSBuildProjectDirectory)/obj/tessdata" />
+    <DownloadFile SourceUrl="https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata"
+                  DestinationFolder="$(MSBuildProjectDirectory)/obj/tessdata" SkipUnchangedFiles="true"
+                  Condition="!Exists('$(MSBuildProjectDirectory)/obj/tessdata/eng.traineddata')" />
+    <GetFileHash Files="$(MSBuildProjectDirectory)/obj/tessdata/eng.traineddata" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="RecognitionModelHash" />
+    </GetFileHash>
+    <Error Condition="'$(RecognitionModelHash)' != '7D4322BD2A7749724879683FC3912CB542F19906C83BCC1A52132556427170B2'" Text="OCR model checksum mismatch. Remove only obj/tessdata/eng.traineddata and rebuild." />
+  </Target>
+</Project>

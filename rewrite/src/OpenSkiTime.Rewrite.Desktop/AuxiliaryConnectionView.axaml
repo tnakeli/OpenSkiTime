@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ x:Class="OpenSkiTime.Rewrite.Desktop.AuxiliaryConnectionView" x:CompileBindings="False">
+ <StackPanel Spacing="10">
+  <TextBlock Text="Optional B / hand-clock connection" FontWeight="SemiBold"/>
+  <TextBlock Text="Backup observations support the report. They never set the race result." Classes="supportingText"/>
+  <StackPanel Orientation="Horizontal" Spacing="8">
+   <ComboBox ItemsSource="{Binding AuxiliaryRoles}" SelectedItem="{Binding AuxiliaryRole}" MinWidth="130" IsEnabled="{Binding !IsAuxiliaryBusy}"/>
+   <Button Content="Connect backup" Command="{Binding ConnectAuxiliaryCommand}" IsEnabled="{Binding CanConnectAuxiliary}" IsVisible="{Binding !IsAuxiliaryConnected}" Classes="primaryAction"/>
+   <Button Content="Disconnect backup" Command="{Binding DisconnectAuxiliaryCommand}" IsEnabled="{Binding !IsAuxiliaryBusy}" IsVisible="{Binding IsAuxiliaryConnected}" Classes="secondaryAction"/>
+   <Button Content="Retry storage" Command="{Binding RetryAuxiliaryStorageCommand}" IsVisible="{Binding IsAuxiliaryConnected}" Classes="secondaryAction"/>
+  </StackPanel>
+  <TextBlock Text="{Binding AuxiliaryConnectionStatus}" TextWrapping="Wrap"/>
+  <StackPanel Spacing="8" IsEnabled="{Binding CanEditAuxiliary}">
+   <CheckBox Content="Live B alongside the active A run" IsChecked="{Binding AuxiliaryLive}" IsVisible="{Binding IsAuxiliaryB}"/>
+   <TextBlock Text="For a temporary device import, turn off Live B and choose its saved run below." TextWrapping="Wrap" Classes="supportingText"/>
+   <Grid ColumnDefinitions="*,8,Auto">
+    <ComboBox ItemsSource="{Binding AuxiliaryRuns}" SelectedItem="{Binding AuxiliaryRun}" PlaceholderText="Saved run for temporary import" HorizontalAlignment="Stretch">
+     <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+    </ComboBox>
+    <Button Grid.Column="2" Content="Refresh runs and ports" Command="{Binding RefreshAuxiliaryRunsCommand}" Classes="secondaryAction"/>
+   </Grid>
+   <Grid ColumnDefinitions="2*,8,130,8,110,8,110">
+    <StackPanel Classes="field"><TextBlock Text="SOURCE" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding AuxiliarySources}" SelectedItem="{Binding AuxiliarySource}" HorizontalAlignment="Stretch"/></StackPanel>
+    <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="DEVICE DATE" Classes="fieldLabel"/><TextBox Text="{Binding AuxiliaryDeviceDate}" Watermark="YYYY-MM-DD"/></StackPanel>
+    <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="START / HAND CH." Classes="fieldLabel"/><NumericUpDown Value="{Binding AuxiliaryStartChannel}" Minimum="0" Maximum="8" FormatString="0"/></StackPanel>
+    <StackPanel Grid.Column="6" Classes="field" IsVisible="{Binding IsAuxiliaryB}"><TextBlock Text="FINISH CH." Classes="fieldLabel"/><NumericUpDown Value="{Binding AuxiliaryFinishChannel}" Minimum="0" Maximum="8" FormatString="0"/></StackPanel>
+   </Grid>
+   <Grid ColumnDefinitions="*,8,*" IsVisible="{Binding IsAuxiliaryUsb}">
+    <TextBox Text="{Binding AuxiliaryUsbId}" Watermark="USB device ID (required when A also uses USB)"/>
+    <TextBox Grid.Column="2" Text="{Binding AuxiliaryFirmware}" Watermark="Firmware"/>
+   </Grid>
+   <Grid ColumnDefinitions="200,8,160" IsVisible="{Binding IsAuxiliarySerial}">
+    <ComboBox ItemsSource="{Binding TimingPorts}" SelectedItem="{Binding AuxiliaryPort}" PlaceholderText="COM port" HorizontalAlignment="Stretch"/>
+    <NumericUpDown Grid.Column="2" Value="{Binding AuxiliaryBaud}" Minimum="1200" Maximum="115200" FormatString="0"/>
+   </Grid>
+   <StackPanel Spacing="8" IsVisible="{Binding IsAuxiliaryAlge}">
+    <Grid ColumnDefinitions="*,8,*,8,*">
+     <TextBox Text="{Binding AuxiliaryStartDevice}" Watermark="Start MT1 ID"/>
+     <TextBox Grid.Column="2" Text="{Binding AuxiliaryFinishDevice}" Watermark="Finish MT1 ID"/>
+     <TextBox Grid.Column="4" Text="{Binding AuxiliaryFromUtc}" Watermark="Receive from UTC (empty = now)"/>
+    </Grid>
+    <Grid ColumnDefinitions="*,8,*,8,Auto">
+     <TextBox Text="{Binding AuxiliaryUsername}" Watermark="ALGE Results username"/>
+     <TextBox Grid.Column="2" Text="{Binding AuxiliaryPassword}" PasswordChar="•" Watermark="Password (empty = saved)"/>
+     <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding AuxiliaryRememberPassword}"/>
+    </Grid>
+   </StackPanel>
+   <TextBox Text="{Binding AuxiliaryReplayPath}" IsVisible="{Binding IsAuxiliaryReplay}" Watermark="Path to raw ALGE ASCII file"/>
+   <StackPanel Classes="field">
+    <TextBlock Text="LOCAL CLOCK UTC OFFSET (MINUTES; MIXED CLOUD/LOCAL ONLY)" Classes="fieldLabel"/>
+    <NumericUpDown Value="{Binding AuxiliaryClockOffsetMinutes}" Minimum="-840" Maximum="840" FormatString="0" Width="150" HorizontalAlignment="Left"/>
+   </StackPanel>
+   <TextBlock Text="Leave blank when both clocks use the same time basis. For mixed cloud and local clocks, enter the local clock offset, e.g. +180 for UTC+03:00. Original timestamps stay unchanged." Classes="supportingText" TextWrapping="Wrap"/>
+   <Grid ColumnDefinitions="*,8,*,8,*">
+    <StackPanel Classes="field"><TextBlock Text="START WARNING (MS)" Classes="fieldLabel"/><NumericUpDown Value="{Binding BackupStartWarningMilliseconds}" Minimum="1" Maximum="10000" FormatString="0"/></StackPanel>
+    <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="FINISH WARNING (MS)" Classes="fieldLabel"/><NumericUpDown Value="{Binding BackupFinishWarningMilliseconds}" Minimum="1" Maximum="10000" FormatString="0"/></StackPanel>
+    <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="MISSING SIGNAL WAIT (S)" Classes="fieldLabel"/><NumericUpDown Value="{Binding BackupMissingGraceSeconds}" Minimum="1" Maximum="300" FormatString="0"/></StackPanel>
+   </Grid>
+   <Button Content="Save backup connection settings" Command="{Binding SaveAuxiliaryPreferencesCommand}" Classes="secondaryAction" HorizontalAlignment="Left"/>
+  </StackPanel>
+ </StackPanel>
+</UserControl>

@@ -4,7 +4,9 @@ namespace OpenSkiTime.Rewrite.Application;
 
 public static class TimingReplay
 {
-    public static TimingSnapshot Restore(TimingReplayData data, ITimingDecoderFactory factory)
+    // Session ownership is explicit: an open connection owned by the caller is not
+    // an interrupted capture. Without that context, preserve recovery diagnostics.
+    public static TimingSnapshot Restore(TimingReplayData data, ITimingDecoderFactory factory, IReadOnlySet<Guid>? activeSessionIds = null)
     {
         ArgumentNullException.ThrowIfNull(data); ArgumentNullException.ThrowIfNull(factory);
         var observations = new List<TimingObservation>();
@@ -20,7 +22,7 @@ public static class TimingReplay
                 observations.AddRange(Decode(decoder, packet));
             }
             foreach (var decoder in decoders.Values) { observations.AddRange(decoder.Complete()); }
-            if (!session.CleanStop)
+            if (!session.CleanStop && activeSessionIds?.Contains(session.Id) != true)
             {
                 observations.Add(new($"{session.Id:N}:interrupted", session.Id, 0, session.Options.Endpoint,
                     $"interrupted:{session.Id:N}", ObservationKind.Invalid, null, null, 0, null, false, "",

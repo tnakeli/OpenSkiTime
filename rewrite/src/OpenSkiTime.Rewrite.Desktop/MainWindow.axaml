@@ -61,7 +61,8 @@
         <Button Content="3  Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
         <Button Name="DrawMenuButton" Content="4  Start lists  ▾" Click="DrawMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsDrawSection}" />
         <Button Name="TimingMenuButton" Content="5  Timing  ▾" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
-        <Button Content="6  Results" Command="{Binding ShowResultsCommand}" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsResultsSection}" />
+        <Button Name="ResultsMenuButton" Content="6  Results  ▾" Click="ResultsMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsResultsSection}" />
+        <Button Name="TimingReportMenuButton" Content="7  Timing report  ▾" Click="TimingReportMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingReportSection}" />
       </StackPanel>
     </Border>
     <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsFormSection}">
@@ -96,12 +97,12 @@
                 <DataGrid Name="SeriesCalendarEventsGrid" Classes="raceGrid columnControls" ItemsSource="{Binding SeriesCalendarEvents}" SelectedItem="{Binding SelectedSeriesCalendarEvent}"
                           AutoGenerateColumns="False" IsReadOnly="True" Height="240" SelectionMode="Single" CanUserSortColumns="True" CanUserResizeColumns="True">
                   <DataGrid.Columns>
-                    <DataGridTextColumn Header="START" SortMemberPath="Start" Binding="{Binding StartDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
-                    <DataGridTextColumn Header="END" SortMemberPath="End" Binding="{Binding EndDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
+                    <DataGridTextColumn Header="START" SortMemberPath="StartDate" Binding="{Binding StartDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
+                    <DataGridTextColumn Header="END" SortMemberPath="EndDate" Binding="{Binding EndDate, StringFormat='{}{0:dd.MM.yyyy}'}" Width="110" />
                     <DataGridTextColumn Header="LOCATION" SortMemberPath="Location" Binding="{Binding Location}" Width="180" />
                     <DataGridTextColumn Header="NATION" SortMemberPath="Nation" Binding="{Binding Nation}" Width="110" />
-                    <DataGridTextColumn Header="EVENT" SortMemberPath="Event" Binding="{Binding Name}" Width="*" />
-                    <DataGridTextColumn Header="RACES" SortMemberPath="Races" Binding="{Binding CompetitionCount}" Width="100" />
+                    <DataGridTextColumn Header="EVENT" SortMemberPath="Name" Binding="{Binding Name}" Width="*" />
+                    <DataGridTextColumn Header="RACES" SortMemberPath="CompetitionCount" Binding="{Binding CompetitionCount}" Width="100" />
                   </DataGrid.Columns>
                 </DataGrid>
                 <DataGrid Name="SeriesCalendarCompetitionsGrid" Classes="raceGrid" ItemsSource="{Binding SeriesCalendarCompetitions}" AutoGenerateColumns="False" IsReadOnly="True" Height="130">
@@ -467,34 +468,13 @@
             </Expander>
             </StackPanel>
         </Border>
-        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSettingsSection}">
-          <StackPanel Spacing="12">
-            <StackPanel Spacing="1"><TextBlock Text="APPLICATION / SETTINGS" Classes="eyebrow" /><TextBlock Text="Settings" Classes="sectionTitle" /></StackPanel>
-            <Border Classes="subtleSurface" Padding="12"><local:TimingSettingsView /></Border>
-            <Border Classes="subtleSurface" Padding="12"><StackPanel Spacing="8">
-              <TextBlock Text="FIS API access" FontWeight="SemiBold" />
-              <TextBlock Text="Create an API key in FIS Member Section → API Access." Classes="supportingText" />
-              <Grid ColumnDefinitions="340,8,Auto,8,Auto" HorizontalAlignment="Left">
-                <TextBox PasswordChar="•" Text="{Binding FisApiKeyInput}" Watermark="{Binding FisApiKeyWatermark}" MaxLength="1024" />
-                <Button Grid.Column="2" Content="Save key" Command="{Binding SaveFisApiKeyCommand}" Classes="primaryAction" />
-                <Button Grid.Column="4" Content="Remove key" Command="{Binding RemoveFisApiKeyCommand}" Classes="secondaryAction" />
-              </Grid>
-              <TextBlock Text="{Binding FisApiKeyStatus}" Classes="supportingText" />
-              <TextBlock Text="FIS Member Section personal access token for XML test uploads. Required scopes: competition.files.write and competition.files.read." Classes="supportingText" />
-              <Grid ColumnDefinitions="340,8,Auto,8,Auto" HorizontalAlignment="Left">
-                <TextBox PasswordChar="•" Text="{Binding FisMemberTokenInput}" Watermark="Member Section personal access token" MaxLength="1024" />
-                <Button Grid.Column="2" Content="Save token" Command="{Binding SaveFisMemberTokenCommand}" Classes="primaryAction" />
-                <Button Grid.Column="4" Content="Remove token" Command="{Binding RemoveFisMemberTokenCommand}" Classes="secondaryAction" />
-              </Grid>
-              <TextBlock Text="The key stays in this Windows account's credential store. Downloaded FIS lists stay in local application data." Classes="supportingText" />
-            </StackPanel></Border>
-          </StackPanel>
-        </Border>
+        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSettingsSection}"><local:SettingsView /></Border>
       </StackPanel>
     </ScrollViewer>
     <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />
     <local:TimingView Name="TimingWorkspace" Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsTimingSection}" />
     <local:ResultsView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsResultsSection}" />
+    <local:TimingReportView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsTimingReportSection}" />
     <Border Grid.Row="3" Classes="statusBar" Classes.error="{Binding IsError}"
             BorderThickness="0,1,0,0" Padding="22,8">
       <StackPanel Orientation="Horizontal" Spacing="8">

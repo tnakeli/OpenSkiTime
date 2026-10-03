@@ -3,6 +3,7 @@
     <Project Path="src/OpenSkiTime.Rewrite.Domain/OpenSkiTime.Rewrite.Domain.csproj" />
     <Project Path="src/OpenSkiTime.Rewrite.Timing/OpenSkiTime.Rewrite.Timing.csproj" />
     <Project Path="src/OpenSkiTime.Rewrite.Devices/OpenSkiTime.Rewrite.Devices.csproj" />
+    <Project Path="src/OpenSkiTime.Rewrite.Recognition/OpenSkiTime.Rewrite.Recognition.csproj" />
     <Project Path="src/OpenSkiTime.TimyUsbHost/OpenSkiTime.TimyUsbHost.csproj" />
     <Project Path="src/OpenSkiTime.Rewrite.Application/OpenSkiTime.Rewrite.Application.csproj" />
     <Project Path="src/OpenSkiTime.Rewrite.Persistence/OpenSkiTime.Rewrite.Persistence.csproj" />

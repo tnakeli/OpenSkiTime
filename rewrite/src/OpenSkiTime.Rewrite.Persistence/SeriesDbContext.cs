@@ -5,7 +5,7 @@ namespace OpenSkiTime.Rewrite.Persistence;
 
 public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> options) : DbContext(options)
 {
-    internal const string Format = "OpenSkiTime.Development/3";
+    internal const string Format = "OpenSkiTime.Development/4";
     internal DbSet<SeriesRow> Series => Set<SeriesRow>();
     internal DbSet<CompetitionRow> Competitions => Set<CompetitionRow>();
     internal DbSet<CompetitorRow> Competitors => Set<CompetitorRow>();
@@ -133,6 +133,8 @@ public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> op
         start.HasIndex(x => new { x.ListId, x.CompetitorId }).IsUnique();
         start.HasOne<StartListRow>().WithMany().HasForeignKey(x => x.ListId).OnDelete(DeleteBehavior.Restrict);
         ConfigureTiming(modelBuilder);
+        ConfigureTimingReport(modelBuilder);
+        ConfigureAuxiliaryTiming(modelBuilder);
         var approved = modelBuilder.Entity<ApprovedResultRow>();
         approved.ToTable("ApprovedResults");
         approved.HasKey(x => x.Id);

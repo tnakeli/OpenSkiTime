@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using OpenSkiTime.Rewrite.Application;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
@@ -7,6 +8,16 @@ public partial class MainWindow
 {
     internal Flyout? CalendarFilterMenu { get; private set; }
     private readonly List<ColumnHeaderControls> _calendarHeaders = [];
+    private static CalendarColumn? CalendarColumnFor(string? member) => member switch
+    {
+        nameof(FisCalendarEvent.StartDate) => CalendarColumn.Start,
+        nameof(FisCalendarEvent.EndDate) => CalendarColumn.End,
+        nameof(FisCalendarEvent.Location) => CalendarColumn.Location,
+        nameof(FisCalendarEvent.Nation) => CalendarColumn.Nation,
+        nameof(FisCalendarEvent.Name) => CalendarColumn.Event,
+        nameof(FisCalendarEvent.CompetitionCount) => CalendarColumn.Races,
+        _ => null
+    };
 
     private void InstallCalendarHeaders()
     {
@@ -15,7 +26,7 @@ public partial class MainWindow
         grid.Sorting -= CalendarGridSorting; grid.Sorting += CalendarGridSorting;
         foreach (var column in grid.Columns)
         {
-            if (!Enum.TryParse<CalendarColumn>(column.SortMemberPath, out var key)) { continue; }
+            if (CalendarColumnFor(column.SortMemberPath) is not { } key) { continue; }
             var label = column.Header?.ToString() ?? "";
             column.HeaderTemplate = new FuncDataTemplate<string>((_, _) =>
             {
@@ -35,7 +46,7 @@ public partial class MainWindow
     {
         e.Handled = true;
         if (_gridViewModel is { IsSeriesCalendarBusy: false } vm
-            && Enum.TryParse<CalendarColumn>(e.Column.SortMemberPath, out var key))
+            && CalendarColumnFor(e.Column.SortMemberPath) is { } key)
         { vm.SortCalendar(key, vm.CalendarSortDirection(key) == false); }
     }
 

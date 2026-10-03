@@ -1,0 +1,34 @@
+OpenSkiTime offline recognition components
+
+English language model
+Project: tesseract-ocr/tessdata_fast
+File: eng.traineddata (distributed unchanged)
+Pinned revision: 87416418657359cb625c412a48b6e1d6d41c29bd
+Source: https://github.com/tesseract-ocr/tessdata_fast/tree/87416418657359cb625c412a48b6e1d6d41c29bd
+File source: https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata
+SHA-256: 7D4322BD2A7749724879683FC3912CB542F19906C83BCC1A52132556427170B2
+License: Apache License 2.0; see Apache-2.0.txt.
+License source: https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/LICENSE
+
+Managed OCR wrapper
+NuGet package: Tesseract 5.2.0
+Author: Charles Weld
+Copyright 2012-2020 Charles Weld
+Source: https://github.com/charlesw/tesseract/tree/5.2.0
+License: Apache License 2.0; see Apache-2.0.txt.
+License source: https://raw.githubusercontent.com/charlesw/tesseract/5.2.0/LICENSE.txt
+
+Native image library included in the Tesseract NuGet package
+Component: Leptonica 1.82.0 (leptonica-1.82.0.dll)
+Copyright (C) 2001-2020 Leptonica. All rights reserved.
+Source: https://github.com/DanBloomberg/leptonica/tree/1.82.0
+License: see Leptonica-1.82.0.txt.
+License source: https://raw.githubusercontent.com/DanBloomberg/leptonica/1.82.0/leptonica-license.txt
+
+Native OCR engine included in the Tesseract NuGet package
+Component: Tesseract (tesseract50.dll)
+Source project: https://github.com/tesseract-ocr/tesseract
+License: Apache License 2.0; see Apache-2.0.txt.
+
+The model is downloaded and verified at build time. Recognition does not
+download models or send image content to a network service at runtime.

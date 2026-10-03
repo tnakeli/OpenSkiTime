@@ -10,6 +10,27 @@ namespace OpenSkiTime.Rewrite.Tests;
 
 public sealed class FisResultSubmissionTests
 {
+    [Theory]
+    [InlineData("FIN9991.xml")]
+    [InlineData("FIN9991.timing.xml")]
+    public async Task ApprovedResultAndTimingReportArtifactsShareTestOnlySubmission(string fileName)
+    {
+        var xml = Encoding.UTF8.GetBytes("<SyntheticApprovedXml />");
+        using var handler = new Handler(async (request, ct) =>
+        {
+            var parts = Assert.IsType<MultipartFormDataContent>(request.Content).ToArray();
+            var file = parts.Single(x => x.Headers.ContentDisposition!.Name!.Trim('"') == "files[]");
+            Assert.Equal(fileName, file.Headers.ContentDisposition!.FileName!.Trim('"'));
+            Assert.Equal(xml, await file.ReadAsByteArrayAsync(ct));
+            Assert.Equal("true", await parts.Single(x => x.Headers.ContentDisposition!.Name!.Trim('"') == "testMode").ReadAsStringAsync(ct));
+            Assert.Equal(Token, request.Headers.Authorization!.Parameter);
+            return Response(Payload());
+        });
+        using var http = new HttpClient(handler); using var client = new FisResultSubmissionClient(http);
+        Assert.True((await client.UploadAsync(new ApprovedFisXmlArtifact(Guid.NewGuid(), fileName, xml), Token)).Submission.TestMode);
+        await Assert.ThrowsAsync<DomainValidationException>(() => client.UploadAsync(new ApprovedFisXmlArtifact(Guid.Empty, fileName, xml), Token));
+    }
+
     private static readonly Guid s_uuid = new("00000000-0000-0000-0000-000000000123");
     private const string Token = "synthetic-member-token";
     private static string Payload(bool complete = false, bool testMode = true) => JsonSerializer.Serialize(new

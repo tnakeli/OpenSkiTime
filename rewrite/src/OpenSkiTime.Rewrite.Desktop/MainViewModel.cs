@@ -6,13 +6,14 @@ using OpenSkiTime.Rewrite.Domain;
 
 namespace OpenSkiTime.Rewrite.Desktop;
 
-public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Results, Settings }
+public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Results, TimingReport, Settings }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
     CategoryRulePresetStore? categoryRulePresetStore = null,
     RecentSeriesStore? recentSeriesStore = null, TimingPreferencesStore? timingPreferencesStore = null,
-    HttpClient? informationHttp = null) : ObservableObject, IDisposable
+    HttpClient? informationHttp = null, TimingReportDefaultsStore? reportDefaultsStore = null,
+    FisTimingDeviceCache? timingDeviceCache = null, HttpClient? submissionHttp = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private readonly RecentSeriesStore _recentSeriesStore = recentSeriesStore ?? new();
@@ -54,6 +55,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(IsDrawSection))]
     [NotifyPropertyChangedFor(nameof(IsTimingSection))]
     [NotifyPropertyChangedFor(nameof(IsResultsSection))]
+    [NotifyPropertyChangedFor(nameof(IsTimingReportSection))]
+    [NotifyPropertyChangedFor(nameof(ActiveRaceLabel))]
     [NotifyPropertyChangedFor(nameof(IsFormSection))]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private WorkspaceSection _activeSection = WorkspaceSection.Series;
@@ -64,9 +67,11 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public bool IsDrawSection => ActiveSection == WorkspaceSection.Draw;
     public bool IsTimingSection => ActiveSection == WorkspaceSection.Timing;
     public bool IsResultsSection => ActiveSection == WorkspaceSection.Results;
-    public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection;
+    public bool IsTimingReportSection => ActiveSection == WorkspaceSection.TimingReport;
+    public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection && !IsTimingReportSection;
     public string ActiveRaceLabel => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
-        ? $"{race.Values.ShortLabel}  /  Run {_activeRaceRun}  ▾" : "Choose competition  ▾";
+        ? IsResultsSection || IsTimingReportSection ? $"{race.Values.ShortLabel}  ▾"
+            : $"{race.Values.ShortLabel}  /  Run {_activeRaceRun}  ▾" : "Choose competition  ▾";
     public string ActiveRaceName => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
         ? race.Values.Name : string.Empty;
     public bool ActiveRaceUsesTiming => IsTimingSection || (!IsDrawSection && _activeRaceSection == WorkspaceSection.Timing);
@@ -103,9 +108,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         if (!IsResultsSection) { return; }
         var selected = FisCompetitions.FirstOrDefault(x => x.Id == _activeRaceId)
             ?? FisCompetitions.FirstOrDefault();
-        if (Equals(ResultsCompetition, selected)) { await LoadResultsAsync(); }
-        else { ResultsCompetition = selected; }
-        if (selected is not null) { SetActiveRace(selected, _activeRaceId == selected.Id ? _activeRaceRun : 1, _activeRaceSection); }
+        await SelectResultsCompetitionAsync(selected);
     }
     [RelayCommand] private void ShowSettings()
     {
@@ -115,7 +118,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     private void SwitchSection(WorkspaceSection section)
     {
-        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors or WorkspaceSection.Draw or WorkspaceSection.Timing or WorkspaceSection.Results) && !CanEditCompetitions) { return; }
+        if ((section is WorkspaceSection.Competitions or WorkspaceSection.Competitors or WorkspaceSection.Draw or WorkspaceSection.Timing or WorkspaceSection.Results or WorkspaceSection.TimingReport) && !CanEditCompetitions) { return; }
         if (IsDrawBusy) { return; }
         if (section != ActiveSection && !CanLeaveDrawInput()) { return; }
         if (section != ActiveSection && HasDeskDrafts
@@ -235,7 +238,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
-            if (!await FlushRaceInformationAsync()) { return; }
+            if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
             var values = DraftSeries().Validated();
             var path = await dialogs.ChooseNewAsync(SafeFileName(values.Name));
             if (path is null) { return; }
@@ -279,7 +282,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
 
     private async Task OpenPathAsync(string path)
     {
-        if (!await FlushRaceInformationAsync()) { return; }
+        if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
         var details = await workspace.OpenAsync(path);
         ClearActiveRace();
         ResetTimingUi();
@@ -318,7 +321,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
-            if (!await FlushRaceInformationAsync()) { return; }
+            if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
             await workspace.CloseAsync();
             StopInformationTracking(); _informationKey = null;
             ClearActiveRace();
@@ -354,7 +357,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
-            if (!await FlushRaceInformationAsync()) { return; }
+            if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
             var revision = _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
             var details = await workspace.SaveSeriesAsync(DraftSeries(), revision);
             Apply(details);
@@ -369,7 +372,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             EnsureDeskClean();
             if (_current is null) { throw new SeriesFileException("Open an event series first."); }
-            if (!await FlushRaceInformationAsync()) { return; }
+            if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
             var path = await dialogs.ChooseBackupAsync(SafeFileName(_current.Values.Name));
             if (path is null) { return; }
             await workspace.BackupAsync(path);
@@ -407,7 +410,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
-            if (!await FlushRaceInformationAsync()) { return; }
+            if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
             var revision = workspace.Timing?.IsActive == true
                 ? (await workspace.ReadAsync()).Revision
                 : _current?.Revision ?? throw new SeriesFileException("Open an event series first.");

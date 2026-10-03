@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -16,6 +17,28 @@ namespace OpenSkiTime.Rewrite.Tests;
 
 public partial class DesktopWorkflowTests
 {
+    private static void SelectTimingSettingsTab(Window window)
+    {
+        window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+        var tabs = window.GetVisualDescendants().OfType<TabControl>().Single(x => x.Name == "SettingsTabs");
+        var tab = tabs.Items.OfType<TabItem>().Single(x => Equals(x.Header, "Timing devices"));
+        PressSettingsControl(window, tab);
+        Assert.True(tab.IsSelected);
+    }
+
+    private static void PressSettingsControl(Window window, Control control)
+    {
+        window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        control.BringIntoView(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        // Headless layout does not itself present the scrolled input scene. Advance the same frame a user clicks.
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)!.Value;
+        Assert.InRange(point.X, 0, window.Bounds.Width);
+        Assert.InRange(point.Y, 0, window.Bounds.Height);
+        window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+    }
+
     [AvaloniaFact]
     public async Task EditingCompetitionIntermediatesUpdatesConnectedTimingColumnsWithoutRedrawing()
     {
@@ -144,6 +167,7 @@ public partial class DesktopWorkflowTests
             vm.TimingIntermediateChannels = "2"; // A configured Timy channel must not block a race with no intermediates.
             vm.FollowTimingOrder = false; // This reference scenario deliberately operates with manual bib selection.
             vm.ShowSettingsCommand.Execute(null);
+            SelectTimingSettingsTab(window);
             Click(window, "Connect");
             await vm.ConnectTimingCommand.ExecutionTask!;
             await vm.ReturnToTimingCommand.ExecuteAsync(null);
@@ -267,6 +291,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal("2:08.00", vm.TimingRows[0].TotalTime);
             Assert.True(view.FindControl<DataGrid>("RankingGrid")!.Columns.Single(x => Equals(x.Header, "TOTAL")).IsVisible);
             vm.ShowSettingsCommand.Execute(null);
+            SelectTimingSettingsTab(window);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             Assert.False(vm.HasTimingRun);

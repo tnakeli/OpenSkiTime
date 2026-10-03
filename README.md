@@ -14,6 +14,7 @@ OpenSkiTime is a desktop race-office application for alpine skiing. It brings re
 4. **Start lists:** choose a competition and run, draw the first-run bib order, then export TSV or open a printable view. Prepare Run 2 from classified Run 1 results, with first-run times visible alongside its starters.
 5. **Timing:** use **At start**, **Running**, **Timestamps** and **Ranking** to follow the race. Reorder starters, assign impulses, see elapsed times and splits, and classify competitors. Original device input and correction history remain in the event file.
 6. **Results:** prepare jury, course, forerunner and weather information; review calculated race points and the FIS penalty; then record TD approval and export the approved XML. Optional FIS submission is currently limited to test mode.
+7. **Timing report:** review automatically populated A timing, collect optional B and hand-clock evidence, check receipt images, and prepare the alpine timing report XML. Equipment and timekeeper defaults are reusable; FIS submission remains test-only.
 
 ### 1 · Event series
 
@@ -65,7 +66,13 @@ Prepare race information before timing begins, or complete it afterwards. Jury m
 
 After the required runs are complete, Results assembles classified times and race points and calculates the FIS penalty using the saved starter points and matching points-list rule tables. Review the finishers, best starters and calculation with the TD. **TD approves · create XML** stores the exact XML and race-information snapshot as an immutable revision in the event file; **Export approved XML** writes that saved revision.
 
-**Send XML · test mode** can validate the approved file through the FIS Member API using a separate Member Section personal access token. It does not publish official results. See [race information and XML operation](docs/results-race-information.md) and [FIS penalty calculation](docs/fis-penalty-review.md).
+**Send XML · test mode** can validate the approved file through the FIS Member API using the single FIS API key saved in Settings. It does not publish official results. See [race information and XML operation](docs/results-race-information.md) and [FIS penalty calculation](docs/fis-penalty-review.md).
+
+### 7 · Timing report
+
+Review A timestamps and the first, last and fastest samples for each run. An optional independent B connection supplies backup observations without changing race results. **Show B** in Timing displays the backup comparison for 30 seconds; missing signals and excessive differences remain visible as warnings.
+
+Results and Timing report follow the competition selected in the shared header; the run remains available when returning to Timing. The report reads that competition's committed timing data automatically and saves edits in the background. Bring in B or hand-clock output from a temporarily connected ALGE device, or drop one or more printed receipt/screen images into the B, hand-start or hand-finish area. Local OCR proposes timestamp matches for the operator to verify. Originals, accepted assignments and report history stay in the event file. Create and export an approved XML revision or submit it to FIS in test mode. PDF generation is not included. See [timing report operation](docs/timing-report.md) and [Settings](docs/settings.md).
 
 ## Timing sources and live publishing
 
