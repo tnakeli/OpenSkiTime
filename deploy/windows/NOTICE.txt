@@ -1,0 +1,24 @@
+OpenSkiTime is currently in pre-release development.
+
+This package is unsigned. Windows may display an unknown-publisher warning.
+Download packages only from https://github.com/tnakeli/OpenSkiTime/releases.
+
+Rehearse the complete race workflow with the simulator and your actual timing
+equipment before race day. Use independent backup timing.
+
+Local race operation works offline. Cloud live publishing and external lookups
+are optional and send data only when requested by the operator. See
+https://openskiti.me/privacy/ for details.
+
+ALGE native USB operation requires the vendor driver and SDK, installed
+separately. These components are not included in this package. The isolated
+TimyUsbHost transport helper requires Windows .NET Framework 4.8, included in
+supported Windows 11 installations. The .NET 10 runtime is bundled for the
+main application and live timing processes.
+
+Back up event series before changing versions. Incompatible development files
+are rejected without modification. Automatic schema upgrades are not available.
+Uninstalling the application does not delete event files or user preferences.
+
+OpenSkiTime is distributed under the MIT license. Included dependencies retain
+their respective licenses; recognition notices are included under licenses/.

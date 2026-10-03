@@ -85,7 +85,9 @@ public sealed class StandaloneE2ETests
         var session = publisher.ResumeSession!;
         using var http = new HttpClient { BaseAddress=new(endpoint) };
         foreach (var next in SyntheticRace.Simulate(state)) { publisher.Offer(state=next); }
-        await UntilState(http,session,s=>s.UpdatedAt==state.UpdatedAt);
+        // Every event in a coalesced batch carries the same snapshot timestamp.
+        // Wait for worker acknowledgement of the whole batch, not its first event.
+        await ProcessFixture.Until(()=>publisher.Health.State==PublisherState.Running && publisher.Health.LastEvent==state.UpdatedAt);
         var actual = await Read(http,session);
         Assert.Equal(50,actual.Competitors.Length);
         Assert.Contains(actual.Runs[0].Results,r=>r.Status==LiveStatus.DNS);
