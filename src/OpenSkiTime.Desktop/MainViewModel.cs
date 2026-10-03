@@ -6,14 +6,15 @@ using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Desktop;
 
-public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Results, TimingReport, Settings }
+public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Results, TimingReport, Settings, PdfFactory }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
     CategoryRulePresetStore? categoryRulePresetStore = null,
     RecentSeriesStore? recentSeriesStore = null, TimingPreferencesStore? timingPreferencesStore = null,
     HttpClient? informationHttp = null, TimingReportDefaultsStore? reportDefaultsStore = null,
-    FisTimingDeviceCache? timingDeviceCache = null, HttpClient? submissionHttp = null) : ObservableObject, IDisposable
+    FisTimingDeviceCache? timingDeviceCache = null, HttpClient? submissionHttp = null,
+    Reporting.ReportGenerationService? pdfGenerator = null, Reporting.IPdfOpener? pdfOpener = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private readonly RecentSeriesStore _recentSeriesStore = recentSeriesStore ?? new();
@@ -56,6 +57,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(IsTimingSection))]
     [NotifyPropertyChangedFor(nameof(IsResultsSection))]
     [NotifyPropertyChangedFor(nameof(IsTimingReportSection))]
+    [NotifyPropertyChangedFor(nameof(IsPdfFactorySection))]
     [NotifyPropertyChangedFor(nameof(ActiveRaceLabel))]
     [NotifyPropertyChangedFor(nameof(IsFormSection))]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
@@ -68,9 +70,9 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public bool IsTimingSection => ActiveSection == WorkspaceSection.Timing;
     public bool IsResultsSection => ActiveSection == WorkspaceSection.Results;
     public bool IsTimingReportSection => ActiveSection == WorkspaceSection.TimingReport;
-    public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection && !IsTimingReportSection;
+    public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection && !IsTimingReportSection && !IsPdfFactorySection;
     public string ActiveRaceLabel => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
-        ? IsResultsSection || IsTimingReportSection ? $"{race.Values.ShortLabel}  ▾"
+        ? IsResultsSection || IsTimingReportSection || IsPdfFactorySection ? $"{race.Values.ShortLabel}  ▾"
             : $"{race.Values.ShortLabel}  /  Run {_activeRaceRun}  ▾" : "Choose competition  ▾";
     public string ActiveRaceName => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
         ? race.Values.Name : string.Empty;

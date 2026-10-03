@@ -1,0 +1,26 @@
+# FIS referee report reference and branding
+
+Reviewed on 2026-10-03. The supplied referee-reference-preview image defines the form's content and layout. It corresponds to the English 2022 Report by the Referee form: competition metadata, nine DSQ writing rows, DNS/NPS/DNF number grids and a publication/referee row. Reference images and downloaded documents remain outside Git.
+
+## Official sources
+
+- [FIS Event Marketing](https://www.fis-ski.com/inside-fis/media-marketing/event-marketing) currently lists the [Alpine Marketing Guide 2026/27](https://assets.fis-ski.com/f/252177/x/e1c805c002/mg_ski_al_26_27_clean_version.pdf), published on 2026-09-25. This confirms the current seasonal marketing context; World Cup sponsor logos are not added to the referee form.
+- The colour FIS logo was downloaded from the [current official website asset](https://www.fis-ski.com/_next/static/media/logo.737d5a82.svg), referenced by [fis-ski.com](https://www.fis-ski.com/) on the review date. The unmodified SVG is embedded as `OpenSkiTime.Reporting/Assets/fis-logo.svg`. SHA-256: `85e3b295db5a404fac3e40fccef266eca73d8467bbfeec06f5dce3d62b38f22f`.
+- [FIS Brand Book](https://assets.fis-ski.com/f/252177/x/9678207bfe/fis_brand_book.pdf), page 6, specifies blue `#002395` (RGB 0/35/149, Pantone Reflex Blue) and yellow `#F0AB00` (RGB 240/171/0, Pantone 130 C). These values are used for the top and bottom stripes. The SVG retains its original gradients. Downloaded book SHA-256: `3cc050605540923e9b23058a5449dcc7fdd0bebbc4db633d767ef410d19f685b`. The book was retrieved from the official asset host; no newer dated corporate palette was established.
+
+The FIS logo remains a third-party FIS trademark and artwork, rather than OpenSkiTime artwork covered by the project's MIT license. Its use here identifies the requested referee-form style; it does not imply FIS certification or endorsement of OpenSkiTime. No runtime network access is required.
+
+## Field mapping and layout
+
+`RefereeReportDocument` uses a dedicated A4 layout with fixed margins of 15 mm top/bottom and 12 mm left/right, independent of PDF settings. The default form fits one page. The embedded PDF background is omitted entirely so organizer/sponsor header and footer text cannot appear on the FIS form. The official FIS logo and blue/yellow stripes appear above the title; the corresponding stripes and federation name form the footer. Run identity is printed beside the title. No OpenSkiTime footer or general-report page numbering is added.
+
+- Place and country come from the competition calendar, falling back to the event series when no calendar is available. Codex, event name, date and discipline come from the selected competition. Category comes from saved race information; gender comes from the calendar or selected run's competitor genders.
+- DSQ rows contain bib, surname/first name, nation, gate, gate judge and reason in the reference column order. Only the requested run is included, across its saved gender groups. At least nine rows are available for handwriting. Additional rows and long notes continue across pages with repeated DSQ headings; content is not truncated.
+- DNS has at least three rows, NPS one and DNF four. Each status uses individual bib cells. There are 14 cells per row; the label occupies the first four cells, leaving 38 DNS, 10 NPS and 52 DNF writing cells in the default form. Extra rows are added automatically when these capacities are exceeded. Tables continue onto another page when necessary, preserving every bib once. Large DSQ lists and long notes likewise continue across pages.
+- Time published, Deadline and publication Date are blank for manual entry. The Referee contains the saved referee's name/nation when available, with writing space for a signature. No technical-delegate signature field or full jury listing is added to this form.
+
+Competition source renderer version is 5, making earlier competition PDFs Outdated after reopening PDF Factory. Existing PDFs remain accessible until regeneration. Timing calculations, raw capture, audit history and series-file format are unchanged.
+
+## Verification
+
+`RefereeReportMatchesFormFieldsAndPreservesEverySelectedRunStatus` renders and parses real PDFs using test-only PdfPig. Cases cover an empty form, a populated single-page form, 160 competitors and long DSQ notes, all with a synthetic organizer/sponsor background configured. Extreme and invalid general print-profile margins do not affect the form's fixed layout. Assertions check that background header/footer text and OpenSkiTime text are absent, alongside metadata and reference labels, selected-run filtering, every bib exactly once, gate-judge/notes column order, complete long-note text and A4 dimensions. `RefereeStatusTablesExpandWithoutLosingBibs` covers 30 DSQ, 120 DNS, 250 DNF and 50 NPS entries separately. `OtherReportsRetainSeriesBackgroundHeaderAndFooter` checks that the same background and OpenSkiTime footer still appear on a competition entry report. Empty and small forms fit one page regardless of PDF settings. Poppler renders are reviewed separately for visual fidelity; test databases and PDFs remain outside Git. Public screenshots use fictional data only.

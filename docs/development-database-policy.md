@@ -6,4 +6,6 @@ The current development format marker is `OpenSkiTime.Development/4`. When makin
 
 Compatible files still support offline reopening and SQLite backup/transfer, including raw inputs and audit history. Tests verify creation without an EF migration-history table, incompatible-file preservation, backup/reopen, immutable history and interrupted-capture replay. No operator database is reset as an error-recovery action.
 
+PDF Factory uses an optional extension table for embedded branding and generation receipts. Supported `/4` files without it open with defaults and are not modified by reading PDF settings. Only an explicit profile save or successful generation creates that extension transactionally; it does not upgrade the race schema or change the format marker. See [PDF Factory storage](pdf-factory.md).
+
 Introduce migrations when releases begin, using the first released schema as the supported baseline. At that point implement and test upgrade backups, preservation and failure recovery. Older development files are rejected without modification.

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/OpenSkiTime.Reporting/OpenSkiTime.Reporting.csproj" />
     <Project Path="src/OpenSkiTime.Domain/OpenSkiTime.Domain.csproj" />
     <Project Path="src/OpenSkiTime.Timing/OpenSkiTime.Timing.csproj" />
     <Project Path="src/OpenSkiTime.Devices/OpenSkiTime.Devices.csproj" />

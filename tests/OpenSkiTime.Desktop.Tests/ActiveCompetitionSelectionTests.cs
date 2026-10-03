@@ -14,7 +14,7 @@ namespace OpenSkiTime.Tests;
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
-    public async Task ResultsAndTimingReportShareCompetitionOnlySelectorAndPreserveTimingRun()
+    public async Task ResultsTimingReportAndPdfFactoryShareCompetitionOnlySelectorAndPreserveTimingRun()
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-active-competition", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -61,6 +61,10 @@ public partial class DesktopWorkflowTests
                 Assert.True(vm.IsTimingReportSection);
                 Assert.Equal(first.Id, vm.ReportCompetition!.Id);
                 AssertCompetitionOnlySelection(window, vm, selector, "SL1");
+                (await OpenCompetitionNavigationAsync(window, vm, "PdfFactoryButton", "SL1")).Hide();
+                Assert.True(vm.IsPdfFactorySection);
+                Assert.Equal(first.Id, vm.PdfCompetition!.Id);
+                AssertCompetitionOnlySelection(window, vm, selector, "SL1");
                 Assert.True(vm.IsActiveRaceDestination(first.Id, 2, WorkspaceSection.Timing));
                 await vm.OpenTimingRunCommand.ExecuteAsync(vm.ActiveRaceDestination);
                 Assert.Equal(2, vm.TimingRun);
@@ -83,6 +87,24 @@ public partial class DesktopWorkflowTests
                 reportMenu.Hide();
                 Assert.True(vm.IsTimingReportSection);
                 Assert.Equal(first.Id, vm.ReportCompetition!.Id);
+                var pdfMenu = await OpenCompetitionNavigationAsync(window, vm, "PdfFactoryButton", "SL1");
+                var pdfChoice = pdfMenu.Items.OfType<MenuItem>().Single(item => Equals(item.CommandParameter, second));
+                pdfChoice.Command!.Execute(pdfChoice.CommandParameter);
+                await vm.SelectActiveCompetitionCommand.ExecutionTask!;
+                pdfMenu.Hide();
+                Assert.True(vm.IsPdfFactorySection);
+                Assert.Equal(second.Id, vm.PdfCompetition!.Id);
+                AssertCompetitionOnlySelection(window, vm, selector, "SL2");
+                Assert.Contains(vm.PdfReports, row => row.FileName.StartsWith("SL2_", StringComparison.Ordinal));
+                Assert.DoesNotContain(vm.PdfReports, row => row.FileName.StartsWith("SL1_", StringComparison.Ordinal));
+                PressSettingsControl(window, selector);
+                var activePdfMenu = Assert.IsType<MenuFlyout>(selector.Flyout);
+                var firstChoice = activePdfMenu.Items.OfType<MenuItem>().Single(item => item.CommandParameter is CompetitionDetails race && race.Id == first.Id);
+                firstChoice.Command!.Execute(firstChoice.CommandParameter);
+                await vm.SelectActiveCompetitionCommand.ExecutionTask!;
+                activePdfMenu.Hide();
+                Assert.True(vm.IsPdfFactorySection);
+                Assert.Equal(first.Id, vm.PdfCompetition!.Id);
                 await vm.ShowResultsCommand.ExecuteAsync(null);
                 Assert.Equal(first.Id, vm.ResultsCompetition!.Id);
             }
@@ -110,7 +132,12 @@ public partial class DesktopWorkflowTests
     {
         var button = window.FindControl<Button>(buttonName)!;
         PressSettingsControl(window, button);
-        var opening = buttonName == "ResultsMenuButton" ? vm.ShowResultsCommand.ExecutionTask : vm.ShowTimingReportCommand.ExecutionTask;
+        var opening = buttonName switch
+        {
+            "ResultsMenuButton" => vm.ShowResultsCommand.ExecutionTask,
+            "PdfFactoryButton" => vm.ShowPdfFactoryCommand.ExecutionTask,
+            _ => vm.ShowTimingReportCommand.ExecutionTask,
+        };
         Assert.NotNull(opening);
         await opening;
         for (var attempt = 0; attempt < 100 && button.Flyout is not MenuFlyout { IsOpen: true }; attempt++)

@@ -71,7 +71,7 @@ public partial class MainWindow : Window
     private void ActiveRace_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel vm) { return; }
-        if ((vm.IsResultsSection || vm.IsTimingReportSection) && sender is Button button)
+        if ((vm.IsResultsSection || vm.IsTimingReportSection || vm.IsPdfFactorySection) && sender is Button button)
         {
             ShowCompetitionMenu(button, vm);
             return;
@@ -97,7 +97,7 @@ public partial class MainWindow : Window
     private static void ShowCompetitionMenu(Button button, MainViewModel vm)
     {
         var menu = new MenuFlyout { Placement = Avalonia.Controls.PlacementMode.Bottom };
-        foreach (var competition in vm.FisCompetitions)
+        foreach (var competition in vm.IsPdfFactorySection ? vm.Competitions : vm.FisCompetitions)
         {
             var item = new MenuItem { Header = competition.Values.ShortLabel,
                 Command = vm.SelectActiveCompetitionCommand, CommandParameter = competition };
@@ -109,8 +109,16 @@ public partial class MainWindow : Window
             }
             menu.Items.Add(item);
         }
-        if (menu.Items.Count == 0) { menu.Items.Add(new MenuItem { Header = "Add a FIS competition first", IsEnabled = false }); }
+        if (menu.Items.Count == 0)
+        { menu.Items.Add(new MenuItem { Header = vm.IsPdfFactorySection ? "Add a competition first" : "Add a FIS competition first", IsEnabled = false }); }
         ShowRaceMenu(button, menu, null);
+    }
+
+    private async void PdfFactoryMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel vm || vm.IsDrawBusy || vm.IsPdfBusy) { return; }
+        await vm.ShowPdfFactoryCommand.ExecuteAsync(null);
+        if (vm.IsPdfFactorySection) { ShowCompetitionMenu(button, vm); }
     }
 
     private async void DrawMenu_Click(object? sender, RoutedEventArgs e)
