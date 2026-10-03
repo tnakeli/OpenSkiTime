@@ -1,0 +1,97 @@
+name: Windows release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+jobs:
+  package:
+    if: github.repository == 'tnakeli/OpenSkiTime'
+    runs-on: windows-2025
+    timeout-minutes: 30
+    outputs:
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Validate release source
+        shell: pwsh
+        run: ./scripts/Assert-ReleaseSource.ps1
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($version.Contains('-').ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: dotnet test rewrite/OpenSkiTime.Rewrite.slnx -c Release
+      - name: Build unsigned Windows installer and portable package
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (!(Test-Path -LiteralPath $compiler)) { throw 'Pinned Windows runner must provide Inno Setup 6.' }
+          ./scripts/Package-Windows.ps1 -Version $env:RELEASE_VERSION -Iscc $compiler
+      - name: Test packaged child processes without an installed .NET runtime
+        shell: pwsh
+        run: ./scripts/Test-WindowsPackage.ps1 -PackageDirectory artifacts/windows/app
+      - name: Verify installer, reinstall and uninstall preservation
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/Test-WindowsInstaller.ps1 -Installer "artifacts/windows/OpenSkiTime-$env:RELEASE_VERSION-win-x64-setup.exe"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-release
+          path: |
+            artifacts/windows/*.exe
+            artifacts/windows/*.zip
+            artifacts/windows/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    needs: package
+    environment: production-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-release
+          path: release
+      - name: Publish immutable release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          PRERELEASE: ${{ needs.package.outputs.prerelease }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          Windows x64 installer and portable package. The .NET 10 runtime is included.
+
+          **Unsigned build:** Windows may show an unknown-publisher warning. Code signing is not enabled yet.
+
+          Rehearse before race day and back up event files before updating. Incompatible development series files are preserved and rejected; automatic schema upgrades are not available. ALGE native USB needs the vendor driver and SDK separately.
+
+          Compare downloaded files with SHA256SUMS.txt. Checksums verify file integrity, not publisher identity.
+          EOF
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" release/* --repo "$REPOSITORY" --verify-tag --title "OpenSkiTime $RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
+  website:
+    needs: [package, publish]
+    if: needs.package.outputs.prerelease == 'false'
+    uses: ./.github/workflows/website.yml
+    secrets: inherit

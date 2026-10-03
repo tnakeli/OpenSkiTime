@@ -50,6 +50,7 @@ coverage/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+website/dist/
 
 # OS files
 .DS_Store

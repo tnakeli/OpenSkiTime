@@ -157,9 +157,12 @@ static Process StartLocalServer(PublisherOptions options, string signingKey)
     var endpoint = new Uri(options.Endpoint);
     if (!endpoint.IsLoopback || endpoint.Scheme != "http") { throw new LiveValidationException("Managed local server must use loopback HTTP."); }
     var assembly = options.LocalServerAssembly ?? throw new LiveValidationException("Local server artifact missing.");
-    var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
+    var executable = Path.ChangeExtension(assembly, OperatingSystem.IsWindows() ? ".exe" : null);
+    var useAppHost = File.Exists(executable);
+    var start = new ProcessStartInfo(useAppHost ? executable : Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
     { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Path.GetDirectoryName(assembly)! };
-    start.ArgumentList.Add(assembly); start.ArgumentList.Add("--urls"); start.ArgumentList.Add(options.Endpoint);
+    if (!useAppHost) { start.ArgumentList.Add(assembly); }
+    start.ArgumentList.Add("--urls"); start.ArgumentList.Add(options.Endpoint);
     start.Environment["LiveTiming__SigningKey"] = signingKey;
     start.Environment["LiveTiming__PublicBaseUrl"] = options.Endpoint;
     start.Environment["Logging__LogLevel__Default"] = "Warning";
