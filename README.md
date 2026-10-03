@@ -1,5 +1,9 @@
 # OpenSkiTime
 
+[![Build, tests and security checks](https://github.com/tnakeli/OpenSkiTime/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/tnakeli/OpenSkiTime/actions/workflows/ci.yml?query=branch%3Amaster)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download/dotnet/10.0)
+
 OpenSkiTime is a desktop race-office application for alpine skiing. It brings registration, start lists, timing and result preparation into one compact workspace. Built with .NET 10 and Avalonia, it runs locally on Windows and keeps each event series in a portable `.ost` file. Local race operation works offline; FIS lookups and online publishing are optional.
 
 ![Race control showing the start order, athletes on course, timestamps and ranking](docs/screenshots/overview.png)
