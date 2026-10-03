@@ -91,12 +91,12 @@ internal sealed partial class SqliteSeriesFileSession : ITimingReportStore
     }
     public Task<long> SaveTimingReportAsync(TimingReportDraft draft, long expectedSeriesRevision, string operatorName,
         string reason, DateTimeOffset at, CancellationToken ct = default)
-        => SaveTimingReportCoreAsync(draft, expectedSeriesRevision, operatorName, reason, at, false, ct);
+        => SaveTimingReportCoreAsync(draft, expectedSeriesRevision, operatorName, reason, at, ct);
     public Task<long> ApplyTimingReportImportAsync(TimingReportDraft draft, long expectedSeriesRevision, string operatorName,
         string reason, DateTimeOffset at, CancellationToken ct = default)
-        => SaveTimingReportCoreAsync(draft, expectedSeriesRevision, operatorName, reason, at, true, ct);
+        => SaveTimingReportCoreAsync(draft, expectedSeriesRevision, operatorName, reason, at, ct);
     private async Task<long> SaveTimingReportCoreAsync(TimingReportDraft draft, long expectedSeriesRevision, string operatorName,
-        string reason, DateTimeOffset at, bool requireCurrentTiming, CancellationToken ct)
+        string reason, DateTimeOffset at, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
         if (string.IsNullOrWhiteSpace(operatorName) || string.IsNullOrWhiteSpace(reason))
@@ -107,18 +107,6 @@ internal sealed partial class SqliteSeriesFileSession : ITimingReportStore
         var saved = await WriteDeskAsync(async (db, series) =>
         {
             if (!await db.Competitions.AnyAsync(x => x.Id == draft.CompetitionId, ct)) { throw new DomainValidationException("Choose an existing competition."); }
-            if (requireCurrentTiming)
-            {
-                // This check and insertion share the write transaction. Raw capture/audit writes do not
-                // always increment Series.Revision, so the UI preview check alone is insufficient.
-                var runIds = await db.Runs.Where(x => x.CompetitionId == draft.CompetitionId).Select(x => x.Id).ToArrayAsync(ct);
-                var rows = await db.StartLists.Where(x => runIds.Contains(x.RunId)).ToArrayAsync(ct);
-                var current = new List<TimingReplayData>();
-                foreach (var list in rows.GroupBy(x => x.RunId).Select(x => x.MaxBy(y => y.Revision)!))
-                { current.Add(await ReadTimingAsync(list.Id, ct)); }
-                if (draft.SourceFingerprint != TimingReportProjection.Fingerprint(current))
-                { throw new DomainValidationException("A timing changed after the import preview. Refresh and review the image matches again."); }
-            }
             var revision = (await db.Set<TimingReportRow>().Where(x => x.CompetitionId == draft.CompetitionId).MaxAsync(x => (int?)x.Revision, ct) ?? 0) + 1;
             db.Add(new TimingReportRow { CompetitionId = draft.CompetitionId, Revision = revision, ValuesJson = json,
                 SavedAt = at, Operator = operatorName.Trim(), Reason = reason.Trim() });
@@ -233,8 +221,8 @@ internal sealed partial class SqliteSeriesFileSession : ITimingReportStore
                 && a.AFinish == b.AFinish && a.NetHundredths == b.NetHundredths;
             if (!SameA(report.First, projected.First) || !SameA(report.Last, projected.Last)
                 || report.BestBib != projected.BestBib || report.BestHundredths != projected.BestHundredths
-                || report.AllResultsA != projected.AllResultsA
-                || !report.MissedA.Select(x => x.Bib).Order().SequenceEqual(projected.MissedA.Select(x => x.Bib).Order()))
+                || projected.MissedA.Any(m => !report.MissedA.Any(r => r.Bib == m.Bib))
+                || report.MissedA.Any(m => !snapshot.Results.Any(r => r.Bib == m.Bib)))
             { throw new DomainValidationException("Report A samples, net times or failure declarations differ from the current timing calculation. Refresh A data."); }
             var auxiliary = await ReadAuxiliaryTimingAsync(source.List.Id, ct);
             var observations = auxiliary.Decode(decoders);

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using Avalonia.Media.Imaging;
@@ -22,17 +23,17 @@ public sealed partial class MainViewModel
     private readonly TesseractTimingImageRecognizer _reportRecognizer = new();
     public ObservableCollection<TimingReportImportRow> ReportImportPreview { get; } = [];
     public ObservableCollection<TimingReportImage> ReportImages { get; } = [];
+    public bool AllReportMatchesSelected => ReportImportPreview.Any(x => x.CanAccept)
+        && ReportImportPreview.Where(x => x.CanAccept).All(x => x.Accept);
     public IReadOnlyList<TimingReportImageRole> ReportImageRoles { get; } = Enum.GetValues<TimingReportImageRole>();
     public IReadOnlyList<int> ReportImportRuns => ReportRuns.Select(x => x.Run).ToArray();
     [ObservableProperty] private int? _reportImportRun;
     [ObservableProperty] private TimingReportImageRole _reportImageRole = TimingReportImageRole.B;
-    [ObservableProperty] private string _reportImageDevice = "";
-    [ObservableProperty] private string _reportImportStatus = "Drop one or more receipt/screen images from the same device here. Select its role and run first.";
+    [ObservableProperty] private string _reportImportStatus = "Reading receipt images locally. Images and detected text remain in this dialog only.";
     [ObservableProperty] private bool _reportImportVerified;
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AcceptReportImageMatchesCommand))]
     private bool _reportImportPreviewStale;
-    [ObservableProperty] private bool _replaceReportEvidence;
     [ObservableProperty] private TimingReportImportRow? _selectedReportImportRow;
     [ObservableProperty] private TimingReportImage? _selectedReportImage;
     [ObservableProperty]
@@ -63,7 +64,15 @@ public sealed partial class MainViewModel
     partial void OnReportImageRoleChanged(TimingReportImageRole value) { ReportMatchTolerance = value == TimingReportImageRole.B ? "1.0" : "2.0"; ClearReportPreview(); }
     partial void OnReportImportRunChanged(int? value) { if (!_reportRefreshingImportChoices) { ClearReportPreview(); } }
     private void ClearReportPreview()
-    { ReportImportPreview.Clear(); SelectedReportImportRow = null; ReportImportVerified = false; _importDraftSnapshot = null; _importTargetsSnapshot = null; ReportImportPreviewStale = false; }
+    {
+        foreach (var row in ReportImportPreview) { row.PropertyChanged -= ReportReceiptSelectionChanged; }
+        ReportImportPreview.Clear(); SelectedReportImportRow = null; ReportImportVerified = false;
+        _importDraftSnapshot = null; _importTargetsSnapshot = null; ReportImportPreviewStale = false;
+        OnPropertyChanged(nameof(AllReportMatchesSelected));
+    }
+
+    private void ReportReceiptSelectionChanged(object? sender, PropertyChangedEventArgs e)
+    { if (e.PropertyName == nameof(TimingReportImportRow.Accept)) { OnPropertyChanged(nameof(AllReportMatchesSelected)); } }
 
     private void SelectReportPreviewRowForImage()
     {
@@ -89,100 +98,96 @@ public sealed partial class MainViewModel
             return;
         }
         ReportImportPreviewStale = true; ReportImportVerified = false;
-        ReportImportStatus = "Timing data changed. Preview and selections kept; preview saved images again before accepting.";
+        ReportImportStatus = "Timing data changed. Close the dialog and read the images again before accepting.";
     }
 
     private string ReadReportImportTargetsSnapshot() => JsonSerializer.Serialize(ReportEvidence.Where(x => x.Run == ReportImportRun)
         .Select(x => new { x.Run, x.Bib, x.AStartStamp, x.AFinishStamp }));
 
-    public async Task ImportReportImagesAsync(IReadOnlyList<string> paths)
+    public Task ImportReportImagesAsync(IReadOnlyList<string> paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        if (IsReportBusy || _reportDraft is null || paths.Count == 0) { return; }
+        return ImportReportImageBatchAsync(async ct =>
+        {
+            if (paths.Count > 50) { throw new DomainValidationException("Read at most 50 images in one dialog."); }
+            var inputs = new List<ReceiptImageInput>(); long total = 0;
+            foreach (var path in paths)
+            {
+                var info = new FileInfo(path); total += info.Length;
+                if (info.Length > 20_000_000 || total > 100_000_000)
+                { throw new DomainValidationException("Images must be at most 20 MB each and 100 MB per dialog."); }
+                inputs.Add(new(Path.GetFileName(path), await File.ReadAllBytesAsync(path, ct)));
+            }
+            return inputs;
+        });
+    }
+
+    internal Task ImportReportImageBytesAsync(byte[] bytes, string fileName)
+        => ImportReportImageBatchAsync(_ => Task.FromResult<IReadOnlyList<ReceiptImageInput>>([new(fileName, bytes)]));
+
+    private sealed record ReceiptImageInput(string FileName, byte[] Bytes);
+
+    private async Task ImportReportImageBatchAsync(Func<CancellationToken, Task<IReadOnlyList<ReceiptImageInput>>> read)
+    {
+        if (IsReportBusy || _reportDraft is null) { return; }
         if (!await FlushTimingReportAsync()) { return; }
         IsReportBusy = true;
         using var cancel = new CancellationTokenSource(); _reportImageCancellation = cancel;
         try { await GuardAsync(async () =>
         {
-            if (paths.Count > 50) { throw new DomainValidationException("Import at most 50 images in one batch."); }
             var draft = _reportDraft; var file = workspace.FilePath;
-            var role = ReportImageRole; var run = ReportImportRun ?? throw new DomainValidationException("Choose a saved run before importing its receipts."); var label = ReportImageDevice.Trim();
-            if (!ReportRuns.Any(x => x.Run == run)) { throw new DomainValidationException("Choose a saved run before importing its receipts."); }
-            var sources = new List<TimingReportImage>(); long total = 0;
-            foreach (var path in paths)
+            var role = ReportImageRole; var run = ReportImportRun ?? throw new DomainValidationException("Choose a saved run before reading receipts.");
+            if (!ReportRuns.Any(x => x.Run == run)) { throw new DomainValidationException("Choose a saved run before reading receipts."); }
+            var inputs = await read(cancel.Token);
+            if (inputs.Count == 0) { return; }
+            if (inputs.Count + ReportImages.Count > 50) { throw new DomainValidationException("Read at most 50 images in one dialog."); }
+            var sources = new List<TimingReportImage>(); long total = ReportImages.Sum(x => (long)x.Bytes.Length);
+            foreach (var input in inputs)
             {
                 cancel.Token.ThrowIfCancellationRequested();
-                var extension = Path.GetExtension(path).ToLowerInvariant();
+                var extension = Path.GetExtension(input.FileName).ToLowerInvariant();
                 if (extension is not (".png" or ".jpg" or ".jpeg" or ".bmp" or ".tif" or ".tiff"))
-                { throw new DomainValidationException("Choose PNG, JPEG, BMP or TIFF images of printed receipts or screens."); }
-                var info = new FileInfo(path);
-                total += info.Length;
-                if (info.Length > 20_000_000 || total > 100_000_000)
-                { throw new DomainValidationException("Images must be at most 20 MB each and 100 MB per batch."); }
-                var bytes = await File.ReadAllBytesAsync(path, cancel.Token);
-                ReportImportStatus = $"Reading image {sources.Count + 1}/{paths.Count} locally - not saved yet.";
+                { throw new DomainValidationException("Choose PNG, JPEG, BMP or TIFF receipt/screen images."); }
+                total += input.Bytes.Length;
+                if (input.Bytes.Length > 20_000_000 || total > 100_000_000)
+                { throw new DomainValidationException("Images must be at most 20 MB each and 100 MB per dialog."); }
+                ReportImportStatus = $"Reading image {sources.Count + 1}/{inputs.Count} locally; images remain in memory.";
                 TimingImageText text;
-                try { text = await _reportRecognizer.RecognizeAsync(bytes, cancel.Token); }
+                try { text = await _reportRecognizer.RecognizeAsync(input.Bytes, cancel.Token); }
                 catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
-                {
-                    // Preserve the original even when OCR cannot interpret it. No image content is logged.
-                    text = new("Recognition failed; review original", []);
-                }
-                sources.Add(new(Guid.NewGuid(), draft.CompetitionId, role, Path.GetFileName(path),
+                { text = new("Recognition failed; review original", []); }
+                sources.Add(new(Guid.NewGuid(), draft.CompetitionId, role, input.FileName,
                     extension == ".png" ? "image/png" : extension is ".jpg" or ".jpeg" ? "image/jpeg" : "image/" + extension.TrimStart('.'),
-                    bytes, string.Join("\n", text.Lines.Select(x => x.Text)), text.Engine, DateTimeOffset.UtcNow)
-                    { RunNumber = run, DeviceLabel = label });
+                    input.Bytes, string.Join("\n", text.Lines.Select(x => x.Text)), text.Engine, DateTimeOffset.UtcNow) { RunNumber = run });
             }
+            cancel.Token.ThrowIfCancellationRequested();
             if (_reportDraft?.CompetitionId != draft.CompetitionId || file != workspace.FilePath)
-            { throw new DomainValidationException("The report changed during recognition. Import the images again in their original report."); }
-            var series = await workspace.ReadAsync();
-            await workspace.SaveTimingReportImagesAsync(sources, series.Revision, cancel.Token);
-            _current = await workspace.ReadAsync();
-            await LoadReportImagesCoreAsync();
-            await PreviewReportImagesCoreAsync(sources);
+            { throw new DomainValidationException("The report changed during recognition. Read the images again in their original report."); }
+            foreach (var source in sources) { ReportImages.Add(source); }
+            SelectedReportImage = sources.FirstOrDefault();
+            await PreviewReportImagesCoreAsync(ReportImages.Where(x => x.Role == role && x.RunNumber == run).ToArray());
         }); }
-        catch (OperationCanceledException) { ReportImportStatus = "Image reading cancelled. No proposed matches were applied."; }
+        catch (OperationCanceledException) { ReportImportStatus = "Image reading cancelled. No times were applied."; }
         finally { _reportImageCancellation = null; IsReportBusy = false; }
+        if (IsError) { ReportImportStatus = StatusMessage; }
     }
-
     [RelayCommand] private void CancelReportImages() => _reportImageCancellation?.Cancel();
 
-    private async Task LoadReportImagesCoreAsync()
-    {
-        if (_reportDraft is null) { return; }
-        var selectedId = SelectedReportImage?.Id;
-        var images = await workspace.ReadTimingReportImagesAsync(_reportDraft.CompetitionId);
-        // Originals are immutable. Reuse the existing objects instead of resetting the
-        // collection and letting the ComboBox replace the operator's selection.
-        foreach (var old in ReportImages.Where(x => !images.Any(i => i.Id == x.Id)).ToArray()) { ReportImages.Remove(old); }
-        for (var index = 0; index < images.Count; index++)
-        {
-            var existing = ReportImages.FirstOrDefault(x => x.Id == images[index].Id);
-            if (existing is null) { ReportImages.Insert(index, images[index]); }
-            else if (ReportImages.IndexOf(existing) != index) { ReportImages.Move(ReportImages.IndexOf(existing), index); }
-        }
-        SelectedReportImage = ReportImages.FirstOrDefault(x => x.Id == selectedId)
-            ?? ReportImages.FirstOrDefault(x => x.Role == ReportImageRole && x.RunNumber == ReportImportRun)
-            ?? ReportImages.FirstOrDefault();
-    }
-
-    [RelayCommand]
-    private async Task PreviewSavedReportImagesAsync()
+    internal async Task RebuildReportReceiptMatchesAsync()
     {
         if (IsReportBusy || _reportDraft is null) { return; }
         if (!await FlushTimingReportAsync()) { return; }
         IsReportBusy = true;
         await GuardAsync(async () =>
         {
-            await LoadReportImagesCoreAsync();
-            var selected = ReportImages.Where(x => x.Role == ReportImageRole && x.RunNumber == ReportImportRun
-                && (ReportImageDevice.Length == 0 || x.DeviceLabel == ReportImageDevice.Trim())).ToArray();
+
+            var selected = ReportImages.Where(x => x.Role == ReportImageRole && x.RunNumber == ReportImportRun).ToArray();
             await PreviewReportImagesCoreAsync(selected);
         });
         IsReportBusy = false;
     }
 
-    private async Task PreviewReportImagesCoreAsync(IReadOnlyList<TimingReportImage> images)
+    private async Task PreviewReportImagesCoreAsync(TimingReportImage[] images)
     {
         if (_reportDraft is null) { return; }
         _reportSelectingImportRow = true;
@@ -202,17 +207,23 @@ public sealed partial class MainViewModel
         {
             var stamp = match.Evidence is { } item ? new TimingReportStamp(item.Ticks, item.Precision, item.Key, Verified: false) : null;
             var keyParts = stamp?.SourceReference.Split(':');
-            ReportImportPreview.Add(new() { Target = ReportEvidence.Single(x => x.Run == ReportImportRun && x.Bib == match.Target.Bib),
-                Channel = match.Target.Channel, Role = ReportImageRole, Stamp = stamp, Accept = stamp is not null,
+            var target = ReportEvidence.Single(x => x.Run == run && x.Bib == match.Target.Bib);
+            var current = ReportImageRole == TimingReportImageRole.B ? match.Target.Channel == 0 ? target.BStart : target.BFinish
+                : ReportImageRole == TimingReportImageRole.HandStart ? target.HandStart : target.HandFinish;
+            var row = new TimingReportImportRow { Target = target,
+                Channel = match.Target.Channel, Role = ReportImageRole, Stamp = stamp, Accept = stamp is not null && (current.Length == 0 || current == TimingReportEvidenceRow.Format(stamp)),
                 Difference = match.DifferenceTicks is { } delta ? (delta / (decimal)TimeSpan.TicksPerSecond).ToString("+0.0000000;-0.0000000;0", CultureInfo.InvariantCulture) : "",
-                State = match.State, SourceText = match.Evidence?.Text ?? "",
-                ImageId = keyParts?.Length >= 2 && Guid.TryParse(keyParts[1], out var id) ? id : null });
+                State = stamp is not null && current.Length > 0 && current != TimingReportEvidenceRow.Format(stamp) ? "Replace current time - select to confirm" : match.State, SourceText = match.Evidence?.Text ?? "",
+                ImageId = keyParts?.Length >= 2 && Guid.TryParse(keyParts[1], out var id) ? id : null };
+            row.PropertyChanged += ReportReceiptSelectionChanged;
+            ReportImportPreview.Add(row);
         }
+        OnPropertyChanged(nameof(AllReportMatchesSelected));
         _importDraftSnapshot = JsonSerializer.Serialize(ReadReportDraft());
         _importTargetsSnapshot = ReadReportImportTargetsSnapshot();
         _importSeriesRevision = (await workspace.ReadAsync()).Revision;
         SelectedReportImportRow = ReportImportPreview.FirstOrDefault(x => x.ImageId == SelectedReportImage?.Id && x.CanAccept);
-        ReportImportStatus = $"{images.Count} original image(s) saved; {evidence.Length} timestamp(s) read; {ReportImportPreview.Count(x => x.CanAccept)} unique proposals. Check the images before accepting. Missing/ambiguous cells stay empty.";
+        ReportImportStatus = $"{images.Length} image(s) in memory; {evidence.Length} timestamp(s) read; {ReportImportPreview.Count(x => x.CanAccept)} report timestamps matched. Check selected timestamps before pressing OK. Unmatched fields remain unchanged.";
         var disputed = images.Sum(image => image.RecognizedText.Split('\n')
             .Count(line => line.StartsWith(TimingEvidenceMatching.OcrReviewRequiredPrefix, StringComparison.Ordinal)));
         if (disputed > 0)
@@ -234,23 +245,24 @@ public sealed partial class MainViewModel
             if (!ReportImportVerified) { throw new DomainValidationException("Check the original images and confirm the proposed timestamps first."); }
             var current = ReadReportDraft();
             if (_importDraftSnapshot is null || _importDraftSnapshot != JsonSerializer.Serialize(current))
-            { throw new DomainValidationException("The report changed after this preview. Preview the saved images again."); }
-            var latest = new List<TimingReplayData>();
-            var desk = await workspace.ReadStartListsAsync(current.CompetitionId);
-            foreach (var source in desk.Revisions.GroupBy(x => x.Plan.RunNumber).Select(g => g.MaxBy(x => x.Revision)!))
-            { latest.Add(await workspace.ReadTimingAsync(source.Id)); }
-            if (TimingReportProjection.Fingerprint(latest) != current.SourceFingerprint)
-            { throw new DomainValidationException("A timing changed after this preview. Reopen Timing report, then preview the saved images again."); }
+            { throw new DomainValidationException("The report changed after this preview. Read the images again."); }
+            // Receipt assignments use the A/B snapshot already displayed in the report.
+            // Reading more device packets must not interrupt operator entry.
             var assignments = current.Associations.ToList(); var count = 0;
             foreach (var row in ReportImportPreview.Where(x => x.Accept && x.Stamp is not null))
             {
                 var existing = assignments.FindIndex(x => x.Run == row.Run && x.Bib == row.Bib && x.Channel == row.Channel && x.Role == row.Role);
-                if (existing >= 0 && !ReplaceReportEvidence) { continue; }
-                var replacement = new TimingReportAssociation(row.Run, row.Bib, row.Channel, row.Role, row.Stamp! with { Verified = true });
+                if (existing >= 0 && assignments[existing].Stamp.Ticks == row.Stamp!.Ticks
+                    && assignments[existing].Stamp.Precision == row.Stamp.Precision && assignments[existing].Stamp.Verified) { continue; }
+                var replacement = new TimingReportAssociation(row.Run, row.Bib, row.Channel, row.Role, row.Stamp! with { Verified = true, SourceReference = "manual" });
                 if (existing >= 0) { assignments[existing] = replacement; } else { assignments.Add(replacement); }
                 count++;
             }
-            if (count == 0) { throw new DomainValidationException("No new matches selected. Existing values are preserved unless replacement is explicitly enabled."); }
+            if (count == 0)
+            {
+                if (!ReportImportPreview.Any(x => x.Accept && x.CanAccept)) { throw new DomainValidationException("Select at least one matched timestamp."); }
+                ClearReportPreview(); ReportStatus = "Selected timestamps are already present."; SetStatus(ReportStatus); return;
+            }
             TimingReportBib Sample(int run, TimingReportBib sample)
             {
                 TimingReportStamp? Find(TimingReportImageRole role, int channel) => assignments.FirstOrDefault(x => x.Run == run && x.Bib == sample.Bib && x.Role == role && x.Channel == channel)?.Stamp;
@@ -263,16 +275,16 @@ public sealed partial class MainViewModel
             _reportDraft = accepted; _reportSaved = await workspace.ReadTimingReportAsync(current.CompetitionId);
             _current = await workspace.ReadAsync(); await PopulateReportAsync(accepted);
             HasTimingReportEdits = false; ClearReportPreview();
-            ReportImportStatus = $"{count} verified timestamp(s) saved with source images and audit history.";
+            ReportImportStatus = $"{count} verified timestamp(s) saved with audit history.";
             ReportStatus = "Image assignments saved. Complete the report review.";
             SetStatus(ReportStatus);
         });
         IsReportBusy = false;
     }
 
-    private void ResetReportImport()
+    public void ResetReportImport()
     {
-        _reportImageCancellation?.Cancel(); ClearReportPreview(); ReportImages.Clear(); SelectedReportImage = null;
+        _reportImageCancellation?.Cancel(); ClearReportPreview(); ReportImages.Clear(); SelectedReportImage = null; ReportImageOriginalSize = false;
     }
     private void DisposeReportUi() { DisposeReportAutosave(); _reportImageCancellation?.Cancel(); _reportSubmissionCancellation?.Cancel(); ReportImagePreview?.Dispose(); }
 }
