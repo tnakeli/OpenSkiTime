@@ -4,7 +4,7 @@
 
 This repository contains the website, infrastructure, deployment workflows and unsigned Windows packaging. Keep them beside the application: source changes, release metadata and deployment reviews then refer to the same commit. No separate private deployment repository is required. Secrets are in Azure and GitHub environment secrets, never source.
 
-The target domain is **openskiti.me**, not openskitime.me. The live service runs in **Sweden Central** (`swedencentral`). The website's default control-plane region is West Europe, subject to the subscription's supported Static Web Apps regions. Static Web Apps distributes static content globally; this website has no Functions backend. It does not promise Sweden-only delivery of website assets. See [Static Web Apps FAQ](https://learn.microsoft.com/en-us/azure/static-web-apps/faq).
+The target domain is **openskiti.me**, not openskitime.me. The live service runs in **Sweden Central** (`swedencentral`). The website's template default control-plane region is West Europe, subject to subscription eligibility and capacity. On 2026-10-03 Azure rejected West Europe for this subscription; East US 2 passed live ARM validation and was selected explicitly for bootstrap. Use `-WebsiteLocation eastus2` when repeating this deployment. Static Web Apps distributes static content globally; this website has no Functions backend. It does not promise Sweden-only delivery of website assets. See [Static Web Apps FAQ](https://learn.microsoft.com/en-us/azure/static-web-apps/faq).
 
 Infrastructure scripts are prepared for authenticated bootstrap. A successful local build does not establish an Azure deployment, DNS change or production acceptance. Record actual acceptance below after bootstrap.
 
@@ -90,7 +90,7 @@ Prerequisites: PowerShell 7, .NET 10 SDK for local packaging, Node 22+, Azure CL
 3. Provision in the selected subscription, using the exact image digest:
 
    ```powershell
-   ./deploy/azure/Initialize-Azure.ps1 -SubscriptionId YOUR-SUBSCRIPTION-ID `
+   ./deploy/azure/Initialize-Azure.ps1 -SubscriptionId YOUR-SUBSCRIPTION-ID -WebsiteLocation eastus2 `
      -Image ghcr.io/tnakeli/openskitime-live@sha256:YOUR-64-HEX-DIGEST
    ./deploy/azure/Configure-GitHub.ps1 -SubscriptionId YOUR-SUBSCRIPTION-ID
    ```
@@ -105,7 +105,9 @@ Prerequisites: PowerShell 7, .NET 10 SDK for local packaging, Node 22+, Azure CL
    Remove-Item Env:CLOUDFLARE_API_TOKEN
    ```
 
-   The script verifies the exact zone and validates all initial DNS changes before mutation. It refuses conflicting existing records or proxied records; it never deletes another destination or mail records. Cloudflare flattens the apex CNAME. It adds `asuid.live` and generated `_dnsauth` TXT records, attaches both SWA names and binds live managed TLS. DNS/certificate propagation can require a later rerun; this is not rolled back by deleting validation records. Keep them for renewal. See [Azure SWA domains](https://learn.microsoft.com/en-us/azure/static-web-apps/custom-domain) and [Container Apps managed certificates](https://learn.microsoft.com/en-us/azure/container-apps/custom-domains-managed-certificates).
+   If the website is ready while the live environment is still provisioning, run `Configure-Domains.ps1 -WebsiteOnly -CloudflareZoneId YOUR-ZONE-ID` first. This validates and configures only apex/www records and website certificates. Run the normal command once the live app exists. Region checks accept both Azure's display name (`Sweden Central`) and its location code (`swedencentral`).
+
+   The script verifies the exact zone and validates all initial DNS changes before mutation. It refuses conflicting existing records or proxied records; it never deletes another destination or mail records. Cloudflare flattens the apex CNAME. It adds `asuid.live` and the generated apex TXT token at `@`, validates www through its CNAME on the Free plan, attaches both SWA names and binds live managed TLS. TXT ownership records can coexist with Cloudflare's flattened apex CNAME. DNS/certificate propagation can require a later rerun; this is not rolled back by deleting validation records. Keep them for renewal. See [Azure SWA apex validation](https://learn.microsoft.com/en-us/azure/static-web-apps/apex-domain-external), [www CNAME validation](https://learn.microsoft.com/en-us/azure/static-web-apps/custom-domain-external) and [Container Apps managed certificates](https://learn.microsoft.com/en-us/azure/container-apps/custom-domains-managed-certificates).
 
 5. Wait for SWA custom domains to report Ready and the live certificate to bind. Enable and dispatch the first website deployment, then verify both website names and live behavior:
 
@@ -151,6 +153,8 @@ No production release/tag is created automatically by merging this setup. Rehear
 
 ## Verification record
 
-Prepared on 2026-10-03. Local website build/link checks, Node failure-cleanup tests, Bicep compilation and self-contained ZIP/live process checks were performed. GitHub Windows CI also verified installer compilation, installation, packaged processes, reinstall and uninstall preservation. Azure provisioning, Cloudflare mutation and production HTTPS/load tests remain unverified. Desktop website preview was reviewed; mobile visual acceptance remains pending.
+On 2026-10-03 local website build/link checks, Node failure-cleanup tests, Bicep compilation and self-contained ZIP/live process checks passed. GitHub Windows CI verified installer compilation, installation, packaged processes, reinstall and uninstall preservation. Azure provisioning completed with live Consumption in Sweden Central and Static Web Apps Free in East US 2. Cloudflare DNS and Azure managed TLS were configured for all three public names; live REST/SignalR acceptance passed on both the Azure hostname and `live.openskiti.me`. The website was published through its GitHub workflow. A monthly 20 EUR resource-group budget with email alerts was configured; this is not a spending cap. Scoped GitHub OIDC and the website environment secret were configured. Desktop and 390px mobile website previews were reviewed. Race-day load, real hardware and an operator's desktop Cloud publishing rehearsal remain unverified.
 
 Core boundary test scenarios run sequentially to avoid unrelated OCR and durable SQLite workloads competing for CI resources. Each scenario retains its own capture/concurrency assertions and production drain deadlines. Live coalescing tests wait for the worker to acknowledge the complete snapshot batch: an event timestamp alone can also identify the first event of that batch.
+
+Live ARM validation requires `appLogsConfiguration.destination: null` to disable persistent logs; the string `'none'` is rejected even though Bicep compilation accepts it. No Log Analytics workspace is provisioned.
