@@ -8,6 +8,10 @@
     <local:HomologationDisplayConverter x:Key="HomologationDisplayConverter" />
   </Window.Resources>
   <Window.Styles>
+    <Style Selector="WrapPanel.sectionNavigation > Button">
+      <Setter Property="Margin" Value="0,0,4,0" />
+      <Setter Property="Padding" Value="6,5" />
+    </Style>
     <Style Selector="DataGrid.columnControls DataGridColumnHeader">
       <Setter Property="Padding" Value="4,0" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -55,7 +59,7 @@
       </Grid>
     </Border>
     <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="22,7">
-      <StackPanel Orientation="Horizontal" Spacing="8">
+      <WrapPanel Classes="sectionNavigation" Orientation="Horizontal">
         <Button Content="1  Event series" Command="{Binding ShowSeriesCommand}" Click="Navigation_Click" Classes="sectionNav" Classes.active="{Binding IsSeriesSection}" />
         <Button Content="2  Competitions" Command="{Binding ShowCompetitionsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitionsSection}" />
         <Button Content="3  Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
@@ -63,7 +67,8 @@
         <Button Name="TimingMenuButton" Content="5  Timing  ▾" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
         <Button Name="ResultsMenuButton" Content="6  Results  ▾" Click="ResultsMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsResultsSection}" />
         <Button Name="TimingReportMenuButton" Content="7  Timing report  ▾" Click="TimingReportMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingReportSection}" />
-      </StackPanel>
+        <Button Name="PdfFactoryButton" Content="8  PDF Factory  ▾" Click="PdfFactoryMenu_Click" Classes="sectionNav" Classes.active="{Binding IsPdfFactorySection}" />
+      </WrapPanel>
     </Border>
     <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsFormSection}">
       <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" HorizontalAlignment="Stretch">
@@ -472,6 +477,7 @@
       </StackPanel>
     </ScrollViewer>
     <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />
+    <local:PdfFactoryView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsPdfFactorySection}" />
     <local:TimingView Name="TimingWorkspace" Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsTimingSection}" />
     <local:ResultsView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsResultsSection}" />
     <local:TimingReportView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsTimingReportSection}" />
