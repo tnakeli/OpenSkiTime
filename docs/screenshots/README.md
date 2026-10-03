@@ -8,7 +8,7 @@ To regenerate the ten desktop PNGs from the repository root, set `OPENSKITIME_RE
 
 ```powershell
 $env:OPENSKITIME_README_SCREENSHOTS = Join-Path (Get-Location) 'docs/screenshots'
-dotnet test rewrite/tests/OpenSkiTime.Rewrite.Desktop.Tests/OpenSkiTime.Rewrite.Desktop.Tests.csproj -c Release --filter FullyQualifiedName~ScreenshotsFromSyntheticEvent
+dotnet test tests/OpenSkiTime.Desktop.Tests/OpenSkiTime.Desktop.Tests.csproj -c Release --filter FullyQualifiedName~ScreenshotsFromSyntheticEvent
 ```
 
 The fixture creates its `.ost` file and points-list ZIP under the system temporary directory and removes them after capture.
@@ -18,7 +18,7 @@ The captures cover the event series, competition editor, competitor grid, first-
 `10-live-timing.png` shows the actual live server's browser interface, including a connected viewer, intermediate times, two racers on course, ranked finishers and waiting starters. `live-demo.json` contains its fictional snapshot; no publisher credential is stored. To regenerate it in an isolated development browser:
 
 ```sh
-dotnet build rewrite/src/OpenSkiTime.LiveTiming.Server -c Release
+dotnet build src/OpenSkiTime.LiveTiming.Server -c Release
 python -m pip install playwright==1.58.0
 python -m playwright install chromium
 python scripts/Capture-PublicScreenshots.py --website

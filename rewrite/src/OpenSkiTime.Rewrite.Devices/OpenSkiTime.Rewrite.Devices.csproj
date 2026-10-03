@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../OpenSkiTime.Rewrite.Application/OpenSkiTime.Rewrite.Application.csproj" />
-    <PackageReference Include="System.IO.Ports" />
-    <ProjectReference Include="../OpenSkiTime.TimyUsbHost/OpenSkiTime.TimyUsbHost.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
-    <None Include="../OpenSkiTime.TimyUsbHost/bin/$(Configuration)/net48/TimyUsbHost.exe" Link="TimyUsbHost.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="../OpenSkiTime.TimyUsbHost/bin/$(Configuration)/net48/TimyUsbHost.exe.config" Link="TimyUsbHost.exe.config" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
-</Project>

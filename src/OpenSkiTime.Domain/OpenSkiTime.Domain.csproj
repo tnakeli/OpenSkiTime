@@ -1,10 +1,1 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <RootNamespace>OpenSkiTime.Domain</RootNamespace>
-    <AssemblyName>OpenSkiTime.Domain</AssemblyName>
-  </PropertyGroup>
-
-  <!-- Domain has zero dependencies (Constitution Principle III). -->
-
-</Project>
+<Project Sdk="Microsoft.NET.Sdk" />

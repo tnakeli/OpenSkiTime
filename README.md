@@ -97,8 +97,9 @@ New series files use the current development format. Incompatible older developm
 Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) on Windows. From the repository root:
 
 ```powershell
-dotnet restore rewrite/OpenSkiTime.Rewrite.slnx
-dotnet run --project rewrite/src/OpenSkiTime.Rewrite.Desktop/OpenSkiTime.Rewrite.Desktop.csproj
+dotnet restore OpenSkiTime.slnx
+dotnet build OpenSkiTime.slnx -c Release
+dotnet run --project src/OpenSkiTime.Desktop -c Release
 ```
 
-Run the automated tests with `dotnet test rewrite/OpenSkiTime.Rewrite.slnx`.
+Run the automated tests with `dotnet test OpenSkiTime.slnx -c Release`.

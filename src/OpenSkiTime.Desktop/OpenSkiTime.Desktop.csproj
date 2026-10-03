@@ -1,37 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <RootNamespace>OpenSkiTime.Desktop</RootNamespace>
-    <AssemblyName>OpenSkiTime.Desktop</AssemblyName>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationIcon>../../assets/icons/openskitime.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
-    <PackageReference Include="Avalonia.Controls.DataGrid" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
-    <PackageReference Include="Avalonia.Diagnostics" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Microsoft.Extensions.Logging" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <ProjectReference Include="../OpenSkiTime.Application/OpenSkiTime.Application.csproj" />
+    <ProjectReference Include="../OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj" />
+    <ProjectReference Include="../OpenSkiTime.Devices/OpenSkiTime.Devices.csproj" />
+    <ProjectReference Include="../OpenSkiTime.Recognition/OpenSkiTime.Recognition.csproj" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\OpenSkiTime.Domain\OpenSkiTime.Domain.csproj" />
-    <ProjectReference Include="..\OpenSkiTime.Application\OpenSkiTime.Application.csproj" />
-    <ProjectReference Include="..\OpenSkiTime.Persistence\OpenSkiTime.Persistence.csproj" />
-    <ProjectReference Include="..\OpenSkiTime.Import\OpenSkiTime.Import.csproj" />
-    <ProjectReference Include="..\OpenSkiTime.Fis.Placeholder\OpenSkiTime.Fis.Placeholder.csproj" />
-  </ItemGroup>
-
+  <ItemGroup><InternalsVisibleTo Include="OpenSkiTime.Desktop.Tests" /></ItemGroup>
+  <ItemGroup><AvaloniaResource Include="../../assets/icons/openskitime.ico" Link="Assets/openskitime.ico" /></ItemGroup>
+  <Import Project="../../LiveTimingArtifacts.targets" />
 </Project>

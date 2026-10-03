@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../rewrite/src/OpenSkiTime.Rewrite.Domain/OpenSkiTime.Rewrite.Domain.csproj" />
+    <ProjectReference Include="../../../src/OpenSkiTime.Domain/OpenSkiTime.Domain.csproj" />
   </ItemGroup>
 </Project>

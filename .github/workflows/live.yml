@@ -33,8 +33,8 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '10.0.x'
-      - run: dotnet restore rewrite/OpenSkiTime.LiveTiming.slnx -p:SecurityAudit=true
-      - run: dotnet test rewrite/OpenSkiTime.LiveTiming.slnx -c Release
+      - run: dotnet restore OpenSkiTime.LiveTiming.slnx -p:SecurityAudit=true
+      - run: dotnet test OpenSkiTime.LiveTiming.slnx -c Release
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -45,7 +45,7 @@ jobs:
         id: container
         with:
           context: .
-          file: rewrite/src/OpenSkiTime.LiveTiming.Server/Dockerfile
+          file: src/OpenSkiTime.LiveTiming.Server/Dockerfile
           push: true
           tags: ghcr.io/tnakeli/openskitime-live:${{ github.sha }}
       - name: Record immutable image

@@ -34,8 +34,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
-      - run: dotnet restore rewrite/OpenSkiTime.Rewrite.slnx -p:SecurityAudit=true
-      - run: dotnet test rewrite/OpenSkiTime.Rewrite.slnx -c Release
+      - run: dotnet restore OpenSkiTime.slnx -p:SecurityAudit=true
+      - run: dotnet test OpenSkiTime.slnx -c Release
       - name: Build unsigned Windows installer and portable package
         shell: pwsh
         env:

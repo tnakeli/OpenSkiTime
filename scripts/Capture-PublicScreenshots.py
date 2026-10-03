@@ -34,7 +34,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     output = root / args.output
     output.mkdir(parents=True, exist_ok=True)
-    server = root / 'rewrite/src/OpenSkiTime.LiveTiming.Server'
+    server = root / 'src/OpenSkiTime.LiveTiming.Server'
     assembly = server / 'bin/Release/net10.0/OpenSkiTime.LiveTiming.Server.dll'
     with socket.socket() as reserve:
         reserve.bind(('127.0.0.1', 0))
