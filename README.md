@@ -74,11 +74,17 @@ Review A timestamps and the first, last and fastest samples for each run. An opt
 
 Results and Timing report follow the competition selected in the shared header; the run remains available when returning to Timing. The report reads that competition's committed timing data automatically and saves edits in the background. Bring in B or hand-clock output from a temporarily connected ALGE device, or open the B, hand-start or hand-finish receipt dialog and choose, drop or paste images there. The Times tab groups synchronization and run timestamps. Local OCR displays detected timestamps in a dialog; OK applies the checked matches. Images and recognition text remain in dialog memory only. Accepted times and report history stay in the event file. Create and export an approved XML revision or submit it to FIS in test mode. PDF generation is not included. See [timing report operation](docs/timing-report.md) and [Settings](docs/settings.md).
 
+![Timing report with first and last A timestamps from a simulated run](docs/screenshots/08-timing-report.png)
+
+![Receipt OCR dialog showing a synthetic receipt, detected text and four proposed B timestamp matches for operator review](docs/screenshots/09-receipt-ocr.png)
+
 ## Timing sources and live publishing
 
 OpenSkiTime has adapters for ALGE Timy 2/3 native USB, MT1 USB/serial and the ALGE Results service. A simulator and ASCII replay are available for practice. Device connection and configuration live in Settings; timing capture continues independently of optional online work.
 
 **Live timing** offers FIS TCP/HTTPS for FIS races and a standalone browser view for every race. Local publishing works offline; Cloud publishing uses the same server and can run alongside FIS. The timing view shows all three statuses and provides Start, Stop, Refresh and session deletion controls. See [live timing setup and operation](docs/live-timing.md) and [cloud server deployment](docs/live-timing-cloud-deployment.md).
+
+![Live timing browser view with fictional athletes, intermediate times and unofficial rankings](docs/screenshots/10-live-timing.png)
 
 ## Current scope
 
