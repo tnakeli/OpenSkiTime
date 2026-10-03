@@ -3,11 +3,13 @@ using System.Globalization;
 using System.Text;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using OpenSkiTime.Rewrite.Application;
 using OpenSkiTime.Rewrite.Desktop;
 using OpenSkiTime.Rewrite.Devices;
 using OpenSkiTime.Rewrite.Domain;
 using OpenSkiTime.Rewrite.Persistence;
+using OpenSkiTime.Rewrite.Timing;
 using Xunit;
 
 namespace OpenSkiTime.Rewrite.Tests;
@@ -86,7 +88,9 @@ public partial class DesktopWorkflowTests
             }
 
             using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
-                fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
+                fisStore: cache, recentSeriesStore: new RecentSeriesStore(root),
+                categoryRulePresetStore: new CategoryRulePresetStore(root), timingPreferencesStore: new TimingPreferencesStore(root),
+                reportDefaultsStore: new TimingReportDefaultsStore(root), timingDeviceCache: new FisTimingDeviceCache(root));
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             vm.FileLabel = @"C:\Demo\Northern Alpine Weekend.ost";
             var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1440, Height = 520 };
@@ -185,6 +189,82 @@ public partial class DesktopWorkflowTests
                 Assert.True(await vm.FlushRaceInformationAsync(), vm.RaceInformationStatus);
                 window.Height = 1120;
                 CaptureDraw(window, output, "07-race-information.png");
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [AvaloniaFact]
+    public async Task GenerateTimingReportScreenshotsFromSyntheticEvent()
+    {
+        var output = Environment.GetEnvironmentVariable("OPENSKITIME_README_SCREENSHOTS");
+        if (string.IsNullOrWhiteSpace(output)) { return; }
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-report-demo", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "Northern Downhill Demo.ost");
+            var date = new DateOnly(2026, 10, 3);
+            var now = new DateTimeOffset(2026, 10, 3, 12, 0, 0, TimeSpan.FromHours(3));
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var values = new CompetitionValues("Northern Downhill Demo", "DH Men", date, Discipline.Downhill, RaceType.Fis, 1, 0, "9993");
+            var series = await workspace.CreateAsync(file, new("Northern Alpine Weekend", "Summit Arena", "Demo Race Office",
+                date, date, "FIN", "2026/27"), [values]);
+            var competition = series.Competitions[0];
+            var revision = series.Revision;
+            var entrants = new List<DrawEntrant>();
+            var surnames = new[] { "KALLIO", "HUIPPU" };
+            var firstNames = new[] { "Eero", "Leo" };
+            for (var i = 0; i < surnames.Length; i++)
+            {
+                var athlete = new CompetitorValues(surnames[i], firstNames[i], 2002 + i, (990101 + i).ToString(CultureInfo.InvariantCulture),
+                    "FIN", "North Ridge", Gender.Male);
+                var saved = await workspace.SaveDeskRowAsync(null, athlete, competition.Id, true, null, revision);
+                revision = saved.Revision;
+                entrants.Add(new(saved.Value.Id, athlete, 20 + i * 10));
+            }
+            var plan = FisStartOrder.FirstRun(competition.Id, values, Gender.Male, entrants, new("1327", date, date), new(), "readme-report");
+            var list = Assert.Single((await workspace.SaveStartListAsync(new(plan, revision, "Demo operator", "Synthetic draw", now))).Revisions);
+            var timing = workspace.Timing!;
+            await timing.SelectRunAsync(list.Id);
+            var simulator = new SimulatorTimingSource();
+            await timing.StartAsync(simulator, new("Simulator", "Demo timing", date, Simulation: true), "Demo operator");
+            foreach (var entry in plan.Entries)
+            {
+                var start = TimeSpan.FromHours(12).Ticks + (entry.Position - 1) * 2 * TimeSpan.TicksPerMinute;
+                await timing.ArmAsync(entry.Bib, null); await simulator.PulseAsync(0, start);
+                await ReportUntil(() => timing.Snapshot!.Results.Single(x => x.Bib == entry.Bib).Status == TimingStatus.OnCourse);
+                await timing.ArmAsync(null, entry.Bib); await simulator.PulseAsync(1, start + TimeSpan.TicksPerMinute);
+                await ReportUntil(() => timing.Snapshot!.Results.Single(x => x.Bib == entry.Bib).Status == TimingStatus.Finished);
+            }
+            await timing.StopAsync();
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
+                fisStore: new FisLocalStore(root), recentSeriesStore: new RecentSeriesStore(root),
+                categoryRulePresetStore: new CategoryRulePresetStore(root), timingPreferencesStore: new TimingPreferencesStore(root),
+                reportDefaultsStore: new TimingReportDefaultsStore(root), timingDeviceCache: new FisTimingDeviceCache(root));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            vm.FileLabel = @"C:\Demo\Northern Alpine Weekend.ost";
+            await vm.ShowTimingReportCommand.ExecuteAsync(null);
+            await vm.SelectReportCompetitionAsync(competition);
+            vm.ReportLevel = 3;
+            Assert.True(await vm.FlushTimingReportAsync(), vm.StatusMessage);
+            var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1440, Height = 900 };
+            window.Show();
+            try
+            {
+                window.GetVisualDescendants().OfType<TimingReportView>().Single().FindControl<TabControl>("TimingReportTabs")!.SelectedIndex = 1;
+                CaptureDraw(window, output, "08-timing-report.png");
+                vm.ReportImageRole = TimingReportImageRole.B;
+                vm.ReportImportRun = 1;
+                await vm.ImportReportImagesAsync([Path.Combine(AppContext.BaseDirectory, "Fixtures", "timing-receipt.png")]);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                Assert.Equal(4, vm.ReportImportPreview.Count(x => x.CanAccept));
+                foreach (var row in vm.ReportImportPreview) { row.Accept = row.CanAccept; }
+                var dialog = new TimingReceiptDialog { DataContext = vm, Width = 1440, Height = 850 };
+                dialog.Show(window);
+                try { CaptureDraw(dialog, output, "09-receipt-ocr.png"); }
+                finally { dialog.Close(); }
             }
             finally { window.Close(); }
         }

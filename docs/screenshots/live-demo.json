@@ -1,0 +1,297 @@
+{
+    "version":  1,
+    "competition":  {
+                        "name":  "Northern Slalom Women",
+                        "place":  "Summit Arena",
+                        "discipline":  "SL",
+                        "date":  "2026-10-03",
+                        "isFis":  true,
+                        "codex":  "9991",
+                        "gender":  "W",
+                        "category":  "FIS",
+                        "intermediateCount":  1,
+                        "slope":  "North Face"
+                    },
+    "competitors":  [
+                        {
+                            "bib":  1,
+                            "lastName":  "AURORA",
+                            "firstName":  "Mira",
+                            "nation":  "FIN",
+                            "club":  "North Ridge",
+                            "fisCode":  "990001"
+                        },
+                        {
+                            "bib":  2,
+                            "lastName":  "LUMI",
+                            "firstName":  "Elina",
+                            "nation":  "FIN",
+                            "club":  "Snowline",
+                            "fisCode":  "990002"
+                        },
+                        {
+                            "bib":  3,
+                            "lastName":  "KIDE",
+                            "firstName":  "Aava",
+                            "nation":  "FIN",
+                            "club":  "Fell Alpine",
+                            "fisCode":  "990003"
+                        },
+                        {
+                            "bib":  4,
+                            "lastName":  "TUNTURI",
+                            "firstName":  "Helmi",
+                            "nation":  "FIN",
+                            "club":  "North Ridge",
+                            "fisCode":  "990004"
+                        },
+                        {
+                            "bib":  5,
+                            "lastName":  "KAARNA",
+                            "firstName":  "Iida",
+                            "nation":  "FIN",
+                            "club":  "Peak Club",
+                            "fisCode":  "990005"
+                        },
+                        {
+                            "bib":  6,
+                            "lastName":  "HALLA",
+                            "firstName":  "Saana",
+                            "nation":  "FIN",
+                            "club":  "Snowline",
+                            "fisCode":  "990006"
+                        },
+                        {
+                            "bib":  7,
+                            "lastName":  "RINNE",
+                            "firstName":  "Veera",
+                            "nation":  "FIN",
+                            "club":  "Fell Alpine",
+                            "fisCode":  "990007"
+                        },
+                        {
+                            "bib":  8,
+                            "lastName":  "TUULI",
+                            "firstName":  "Emilia",
+                            "nation":  "FIN",
+                            "club":  "Peak Club",
+                            "fisCode":  "990008"
+                        },
+                        {
+                            "bib":  9,
+                            "lastName":  "KORPI",
+                            "firstName":  "Sofia",
+                            "nation":  "FIN",
+                            "club":  "North Ridge",
+                            "fisCode":  "990009"
+                        },
+                        {
+                            "bib":  10,
+                            "lastName":  "PAKKA",
+                            "firstName":  "Linnea",
+                            "nation":  "FIN",
+                            "club":  "Snowline",
+                            "fisCode":  "990010"
+                        },
+                        {
+                            "bib":  11,
+                            "lastName":  "SUMU",
+                            "firstName":  "Aino",
+                            "nation":  "FIN",
+                            "club":  "Peak Club",
+                            "fisCode":  "990011"
+                        },
+                        {
+                            "bib":  12,
+                            "lastName":  "LUMIKKO",
+                            "firstName":  "Demo",
+                            "nation":  "FIN",
+                            "club":  "Fell Alpine",
+                            "fisCode":  "990012"
+                        }
+                    ],
+    "currentRun":  1,
+    "runs":  [
+                 {
+                     "number":  1,
+                     "listCreatedAt":  "2026-10-03T12:03:00+03:00",
+                     "startOrder":  [
+                                        1,
+                                        2,
+                                        3,
+                                        4,
+                                        5,
+                                        6,
+                                        7,
+                                        8,
+                                        9,
+                                        10,
+                                        11,
+                                        12
+                                    ],
+                     "results":  [
+                                     {
+                                         "bib":  1,
+                                         "status":  "Finished",
+                                         "hundredths":  5487,
+                                         "rank":  3,
+                                         "difference":  120,
+                                         "at":  "2026-10-03T12:03:00+03:00",
+                                         "startedAt":  null,
+                                         "startSourceTicks":  null,
+                                         "finishSourceTicks":  null,
+                                         "intermediates":  [
+                                                               {
+                                                                   "number":  1,
+                                                                   "hundredths":  2214,
+                                                                   "at":  "2026-10-03T12:03:00+03:00",
+                                                                   "sourceTicks":  null
+                                                               }
+                                                           ],
+                                         "splits":  [
+                                                        {
+                                                            "number":  1,
+                                                            "hundredths":  2214,
+                                                            "at":  "2026-10-03T12:03:00+03:00",
+                                                            "sourceTicks":  null
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "bib":  2,
+                                         "status":  "Finished",
+                                         "hundredths":  5458,
+                                         "rank":  2,
+                                         "difference":  91,
+                                         "at":  "2026-10-03T12:03:00+03:00",
+                                         "startedAt":  null,
+                                         "startSourceTicks":  null,
+                                         "finishSourceTicks":  null,
+                                         "intermediates":  [
+                                                               {
+                                                                   "number":  1,
+                                                                   "hundredths":  2187,
+                                                                   "at":  "2026-10-03T12:03:00+03:00",
+                                                                   "sourceTicks":  null
+                                                               }
+                                                           ],
+                                         "splits":  [
+                                                        {
+                                                            "number":  1,
+                                                            "hundredths":  2187,
+                                                            "at":  "2026-10-03T12:03:00+03:00",
+                                                            "sourceTicks":  null
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "bib":  3,
+                                         "status":  "Finished",
+                                         "hundredths":  5367,
+                                         "rank":  1,
+                                         "difference":  0,
+                                         "at":  "2026-10-03T12:03:00+03:00",
+                                         "startedAt":  null,
+                                         "startSourceTicks":  null,
+                                         "finishSourceTicks":  null,
+                                         "intermediates":  [
+                                                               {
+                                                                   "number":  1,
+                                                                   "hundredths":  2161,
+                                                                   "at":  "2026-10-03T12:03:00+03:00",
+                                                                   "sourceTicks":  null
+                                                               }
+                                                           ],
+                                         "splits":  [
+                                                        {
+                                                            "number":  1,
+                                                            "hundredths":  2161,
+                                                            "at":  "2026-10-03T12:03:00+03:00",
+                                                            "sourceTicks":  null
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "bib":  4,
+                                         "status":  "OnCourse",
+                                         "hundredths":  null,
+                                         "rank":  null,
+                                         "difference":  null,
+                                         "at":  "2026-10-03T12:03:00+03:00",
+                                         "startedAt":  null,
+                                         "startSourceTicks":  null,
+                                         "finishSourceTicks":  null,
+                                         "intermediates":  [
+                                                               {
+                                                                   "number":  1,
+                                                                   "hundredths":  2277,
+                                                                   "at":  "2026-10-03T12:03:00+03:00",
+                                                                   "sourceTicks":  null
+                                                               }
+                                                           ],
+                                         "splits":  [
+                                                        {
+                                                            "number":  1,
+                                                            "hundredths":  2277,
+                                                            "at":  "2026-10-03T12:03:00+03:00",
+                                                            "sourceTicks":  null
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "bib":  5,
+                                         "status":  "OnCourse",
+                                         "hundredths":  null,
+                                         "rank":  null,
+                                         "difference":  null,
+                                         "at":  "2026-10-03T12:03:00+03:00",
+                                         "startedAt":  null,
+                                         "startSourceTicks":  null,
+                                         "finishSourceTicks":  null,
+                                         "intermediates":  null,
+                                         "splits":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "bib":  6,
+                                         "status":  "DNF",
+                                         "hundredths":  null,
+                                         "rank":  null,
+                                         "difference":  null,
+                                         "at":  "2026-10-03T12:03:00+03:00",
+                                         "startedAt":  null,
+                                         "startSourceTicks":  null,
+                                         "finishSourceTicks":  null,
+                                         "intermediates":  null,
+                                         "splits":  [
+
+                                                    ]
+                                     }
+                                 ]
+                 },
+                 {
+                     "number":  2,
+                     "listCreatedAt":  "2026-10-03T12:03:00+03:00",
+                     "startOrder":  [
+                                        3,
+                                        2,
+                                        1,
+                                        4,
+                                        5,
+                                        6,
+                                        7,
+                                        8,
+                                        9,
+                                        10,
+                                        11,
+                                        12
+                                    ],
+                     "results":  [
+
+                                 ]
+                 }
+             ],
+    "updatedAt":  "2026-10-03T12:03:00+03:00",
+    "paused":  false
+}
