@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <PropertyGroup><OutputType>Exe</OutputType><ApplicationIcon>../../../assets/icons/live-timing.ico</ApplicationIcon></PropertyGroup>
   <ItemGroup><ProjectReference Include="../OpenSkiTime.LiveTiming.Publishing/OpenSkiTime.LiveTiming.Publishing.csproj" /></ItemGroup>
 </Project>

@@ -25,6 +25,7 @@ OutputBaseFilename=OpenSkiTime-{#AppVersion}-win-x64-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=../../assets/icons/openskitime.ico
 UninstallDisplayIcon={app}\OpenSkiTime.Rewrite.Desktop.exe
 LicenseFile={#SourceDir}\LICENSE.txt
 InfoBeforeFile={#SourceDir}\NOTICE.txt

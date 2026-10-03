@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
+    <ApplicationIcon>../../../assets/icons/live-timing.ico</ApplicationIcon>
     <ContainerRepository>openskitime-live-timing</ContainerRepository>
     <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0</ContainerBaseImage>
     <ContainerUser>1654</ContainerUser>

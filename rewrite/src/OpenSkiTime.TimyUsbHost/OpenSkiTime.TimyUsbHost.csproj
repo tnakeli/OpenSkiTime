@@ -4,6 +4,7 @@
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>TimyUsbHost</AssemblyName>
     <OutputType>Exe</OutputType>
+    <ApplicationIcon>../../../assets/icons/openskitime.ico</ApplicationIcon>
     <PlatformTarget>x64</PlatformTarget>
     <ImplicitUsings>disable</ImplicitUsings>
     <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
