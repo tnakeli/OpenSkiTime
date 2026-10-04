@@ -4,7 +4,7 @@
  <UserControl.Resources>
   <!-- One timing role: Role -> Source -> Channel -> source-specific connection details. -->
   <DataTemplate x:Key="TimingRoleRowTemplate">
-   <Grid ColumnDefinitions="120,8,180,8,110,8,*" Margin="0,0,0,6">
+   <Grid ColumnDefinitions="120,8,180,8,110,8,*,8,Auto" Margin="0,0,0,6">
     <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
     <ComboBox Grid.Column="2" VerticalAlignment="Center" ItemsSource="{Binding Sources}" SelectedItem="{Binding Source}" IsVisible="{Binding ShowOwnConnection}" HorizontalAlignment="Stretch" ToolTip.Tip="Timing source for this role" />
     <TextBlock Grid.Column="2" Text="{Binding LeaderSourceLabel}" IsVisible="{Binding ShowsLeaderConnection}" Classes="supportingText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -27,6 +27,7 @@
      <TextBox Text="{Binding ReplayPath}" IsVisible="{Binding IsReplay}" Width="280" Watermark="Path to raw ALGE ASCII file" />
      <TextBlock Text="Training data only" IsVisible="{Binding IsSimulator}" Classes="supportingText" VerticalAlignment="Center" />
     </WrapPanel>
+    <TextBlock Grid.Column="8" Name="RoleSignalText" Text="{Binding SignalText}" VerticalAlignment="Center" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" FontSize="12" Foreground="{DynamicResource AccentBrush}" ToolTip.Tip="Latest signal per channel of this device while timing is connected. ● marks this role's channel." />
    </Grid>
   </DataTemplate>
  </UserControl.Resources>

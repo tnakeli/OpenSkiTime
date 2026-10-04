@@ -119,6 +119,36 @@ public interface ITimingDecoderFactory
 
 public sealed record TimingSourceInput(ITimingSource Source, CaptureOptions Options);
 
+// Latest impulse per physical device channel, for the Settings signal monitor. Diagnostics only; never used for timing.
+public sealed record TimingSignal(string Device, int Channel, long DeviceTicks, int Precision, DateTimeOffset ReceivedAt);
+
+public static class TimingSignals
+{
+    // ALGE Results observations name their MT1 device; other sources are identified by their connection.
+    public static string DeviceKey(CaptureOptions options, string observationSource)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return options.Device == TimingSourceTypes.AlgeResultsLabel ? "alge:" + observationSource : options.Device + "|" + options.Endpoint;
+    }
+
+    public static string DeviceKey(TimingConnection connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        return connection.Source == TimingSourceType.AlgeResults ? "alge:" + connection.AlgeDeviceId.Trim() : connection.SourceLabel + "|" + connection.Endpoint;
+    }
+
+    internal static void Record(System.Collections.Concurrent.ConcurrentDictionary<(string, int), TimingSignal> signals,
+        CaptureOptions options, IEnumerable<TimingObservation> observations, DateTimeOffset receivedAt)
+    {
+        foreach (var o in observations)
+        {
+            if (o.PhysicalChannel is not { } channel || o.DeviceTicks is not { } ticks || o.Kind is not (ObservationKind.Impulse or ObservationKind.Information)) { continue; }
+            var device = DeviceKey(options, o.Source);
+            signals[(device, channel)] = new(device, channel, ticks, o.Precision, receivedAt);
+        }
+    }
+}
+
 // This object belongs to exactly one series session. Device work never uses the UI synchronization context.
 // One capture may read several device connections. Each has its own session and raw journal; one writer loop
 // commits every packet durably, in arrival order, before decoding and automatic assignment.
@@ -138,6 +168,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private string[] _labels = [];
     private string[] _connections = [];
     private CaptureOptions[] _activeOptions = [];
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), TimingSignal> _signals = new();
     private CancellationTokenSource? _readCancellation;
     private Channel<CaptureInput>? _queue;
     private Task? _producer;
@@ -171,6 +202,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     public CaptureOptions? LastCaptureOptions => _sessions.LastOrDefault()?.Options;
     // Options of every device session in the running capture (one per physical connection).
     public IReadOnlyList<CaptureOptions> ActiveCaptureOptions => IsActive ? Volatile.Read(ref _activeOptions) : [];
+    // Latest impulse per physical device channel received by the running capture (Settings signal monitor).
+    public IReadOnlyList<TimingSignal> RecentSignals => IsActive ? _signals.Values.ToArray() : [];
     // The device sessions of the most recent capture start in this run, for restoring settings without preferences.
     public IReadOnlyList<CaptureOptions> LastCaptureGroup
     {
@@ -284,6 +317,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         Volatile.Write(ref _activeOptions, sessions.Select(x => x.Options).ToArray());
         _queue = Channel.CreateBounded<CaptureInput>(new BoundedChannelOptions(2048) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true });
         _runningClock.Clear();
+        _signals.Clear();
         _readCancellation = new();
         _fault = null; _failed = NewSignal(); _connection = "Connecting…";
         var queue = _queue;
@@ -423,7 +457,14 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         if (!_decoders.TryGetValue(key, out var decoder))
         { decoder = decoders.Create(session, packet.Protocol, packet.Source, packet.Stream); _decoders.Add(key, decoder); }
         var decoded = TimingReplay.Decode(decoder, packet, includeInformation: live);
-        if (live) { foreach (var observation in decoded) { _runningClock.Observe(observation, packet.ReceivedAt); } }
+        if (live)
+        {
+            // The running display clock follows timing impulses and device heartbeats only; informational device input
+            // (for example an ALGE Results channel no role uses, or another device day) must not move it.
+            foreach (var observation in decoded.Where(x => x.Kind == ObservationKind.Impulse || (x.Kind == ObservationKind.Information && x.PhysicalChannel is null)))
+            { _runningClock.Observe(observation, packet.ReceivedAt); }
+            TimingSignals.Record(_signals, session.Options, decoded, packet.ReceivedAt);
+        }
         _observations.AddRange(decoded.Where(x => x.Kind != ObservationKind.Information));
     }
 

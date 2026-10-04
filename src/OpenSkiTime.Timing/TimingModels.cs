@@ -10,7 +10,11 @@ public enum DecisionKind { Assignment, Status, Time, StartOrder }
 // Ticks are integer 100 ns units. Device precision is retained separately; receive time never determines race time.
 public sealed record TimingObservation(string Key, Guid SessionId, long PacketSequence, string Source,
     string Fingerprint, ObservationKind Kind, int? Channel, long? DeviceTicks, int Precision,
-    int? SuggestedBib, bool Manual, string ClockId, string Message);
+    int? SuggestedBib, bool Manual, string ClockId, string Message)
+{
+    // The device channel the impulse arrived on (C0–C8), before routing to a timing position. Diagnostics only.
+    public int? PhysicalChannel { get; init; }
+}
 
 public sealed record TimingDecision(DecisionKind Kind, string? ObservationKey = null, Guid? CompetitorId = null,
     int? Bib = null, bool Ignored = false, TimingStatus? Status = null, long? Hundredths = null,

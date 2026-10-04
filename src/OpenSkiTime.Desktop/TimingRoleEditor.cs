@@ -41,6 +41,8 @@ public sealed partial class TimingRoleEditor : ObservableObject
     [ObservableProperty] private int _baudRate = 38400;
     [ObservableProperty] private string _algeDeviceId = "";
     [ObservableProperty] private string _algeUsername = "";
+    // Latest signals of this row's device per channel while timing is connected, e.g. "C0 20:46:44.07 · ●C1 20:47:01.33".
+    [ObservableProperty] private string _signalText = "";
     [ObservableProperty] private string _replayPath = "";
 
     // A port list control must not clear the configured port.

@@ -127,6 +127,30 @@ public sealed partial class MainViewModel
 
     private void ForgetAlgeSessionPasswords() => _algeSessionPasswords.Clear();
 
+    private long _lastSignalRefresh;
+
+    // Settings signal monitor: each role row shows the latest impulse per channel of its device while timing is connected,
+    // with the row's own channel marked, so wiring and channel settings can be checked by pressing the device.
+    internal void RefreshTimingRoleSignals()
+    {
+        var now = Environment.TickCount64;
+        if (now - _lastSignalRefresh < 200) { return; }
+        _lastSignalRefresh = now;
+        var connected = IsTimingConnected;
+        var signals = connected ? (workspace.Timing?.RecentSignals ?? []).Concat(workspace.Auxiliary?.State(AuxiliaryTimingRole.B).Signals ?? []).ToArray() : [];
+        foreach (var editor in PrimaryTimingRoles.Concat(BackupTimingRoles))
+        {
+            if (!connected) { editor.SignalText = ""; continue; }
+            string key;
+            try { key = TimingSignals.DeviceKey(editor.ToConnection()); }
+            catch (OpenSkiTime.Domain.DomainValidationException) { editor.SignalText = ""; continue; }
+            var parts = signals.Where(x => x.Device == key).OrderBy(x => x.Channel).Select(x =>
+                (x.Channel == editor.Channel ? "●" : "") + "C" + x.Channel.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + " " + OpenSkiTime.Timing.TimingTime.FormatTimeOfDay(x.DeviceTicks)[..11]).ToArray();
+            editor.SignalText = parts.Length == 0 ? "No signals yet" : string.Join(" · ", parts);
+        }
+    }
+
     public void LoadTimingPreferences()
     {
         if (timingPreferencesStore?.LoadWithNotes() is not { } loaded) { return; }

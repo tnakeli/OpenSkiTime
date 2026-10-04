@@ -138,7 +138,7 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
         return Make(kind, clockOk ? text : "Device clock moved backwards/reset. Review clock setup: " + text) with
         {
             Fingerprint = $"{source}:{session.Options.DeviceDate:yyyyMMdd}:{_currentClock}:{flag}:{number}:{channel}:{_clockEpoch}",
-            Channel = normalizedChannel, DeviceTicks = ticks, Precision = precision,
+            Channel = normalizedChannel, PhysicalChannel = channel, DeviceTicks = ticks, Precision = precision,
             SuggestedBib = explicitBib, Manual = match.Groups["manual"].Success,
             ClockId = ClockId()
         };
@@ -224,6 +224,10 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         // push on another day means the capture's device date is wrong, so it is shown for review instead of disappearing.
         var otherDay = deviceDate != session.Options.DeviceDate;
         if (otherDay) { kind = packet.Stream == "push" ? ObservationKind.Invalid : ObservationKind.Information; }
+        // Push delivers every channel of a subscribed device. A channel no role uses is kept as raw input and shown in the
+        // Settings signal monitor, but does not enter race timing.
+        var position = session.Options.Position(channel, device);
+        if (position is null && session.Options.Routes is not null && kind == ObservationKind.Impulse) { kind = ObservationKind.Information; }
         int? bib = null;
         if (trigger.TryGetProperty("startNumber", out var number) && number.ValueKind == JsonValueKind.Object
             && number.TryGetProperty("type", out var numberType) && numberType.GetString() == "MANUAL"
@@ -236,9 +240,10 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         var local = checked(ticks + timeOffset * TimeSpan.TicksPerMinute);
         var clockId = session.Options.ClockGroup is { } group ? $"sync:{group}:0" : "alge-results";
         return new($"{session.Id:N}:{packet.Sequence}:json:{index}", session.Id, packet.Sequence, device,
-            "mt1:" + fingerprint, kind, session.Options.Position(channel, device) ?? channel + 10,
+            "mt1:" + fingerprint, kind, position ?? channel + 10,
             local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}"
-                + (otherDay ? $" · device date {deviceDate:yyyy-MM-dd} differs from the capture device date {session.Options.DeviceDate:yyyy-MM-dd}; check Device date in Settings" : ""));
+                + (otherDay ? $" · device date {deviceDate:yyyy-MM-dd} differs from the capture device date {session.Options.DeviceDate:yyyy-MM-dd}; check Device date in Settings" : ""))
+            { PhysicalChannel = channel };
     }
 
     private static TimingObservation Invalid(RawTimingPacket packet, string message, int index = 0) => new(

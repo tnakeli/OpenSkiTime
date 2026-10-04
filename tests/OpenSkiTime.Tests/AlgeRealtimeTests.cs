@@ -21,7 +21,7 @@ public sealed class AlgeRealtimeTests
         FromUtc: new DateTimeOffset(Instant).AddMinutes(-5)) { Routes = [new(1, 2, "231203016")], ClockGroup = "g" };
 
     [Fact]
-    public async Task PushedTriggersArriveImmediatelyOnTheDeviceTopicAndUnroutedChannelsAreNotRecorded()
+    public async Task PushedTriggersArriveImmediatelyOnTheDeviceTopicAndUnroutedChannelsAreInformationOnly()
     {
         var http = new FakeAlge();
         var push = new FakeRealtime(
@@ -35,22 +35,24 @@ public sealed class AlgeRealtimeTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.ReceiveAsync(p =>
         {
             packets.Add(p);
-            if (packets.Count(x => x.Stream == "push") == 2) { stop.Cancel(); }
+            if (packets.Count(x => x.Stream == "push") == 3) { stop.Cancel(); }
             return ValueTask.CompletedTask;
         }, statuses.Add, stop.Token));
 
         Assert.Equal(["/topic/device/231203016/trigger"], push.Topics);
         Assert.Equal("token-1", push.Token);
         var pushed = packets.Where(x => x.Protocol == "alge-results/v1" && x.Stream == "push").ToArray();
-        Assert.Equal(2, pushed.Length);
-        Assert.DoesNotContain(pushed, x => Encoding.UTF8.GetString(x.Bytes).Contains("\"C3\"", StringComparison.Ordinal));
+        Assert.Equal(3, pushed.Length); // every channel of the subscribed device is journalled
         Assert.Contains(packets, x => x.Protocol == "transport-status" && Encoding.UTF8.GetString(x.Bytes).Contains("deleted", StringComparison.Ordinal));
         Assert.Contains(statuses, x => x.Contains("realtime push", StringComparison.Ordinal));
         Assert.Equal(1, http.Logins);
 
         // The push body decodes with the same decoder as REST history, on the device clock time (timestamp + timeOffset).
         var session = new CaptureSession(Guid.NewGuid(), Guid.Empty, Options(), DateTimeOffset.UtcNow, null, false);
-        var observation = Assert.Single(new AlgeResultsDecoder(session).Feed(new(session.Id, 1, DateTimeOffset.UtcNow, pushed[0].Protocol, pushed[0].Source, pushed[0].Stream, pushed[0].Bytes)));
+        var unrouted = Assert.Single(new AlgeResultsDecoder(session).Feed(new(session.Id, 1, DateTimeOffset.UtcNow, pushed[0].Protocol, pushed[0].Source, pushed[0].Stream, pushed[0].Bytes)));
+        Assert.Equal((ObservationKind.Information, 3), (unrouted.Kind, unrouted.PhysicalChannel)); // C3 is no role: signal monitor only
+        var observation = Assert.Single(new AlgeResultsDecoder(session).Feed(new(session.Id, 2, DateTimeOffset.UtcNow, pushed[1].Protocol, pushed[1].Source, pushed[1].Stream, pushed[1].Bytes)));
+        Assert.Equal(1, observation.PhysicalChannel);
         Assert.Equal((ObservationKind.Impulse, 2), (observation.Kind, observation.Channel));
         Assert.Equal(new DateTime(2026, 10, 4, 20, 6, 44).Ticks, observation.DeviceTicks);
     }

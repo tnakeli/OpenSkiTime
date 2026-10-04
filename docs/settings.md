@@ -25,6 +25,11 @@ Each row shows only the connection fields of its source: USB ID, firmware and **
 
 ALGE Results times are the device clock time set for the device in ALGE Results (`timestamp + timeOffset`, as documented by the API), the same wall-clock time every other device shows. OpenSkiTime has no time zone or UTC offset settings.
 
+**Signal monitor:** while timing is connected, each role row shows on the right the latest impulse per channel of its device, for example `C0 20:46:44.07 · ●C1 20:47:01.33`; ● marks the row's own channel. Press the device buttons or cells to check wiring and channel settings. Channels that no role uses are shown too: for ALGE Results they are journalled as information and never timed, for Timy/MT1 they remain unassigned review input as before.
+**Signal monitor:** while timing is connected, each role row shows on the right the latest impulse per channel of its device, for example `C0 20:46:44.07 · ●C1 20:47:01.33`; ● marks the row's own channel. Press the device buttons or cells to check wiring and channel settings. Channels no role uses are shown too: for ALGE Results they are journalled as information and never timed; for Timy/MT1 they remain unassigned review input as before.
+
+**Device date** dates Timy and MT1 serial times, which carry only the time of day. ALGE Results reports the full date, and a live trigger from another day than the device date is shown for review instead of being timed. Connecting warns when the device date is not today's date.
+
 **Save timing settings** validates the complete configuration and stores it on this computer in `timing-roles.json` in the user's local application data. Passwords are never stored there. Settings cannot be changed while timing is connected; disconnect first. While connected, the Settings tab shows the live B Clock status with **Retry B Clock** and **Disconnect B Clock**; neither interrupts primary timing.
 
 Start/finish difference warnings and missing-signal wait are helper thresholds, initially 1 ms, 10 ms and 5 s. ALGE Results monitoring waits at least 10 s for missing B signals. These settings do not alter timing or FIS rules.

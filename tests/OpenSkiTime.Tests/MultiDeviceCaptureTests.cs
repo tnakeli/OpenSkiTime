@@ -149,6 +149,53 @@ public sealed class MultiDeviceCaptureTests : IDisposable
         Assert.Contains("12:00:00", observation.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AnUnroutedDeviceChannelIsShownAsASignalButNeverTimed()
+    {
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, Path.Combine(_root, "signals.ost"), 1);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        var clock = new SimulatorTimingSource();
+        await timing.StartAsync([new(clock, Device("Timy", "g5", R(0, 0), R(1, 1)))], "Synthetic operator");
+        await clock.PulseAsync(4, Noon); // C4 is not assigned to any role
+        await clock.PulseAsync(0, Noon + TimeSpan.TicksPerSecond);
+        await UntilAsync(() => timing.RecentSignals.Count == 2);
+        Assert.Equal([0, 4], timing.RecentSignals.Select(x => x.Channel).Order());
+        Assert.All(timing.RecentSignals, x => Assert.Equal(TimingSignals.DeviceKey(Device("Timy", "g5", R(0, 0)), "Simulator"), x.Device));
+        Assert.DoesNotContain(timing.Snapshot!.Observations, x => x.State == "Assigned" && x.Observation.PhysicalChannel == 4);
+        await timing.StopAsync();
+        Assert.Empty(timing.RecentSignals);
+    }
+
+    [Fact]
+    public void RunningDisplayTimeIgnoresADeviceTimeFromAnotherDay()
+    {
+        var time = new StepTime();
+        var clock = new RunningTimingClock(time);
+        TimingObservation At(DateOnly date, int second, ObservationKind kind = ObservationKind.Impulse) => new("k" + second, Guid.Empty, 1, "x", "f" + second, kind, 0,
+            date.ToDateTime(new TimeOnly(12, 0, second)).Ticks, 4, null, false, "sync:g:0", "");
+        var raceDay = new DateOnly(2026, 9, 13);
+        var start = At(raceDay, 0);
+        clock.Observe(start, time.GetUtcNow());
+        time.Advance(TimeSpan.FromSeconds(5));
+        clock.Observe(At(raceDay, 5, ObservationKind.Information), time.GetUtcNow());
+        // A device reporting the real calendar date three weeks later must not make the competitor look 21 days on course.
+        clock.Observe(At(new DateOnly(2026, 10, 4), 6), time.GetUtcNow());
+        time.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(700, clock.ElapsedHundredths(start));
+    }
+
+    private sealed class StepTime : TimeProvider
+    {
+        private DateTimeOffset _utc = new(2026, 9, 13, 9, 0, 0, TimeSpan.Zero);
+        private long _timestamp;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _timestamp;
+        public override DateTimeOffset GetUtcNow() => _utc;
+        public void Advance(TimeSpan value) { _timestamp += value.Ticks; _utc += value; }
+    }
+
     private static async Task UntilAsync(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));

@@ -19,7 +19,8 @@ public sealed class RunningTimingClock(TimeProvider? timeProvider = null)
         {
             var delay = Math.Max(0, (_time.GetUtcNow() - receivedAt).Ticks);
             var deviceNow = ticks + delay;
-            if (!_anchors.TryGetValue(observation.ClockId, out var old) || deviceNow >= old.Device)
+            // A display estimate never leaps: a device time more than 12 hours ahead of the current anchor is not adopted.
+            if (!_anchors.TryGetValue(observation.ClockId, out var old) || (deviceNow >= old.Device && deviceNow - old.Device <= TimeSpan.FromHours(12).Ticks))
             { _anchors[observation.ClockId] = (deviceNow, _time.GetTimestamp()); _latestClockId = observation.ClockId; }
         }
     }

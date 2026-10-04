@@ -134,11 +134,11 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         }
     }
 
-    // Push bodies are journalled as received. Triggers of channels this capture does not route are not recorded,
-    // exactly as the REST history only requests routed device channels.
-    private async Task EmitPushAsync(byte[] body, Func<TransportPacket, ValueTask> receive)
+    // Push bodies are journalled as received, for every channel of a subscribed device. Channels no role uses are
+    // decoded as information only (shown in the Settings signal monitor, never timed).
+    private static async Task EmitPushAsync(byte[] body, Func<TransportPacket, ValueTask> receive)
     {
-        string? device = null; int? channel = null; string? change = null;
+        string? device = null; string? change = null;
         try
         {
             using var json = JsonDocument.Parse(body);
@@ -146,11 +146,8 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
             change = root.TryGetProperty("type", out var type) ? type.GetString() : null;
             var dto = root.TryGetProperty("dto", out var inner) ? inner : root;
             device = dto.TryGetProperty("deviceId", out var id) ? id.GetString() : null;
-            var text = dto.TryGetProperty("timingChannel", out var c) ? c.GetString() : null;
-            if (text is { Length: 2 } && text[0] == 'C' && int.TryParse(text.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)) { channel = parsed; }
         }
         catch (JsonException) { /* malformed input is still journalled for review */ }
-        if (device is not null && channel is not null && !_endpoints.Contains((device, channel.Value))) { return; }
         await receive(new("alge-results/v1", device ?? "ALGE Results", "push", body));
         if (change == "ENTITY_DELETE")
         {

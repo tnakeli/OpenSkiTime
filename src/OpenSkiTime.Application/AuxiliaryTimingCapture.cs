@@ -92,6 +92,8 @@ public sealed record AuxiliaryCaptureState(AuxiliaryTimingRole Role, Guid? ListI
     public CaptureOptions? Options { get; init; }
     // Every device session of this role's capture (one per physical connection).
     public IReadOnlyList<CaptureOptions> AllOptions { get; init; } = [];
+    // Latest impulse per physical device channel (Settings signal monitor).
+    public IReadOnlyList<TimingSignal> Signals { get; init; } = [];
 }
 
 // Auxiliary input has no path to TimingEngine, race assignments or result publication.
@@ -200,6 +202,7 @@ public sealed class AuxiliaryTimingWorkspace(IAuxiliaryTimingStore store, ITimin
         private readonly List<AuxiliaryTimingObservation> _observations = [];
         private readonly object _viewGate = new();
         private readonly string[] _connections = Enumerable.Repeat("Connecting…", sources.Length).ToArray();
+        private readonly ConcurrentDictionary<(string, int), TimingSignal> _signals = new();
         private AuxiliaryTimingObservation[] _shown = [];
         private Task? _producer;
         private Task? _writer;
@@ -222,7 +225,7 @@ public sealed class AuxiliaryTimingWorkspace(IAuxiliaryTimingStore store, ITimin
                         Connection, Volatile.Read(ref _fault), Volatile.Read(ref _pending),
                         Interlocked.Read(ref _saved), Volatile.Read(ref _shown))
                         { SessionId = sessions[0].Capture.Id, Options = sessions[0].Capture.Options,
-                          AllOptions = sessions.Select(x => x.Capture.Options).ToArray() };
+                          AllOptions = sessions.Select(x => x.Capture.Options).ToArray(), Signals = IsActive ? _signals.Values.ToArray() : [] };
                 }
             }
         }
@@ -287,7 +290,10 @@ public sealed class AuxiliaryTimingWorkspace(IAuxiliaryTimingStore store, ITimin
                     var key = $"{session.Capture.Id:N}:{packet.Protocol}:{packet.Source}:{packet.Stream}";
                     if (!_decoders.TryGetValue(key, out var decoder))
                     { decoder = factory.Create(session.Capture, packet.Protocol, packet.Source, packet.Stream); _decoders.Add(key, decoder); }
-                    _observations.AddRange(TimingReplay.Decode(decoder, raw).Select(x => AuxiliaryTimingData.Wrap(session, x) with { ReceivedAt = raw.ReceivedAt }));
+                    var decoded = TimingReplay.Decode(decoder, raw, includeInformation: true);
+                    TimingSignals.Record(_signals, session.Capture.Options, decoded, raw.ReceivedAt);
+                    _observations.AddRange(decoded.Where(x => x.Kind != ObservationKind.Information)
+                        .Select(x => AuxiliaryTimingData.Wrap(session, x) with { ReceivedAt = raw.ReceivedAt }));
                     Volatile.Write(ref _shown, _observations.ToArray());
                 }
                 if (change is not null && !_decoders.Values.Any(x => x.HasPendingInput))
