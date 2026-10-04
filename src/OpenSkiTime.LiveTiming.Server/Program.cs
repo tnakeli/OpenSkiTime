@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.SignalR;
 using OpenSkiTime.LiveTiming;
@@ -9,26 +10,46 @@ var maxBodyBytes = Math.Clamp(builder.Configuration.GetValue("LiveTiming:MaxBody
 var creationPerMinute = Math.Clamp(builder.Configuration.GetValue("LiveTiming:CreationPerMinute", 5), 1, 100);
 var requestsPerMinute = Math.Clamp(builder.Configuration.GetValue("LiveTiming:RequestsPerMinute", 3000), 60, 100000);
 var maxConnections = Math.Clamp(builder.Configuration.GetValue("LiveTiming:MaxConnections", 1000), 10, 10000);
+var connectionsPerClient = Math.Clamp(builder.Configuration.GetValue("LiveTiming:ConnectionsPerClient", 200), 1, maxConnections);
+var trustForwardedFor = builder.Configuration.GetValue("LiveTiming:TrustForwardedFor", false);
 builder.WebHost.ConfigureKestrel(o =>
 {
     o.Limits.MaxRequestBodySize = maxBodyBytes;
     o.Limits.MaxConcurrentConnections = maxConnections; o.Limits.MaxConcurrentUpgradedConnections = maxConnections;
 });
+builder.Logging.AddFilter(PublisherAudit.Category, LogLevel.Information);
 builder.Services.Configure<JsonOptions>(o => { foreach (var c in LiveJson.Options.Converters) { o.SerializerOptions.Converters.Add(c); } });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SessionStore>();
+builder.Services.AddSingleton<PublisherKeys>();
 builder.Services.AddSignalR(o => { o.MaximumReceiveMessageSize = 4096; o.MaximumParallelInvocationsPerClient = 1; })
     .AddJsonProtocol(o => { foreach (var c in LiveJson.Options.Converters) { o.PayloadSerializerOptions.Converters.Add(c); } });
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
-    o.AddPolicy("creation", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+    o.AddPolicy("creation", context => RateLimitPartition.GetFixedWindowLimiter(Client(context),
         _ => new FixedWindowRateLimiterOptions { PermitLimit = creationPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(_ => RateLimitPartition.GetFixedWindowLimiter("global",
+    // Long-lived viewer sockets are bounded per client so one source cannot take every connection slot.
+    o.AddPolicy("viewers", context => RateLimitPartition.GetConcurrencyLimiter(Client(context),
+        _ => new ConcurrencyLimiterOptions { PermitLimit = connectionsPerClient, QueueLimit = 0 }));
+    // Partitioned per client: one flooding source exhausts only its own budget, not the shared service.
+    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context => RateLimitPartition.GetFixedWindowLimiter(Client(context),
         _ => new FixedWindowRateLimiterOptions { PermitLimit = requestsPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
+if (trustForwardedFor)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(o =>
+    {
+        // Behind exactly one trusted ingress proxy, which appends the real client address as the last entry.
+        o.ForwardedHeaders = ForwardedHeaders.XForwardedFor; o.ForwardLimit = 1;
+        o.KnownIPNetworks.Clear(); o.KnownProxies.Clear();
+    });
+}
 var app = builder.Build();
 _ = app.Services.GetRequiredService<SessionStore>(); // Fail before listening if signing configuration is invalid.
+_ = app.Services.GetRequiredService<PublisherKeys>(); // Fail before listening if publisher keys are missing or invalid.
+var audit = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(PublisherAudit.Category);
+if (trustForwardedFor) { app.UseForwardedHeaders(); }
 app.Use(async (context, next) =>
 {
     context.Response.Headers.CacheControl = "no-store";
@@ -42,10 +63,17 @@ app.Use(async (context, next) =>
 app.UseRateLimiter();
 app.UseDefaultFiles(); app.UseStaticFiles();
 app.MapGet("/health", () => Results.Ok(new { status = "Running", processId = Environment.ProcessId }));
-app.MapPost("/api/sessions", (HttpContext context, SessionStore store, IConfiguration config) =>
+app.MapGet("/.well-known/security.txt", (HttpContext context, IConfiguration config, TimeProvider time) =>
+    Results.Text(SecurityTxt.Create(PublicBase(context, config), config, time.GetUtcNow()), "text/plain; charset=utf-8"));
+app.MapGet("/api/sessions", (SessionStore store) => Results.Ok(store.List()));
+app.MapPost("/api/sessions", (HttpContext context, SessionStore store, PublisherKeys keys, IConfiguration config) =>
 {
-    var publicBase = config["LiveTiming:PublicBaseUrl"] ?? $"{context.Request.Scheme}://{context.Request.Host}";
-    return Results.Ok(store.Create(publicBase));
+    var header = context.Request.Headers.Authorization.ToString();
+    if (keys.Authenticate(header.StartsWith("Bearer ", StringComparison.Ordinal) ? header[7..] : null) is not { } publisher)
+    { return Results.Unauthorized(); }
+    var session = store.Create(PublicBase(context, config));
+    PublisherAudit.SessionCreated(audit, session.SessionId, publisher);
+    return Results.Ok(session);
 }).RequireRateLimiting("creation");
 app.MapGet("/api/sessions/{id:guid}/state", (Guid id, SessionStore store) => store.Read(id) is { } state ? Results.Ok(state) : Results.NotFound());
 app.MapPut("/api/sessions/{id:guid}/state", async (Guid id, LiveSnapshot state, HttpContext context, SessionStore store, IHubContext<LiveHub> hub) =>
@@ -70,10 +98,13 @@ app.MapPost("/api/sessions/{id:guid}/pause", async (Guid id, HttpContext context
 });
 app.MapDelete("/api/sessions/{id:guid}", Delete);
 app.MapDelete("/api/sessions/{id:guid}/data", Delete);
-app.MapHub<LiveHub>("/live");
+app.MapHub<LiveHub>("/live").RequireRateLimiting("viewers");
 app.MapGet("/r/{id:guid}", (IWebHostEnvironment env) => Results.File(Path.Combine(env.WebRootPath, "index.html"), "text/html"));
 app.Run();
 
+static string Client(HttpContext context) => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+static string PublicBase(HttpContext context, IConfiguration config)
+    => config["LiveTiming:PublicBaseUrl"] ?? $"{context.Request.Scheme}://{context.Request.Host}";
 static DateTimeOffset? Authorize(HttpContext context, SessionStore store, Guid id)
 {
     var header = context.Request.Headers.Authorization.ToString();

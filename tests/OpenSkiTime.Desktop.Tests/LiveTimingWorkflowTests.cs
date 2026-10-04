@@ -40,6 +40,11 @@ public partial class DesktopWorkflowTests
             try
             {
                 vm.LiveTimeZone="Europe/Helsinki"; vm.LiveLocalEndpoint=$"http://localhost:{ProcessFixture.Port()}"; vm.LiveCloudEndpoint=cloudServer.Endpoint;
+                // Settings saves the operator-issued key per server; the control panel reads it only when Cloud starts.
+                vm.LivePublisherKeyInput="too-short"; vm.SaveLivePublisherKeyCommand.Execute(null); Assert.True(vm.IsError);
+                vm.LivePublisherKeyInput=cloudServer.PublisherKey; vm.SaveLivePublisherKeyCommand.Execute(null);
+                Assert.False(vm.IsError,vm.StatusMessage); Assert.Equal("",vm.LivePublisherKeyInput);
+                Assert.Equal("Publisher key saved for this server and Windows user.",vm.LivePublisherKeyStatus);
                 var local=vm.LiveChannels[0]; var cloud=vm.LiveChannels[1];
                 await local.StartCommand.ExecuteAsync(null); await cloud.StartCommand.ExecuteAsync(null);
                 await LiveUiUntil(()=>local.Status=="Running"&&cloud.Status=="Running");
@@ -112,6 +117,8 @@ public partial class DesktopWorkflowTests
         {
             if(OperatingSystem.IsWindows()&&cloudEndpoint is not null&&competitionId!=Guid.Empty)
             { new WindowsCredentialStore("OpenSkiTime.LiveTiming:"+competitionId.ToString("N")+":"+Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cloudEndpoint)))[..16]).Remove(); }
+            if(OperatingSystem.IsWindows()&&cloudEndpoint is not null)
+            { new WindowsCredentialStore(OpenSkiTime.LiveTiming.Client.PublisherKeyCredential.Target(cloudEndpoint)).Remove(); }
             Directory.Delete(root,true);
         }
     }

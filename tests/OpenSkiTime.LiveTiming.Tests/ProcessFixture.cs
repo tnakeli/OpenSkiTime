@@ -31,12 +31,19 @@ internal static class ProcessFixture
         while (!condition()) { await Task.Delay(50,timeout.Token); }
     }
 }
-internal sealed class ServerProcess(int maxSessions = 100) : IAsyncDisposable
+internal sealed class ServerProcess(int maxSessions = 100, IReadOnlyDictionary<string, string>? environment = null) : IAsyncDisposable
 {
     private Process? _process;
     private readonly string _key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     public string Endpoint { get; } = $"http://127.0.0.1:{ProcessFixture.Port()}";
     public string SigningKey => _key;
+    public string PublisherKey { get; } = LivePublisherKey.Generate();
+    public HttpRequestMessage CreateSession(string? key = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, Endpoint + "/api/sessions");
+        request.Headers.Authorization = new("Bearer", key ?? PublisherKey);
+        return request;
+    }
     public async Task Start()
     {
         var assembly = ProcessFixture.Artifact("Server");
@@ -45,6 +52,8 @@ internal sealed class ServerProcess(int maxSessions = 100) : IAsyncDisposable
         start.ArgumentList.Add(assembly); start.ArgumentList.Add("--urls"); start.ArgumentList.Add(Endpoint);
         start.Environment["LiveTiming__SigningKey"] = _key; start.Environment["Logging__LogLevel__Default"] = "Warning";
         start.Environment["LiveTiming__MaxSessions"] = maxSessions.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        start.Environment["LiveTiming__PublisherKeys"] = "test-publisher:" + LivePublisherKey.Hash(PublisherKey);
+        foreach (var (name, value) in environment ?? new Dictionary<string, string>()) { start.Environment[name] = value; }
         _process = Process.Start(start)!;
         _process.OutputDataReceived += (_,_) => { }; _process.ErrorDataReceived += (_,_) => { };
         _process.BeginOutputReadLine(); _process.BeginErrorReadLine();
