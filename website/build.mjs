@@ -14,7 +14,7 @@ const pages = [
 ];
 const header = `<a class="skip" href="#main">Skip to content</a>
 <header class="site-header"><div class="shell header-inner"><a class="brand" href="/" aria-label="OpenSkiTime home"><img src="/favicon.svg" width="34" height="34" alt="">OpenSkiTime<span class="brand-dot">.</span></a><nav aria-label="Main navigation"><a href="/#workflow">Features</a><a href="/guide/">Get started</a><a href="${repo}">GitHub <span aria-hidden="true">↗</span></a><a class="nav-download" href="/download/">Download <span aria-hidden="true">↓</span></a></nav></div></header>`;
-const footer = `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="/">OpenSkiTime<span class="brand-dot">.</span></a><p>Made for the people behind the race.</p></div><div class="shell footer-bottom"><span>Open source · MIT license</span><nav aria-label="Footer"><a href="/privacy/">Privacy</a><a href="${repo}/blob/master/LICENSE">License</a><a href="${repo}/issues">Report an issue ↗</a><a href="${repo}">Source code ↗</a></nav></div></footer>`;
+const footer = `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="/">OpenSkiTime<span class="brand-dot">.</span></a><p>Made for the people behind the race.</p></div><div class="shell footer-bottom"><span>Open source · MIT license</span><nav aria-label="Footer"><a href="/privacy/">Privacy</a><a href="${repo}/blob/master/LICENSE">License</a><a href="${repo}/issues">Report an issue ↗</a><a href="${repo}/security/advisories/new">Report a vulnerability ↗</a><a href="${repo}">Source code ↗</a></nav></div></footer>`;
 
 let release = null;
 if (process.env.OPENSKITIME_RELEASE_FILE) {
@@ -47,5 +47,9 @@ for (const [name, route, title, description] of pages) {
   await mkdir(target, { recursive: true });
   await writeFile(path.join(target, name === '404' ? '404.html' : 'index.html'), html);
 }
+// RFC 9116. Each deployment renews the expiry; the contact is GitHub private vulnerability reporting.
+const expires = new Date(Date.UTC(new Date().getUTCFullYear() + 1, new Date().getUTCMonth(), new Date().getUTCDate()));
+await mkdir(path.join(output, '.well-known'), { recursive: true });
+await writeFile(path.join(output, '.well-known', 'security.txt'), `Contact: ${repo}/security/advisories/new\nExpires: ${expires.toISOString().replace('.000Z', 'Z')}\nPolicy: ${repo}/blob/master/SECURITY.md\nPreferred-Languages: en, fi\nCanonical: https://openskiti.me/.well-known/security.txt\n`);
 await writeFile(path.join(output, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${pages.filter(p => p[0] !== '404').map(p => `<url><loc>https://openskiti.me${p[1]}</loc></url>`).join('')}</urlset>\n`);
 console.log(`Built ${pages.length} pages in ${output}; download: ${asset ? release.tag_name : 'pre-release'}.`);
