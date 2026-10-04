@@ -37,7 +37,7 @@ This sequence is not implemented yet because only protocol 1 exists. Implement m
 
 OpenSkiTime is in development and testing, expected to last about one year (through the 2026-27 season), with real-race testing planned for the following season. During this phase releases are `0.x` previews for rehearsal and evaluation, and series files are not migrated: a new version may reject files created by an earlier one, without modifying them.
 
-Database migrations are introduced before the first release intended for real race use, and earlier if testers need to keep series files across versions. From that release on, every changelog section must state how existing `.ost` files are upgraded, and a release that cannot open the previous release's files is not allowed.
+Database migrations are introduced before the first release intended for real race use, and earlier if testers need to keep series files across versions. Existing `.ost` files are never upgraded in place: a migration always creates a new series file from the old one and leaves the original unchanged, so the previous version can still open it. From that release on, a changelog section must state when a version creates a new series file from older ones, and a release that cannot migrate the previous release's files is not allowed.
 
 ## Changelog practice
 
