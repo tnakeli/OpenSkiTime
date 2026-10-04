@@ -1,5 +1,6 @@
 using System.Globalization;
 using OpenSkiTime.Application;
+using OpenSkiTime.Domain;
 using OpenSkiTime.Timing;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -20,6 +21,12 @@ public sealed class QuestPdfRenderer : IReportPdfRenderer
             RefereeReportDocument.Create(data).GeneratePdf(destination);
             return;
         }
+        if (data.Descriptor.Type == PdfReportType.TimingReport)
+        {
+            // The FIS form has its own fixed layout, without organizer background or report header.
+            TimingReportFormDocument.Create(data).GeneratePdf(destination);
+            return;
+        }
         profile.Validate();
         var document = Document.Create(container => container.Page(page =>
         {
@@ -35,13 +42,12 @@ public sealed class QuestPdfRenderer : IReportPdfRenderer
                 {
                     case PdfReportType.PenaltyCalculation: PenaltyCalculationDocument.Compose(column, data); break;
                     case PdfReportType.OfficialResults: OfficialResultsDocument.Compose(column, data); break;
-                    case PdfReportType.TimingReport: TimingReportDocument.Compose(column, data); break;
                     default: EntriesDocument.Compose(column, data); break;
                 }
             });
             page.Footer().PaddingTop(6).Row(row =>
             {
-                row.RelativeItem().Text("OpenSkiTime | " + data.GeneratedAt.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture)).FontSize(7);
+                row.RelativeItem().Text(ProductInfo.DisplayName + " | " + data.GeneratedAt.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture)).FontSize(7);
                 row.AutoItem().Text(text => { text.Span("Page "); text.CurrentPageNumber(); text.Span(" / "); text.TotalPages(); });
             });
         }));
@@ -153,18 +159,42 @@ internal static class EntriesDocument
     {
         var start = data.Descriptor.Type == PdfReportType.StartList;
         if (data.Groups.Count == 0 || data.Groups.All(x => x.Entries.Count == 0)) { column.Item().Text("No entries."); }
+        var columns = start ? StartColumns() : EntryColumns(data);
         foreach (var group in data.Groups)
         {
             if (group.Label.Length > 0) { ReportComponents.Heading(column, group.Label + " (" + group.Entries.Count + ")"); }
-            ReportComponents.Table(column.Item(), start ? ["Pos", "Bib", "Code", "Name", "Year", "Nation", "Club", "Points"]
-                : ["Bib", "Code", "Name", "Year", "Nation", "Club", "Category"], group.Entries.Select(x => start
-                    ? new[] { ReportComponents.Number(x.Position), ReportComponents.Number(x.Bib), x.Athlete.FederationCode ?? "", x.Athlete.Surname + " " + x.Athlete.FirstName,
-                        ReportComponents.Number(x.Athlete.BirthYear), x.Athlete.Nation ?? "", x.Athlete.Club ?? "", x.Points?.ToString("0.00", CultureInfo.InvariantCulture) ?? "" }
-                    : new[] { ReportComponents.Number(x.Bib), x.Athlete.FederationCode ?? "", x.Athlete.Surname + " " + x.Athlete.FirstName,
-                        ReportComponents.Number(x.Athlete.BirthYear), x.Athlete.Nation ?? "", x.Athlete.Club ?? "", x.Category }),
-                start ? [0.5f, 0.5f, 0.9f, 2.8f, 0.7f, 0.7f, 1.5f, 0.8f] : [0.5f, 0.9f, 2.8f, 0.7f, 0.7f, 1.5f, 1.3f]);
+            ReportComponents.Table(column.Item(), columns.Select(x => x.Header).ToArray(),
+                group.Entries.Select(row => columns.Select(x => x.Value(row)).ToArray()), columns.Select(x => x.Width).ToArray());
         }
         column.Item().PaddingTop(6).Text("Entries: " + data.Groups.Sum(x => x.Entries.Count));
+    }
+    private sealed record EntryColumn(string Header, float Width, Func<EntryReportRow, string> Value);
+    private static string Name(EntryReportRow x) => x.Athlete.Surname + " " + x.Athlete.FirstName;
+    private static EntryColumn[] StartColumns() =>
+    [
+        new("Pos", 0.5f, x => ReportComponents.Number(x.Position)), new("Bib", 0.5f, x => ReportComponents.Number(x.Bib)),
+        new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name), new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)),
+        new("Nation", 0.7f, x => x.Athlete.Nation ?? ""), new("Club", 1.5f, x => x.Athlete.Club ?? ""),
+        new("Points", 0.8f, x => x.Points?.ToString("0.00", CultureInfo.InvariantCulture) ?? "")
+    ];
+    private static EntryColumn[] EntryColumns(PdfReportData data)
+    {
+        var rows = data.Groups.SelectMany(x => x.Entries).ToArray();
+        var columns = new List<EntryColumn>();
+        // A column that no entrant has a value for carries no information and is omitted.
+        if (rows.Any(x => x.Bib is not null)) { columns.Add(new("Bib", 0.5f, x => ReportComponents.Number(x.Bib))); }
+        columns.AddRange([new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name),
+            new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)), new("Nation", 0.7f, x => x.Athlete.Nation ?? ""),
+            new("Club", 1.5f, x => x.Athlete.Club ?? "")]);
+        if (rows.Any(x => x.Category is not ("" or CategoryResolver.Unclassified))) { columns.Add(new("Category", 1.3f, x => x.Category)); }
+        if (data.Descriptor.CompetitionId is null)
+        {
+            // Series entries mark each competition the entrant participates in, in race order.
+            var participations = data.Source.Desk.Participations.Where(p => p.Participates).Select(p => (p.CompetitorId, p.CompetitionId)).ToHashSet();
+            foreach (var race in data.Source.Series.Competitions.OrderBy(x => x.Values.Date).ThenBy(x => x.Values.ShortLabel, StringComparer.Ordinal).ThenBy(x => x.Id))
+            { columns.Add(new(race.Values.ShortLabel, 0.8f, x => participations.Contains((x.Id, race.Id)) ? "X" : "")); }
+        }
+        return columns.ToArray();
     }
 }
 
@@ -224,51 +254,5 @@ internal static class PenaltyCalculationDocument
                 $"A = {penalty.SumA:0.00}   B = {penalty.SumB:0.00}   C = {penalty.SumC:0.00}\nCalculated penalty = {penalty.Calculated:0.00}\nCorrection Z = {penalty.Rules.Correction:0.00}   Adder = {penalty.Rules.Adder:0.00}\nMinimum = {penalty.Rules.Minimum:0.00}   Maximum = {penalty.Rules.Maximum:0.00}\nApplied penalty = {penalty.Applied:0.00}   F = {penalty.FValue}   Points cap = {penalty.MaximumPoints:0.00}\nDouble minimum: {penalty.DoubleMinimum}"));
         }
         ReportComponents.ManualLine(column, "Technical delegate signature (manual)");
-    }
-}
-
-internal static class TimingReportDocument
-{
-    public static void Compose(ColumnDescriptor column, PdfReportData data)
-    {
-        if (data.Source.TimingReport is { } saved)
-        {
-            var draft = saved.Values;
-            column.Item().Text($"Timing report revision {saved.Revision} | Reviewed: {draft.Reviewed} | FIS certification: {draft.CertifyFis}");
-            foreach (var device in new[] { ("Timer A", draft.Defaults.TimerA), ("Timer B", draft.Defaults.TimerB), ("Start device", draft.Defaults.StartDevice),
-                ("Finish cells A", draft.Defaults.FinishCellsA), ("Finish cells B", draft.Defaults.FinishCellsB) })
-            { column.Item().Text(device.Item1 + ": " + device.Item2.Brand + " " + device.Item2.Model + " | Serial " + device.Item2.Serial + " | Homologation " + device.Item2.Homologation); }
-            column.Item().Text("Chief of timing: " + draft.Defaults.ChiefOfTiming.LastName + " " + draft.Defaults.ChiefOfTiming.FirstName);
-            ReportComponents.Table(column.Item(), ["Synchronization", "Time of day", "Precision", "Verified"],
-                new[] { ("A/B synchronization", draft.Sync), ("Hand synchronization", draft.HandSync), ("A check", draft.SyncCheckA), ("B check", draft.SyncCheckB) }
-                    .Select(x => new[] { x.Item1, TimingTime.FormatTimeOfDay(x.Item2?.Ticks), ReportComponents.Number(x.Item2?.Precision), x.Item2?.Verified.ToString() ?? "" }));
-            foreach (var run in draft.Runs)
-            {
-                ReportComponents.Heading(column, "Run " + run.Run);
-                column.Item().Text("First bib: " + run.First.Bib + " | Last bib: " + run.Last.Bib + " | Best bib: " + run.BestBib + " | Best time: " + TimingTime.Format(run.BestHundredths));
-                column.Item().Text("All results from A: " + run.AllResultsA + " | " + run.Comment);
-                foreach (var sample in new[] { ("First", run.First), ("Last", run.Last) })
-                {
-                    ReportComponents.Heading(column, sample.Item1 + " competitor | Bib " + sample.Item2.Bib);
-                    ReportComponents.Table(column.Item(), ["Clock", "Start", "Finish", "Net"],
-                        [new[] { "A", TimingTime.FormatTimeOfDay(sample.Item2.AStart?.Ticks), TimingTime.FormatTimeOfDay(sample.Item2.AFinish?.Ticks), TimingTime.Format(sample.Item2.NetHundredths) },
-                         new[] { "B", TimingTime.FormatTimeOfDay(sample.Item2.BStart?.Ticks), TimingTime.FormatTimeOfDay(sample.Item2.BFinish?.Ticks), "" },
-                         new[] { "Hand", TimingTime.FormatTimeOfDay(sample.Item2.HandStart?.Ticks), TimingTime.FormatTimeOfDay(sample.Item2.HandFinish?.Ticks), "" }]);
-                }
-                foreach (var missed in run.MissedA) { column.Item().Text("Bib " + missed.Bib + " | " + missed.Reason + " | Time from " + missed.TimeFrom); }
-            }
-        }
-        foreach (var run in data.Source.Runs)
-        {
-            ReportComponents.Heading(column, "Run " + run.List.Plan.RunNumber + " | " + GenderLabels.Format(run.List.Plan.Gender));
-            ReportComponents.Table(column.Item(), ["Device", "Channels", "Started", "Stopped", "Packets"], run.Source.Sessions.Select(x => new[]
-            { x.Options.Device, "Start " + x.Options.StartChannel + " / Finish " + x.Options.FinishChannel,
-                x.StartedAt.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture), x.StoppedAt?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture) ?? "Active",
-                ReportComponents.Number(run.Source.Packets.Count(p => p.SessionId == x.Id)) }));
-            column.Item().Text("Observations: " + run.Timing.Observations.Count + " | Unresolved: " + run.Timing.Unresolved + " | Audit decisions: " + run.Timing.Audit.Count);
-            ReportComponents.Table(column.Item(), ["Bib", "Status", "Net time", "Detail"], run.Timing.Results.Select(x => new[]
-            { ReportComponents.Number(x.Bib), x.Status.ToString(), x.Time, x.Detail }));
-        }
-        ReportComponents.ManualLine(column, "Chief of timing signature (manual)");
     }
 }
