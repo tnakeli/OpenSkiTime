@@ -6,7 +6,7 @@ This is the maintainer checklist for publishing a desktop application release (`
 
 | Product | Tag | Changelog | GitHub release | Triggered workflow |
 |---|---|---|---|---|
-| Desktop application (installer, portable ZIP, local live server) | `vX.Y.Z`, `vX.Y.Z-preview.N` | [CHANGELOG.md](../CHANGELOG.md) | "OpenSkiTime vX.Y.Z" with installer, ZIP, SBOM, CVE reports and checksums. Stable versions are marked *Latest* and update the website download. | `windows-release.yml` |
+| Desktop application (installer, portable ZIP, local live server) | `vX.Y.Z`, `vX.Y.Z-preview.N` | [CHANGELOG.md](../CHANGELOG.md) | "OpenSkiTime vX.Y.Z" with installer, ZIP, SBOM, CVE reports and checksums. Stable versions are marked *Latest*. The website download offers the newest stable version, or the newest preview while no stable version exists. | `windows-release.yml` |
 | Hosted live timing server (`live.openskiti.me`) | `live-vX.Y.Z` | [CHANGELOG-LIVE.md](../CHANGELOG-LIVE.md) | "OpenSkiTime Live live-vX.Y.Z" with notes and the deployed image digest, no files. Created with *Latest* disabled (GitHub still shows it as latest until a stable application release exists; the website ignores it). Created only after a successful deployment. | `live.yml` |
 
 Nothing is released automatically by merging. Pull requests, master merges and manual `live.yml` dispatches create no GitHub release. Only a pushed tag does. Website content changes still deploy on merge; that is not a release.

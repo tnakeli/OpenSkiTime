@@ -37,7 +37,7 @@ Use an end date later than the start date. Azure may require time before cost da
 
 ## Website development
 
-The dependency-free Node builder generates a responsive English website: landing page, download page, first-race guide, privacy page and 404 page. The screenshots are synthetic desktop captures. There are no visitor scripts, forms or analytics cookies. Security headers are in `website/staticwebapp.config.json`. Download links are generated only from a published stable `vX.Y.Z` release with the expected upstream installer; before that, the site honestly offers source instructions.
+The dependency-free Node builder generates a responsive English website: landing page, download page, first-race guide, privacy page and 404 page. The screenshots are synthetic desktop captures. There are no visitor scripts, forms or analytics cookies. Security headers are in `website/staticwebapp.config.json`. Download links are generated from the newest published stable `vX.Y.Z` release with the expected upstream installer. While no stable release exists, the newest `vX.Y.Z-preview.N` release is offered instead, labelled as a preview with a backup-timing warning. Without either, the site offers source instructions.
 
 ```powershell
 node website/build.mjs
@@ -47,7 +47,7 @@ node website/preview.mjs
 # Open http://127.0.0.1:4173
 ```
 
-Before publication, review the website on a desktop and narrow/mobile viewport. Local HTML/link checks are not a substitute for browser review. Stable releases trigger a rebuild, so installer links cannot get ahead of release publication. Prereleases remain available on GitHub Releases but do not replace the stable website download.
+Before publication, review the website on a desktop and narrow/mobile viewport. Local HTML/link checks are not a substitute for browser review. Every application release triggers a rebuild after publication, so installer links cannot get ahead of release publication. Once a stable release exists, later previews remain available on GitHub Releases but do not replace the stable website download.
 
 ## Security boundaries
 

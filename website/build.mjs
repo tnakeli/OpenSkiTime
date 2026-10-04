@@ -20,18 +20,21 @@ const footer = `<footer class="site-footer"><div class="shell footer-top"><a cla
 let release = null;
 if (process.env.OPENSKITIME_RELEASE_FILE) {
   release = JSON.parse(await readFile(process.env.OPENSKITIME_RELEASE_FILE, 'utf8'));
-  if (release.draft || release.prerelease || !/^v\d+\.\d+\.\d+$/.test(release.tag_name ?? '')) {
-    throw new Error('The website only links to a published stable release.');
+  // Stable vX.Y.Z, or a vX.Y.Z-preview.N prerelease while no stable release exists (scripts/read-release.mjs).
+  const tag = release.prerelease ? /^v\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/ : /^v\d+\.\d+\.\d+$/;
+  if (release.draft || !tag.test(release.tag_name ?? '')) {
+    throw new Error('The website only links to a published application release.');
   }
 }
-const asset = release?.assets?.find(a => /^OpenSkiTime-\d+\.\d+\.\d+-win-x64-setup\.exe$/.test(a.name));
-if (release && !asset) throw new Error('Stable release has no Windows installer.');
+const asset = release?.assets?.find(a => a.name === `OpenSkiTime-${release.tag_name.slice(1)}-win-x64-setup.exe`);
+if (release && !asset) throw new Error('Release has no Windows installer.');
+const preview = release?.prerelease === true;
 if (asset && !asset.browser_download_url.startsWith(`${repo}/releases/download/${release.tag_name}/`)) {
   throw new Error('Unexpected release asset origin.');
 }
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const download = asset
-  ? `<p class="eyebrow">Windows x64 · ${escape(release.tag_name)}</p><h2>Ready for your next rehearsal.</h2><p>The installer includes the .NET runtime and the local live timing tools.</p><a class="button" href="${escape(asset.browser_download_url)}">Download for Windows <span aria-hidden="true">↓</span></a><p class="small"><a href="${repo}/releases/tag/${escape(release.tag_name)}">Release notes and SHA-256 checksums ↗</a></p><p class="notice">This installer is currently unsigned. Windows may display an unknown-publisher warning. Download only from this project’s GitHub Releases.</p>`
+  ? `<p class="eyebrow">Windows x64 · ${escape(release.tag_name)}${preview ? ' · Preview' : ''}</p><h2>${preview ? 'Try the development preview.' : 'Ready for your next rehearsal.'}</h2><p>${preview ? 'A preview for testing and rehearsals. Do not rely on it alone at an official race; always use independent backup timing. ' : ''}The installer includes the .NET runtime and the local live timing tools.</p><a class="button" href="${escape(asset.browser_download_url)}">Download for Windows <span aria-hidden="true">↓</span></a><p class="small"><a href="${repo}/releases/tag/${escape(release.tag_name)}">Release notes and SHA-256 checksums ↗</a></p><p class="notice">This installer is currently unsigned. Windows may display an unknown-publisher warning. Download only from this project’s GitHub Releases.</p>`
   : `<p class="eyebrow">Pre-release development</p><h2>The first installer is on its way.</h2><p>There is no published Windows installer yet. You can run the current development version from source and follow progress on GitHub.</p><a class="button" href="${repo}/releases">View releases <span aria-hidden="true">↗</span></a><p class="small"><a href="/guide/#from-source">Run from source →</a></p>`;
 
 await mkdir(path.join(output, 'assets'), { recursive: true });
