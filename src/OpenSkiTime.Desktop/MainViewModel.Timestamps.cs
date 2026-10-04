@@ -51,6 +51,16 @@ public sealed partial class MainViewModel
         return null;
     }
 
+    // Live hover preview only: reads the in-memory snapshot and never touches capture, audit or storage.
+    public TimingDropPreview? TimingDropPreviewFor(TimingDragCompetitor item, TimingTimestampCell? cell)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (cell is null || cell.Channel == 0 || TimingDropProblem(item, cell, false) is not null
+            || workspace.Timing?.Snapshot is not { } snapshot) { return null; }
+        var preview = TimingEngine.PreviewAssignment(snapshot, item.Bib, cell.Key, 0, 1);
+        return TimingDropPreview.From(preview);
+    }
+
     public Task DropTimingCompetitorAsync(TimingDragCompetitor item, TimingTimestampCell? cell, bool toStart) => GuardAsync(async () =>
     {
         if (TimingDropProblem(item, cell, toStart) is { } problem) { throw new DomainValidationException(problem); }

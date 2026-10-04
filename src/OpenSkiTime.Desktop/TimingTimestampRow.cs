@@ -52,3 +52,16 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
 }
 
 public sealed record TimingDragCompetitor(Guid Workspace, Guid ListId, int Bib, string Name, string? StartKey, IReadOnlyList<string> AssignedKeys);
+
+public sealed record TimingDropPreview(string Bib, string Result, bool IsValid)
+{
+    public static TimingDropPreview? From(AssignmentPreview preview)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+        if (preview.Channel is not ({ } channel and > 0)) { return null; }
+        var position = channel == 1 ? "Finish" : $"Intermediate {channel - 1}";
+        return preview.Hundredths is { } hundredths
+            ? new($"Bib: {preview.Bib}", $"{position}: {TimingTime.Format(hundredths)}", true)
+            : new($"Bib: {preview.Bib}", preview.Problem ?? "No time", false);
+    }
+}
