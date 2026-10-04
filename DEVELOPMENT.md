@@ -52,6 +52,10 @@ The native USB library for ALGE Timy timing devices is Windows-only. These tests
 
 Windows-specific credential storage (Windows Data Protection API) tests only run on Windows.
 
+### Desktop Workflow Tests — Headless environment only
+
+The headless Avalonia testing environment on Linux has limitations with complex UI layout and navigation tests. These tests are included in the Windows CI where the full Avalonia rendering pipeline is available.
+
 ## Testing
 
 ### Running all tests
