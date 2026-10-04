@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,7 +23,6 @@ public sealed partial class MainViewModel
     public ObservableCollection<TimingGridRow> OnCourseRows { get; } = [];
     public ObservableCollection<TimingGridRow> FinishedTimingRows { get; } = [];
     public ObservableCollection<int> TimingCheckpoints { get; } = [];
-    [ObservableProperty] private string _timingIntermediateChannels = "";
     [ObservableProperty] private string _timingDeviceClock = "--:--:--";
     [ObservableProperty] private bool _startInputOn = true;
     [ObservableProperty] private bool _finishInputOn = true;
@@ -61,43 +59,6 @@ public sealed partial class MainViewModel
         { row.Clock.Marker = row.Bib == timing?.ArmedFinish ? "▶" : ""; }
         ExpectedFinishTime = OnCourseRows.FirstOrDefault(x => x.Bib == timing?.ArmedFinish)?.Clock.Time ?? "—";
     }
-    // Interim bridge: maps role assignments onto the existing single-source fields. Replaced by the role-based Settings UI.
-    public void LoadTimingPreferences()
-    {
-        if (timingPreferencesStore?.Load() is not { Start: { } start } p) { return; }
-        var c = start.Connection;
-        TimingSource = c.SourceLabel;
-        TimingPort = c.Port; TimyDeviceId = c.UsbId; TimingBaud = c.BaudRate; TimingFirmware = c.Firmware;
-        TimingStartChannel = start.Channel; TimingFinishChannel = p.Finish?.Channel ?? 1;
-        TimingIntermediateChannels = string.Join(",", p.Intermediates.Select(x => x.Channel));
-    }
-
-    [RelayCommand] private async Task SaveTimingPreferencesAsync() => await GuardAsync(() =>
-    {
-        if (!CanChangeTimingDevice) { throw new DomainValidationException("Disconnect capture before changing settings."); }
-        var connection = new TimingConnection(TimingSourceTypes.Parse(TimingSource) ?? throw new DomainValidationException("Choose a timing source."))
-        { Port = TimingPort, UsbId = TimyDeviceId, BaudRate = TimingBaud, Firmware = TimingFirmware, AlgeUsername = Mt1Username };
-        var assignments = new List<TimingSourceAssignment>
-        {
-            new(TimingRole.Start, connection with { AlgeDeviceId = Mt1StartDevice }, TimingStartChannel),
-            new(TimingRole.Finish, connection with { AlgeDeviceId = Mt1FinishDevice }, TimingFinishChannel)
-        };
-        assignments.AddRange(ReadIntermediateChannels().Select((channel, i) => new TimingSourceAssignment(TimingRole.Intermediate(i + 1), connection, channel)));
-        var existing = timingPreferencesStore?.Load() ?? TimingRoleConfiguration.Empty;
-        timingPreferencesStore?.Save(existing with { Assignments = existing.Assignments.Where(x => x.Role.IsBackup).Concat(assignments).ToArray() });
-        SetStatus("Timing settings saved on this computer.");
-        return Task.CompletedTask;
-    });
-
-    private int[] ReadIntermediateChannels()
-    {
-        if (string.IsNullOrWhiteSpace(TimingIntermediateChannels)) { return []; }
-        var parts = TimingIntermediateChannels.Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Any(x => !int.TryParse(x, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
-        { throw new DomainValidationException("Enter intermediate channels separated by commas, for example 2,3."); }
-        return parts.Select(x => int.Parse(x, CultureInfo.InvariantCulture)).ToArray();
-    }
-
     [RelayCommand] private async Task ReturnToTimingAsync()
     {
         if (!HasTimingRun) { return; }
@@ -123,7 +84,8 @@ public sealed partial class MainViewModel
     private void ConfigureTimingCheckpoints()
     {
         TimingCheckpoints.Clear();
-        var count = Math.Min(ReadIntermediateChannels().Length,
+        // A race uses as many configured intermediate roles as its competition defines.
+        var count = Math.Min(TimingIntermediateRoles.Count,
             TimingCompetition?.Values.IntermediateCount ?? _timingList!.Plan.Competition.IntermediateCount);
         for (var i = 1; i <= count; i++) { TimingCheckpoints.Add(i); }
         _queueSnapshot = null;

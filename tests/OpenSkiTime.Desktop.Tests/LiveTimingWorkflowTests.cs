@@ -51,7 +51,7 @@ public partial class DesktopWorkflowTests
                 Assert.Equal("",vm.LiveTimingError); Assert.NotEmpty(cloud.Expiration);
                 using var http=new HttpClient();
                 var localId=new Uri(local.PublicUrl).Segments[^1]; var cloudId=new Uri(cloud.PublicUrl).Segments[^1];
-                vm.TimingSource="Simulator"; vm.TimingIntermediateChannels="2";
+                UseSimulatorTiming(vm, 2);
                 await vm.ConnectTimingCommand.ExecuteAsync(null); await vm.ToggleTimingChannelCommand.ExecuteAsync("start"); await vm.ToggleTimingChannelCommand.ExecuteAsync("finish"); await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:1");
                 var bib=vm.TimingRows[0].Bib; vm.SimulationTime="12:00:00.1234567";
                 await vm.SimulatePulseCommand.ExecuteAsync("start"); await WaitTimingAsync(vm,()=>vm.OnCourseRows.Count==1);
