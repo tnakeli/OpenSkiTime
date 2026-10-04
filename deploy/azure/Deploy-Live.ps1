@@ -11,6 +11,18 @@ function Invoke-Azure([string[]] $Arguments) {
     if ($LASTEXITCODE -ne 0) { throw 'Azure deployment command failed.' }
     return $result
 }
+# `containerapp update` returns before ingress stops routing to the previous revision. Checking earlier
+# would verify the old image; wait until the requested image is the only active, provisioned revision.
+function Wait-ActiveImage([string] $Expected) {
+    $deadline = [DateTimeOffset]::UtcNow.AddMinutes(5)
+    do {
+        $active = @(Invoke-Azure @('containerapp','revision','list','--name',$AppName,'--resource-group',$ResourceGroup,
+            '--query','[?properties.active].{image:properties.template.containers[0].image, state:properties.provisioningState}','--output','json') | ConvertFrom-Json)
+        if ($active.Count -eq 1 -and $active[0].image -eq $Expected -and $active[0].state -eq 'Provisioned') { return }
+        Start-Sleep -Seconds 5
+    } while ([DateTimeOffset]::UtcNow -lt $deadline)
+    throw 'The requested image did not become the only active revision within five minutes.'
+}
 $app = Invoke-Azure @('containerapp','show','--name',$AppName,'--resource-group',$ResourceGroup,'--output','json') | ConvertFrom-Json
 if ($app.location.Replace(' ','').ToLowerInvariant() -ne 'swedencentral') { throw 'Live deployment must target Sweden Central.' }
 if ($app.properties.template.scale.maxReplicas -ne 1 -or $app.properties.configuration.activeRevisionsMode -ne 'Single') {
@@ -20,6 +32,7 @@ $previous = $app.properties.template.containers[0].image
 $origin = 'https://' + $app.properties.configuration.ingress.fqdn
 try {
     Invoke-Azure @('containerapp','update','--name',$AppName,'--resource-group',$ResourceGroup,'--image',$Image,'--output','none')
+    Wait-ActiveImage $Image
     # LIVE_PUBLISHER_KEY is the dedicated deployment-check key; anonymous creation must be refused.
     & node (Join-Path $PSScriptRoot '../../scripts/live-smoke.mjs') $origin '--require-publisher-key'
     if ($LASTEXITCODE -ne 0) { throw 'New live revision failed the functional check.' }
@@ -29,6 +42,7 @@ try {
 } catch {
     Write-Warning 'Deployment failed. Restoring the previous image; RAM race state must be republished.'
     Invoke-Azure @('containerapp','update','--name',$AppName,'--resource-group',$ResourceGroup,'--image',$previous,'--output','none')
+    Wait-ActiveImage $previous
     & node (Join-Path $PSScriptRoot '../../scripts/live-smoke.mjs') $origin
     if ($LASTEXITCODE -ne 0) { throw 'Rollback also failed verification. Operator action is required.' }
     throw 'Deployment verification failed; the previous image has been restored and verified.'

@@ -112,5 +112,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     await smoke(process.argv[2], {requirePublisherKey: process.argv.includes('--require-publisher-key')});
     console.log('Live check passed: health, authentication, snapshot, WebSocket, event, pause and deletion.');
   }
-  catch { console.error('Live check failed. Inspect deployment health; request data and credentials are intentionally not logged.'); process.exitCode = 1; }
+  catch (error) {
+    // Name the failed check (an assertion label or request route); never print responses or credentials.
+    const check = error instanceof assert.AssertionError || error.message?.startsWith('Live check') ? `: ${error.message.split('\n')[0]}` : '';
+    console.error(`Live check failed${check}. Inspect deployment health; request data and credentials are intentionally not logged.`);
+    process.exitCode = 1;
+  }
 }
