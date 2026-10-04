@@ -380,7 +380,7 @@ Deployed Static Web Apps control-plane region is **East US 2**. The Bicep websit
 
 | Path | Trigger, gates and output |
 |---|---|
-| PR/master CI | `ci.yml`: application build/tests, website checks, infrastructure validation and scans of the Windows package/live container. Weekly/manual checks refresh advisory coverage. No production deployment credentials. |
+| PR/master CI | `ci.yml`: application build/tests, website checks, infrastructure validation and scans of the Windows package/live container. Pull requests that change only `website/`, `docs/`, top-level Markdown or the website workflow skip the Windows build/tests and both scans; skipped jobs satisfy the required checks. Master pushes and weekly/manual runs always run everything. No production deployment credentials. |
 | Website | `website.yml`: enabled master changes matching website/assets/workflow paths, stable release updates or explicit run. Build/check site and published stable release metadata, then upload static output. |
 | Windows release | `windows-release.yml`: `v*` tags. Validate source ancestry, build/test, package self-contained x64 ZIP/Inno installer, verify installation/reinstallation/uninstallation and scan before publishing Release assets. Prereleases do not replace stable website downloads. |
 | Live server | `live.yml`: `live-v*` tags or manual deployment. Build/test, push GHCR and scan the same immutable digest before enabled deployment. Verify custom HTTPS health/acceptance; failed verification attempts rollback to the prior image. |
