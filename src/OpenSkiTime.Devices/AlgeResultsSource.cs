@@ -32,10 +32,14 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
     private (string? Device, int Channel)[] _endpoints = [];
     private long _from;
     private int _reconciles;
+    private readonly Dictionary<string, int> _refused = new(StringComparer.Ordinal);
+    private Action<string>? _status;
+    private string _baseStatus = "";
 
     public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(receive); ArgumentNullException.ThrowIfNull(status);
+        _status = status;
         // Every routed role (start, finish, intermediates) is its own device/channel endpoint.
         _endpoints = (options.Routes is { } routes
             ? routes.Select(x => (Device: x.DeviceId, x.Channel))
@@ -63,8 +67,9 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
                 // Subscribed first, then reconciled: a trigger between the history read and the push cannot be missed.
                 await ReconcileAsync(receive, forceHistory: true, ct);
                 wasConnected = true; reconnectDelay = _timings.FirstReconnectDelay;
-                status("Connected · ALGE Results realtime push · REST check every "
-                    + _timings.ReconcileInterval.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s");
+                _baseStatus = "Connected · ALGE Results realtime push · REST check every "
+                    + _timings.ReconcileInterval.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s";
+                status(_baseStatus + RefusedSummary);
                 await ListenAsync(connection, receive, ct);
             }
             catch (AlgeAuthenticationException)
@@ -180,35 +185,65 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
     }
 
     // Count per endpoint; when it changed (or forced), read history from the capture bound with a fixed upper bound so
-    // newly arriving triggers cannot shift offset pagination.
+    // newly arriving triggers cannot shift offset pagination. A device channel that ALGE Results refuses (for example a
+    // device not registered to this account) is reported once by name and skipped; the other roles keep working, and the
+    // refused one is retried with the periodic full check.
     private async Task ReconcileAsync(Func<TransportPacket, ValueTask> receive, bool forceHistory, CancellationToken ct)
     {
         _token ??= await LoginAsync(client, username, password, ct);
         foreach (var endpoint in _endpoints)
         {
-            var prefix = $"mt1/api/devices/{endpoint.Device}/channel/{endpoint.Channel}/trigger";
-            var filter = "timestampFrom_ms=" + _from.ToString(CultureInfo.InvariantCulture);
-            var countBytes = await GetAsync(prefix + "/count?" + filter, ct);
-            using var countDoc = JsonDocument.Parse(countBytes);
-            var count = countDoc.RootElement.GetProperty("data")[0].GetProperty("value").GetInt64();
-            var known = _counts.TryGetValue(prefix, out var old);
-            if (known && count < old)
-            { await receive(new("transport-status", endpoint.Device!, "cloud", Encoding.UTF8.GetBytes("ALGE Results history count decreased. Review server/device changes; local raw records were retained."))); }
-            if (known && old == count && !forceHistory) { continue; }
-            var until = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var offset = 0;
-            while (true)
+            var name = $"{endpoint.Device} C{endpoint.Channel}";
+            if (_refused.ContainsKey(name) && !forceHistory) { continue; }
+            try
             {
-                var query = string.Create(CultureInfo.InvariantCulture, $"{prefix}?{filter}&timestampTo_ms={until}&limit=200&offset={offset}");
-                var bytes = await GetAsync(query, ct, page => receive(new("alge-results/v1", endpoint.Device!, "cloud", page)));
-                using var data = JsonDocument.Parse(bytes);
-                var length = data.RootElement.GetProperty("data").GetArrayLength();
-                if (length < 200) { break; }
-                offset += length;
-                if (offset > 100000) { throw new IOException("MT1 history is too large. Choose a later receive-from time."); }
+                await ReconcileEndpointAsync(endpoint, receive, forceHistory, ct);
+                if (_refused.Remove(name))
+                {
+                    await receive(new("transport-status", endpoint.Device!, "cloud", Encoding.UTF8.GetBytes($"ALGE Results now accepts device {name}. Its history was recovered.")));
+                    if (_baseStatus.Length != 0) { _status?.Invoke(_baseStatus + RefusedSummary); }
+                }
             }
-            _counts[prefix] = count;
+            catch (AlgeStatusException ex)
+            {
+                if (_refused.TryAdd(name, ex.Code))
+                {
+                    await receive(new("transport-status", endpoint.Device!, "cloud", Encoding.UTF8.GetBytes(
+                        $"ALGE Results refused device {name} (status {ex.Code.ToString(CultureInfo.InvariantCulture)}). Check that the device is registered to this account and the channel is correct. Other roles continue.")));
+                    if (_baseStatus.Length != 0) { _status?.Invoke(_baseStatus + RefusedSummary); }
+                }
+            }
         }
+    }
+
+    // Refused device channels for the status line, e.g. "231203037 C3 refused (-2011)".
+    private string RefusedSummary => _refused.Count == 0 ? ""
+        : " · " + string.Join(", ", _refused.Select(x => $"{x.Key} refused ({x.Value.ToString(CultureInfo.InvariantCulture)})"));
+
+    private async Task ReconcileEndpointAsync((string? Device, int Channel) endpoint, Func<TransportPacket, ValueTask> receive, bool forceHistory, CancellationToken ct)
+    {
+        var prefix = $"mt1/api/devices/{endpoint.Device}/channel/{endpoint.Channel}/trigger";
+        var filter = "timestampFrom_ms=" + _from.ToString(CultureInfo.InvariantCulture);
+        var countBytes = await GetAsync(prefix + "/count?" + filter, ct);
+        using var countDoc = JsonDocument.Parse(countBytes);
+        var count = countDoc.RootElement.GetProperty("data")[0].GetProperty("value").GetInt64();
+        var known = _counts.TryGetValue(prefix, out var old);
+        if (known && count < old)
+        { await receive(new("transport-status", endpoint.Device!, "cloud", Encoding.UTF8.GetBytes("ALGE Results history count decreased. Review server/device changes; local raw records were retained."))); }
+        if (known && old == count && !forceHistory) { return; }
+        var until = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var offset = 0;
+        while (true)
+        {
+            var query = string.Create(CultureInfo.InvariantCulture, $"{prefix}?{filter}&timestampTo_ms={until}&limit=200&offset={offset}");
+            var bytes = await GetAsync(query, ct, page => receive(new("alge-results/v1", endpoint.Device!, "cloud", page)));
+            using var data = JsonDocument.Parse(bytes);
+            var length = data.RootElement.GetProperty("data").GetArrayLength();
+            if (length < 200) { break; }
+            offset += length;
+            if (offset > 100000) { throw new IOException("MT1 history is too large. Choose a later receive-from time."); }
+        }
+        _counts[prefix] = count;
     }
 
     public static async Task<string> LoginAsync(HttpClient client, string username, string password, CancellationToken ct = default)
@@ -315,12 +350,14 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         var code = root.GetProperty("status").GetInt32();
         if (code == -9000) { throw new AlgeQuotaException(); }
         if (code == -1007) { throw new AlgeAuthenticationException(); }
-        if (code != 0) { throw new IOException("ALGE Results returned an unsuccessful response (" + code.ToString(CultureInfo.InvariantCulture) + ")."); }
+        if (code != 0) { throw new AlgeStatusException(code); }
     }
 
     public ValueTask DisposeAsync() { _token = null; return ValueTask.CompletedTask; }
     private sealed class AlgeAuthenticationException : IOException;
     private sealed class AlgeQuotaException : IOException;
+    private sealed class AlgeStatusException(int code) : IOException("ALGE Results returned an unsuccessful response (" + code.ToString(CultureInfo.InvariantCulture) + ").")
+    { public int Code { get; } = code; }
 }
 
 public sealed record AlgeResultsDevice(string Id, string Name, string Type)

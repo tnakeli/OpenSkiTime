@@ -114,6 +114,30 @@ public sealed class AlgeRealtimeTests
     }
 
     [Fact]
+    public async Task ARefusedDeviceIsReportedByNameWhileOtherRolesKeepReceiving()
+    {
+        var http = new FakeAlge { RefusedDevice = "231203037" };
+        var push = new FakeRealtime(Trigger("231203016", "C1", Stamp()));
+        using var client = new HttpClient(http);
+        var options = Options() with { Routes = [new(1, 2, "231203016"), new(3, 3, "231203037")] };
+        await using var source = new AlgeResultsSource(client, "club@example.test", "secret", options, () => push, Fast);
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var packets = new List<TransportPacket>(); var statuses = new List<string>();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.ReceiveAsync(p =>
+        {
+            packets.Add(p);
+            if (p.Stream == "push") { stop.Cancel(); }
+            return ValueTask.CompletedTask;
+        }, statuses.Add, stop.Token));
+        var notice = Assert.Single(packets, x => x.Protocol == "transport-status");
+        Assert.Contains("231203037 C3", Encoding.UTF8.GetString(notice.Bytes), StringComparison.Ordinal);
+        Assert.Contains("-2011", Encoding.UTF8.GetString(notice.Bytes), StringComparison.Ordinal);
+        Assert.Contains(packets, x => x.Stream == "push");
+        Assert.Contains(statuses, x => x.Contains("231203037 C3 refused (-2011)", StringComparison.Ordinal));
+        Assert.Equal(1, http.Logins);
+    }
+
+    [Fact]
     public async Task AccountDevicesAreListedForChoosingDeviceIds()
     {
         var http = new FakeAlge();
@@ -159,6 +183,7 @@ public sealed class AlgeRealtimeTests
         public int Logins { get; private set; }
         public int Counts { get; private set; }
         public int DeviceLists { get; private set; }
+        public string? RefusedDevice { get; init; }
         public void Add(string trigger) { lock (_gate) { _history.Add(trigger); } }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -178,6 +203,8 @@ public sealed class AlgeRealtimeTests
                     Assert.Equal("token-" + Logins, Assert.Single(request.Headers.GetValues("authorization")));
                     return Task.FromResult(Json("""{"status":0,"data":[{"id":"231203037","type":"MT1","deviceComponents":{"info":{"name":"Club B split"}}},{"id":"231203016","type":"MT1","deviceComponents":{}}]}"""));
                 }
+                if (RefusedDevice is { } refused && request.RequestUri!.AbsolutePath.Contains("/devices/" + refused + "/", StringComparison.Ordinal))
+                { return Task.FromResult(Json("""{"status":-2011,"message":"Not allowed","data":[]}""")); }
                 if (request.RequestUri!.AbsolutePath.EndsWith("/count", StringComparison.Ordinal))
                 { Counts++; return Task.FromResult(Json($$"""{"status":0,"data":[{"value":{{_history.Count}}}]}""")); }
                 var dtos = _history.Select(x => x[(x.IndexOf("\"dto\":", StringComparison.Ordinal) + 6)..x.LastIndexOf(",\"entityType\"", StringComparison.Ordinal)]);

@@ -91,6 +91,12 @@
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     </Style>
+    <!-- Unavailable steps (no series open) stay flat: Fluent's disabled template would draw grey boxes. -->
+    <Style Selector="Button.sectionNav:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Foreground" Value="#8FA3AA" />
+    </Style>
 
     <Style Selector="TextBox">
       <Setter Property="MinHeight" Value="34" />
@@ -172,6 +178,17 @@
     <Style Selector="Button.toolbarAction:pointerover">
       <Setter Property="Background" Value="#285365" />
     </Style>
+    <!-- Disabled toolbar actions stay on the navy bar: Fluent's light disabled colours would make them nearly invisible. -->
+    <Style Selector="Button.toolbarAction:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#16384A" />
+      <Setter Property="BorderBrush" Value="#2F5363" />
+      <Setter Property="Foreground" Value="#7F9CA6" />
+    </Style>
+    <Style Selector="Button.toolbarAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#285365" />
+      <Setter Property="BorderBrush" Value="#5C8592" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
     <Style Selector="Button.activeRace">
       <Setter Property="MinHeight" Value="34" />
       <Setter Property="Padding" Value="12,6" />
@@ -217,6 +234,9 @@
     </Style>
     <Style Selector="Button:disabled">
       <Setter Property="Opacity" Value="0.52" />
+    </Style>
+    <Style Selector="Button.toolbarAction:disabled, Button.sectionNav:disabled">
+      <Setter Property="Opacity" Value="1" />
     </Style>
 
     <Style Selector="DataGrid.raceGrid">
