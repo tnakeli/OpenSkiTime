@@ -39,7 +39,9 @@ Use an end date later than the start date. Azure may require time before cost da
 
 The dependency-free Node builder generates a responsive English website: landing page, download page, first-race guide, privacy page, code signing policy and 404 page, plus a Finnish overview at `/fi/`. The screenshots are synthetic desktop captures. There are no visitor scripts, forms or analytics cookies.
 
-Search and answer engines read the same content visitors see. Page titles and descriptions use the terms people search for (alpine ski race timing software, ajanotto-ohjelma). The English and Finnish landing pages declare `hreflang` alternates and carry one JSON-LD `application/ld+json` data block (WebSite, SoftwareApplication, SoftwareSourceCode, FAQPage). The FAQ is defined once in `website/build.mjs` and renders both the visible questions and the structured data, so keep its answers factual and in step with the application. `website/llms.txt` gives AI tools a short project summary with links; `website/check.mjs` verifies that its site links resolve. JSON-LD blocks are not executed, so the CSP needs no `script-src`. The 404 page is `noindex`. Security headers are in `website/staticwebapp.config.json`. Download links are generated only from a published stable `vX.Y.Z` release with the expected upstream installer; before that, the site honestly offers source instructions.
+Search and answer engines read the same content visitors see. Page titles and descriptions use the terms people search for (alpine ski race timing software, ajanotto-ohjelma). The English and Finnish landing pages declare `hreflang` alternates and carry one JSON-LD `application/ld+json` data block (WebSite, SoftwareApplication, SoftwareSourceCode, FAQPage). The FAQ is defined once in `website/build.mjs` and renders both the visible questions and the structured data, so keep its answers factual and in step with the application. `website/llms.txt` gives AI tools a short project summary with links; `website/check.mjs` verifies that its site links resolve. JSON-LD blocks are not executed, so the CSP needs no `script-src`. The 404 page is `noindex`.
+
+Security headers are in `website/staticwebapp.config.json`. Download links are generated from the newest published stable `vX.Y.Z` release with the expected upstream installer. While no stable release exists, the newest `vX.Y.Z-preview.N` release is offered instead, labelled as a preview with a backup-timing warning. Without either, the site offers source instructions.
 
 ```powershell
 node website/build.mjs
@@ -49,7 +51,7 @@ node website/preview.mjs
 # Open http://127.0.0.1:4173
 ```
 
-Before publication, review the website on a desktop and narrow/mobile viewport. Local HTML/link checks are not a substitute for browser review. Stable releases trigger a rebuild, so installer links cannot get ahead of release publication. Prereleases remain available on GitHub Releases but do not replace the stable website download.
+Before publication, review the website on a desktop and narrow/mobile viewport. Local HTML/link checks are not a substitute for browser review. Every application release triggers a rebuild after publication, so installer links cannot get ahead of release publication. Once a stable release exists, later previews remain available on GitHub Releases but do not replace the stable website download.
 
 ## Security boundaries
 
