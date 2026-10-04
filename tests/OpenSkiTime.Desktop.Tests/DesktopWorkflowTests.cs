@@ -63,7 +63,7 @@ public partial class DesktopWorkflowTests
             window.Show(); Dispatcher.UIThread.RunJobs();
             Assert.Equal("FIS Slalom", window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             Assert.Contains("FIS", window.FindControl<Button>("ActiveRaceButton")!.Content!.ToString(), StringComparison.Ordinal);
-            Assert.Equal(path, window.Title);
+            Assert.Equal(path + " — OpenSkiTime " + ProductInfo.Version + " · FIS rules 2026-27", window.Title);
             window.Close();
         }
         finally
@@ -177,7 +177,7 @@ public partial class DesktopWorkflowTests
             await vm.OpenDrawRunCommand.ExecutionTask!;
             Assert.True(vm.IsDrawSection);
             Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
-            Assert.Equal(vm.FileLabel, vm.WindowTitle);
+            Assert.Equal(vm.FileLabel + " — OpenSkiTime " + ProductInfo.Version + " · FIS rules 2026-27", vm.WindowTitle);
             Assert.Equal(competition.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             Assert.Equal("Waiting for draw", vm.DrawState);
             window.UpdateLayout();
@@ -252,7 +252,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal("Corrected Slalom", window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             Assert.Contains("SL NEW", vm.ActiveRaceLabel, StringComparison.Ordinal);
             Assert.DoesNotContain("Corrected Slalom", vm.DrawContext, StringComparison.Ordinal);
-            Assert.Equal(vm.FileLabel, vm.WindowTitle);
+            Assert.Equal(vm.FileLabel + " — OpenSkiTime " + ProductInfo.Version + " · FIS rules 2026-27", vm.WindowTitle);
             dialogs.ExportPath = Path.Combine(root, "start-list.tsv");
             Click(window, "Export TSV");
             await vm.ExportDrawCommand.ExecutionTask!;
@@ -463,7 +463,7 @@ public partial class DesktopWorkflowTests
             window.Show();
             Click(window, "Open file");
             await vm.OpenSeriesCommand.ExecutionTask!;
-            Assert.Equal(file, window.Title);
+            Assert.Equal(file + " — OpenSkiTime " + ProductInfo.Version + " · FIS rules 2026-27", window.Title);
             Click(window, "3  Competitors");
             window.UpdateLayout();
             var sections = window.GetVisualDescendants().OfType<Expander>()

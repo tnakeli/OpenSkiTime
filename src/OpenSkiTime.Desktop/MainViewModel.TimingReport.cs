@@ -47,8 +47,8 @@ public sealed partial class MainViewModel
         ? $"A: {draft.Defaults.TimerA.Brand} {draft.Defaults.TimerA.Model}  /  B: {draft.Defaults.TimerB.Brand} {draft.Defaults.TimerB.Model}\nTimekeeper: {draft.Defaults.Timekeeper.LastName} {draft.Defaults.Timekeeper.FirstName}  /  Chief: {draft.Defaults.ChiefOfTiming.LastName} {draft.Defaults.ChiefOfTiming.FirstName}" : "";
     public string ReportIdentity => _reportDraft is { } d
         ? $"{d.Header.Nation}{d.Header.Codex} / {d.Header.Discipline} / {d.Header.Date:dd.MM.yyyy} / TD {d.TechnicalDelegate.LastName} {d.TechnicalDelegate.FirstName}" : "";
-    public string ReportSoftware { get; } = "OpenSkiTime " + ReportSoftwareVersion;
-    private static string ReportSoftwareVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString() ?? "1.0";
+    public string ReportSoftware { get; } = ProductInfo.DisplayName;
+    private static string ReportSoftwareVersion => ProductInfo.Version;
 
     partial void OnReportSyncChanged(string value) => ReportChanged();
     partial void OnReportHandSyncChanged(string value) => ReportChanged();

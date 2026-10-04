@@ -1,6 +1,6 @@
 # Settings
 
-Settings has three tabs: **FIS**, **Timing devices** and **Timing report**.
+Settings has five tabs: **FIS**, **Timing devices**, **Timing report**, **Live timing** and **About**.
 
 ## FIS
 
@@ -29,3 +29,11 @@ Selecting a cached homologation snapshots its expiry season and catalogue retrie
 Save the chief of timing and calculations, timekeeper and connection defaults once. Surnames and nation codes normalize to uppercase. These are user preferences outside the series database. Reports use these saved values when opened. Saving preferences updates an open report; saved report revisions retain portable snapshots and approved XML remains unchanged. OpenSkiTime supplies the result-software name and version automatically.
 
 Verification uses synthetic equipment and contacts. Tests cover endpoint authentication, malformed/error responses, shared credentials through actual Results and report submission helpers, Settings navigation, offline cache/default reopening, preserved report snapshots and rejected invalid replacements. Physical devices, live authenticated FIS responses and real FIS report acceptance need separate operational verification.
+
+## Live timing
+
+Enter the Cloud server address and save its **publisher key**. A Cloud live timing server creates race sessions only for publishers holding a key issued by its operator; Local publishing needs no key. The key is saved per server origin in this Windows user's Credential Manager, never in the event file or preferences, and the status line shows whether a key is saved for the current address. Restart Cloud publishing after saving a new key. To publish on `live.openskiti.me`, contact the OpenSkiTime maintainer for a key; self-hosted servers issue their own. See [publisher keys](live-timing-cloud-deployment.md#publisher-keys).
+
+## About
+
+Shows the software version (Semantic Versioning `MAJOR.MINOR.PATCH`) and the FIS rule season the application implements (currently 2026-27), with links to the source code, MIT license, third-party notices, issue reporting, private vulnerability reporting and the privacy statement. The window title shows the same version and rule season.
