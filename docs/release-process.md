@@ -33,6 +33,12 @@ The hosted server must keep serving installed applications. A protocol increment
 
 This sequence is not implemented yet because only protocol 1 exists. Implement multi-version acceptance in the server with the first increment.
 
+## Development phase and series file migrations
+
+OpenSkiTime is in development and testing, expected to last about one year (through the 2026-27 season), with real-race testing planned for the following season. During this phase releases are `0.x` previews for rehearsal and evaluation, and series files are not migrated: a new version may reject files created by an earlier one, without modifying them.
+
+Database migrations are introduced before the first release intended for real race use, and earlier if testers need to keep series files across versions. From that release on, every changelog section must state how existing `.ost` files are upgraded, and a release that cannot open the previous release's files is not allowed.
+
 ## Changelog practice
 
 Add user-visible changes under `## [Unreleased]` in the relevant changelog during normal pull requests, using the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) groups *Added*, *Changed*, *Fixed*, *Removed* and *Security*. Write for operators, not developers: describe behavior and limitations, not implementation. Do not mention internal planning, agent workflows or personal data. Dependency and CI-only changes need no entry unless they affect users.
