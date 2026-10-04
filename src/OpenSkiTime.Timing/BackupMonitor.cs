@@ -1,7 +1,11 @@
 namespace OpenSkiTime.Timing;
 
 public sealed record BackupComparisonRow(int Bib, string Position, long? ATicks, long? BTicks,
-    long? DifferenceTicks, string Warning, bool IsElapsed = false);
+    long? DifferenceTicks, string Warning, bool IsElapsed = false)
+{
+    // False for A observations that existed before this B session connected; they are never reported as missing.
+    public bool Monitored { get; init; } = true;
+}
 public sealed record BackupMonitorSnapshot(IReadOnlyList<BackupComparisonRow> Rows, IReadOnlyList<string> Warnings);
 
 // Operational comparison only. All clock context is supplied and this class cannot alter timing results.
@@ -53,7 +57,7 @@ public sealed class BackupMonitor
             if (warning is not null && match.State.StartsWith("Ambiguous", StringComparison.Ordinal))
             { warning = "B match ambiguous · check timestamps"; }
             rows.Add(new(match.Target.Bib, match.Target.Channel == 0 ? "Start" : "Finish", match.Target.Ticks,
-                match.Evidence?.Ticks, match.DifferenceTicks, warning ?? ""));
+                match.Evidence?.Ticks, match.DifferenceTicks, warning ?? "") { Monitored = _firstSeen.ContainsKey(match.Target.Key) });
         }
         var byPosition = rows.ToDictionary(x => (x.Bib, x.Position));
         var matchedB = _matches.Where(x => x.Evidence is not null).ToDictionary(x => (x.Target.Bib, x.Target.Channel), x => x.Evidence!.Key);
