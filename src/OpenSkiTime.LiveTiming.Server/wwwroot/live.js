@@ -4,6 +4,23 @@
   const get = name => document.getElementById(name);
   let state, selectedRun, socket, retry;
   const time = value => value == null ? '—' : `${Math.floor(value / 6000)}:${String(Math.floor(value / 100) % 60).padStart(2, '0')}.${String(value % 100).padStart(2, '0')}`;
+  const gender = value => ({M:'Men', L:'Women', W:'Women', A:'Mixed'})[value] || '';
+  async function list() {
+    try {
+      const response = await fetch('/api/sessions', {cache:'no-store'});
+      if (!response.ok) throw Error('List failed');
+      const races = await response.json();
+      get('connection').textContent = 'Live';
+      get('races').replaceChildren(...races.map(r => {
+        const li = document.createElement('li'), a = document.createElement('a'), meta = document.createElement('span');
+        a.href = `/r/${encodeURIComponent(r.sessionId)}`; a.textContent = r.name;
+        meta.textContent = [r.date, r.place, r.discipline, gender(r.gender), r.isFis && r.codex ? `Codex ${r.codex}` : '', r.paused ? 'Publishing stopped' : ''].filter(Boolean).join(' · ');
+        li.append(a, meta); return li;
+      }));
+      get('empty').hidden = races.length > 0;
+    } catch { get('connection').textContent = 'Reconnecting'; }
+    retry = setTimeout(list, 30000);
+  }
   function render(next) {
     state = next;
     get('results').replaceChildren(); get('runs').replaceChildren();
@@ -16,18 +33,21 @@
     const onCourse = next.runs.find(r => r.number === next.currentRun).results.filter(r => r.status === 'OnCourse').map(r => { const c = next.competitors.find(c => c.bib === r.bib); return `${r.bib} ${c.lastName} ${c.firstName}`; });
     get('course').textContent = next.paused ? 'Publishing stopped · Last state retained' : `On course · ${onCourse.join(' / ') || '—'}`;
     get('updated').textContent = `Run ${selectedRun} · Last live update ${new Date(next.updatedAt).toLocaleString()}`;
+    // Show the intermediates column only when this run has at least one intermediate time.
+    const intermediates = run.results.some(r => (r.intermediates || []).length > 0);
+    get('intermediates').hidden = !intermediates;
     const rows = run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'});
     rows.sort((a,b) => (a.rank || 99999) - (b.rank || 99999) || run.startOrder.indexOf(a.bib)-run.startOrder.indexOf(b.bib));
     rows.forEach(r => {
       const c = next.competitors.find(c => c.bib === r.bib), tr = document.createElement('tr'); tr.dataset.bib = r.bib; tr.className = r.status.toLowerCase();
       [r.rank || '—', r.bib, `${c.lastName} ${c.firstName}`, [c.nation,c.club].filter(Boolean).join(' / '), r.status,
-        (r.intermediates || []).map(i => `I${i.number} ${time(i.hundredths)}`).join(' · ') || '—', time(r.hundredths), r.difference == null ? '—' : '+' + time(r.difference)]
+        intermediates ? (r.intermediates || []).map(i => `I${i.number} ${time(i.hundredths)}`).join(' · ') || '—' : null, time(r.hundredths), r.difference == null ? '—' : '+' + time(r.difference)]
+        .filter(value => value !== null)
         .forEach(value => { const td = document.createElement('td'); td.textContent = value; tr.append(td); });
       get('results').append(tr);
     });
   }
   async function connect() {
-    if (!id) { render(null); return; }
     try {
       get('connection').textContent = 'Connecting';
       const response = await fetch('/live/negotiate?negotiateVersion=1', {method:'POST'});
@@ -49,5 +69,5 @@
       socket.onerror = () => socket.close();
     } catch { get('connection').textContent = 'Reconnecting'; retry = setTimeout(connect,2000); }
   }
-  connect();
+  if (id) { get('race').hidden = false; connect(); } else { get('list').hidden = false; list(); }
 })();
