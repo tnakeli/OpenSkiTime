@@ -58,6 +58,18 @@ public sealed class SessionStore
     {
         lock (_gate) { Prune(); return _sessions.GetValueOrDefault(id)?.State; }
     }
+    public IReadOnlyList<LiveSessionSummary> List()
+    {
+        lock (_gate)
+        {
+            Prune();
+            return _sessions.Where(x => x.Value.State is not null).Select(x => (Id: x.Key, State: x.Value.State!))
+                .OrderByDescending(x => x.State.Competition.Date).ThenByDescending(x => x.State.UpdatedAt).ThenBy(x => x.Id)
+                .Select(x => new LiveSessionSummary(x.Id, x.State.Competition.Name, x.State.Competition.Place, x.State.Competition.Discipline,
+                    x.State.Competition.Date, x.State.Competition.Gender, x.State.Competition.Category, x.State.Competition.IsFis,
+                    x.State.Competition.Codex, x.State.UpdatedAt, x.State.Paused)).ToArray();
+        }
+    }
     public void Replace(Guid id, DateTimeOffset expires, LiveSnapshot state)
     {
         ArgumentNullException.ThrowIfNull(state);

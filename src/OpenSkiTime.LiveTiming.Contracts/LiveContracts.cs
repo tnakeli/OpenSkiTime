@@ -69,11 +69,14 @@ public sealed record LiveSnapshot(long Version, LiveCompetition Competition, Liv
 public sealed class LiveValidationException(string message) : Exception(message);
 public sealed record LiveEvent(long Version, int Run, LiveEventKind Kind, LiveResult Result, DateTimeOffset At);
 public sealed record LiveSession(Guid SessionId, string PublisherToken, DateTimeOffset ExpiresAt, string PublicUrl);
+/// <summary>Public listing entry for an active session that has published state.</summary>
+public sealed record LiveSessionSummary(Guid SessionId, string Name, string Place, string Discipline, DateOnly Date,
+    string Gender, string Category, bool IsFis, string Codex, DateTimeOffset UpdatedAt, bool Paused);
 public sealed record PublisherHealth(PublisherState State, string Endpoint = "", DateTimeOffset? LastConnected = null,
     DateTimeOffset? LastSuccessfulPublish = null, DateTimeOffset? LastEvent = null, string? Error = null,
     string? PublicUrl = null, DateTimeOffset? ExpiresAt = null);
 public sealed record PublisherOptions(PublisherKind Kind, string Endpoint, string FisPassword = "", int TcpPort = 1550,
-    string? LocalServerAssembly = null, LiveSession? ResumeSession = null, string? LocalSigningKey = null);
+    string? LocalServerAssembly = null, LiveSession? ResumeSession = null, string? LocalSigningKey = null, string? PublisherKey = null);
 public sealed record WorkerInput(string Command, PublisherOptions? Options = null, LiveSnapshot? Snapshot = null);
 // Private current-user IPC only. Never serialize this envelope into diagnostic logs.
 public sealed record WorkerOutput(PublisherHealth Health, LiveSession? Session);
@@ -85,5 +88,17 @@ public static class LiveJson
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { MaxDepth = 32 };
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
+    }
+}
+/// <summary>Publisher keys authorize live session creation. Servers store only the SHA-256 hash.</summary>
+public static class LivePublisherKey
+{
+    public const string Prefix = "ost_pk_";
+    public static string Generate() => Prefix + Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+        .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    public static string Hash(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)));
     }
 }

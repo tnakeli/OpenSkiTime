@@ -66,6 +66,50 @@
      <TextBlock Text="{Binding ReportDefaultsStatus}" TextWrapping="Wrap" Classes="supportingText"/>
     </StackPanel>
    </TabItem>
+   <TabItem Header="Live timing">
+    <StackPanel Spacing="12" Margin="0,12,0,0">
+     <TextBlock Text="Cloud publisher key" FontWeight="SemiBold"/>
+     <TextBlock Text="A Cloud live timing server accepts new race sessions only from publishers with a key issued by its operator. Local publishing needs no key." TextWrapping="Wrap" Classes="supportingText"/>
+     <StackPanel Classes="field" HorizontalAlignment="Left" Width="460">
+      <TextBlock Text="CLOUD SERVER" Classes="fieldLabel"/>
+      <TextBox Name="LiveCloudEndpointBox" Text="{Binding LiveCloudEndpoint}" MaxLength="512"/>
+     </StackPanel>
+     <Grid ColumnDefinitions="340,8,Auto,8,Auto" HorizontalAlignment="Left">
+      <TextBox Name="LivePublisherKeyInputBox" PasswordChar="•" Text="{Binding LivePublisherKeyInput}" Watermark="Publisher key" MaxLength="512"/>
+      <Button Grid.Column="2" Content="Save key" Command="{Binding SaveLivePublisherKeyCommand}" Classes="primaryAction"/>
+      <Button Grid.Column="4" Content="Remove key" Command="{Binding RemoveLivePublisherKeyCommand}" Classes="secondaryAction"/>
+     </Grid>
+     <TextBlock Name="LivePublisherKeyStatusText" Text="{Binding LivePublisherKeyStatus}" Classes="supportingText"/>
+     <TextBlock Text="The key is saved per server in this Windows account's credential store, never in the event file. To publish on live.openskiti.me, contact the OpenSkiTime maintainer for a key. You can also run your own live timing server." TextWrapping="Wrap" Classes="supportingText"/>
+    </StackPanel>
+   </TabItem>
+   <TabItem Header="About">
+    <StackPanel Name="AboutPanel" Spacing="10" Margin="0,12,0,0">
+     <TextBlock Name="AboutProductText" Text="{Binding ProductInfoName}" FontSize="18" FontWeight="SemiBold"/>
+     <TextBlock Name="AboutVersionText" Text="{Binding ProductInfoVersionLine}" Classes="supportingText"/>
+     <TextBlock Text="Open-source alpine ski race timing. Local race operation works offline; online integrations are optional." TextWrapping="Wrap"/>
+     <Separator/>
+     <TextBlock Text="Open source and licenses" FontWeight="SemiBold"/>
+     <TextBlock Text="OpenSkiTime is released under the MIT license. Third-party components keep their own licenses. FIS logos and forms are FIS trademarks and artwork; their use does not imply FIS certification or endorsement." TextWrapping="Wrap" Classes="supportingText"/>
+     <WrapPanel>
+      <HyperlinkButton Content="Source code" NavigateUri="https://github.com/tnakeli/OpenSkiTime"/>
+      <HyperlinkButton Content="MIT license" NavigateUri="https://github.com/tnakeli/OpenSkiTime/blob/master/LICENSE"/>
+      <HyperlinkButton Content="Third-party notices" NavigateUri="https://github.com/tnakeli/OpenSkiTime/blob/master/THIRD-PARTY-NOTICES.md"/>
+     </WrapPanel>
+     <TextBlock Text="Support and security" FontWeight="SemiBold"/>
+     <TextBlock Text="Report bugs and feature requests as GitHub issues. Report security vulnerabilities privately through GitHub security advisories, not as public issues. Never attach credentials or personal race data." TextWrapping="Wrap" Classes="supportingText"/>
+     <WrapPanel>
+      <HyperlinkButton Content="Report an issue" NavigateUri="https://github.com/tnakeli/OpenSkiTime/issues"/>
+      <HyperlinkButton Content="Report a vulnerability" NavigateUri="https://github.com/tnakeli/OpenSkiTime/security/advisories/new"/>
+     </WrapPanel>
+     <TextBlock Text="Privacy" FontWeight="SemiBold"/>
+     <TextBlock Text="Event series, timing data and audit history stay in your local .ost files. Data leaves this computer only through integrations you start, such as FIS services or live timing." TextWrapping="Wrap" Classes="supportingText"/>
+     <WrapPanel>
+      <HyperlinkButton Content="Privacy &amp; your race data" NavigateUri="https://openskiti.me/privacy/"/>
+      <HyperlinkButton Content="openskiti.me" NavigateUri="https://openskiti.me/"/>
+     </WrapPanel>
+    </StackPanel>
+   </TabItem>
   </TabControl>
  </StackPanel>
 </UserControl>

@@ -240,7 +240,7 @@ public sealed class PdfReportSourceBuilder(ITimingDecoderFactory decoders)
             if (after.Revision != series.Revision || workspace.FilePath != path) { continue; }
             var version = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
-                RendererVersion = 5, series.Revision, settings.Profile,
+                RendererVersion = 6, series.Revision, settings.Profile,
                 Timing = runs.Select(x => ResultSourceFingerprint.Create(x.Source)).ToArray(),
                 timingReport, information, Approvals = finals.Select(x => x.Approval is { } a
                     ? new { a.Id, a.Revision, a.CalculatedPenalty, a.AppliedPenalty } : null).ToArray()

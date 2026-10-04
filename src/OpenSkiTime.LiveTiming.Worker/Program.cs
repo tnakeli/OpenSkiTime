@@ -38,6 +38,7 @@ var nextAttempt = DateTimeOffset.MinValue; var nextHealth = DateTimeOffset.MinVa
 var log = new ProtocolLog();
 log.Write("Publisher process started");
 var localSigningKey = "";
+var localPublisherKey = ""; // Private to this worker and its managed loopback server unless the caller supplies one.
 try
 {
     while (!lifetime.IsCancellationRequested)
@@ -53,14 +54,15 @@ try
                         {
                             options = command.Options ?? throw new LiveValidationException("Publisher options missing.");
                             localSigningKey = options.LocalSigningKey ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                            localPublisherKey = options.Kind == PublisherKind.Local && options.PublisherKey is { Length: > 0 } supplied ? supplied : LivePublisherKey.Generate();
                             health = health with { Endpoint = options.Endpoint, State = PublisherState.Starting, Error = null };
                             await SendHealth();
                             if (options.Kind == PublisherKind.Local)
                             {
-                                localServer = StartLocalServer(options, localSigningKey);
-                                standalone = new(options.Endpoint, options.ResumeSession, log.Write);
+                                localServer = StartLocalServer(options, localSigningKey, localPublisherKey);
+                                standalone = new(options.Endpoint, options.ResumeSession, log.Write, localPublisherKey);
                             }
-                            else if (options.Kind == PublisherKind.Cloud) { standalone = new(options.Endpoint, options.ResumeSession, log.Write); }
+                            else if (options.Kind == PublisherKind.Cloud) { standalone = new(options.Endpoint, options.ResumeSession, log.Write, options.PublisherKey); }
                             else
                             {
                                 IFisLiveTimingTransport transport = options.Kind == PublisherKind.FisTcp
@@ -70,7 +72,7 @@ try
                             }
                         }
                         else if (options.Kind == PublisherKind.Local && localServer?.HasExited != false)
-                        { localServer?.Dispose(); localServer = StartLocalServer(options, localSigningKey); }
+                        { localServer?.Dispose(); localServer = StartLocalServer(options, localSigningKey, localPublisherKey); }
                         running = true; refresh = true; nextAttempt = DateTimeOffset.MinValue; retries = 0;
                         health = health with { State = PublisherState.Starting, Error = null }; log.Write("Publisher start");
                         break;
@@ -82,7 +84,7 @@ try
                     case "refresh":
                         refresh = true; nextAttempt = DateTimeOffset.MinValue;
                         if (options?.Kind == PublisherKind.Local && localServer?.HasExited != false)
-                        { localServer?.Dispose(); localServer = StartLocalServer(options, localSigningKey); }
+                        { localServer?.Dispose(); localServer = StartLocalServer(options, localSigningKey, localPublisherKey); }
                         running = true; break;
                     case "delete":
                     case "delete-all":
@@ -101,7 +103,7 @@ try
                 if (options?.Kind == PublisherKind.Local && localServer?.HasExited == true)
                 {
                     health = health with { State = PublisherState.Reconnecting, Error = "Local server exited; restarting and restoring snapshot." }; await SendHealth();
-                    localServer.Dispose(); localServer = StartLocalServer(options, localSigningKey); refresh = true;
+                    localServer.Dispose(); localServer = StartLocalServer(options, localSigningKey, localPublisherKey); refresh = true;
                 }
                 var state = Volatile.Read(ref latest);
                 if (state is not null && (refresh || !ReferenceEquals(state, published)))
@@ -132,7 +134,9 @@ try
             // Never expose raw exception messages: an endpoint/server response could echo a credential.
             var permanent = ex is LiveValidationException || (ex is HttpRequestException request && request.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.BadRequest);
             health = health with { State = running && !permanent ? PublisherState.Reconnecting : PublisherState.Error,
-                Error = permanent ? "Configuration or authentication rejected. Check settings and restart." : "Publish/health failed. Check endpoint and network; retrying." };
+                // LiveValidationException text is authored by OpenSkiTime, never echoed from a server response.
+                Error = ex is LiveValidationException validation ? validation.Message
+                    : permanent ? "Configuration or authentication rejected. Check settings and restart." : "Publish/health failed. Check endpoint and network; retrying." };
             if (permanent) { running = false; }
             refresh = true; fis?.Disconnect();
             nextAttempt = DateTimeOffset.UtcNow.AddSeconds(Math.Min(30, 1 << Math.Min(retries++, 5)));
@@ -152,7 +156,7 @@ finally
 return 0;
 
 Task SendHealth() => writer.WriteLineAsync(JsonSerializer.Serialize(new WorkerOutput(health, standalone is null ? options?.ResumeSession : standalone.Session), LiveJson.Options));
-static Process StartLocalServer(PublisherOptions options, string signingKey)
+static Process StartLocalServer(PublisherOptions options, string signingKey, string publisherKey)
 {
     var endpoint = new Uri(options.Endpoint);
     if (!endpoint.IsLoopback || endpoint.Scheme != "http") { throw new LiveValidationException("Managed local server must use loopback HTTP."); }
@@ -164,6 +168,7 @@ static Process StartLocalServer(PublisherOptions options, string signingKey)
     if (!useAppHost) { start.ArgumentList.Add(assembly); }
     start.ArgumentList.Add("--urls"); start.ArgumentList.Add(options.Endpoint);
     start.Environment["LiveTiming__SigningKey"] = signingKey;
+    start.Environment["LiveTiming__PublisherKeys"] = "local:" + LivePublisherKey.Hash(publisherKey);
     start.Environment["LiveTiming__PublicBaseUrl"] = options.Endpoint;
     start.Environment["Logging__LogLevel__Default"] = "Warning";
     return Process.Start(start) ?? throw new IOException("Local server process could not start.");
