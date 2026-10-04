@@ -81,6 +81,9 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _timingConnection = "Disconnected";
     [ObservableProperty] private string _timingHoldSummary = "";
     [ObservableProperty] private string _timingAlarm = "";
+    [ObservableProperty] private string _timingClockWarning = "";
+    public bool HasTimingClockWarning => TimingClockWarning.Length != 0;
+    partial void OnTimingClockWarningChanged(string value) => OnPropertyChanged(nameof(HasTimingClockWarning));
     [ObservableProperty] private string _timingSummary = "Choose a saved start list.";
     [ObservableProperty] private string _startBibText = "";
     [ObservableProperty] private string _finishBibText = "";
@@ -532,6 +535,9 @@ public sealed partial class MainViewModel
         TimingHoldSummary = heldCount == 0 ? "" : heldCount == TimingCheckpoints.Count + 2
             ? "HOLD · all positions" : $"HOLD · {heldCount} position(s)";
         TimingAlarm = timing?.Fault ?? (timing?.Pending >= 512 ? "CAPTURE BACKLOG: input is waiting for storage. Do not close this file; check the local disk." : "");
+        TimingClockWarning = timing?.DeviceClockDifference is { } clocks && clocks.Difference > TimeSpan.FromSeconds(2)
+            ? $"Device clocks differ by {TimingTime.Format(clocks.Difference.Ticks / TimingTime.TicksPerHundredth)}: {clocks.Ahead} is ahead of {clocks.Behind}. Synchronize the devices; elapsed times between them would be wrong."
+            : "";
         ArmedBibs = $"Start {timing?.ArmedStart?.ToString(CultureInfo.InvariantCulture) ?? "—"}  /  Finish {timing?.ArmedFinish?.ToString(CultureInfo.InvariantCulture) ?? "—"}";
         OnPropertyChanged(nameof(TimingCaptureLabel));
         RefreshRaceQueues();

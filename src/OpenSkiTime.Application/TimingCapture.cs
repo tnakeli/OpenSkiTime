@@ -224,6 +224,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     public int? ExpectedBib(int channel) => _expected[channel] is > 0 and var bib ? bib : null;
     public bool IsHeld(int channel) => _held[channel];
     public long? LiveDeviceTicks => _runningClock.DeviceNowTicks(TimeSpan.FromSeconds(5));
+    // Approximate clock difference between devices of the running capture (devices heard from in the last 30 minutes).
+    public DeviceClockDifference? DeviceClockDifference => IsActive ? _runningClock.LargestDifference(TimeSpan.FromMinutes(30)) : null;
     public long? RunningHundredths(string? startKey)
     {
         var start = Snapshot?.Observations.FirstOrDefault(x => x.Observation.Key == startKey)?.Observation;
@@ -463,8 +465,12 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         {
             // The running display clock follows timing impulses and device heartbeats only; informational device input
             // (for example an ALGE Results channel no role uses, or another device day) must not move it.
-            foreach (var observation in decoded.Where(x => x.Kind == ObservationKind.Impulse || (x.Kind == ObservationKind.Information && x.PhysicalChannel is null)))
-            { _runningClock.Observe(observation, packet.ReceivedAt); }
+            // History pages (REST "cloud") carry old triggers, so they never anchor a device clock.
+            if (packet.Stream != "cloud")
+            {
+                foreach (var observation in decoded.Where(x => x.Kind == ObservationKind.Impulse || (x.Kind == ObservationKind.Information && x.PhysicalChannel is null)))
+                { _runningClock.Observe(observation, packet.ReceivedAt); }
+            }
             TimingSignals.Record(_signals, session.Options, decoded, packet.ReceivedAt);
         }
         _observations.AddRange(decoded.Where(x => x.Kind != ObservationKind.Information));

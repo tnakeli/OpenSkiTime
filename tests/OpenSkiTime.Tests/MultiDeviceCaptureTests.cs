@@ -212,6 +212,23 @@ public sealed class MultiDeviceCaptureTests : IDisposable
         Assert.Equal(700, clock.ElapsedHundredths(start));
     }
 
+    [Fact]
+    public void RunningTimeUsesTheStartDeviceClockAndUnsyncedDevicesAreReported()
+    {
+        var time = new StepTime();
+        var clock = new RunningTimingClock(time);
+        TimingObservation At(string device, TimeSpan clockTime) => new(device + clockTime.Ticks, Guid.Empty, 1, device, "f" + device + clockTime.Ticks,
+            ObservationKind.Impulse, 0, new DateTime(2026, 10, 5).Add(clockTime).Ticks, 4, null, false, "sync:g:0", "");
+        var start = At("Timy:1", new TimeSpan(12, 0, 0));
+        clock.Observe(start, time.GetUtcNow());
+        // The MT1 clock is 1:56 ahead of the Timy; its intermediate arrives at the same real moment.
+        clock.Observe(At("231203016", new TimeSpan(12, 1, 56)), time.GetUtcNow());
+        time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(100, clock.ElapsedHundredths(start)); // not 1:57 from the other device's clock
+        var difference = clock.LargestDifference(TimeSpan.FromMinutes(30))!;
+        Assert.Equal((TimeSpan.FromSeconds(116), "231203016", "Timy:1"), (difference.Difference, difference.Ahead, difference.Behind));
+    }
+
     private sealed class StepTime : TimeProvider
     {
         private DateTimeOffset _utc = new(2026, 9, 13, 9, 0, 0, TimeSpan.Zero);
