@@ -1,0 +1,343 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using OpenSkiTime.Application;
+using OpenSkiTime.Devices;
+using OpenSkiTime.Domain;
+using OpenSkiTime.Timing;
+
+namespace OpenSkiTime.Desktop;
+
+public sealed record TimingReportDeviceRow(string Time, string Position, string Kind, string RawText, string Provenance);
+
+// "Timing device" input of the Read timing observations dialog. The device is read in dialog memory only:
+// nothing is persisted to the series or to preferences, and live A / B capture and role settings are never changed.
+public sealed partial class MainViewModel
+{
+    public const string ReportImageInputMode = "Image / OCR";
+    public const string ReportDeviceInputMode = "Timing device";
+    private const int ReportDeviceRowLimit = 2000;
+    private const string ReportDeviceIdleStatus = "Choose the device and channels, then press Connect / Read. Nothing is saved until you press OK.";
+    private TimingDeviceRead? _reportDeviceRead;
+    private TimingConnection? _reportDeviceConnection;
+    private Task? _reportDeviceMonitor;
+    private Task _reportDeviceStopping = Task.CompletedTask;
+    internal TimeSpan ReportDevicePollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
+    // Completes when the current device read has stopped and its observations were matched (tests and shutdown).
+    internal Task ReportDeviceReadTask => _reportDeviceMonitor ?? Task.CompletedTask;
+
+    public IReadOnlyList<string> ReportInputModes { get; } = [ReportImageInputMode, ReportDeviceInputMode];
+    public IReadOnlyList<string> ReportDeviceSources { get; } = TimingSourceTypes.DeviceRead.Select(TimingSourceTypes.Label).ToArray();
+    public IReadOnlyList<int> ReportDeviceChannels { get; } = Enumerable.Range(0, 9).ToArray();
+    public IReadOnlyList<int> ReportDeviceBauds { get; } = [9600, 19200, 38400, 57600, 115200];
+    public ObservableCollection<string> ReportDevicePorts { get; } = [];
+    public ObservableCollection<TimingReportDeviceRow> ReportDeviceObservations { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsReportImageInput))]
+    [NotifyPropertyChangedFor(nameof(IsReportDeviceInput))]
+    private string _reportInputMode = ReportImageInputMode;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsReportDeviceUsb))]
+    [NotifyPropertyChangedFor(nameof(IsReportDeviceSerial))]
+    [NotifyPropertyChangedFor(nameof(IsReportDeviceAlge))]
+    [NotifyPropertyChangedFor(nameof(IsReportDeviceReplay))]
+    private string _reportDeviceSource = TimingSourceTypes.TimyUsbLabel;
+    [ObservableProperty] private string _reportDeviceUsbId = "";
+    [ObservableProperty] private string _reportDevicePort = "";
+    [ObservableProperty] private int _reportDeviceBaud = 38400;
+    [ObservableProperty] private string _reportDeviceAlgeStartDevice = "";
+    [ObservableProperty] private string _reportDeviceAlgeFinishDevice = "";
+    [ObservableProperty] private string _reportDeviceAlgeUsername = "";
+    [ObservableProperty] private string _reportDeviceAlgePassword = "";
+    [ObservableProperty] private bool _reportDeviceRememberPassword;
+    [ObservableProperty] private string _reportDeviceFromUtc = "";
+    [ObservableProperty] private string _reportDeviceReplayPath = "";
+    [ObservableProperty] private int _reportDeviceStartChannel;
+    [ObservableProperty] private int _reportDeviceFinishChannel = 1;
+    [ObservableProperty] private int _reportDeviceHandChannel;
+    [ObservableProperty] private string _reportDeviceDate = "";
+    [ObservableProperty] private string _reportDeviceUtcOffset = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanEditReportDevice))]
+    private bool _isReportDeviceReading;
+    [ObservableProperty] private string _reportDeviceStatus = ReportDeviceIdleStatus;
+    [ObservableProperty] private string _reportImportWarnings = "";
+
+    public bool IsReportImageInput => ReportInputMode != ReportDeviceInputMode;
+    public bool IsReportDeviceInput => ReportInputMode == ReportDeviceInputMode;
+    private TimingSourceType ReportDeviceSourceType => TimingSourceTypes.Parse(ReportDeviceSource) ?? TimingSourceType.TimyUsb;
+    public bool IsReportDeviceUsb => ReportDeviceSourceType == TimingSourceType.TimyUsb;
+    public bool IsReportDeviceSerial => ReportDeviceSourceType == TimingSourceType.Mt1Serial;
+    public bool IsReportDeviceAlge => ReportDeviceSourceType == TimingSourceType.AlgeResults;
+    public bool IsReportDeviceReplay => ReportDeviceSourceType == TimingSourceType.ReplayFile;
+    public bool IsReportDeviceB => ReportImageRole == TimingReportImageRole.B;
+    public bool IsReportDeviceHand => !IsReportDeviceB;
+    public bool CanEditReportDevice => !IsReportDeviceReading;
+
+    private void NotifyReportDeviceRole() { OnPropertyChanged(nameof(IsReportDeviceB)); OnPropertyChanged(nameof(IsReportDeviceHand)); }
+
+    partial void OnReportInputModeChanged(string value)
+    {
+        // Switching input discards the other input's in-memory evidence and any unaccepted proposals.
+        _reportImageCancellation?.Cancel(); ResetReportDeviceRead(); ClearReportPreview();
+        ReportImages.Clear(); SelectedReportImage = null;
+        if (value == ReportDeviceInputMode)
+        {
+            PrepareReportDeviceDefaults();
+            ReportImportStatus = "Read timestamps from a timing device into this dialog. Review the matched timestamps, then press OK.";
+        }
+        else { ReportImportStatus = "Open images, drop images here, or paste an image (Ctrl+V / Ctrl+C). Review the matched timestamps, then press OK."; }
+    }
+
+    private void PrepareReportDeviceDefaults()
+    {
+        if (_reportDraft is { } draft)
+        {
+            ReportDeviceDate = draft.Header.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (ReportDeviceFromUtc.Length == 0)
+            { ReportDeviceFromUtc = draft.Header.Date.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " 12:00"; }
+        }
+        if (ReportDevicePorts.Count == 0) { RefreshReportDevicePorts(); }
+    }
+
+    [RelayCommand]
+    private void RefreshReportDevicePorts()
+    {
+        try
+        {
+            var selected = ReportDevicePort ?? "";
+            ReportDevicePorts.Clear();
+            foreach (var port in SerialTimingSource.PortNames()) { ReportDevicePorts.Add(port); }
+            ReportDevicePort = selected.Length != 0 ? selected : ReportDevicePorts.FirstOrDefault() ?? "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException)
+        { ReportDeviceStatus = "Serial ports could not be listed: " + ex.Message; }
+    }
+
+    // Builds the transient read configuration. Only fields of the selected source are used.
+    internal (TimingConnection Connection, CaptureOptions Options, AuxiliaryTimingRole Role) BuildReportDeviceRead()
+    {
+        var source = TimingSourceTypes.Parse(ReportDeviceSource);
+        if (source is not { } type || !TimingSourceTypes.DeviceRead.Contains(type))
+        { throw new DomainValidationException("Choose a timing device source."); }
+        if (!DateOnly.TryParseExact(ReportDeviceDate.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        { throw new DomainValidationException("Device date must use YYYY-MM-DD."); }
+        int? offset = null;
+        if (ReportDeviceUtcOffset.Trim().Length != 0)
+        {
+            if (!int.TryParse(ReportDeviceUtcOffset.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var minutes)
+                || minutes is < -840 or > 840)
+            { throw new DomainValidationException("Local clock UTC offset must be whole minutes between -840 and 840, or blank."); }
+            offset = minutes;
+        }
+        var role = ReportImageRole switch
+        {
+            TimingReportImageRole.B => AuxiliaryTimingRole.B,
+            TimingReportImageRole.HandStart => AuxiliaryTimingRole.HandStart,
+            _ => AuxiliaryTimingRole.HandFinish
+        };
+        var b = role == AuxiliaryTimingRole.B;
+        var startChannel = b ? ReportDeviceStartChannel : ReportDeviceHandChannel;
+        var finishChannel = b ? ReportDeviceFinishChannel : ReportDeviceHandChannel;
+        var alge = type == TimingSourceType.AlgeResults;
+        var startDevice = ReportDeviceAlgeStartDevice.Trim();
+        var finishDevice = b && ReportDeviceAlgeFinishDevice.Trim().Length != 0 ? ReportDeviceAlgeFinishDevice.Trim() : startDevice;
+        DateTimeOffset? fromUtc = null;
+        if (alge)
+        {
+            if (startDevice.Length == 0 || !startDevice.All(char.IsAsciiDigit) || !finishDevice.All(char.IsAsciiDigit))
+            { throw new DomainValidationException("Enter the ALGE Results device ID (digits only)."); }
+            if (!DateTimeOffset.TryParse(ReportDeviceFromUtc, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+            { throw new DomainValidationException("Enter a valid ALGE Results receive-from date/time in UTC (YYYY-MM-DD HH:mm)."); }
+            fromUtc = parsed;
+        }
+        if (type == TimingSourceType.Mt1Serial && (ReportDevicePort ?? "").Trim().Length == 0)
+        { throw new DomainValidationException("Choose the MT1 COM port."); }
+        if (type == TimingSourceType.ReplayFile && !File.Exists(ReportDeviceReplayPath.Trim()))
+        { throw new DomainValidationException("Enter the path to an existing raw ALGE ASCII file."); }
+        var connection = new TimingConnection(type)
+        {
+            UsbId = type == TimingSourceType.TimyUsb ? ReportDeviceUsbId.Trim() : "",
+            Port = type == TimingSourceType.Mt1Serial ? (ReportDevicePort ?? "").Trim() : "",
+            BaudRate = type == TimingSourceType.Mt1Serial ? ReportDeviceBaud : 38400,
+            AlgeDeviceId = alge ? startDevice : "",
+            AlgeUsername = alge ? ReportDeviceAlgeUsername.Trim() : "",
+            ReplayPath = type == TimingSourceType.ReplayFile ? ReportDeviceReplayPath.Trim() : ""
+        };
+        connection.Validate("Timing device");
+        var endpoint = alge ? $"{startDevice}/{startChannel};{finishDevice}/{finishChannel}" : connection.Endpoint;
+        var options = new CaptureOptions(connection.SourceLabel, endpoint, date, startChannel, finishChannel,
+            type == TimingSourceType.ReplayFile, "Not queried", alge ? startDevice : null, alge ? finishDevice : null, fromUtc)
+        { BaudRate = connection.BaudRate, ComparisonUtcOffsetMinutes = offset };
+        AuxiliaryTimingValidation.Validate(role, options);
+        return (connection, options, role);
+    }
+
+    // A device endpoint used by live capture is never opened a second time from this dialog.
+    private void ValidateReportDeviceEndpoint(CaptureOptions options)
+    {
+        if (workspace.Timing is { IsActive: true, LastCaptureOptions: { } live } && SameLocalTimingEndpoint(options, live))
+        { throw new DomainValidationException("This device is in use by live timing (A). Choose another device, or read it after live capture is disconnected."); }
+        if (workspace.Auxiliary is not { } auxiliary) { return; }
+        foreach (var role in Enum.GetValues<AuxiliaryTimingRole>())
+        {
+            var state = auxiliary.State(role);
+            if (state is { IsActive: true, Options: { } active } && SameLocalTimingEndpoint(options, active))
+            {
+                throw new DomainValidationException((role == AuxiliaryTimingRole.B ? "This device is in use by live B Clock capture."
+                    : $"This device is in use by {role} capture.") + " Choose another device, or read it after that capture is disconnected.");
+            }
+        }
+    }
+
+    [RelayCommand]
+    private async Task ReadReportDeviceAsync()
+    {
+        if (IsReportBusy || IsReportDeviceReading || _reportDraft is null) { return; }
+        var password = ReportDeviceAlgePassword;
+        ResetReportDeviceRead(); ClearReportPreview();
+        IsReportDeviceReading = true; // Also blocks a second Connect / Read while the previous source is released.
+        var started = false;
+        try
+        {
+            await _reportDeviceStopping; // A previous read in this dialog releases its port before the next read opens it.
+            await GuardAsync(() =>
+            {
+                var (connection, options, role) = BuildReportDeviceRead();
+                ValidateReportDeviceEndpoint(options);
+                var source = TimingSourceFactory.Create(connection, options, _timingHttp, password, ReportDeviceRememberPassword);
+                TimingDeviceRead read;
+                try { read = new TimingDeviceRead(source, role, options); }
+                catch { _ = source.DisposeAsync().AsTask(); throw; }
+                _reportDeviceRead = read; _reportDeviceConnection = connection;
+                read.Start(); started = true;
+                ReportDeviceStatus = $"Reading {connection.SourceLabel} · {connection.Summary} in this dialog only. Press Stop when the device has sent its timestamps.";
+                ReportImportStatus = ReportDeviceStatus;
+                _reportDeviceMonitor = MonitorReportDeviceReadAsync(read);
+                return Task.CompletedTask;
+            });
+        }
+        finally
+        {
+            if (!started)
+            {
+                IsReportDeviceReading = false;
+                if (IsError) { ReportDeviceStatus = ReportImportStatus = StatusMessage; }
+            }
+        }
+    }
+
+    [RelayCommand]
+    private async Task StopReportDeviceAsync()
+    {
+        if (_reportDeviceRead is not { } read) { return; }
+        await read.StopAsync();
+        await ReportDeviceReadTask;
+    }
+
+    private async Task MonitorReportDeviceReadAsync(TimingDeviceRead read)
+    {
+        var shown = -1;
+        while (true)
+        {
+            var completed = await Task.WhenAny(read.Completion, Task.Delay(ReportDevicePollInterval)) == read.Completion;
+            if (!ReferenceEquals(_reportDeviceRead, read)) { return; }
+            ReportDeviceStatus = read.Status + $" · {read.PacketCount} packet(s) received in memory";
+            if (!completed && read.PacketCount != shown)
+            {
+                shown = read.PacketCount;
+                var live = await Task.Run(() => read.Decode(new AlgeDecoderFactory()));
+                if (!ReferenceEquals(_reportDeviceRead, read)) { return; }
+                ShowReportDeviceObservations(read, live);
+            }
+            if (completed) { break; }
+        }
+        IsReportDeviceReading = false;
+        await PreviewReportDeviceAsync(read);
+    }
+
+    private void ShowReportDeviceObservations(TimingDeviceRead read, IReadOnlyList<AuxiliaryTimingObservation> observations)
+    {
+        var provenance = ReportDeviceProvenance(read);
+        ReportDeviceObservations.Clear();
+        foreach (var item in observations.TakeLast(ReportDeviceRowLimit))
+        {
+            var o = item.Observation;
+            var time = o.DeviceTicks is { } ticks ? TimingReportXml.FormatStamp(new(ticks, o.Precision)) + (o.ClockId == "UTC" ? " UTC" : "") : "";
+            var position = o.Channel switch { 0 => "Start", 1 => "Finish", null => "", _ => "Not mapped" };
+            ReportDeviceObservations.Add(new(time, position, o.Kind.ToString(), o.Message, $"{provenance}:{o.Key}"));
+        }
+    }
+
+    private static string ReportDeviceProvenance(TimingDeviceRead read) => DeviceEvidence.Provenance(read.Options.Device, read.Options.Endpoint);
+
+    // Human-readable provenance for the accepted change reason, e.g. "device import (MT1 · USB / serial, COM3)".
+    private string ReportDeviceImportDescription(TimingDeviceRead read)
+    {
+        var detail = _reportDeviceConnection is { Source: TimingSourceType.ReplayFile } replay
+            ? Path.GetFileName(replay.ReplayPath) : read.Options.Endpoint;
+        return $"device import ({read.Options.Device}, {detail})";
+    }
+
+    private async Task PreviewReportDeviceAsync(TimingDeviceRead read)
+    {
+        if (_reportDraft is null || !ReferenceEquals(_reportDeviceRead, read)) { return; }
+        if (IsReportBusy)
+        { ReportImportStatus = "The report is busy. Press Connect / Read again to match the device timestamps."; return; }
+        if (!await FlushTimingReportAsync()) { return; }
+        IsReportBusy = true;
+        try
+        {
+            await GuardAsync(async () =>
+            {
+                var observations = await Task.Run(() => read.Decode(new AlgeDecoderFactory()));
+                if (!ReferenceEquals(_reportDeviceRead, read)) { return; }
+                ShowReportDeviceObservations(read, observations);
+                var provenance = ReportDeviceProvenance(read);
+                var sets = new Dictionary<bool, DeviceEvidenceSet>();
+                DeviceEvidenceSet For(bool targetUsesUtc)
+                {
+                    if (!sets.TryGetValue(targetUsesUtc, out var set))
+                    { set = DeviceEvidence.ToEvidence(observations, targetUsesUtc, provenance); sets.Add(targetUsesUtc, set); }
+                    return set;
+                }
+                if (!await PreviewReportEvidenceCoreAsync(For, compareClockBasis: true, ReportDeviceImportDescription(read))) { return; }
+                var impulses = observations.Count(x => x.Observation.Kind == ObservationKind.Impulse);
+                var invalid = observations.Count(x => x.Observation.Kind == ObservationKind.Invalid);
+                ReportImportStatus = $"{read.PacketCount} packet(s) read from {read.Options.Device} in memory; {impulses} impulse(s) decoded; "
+                    + $"{ReportImportPreview.Count(x => x.CanAccept)} report timestamps matched. Check selected timestamps before pressing OK. Unmatched fields remain unchanged.";
+                if (invalid > 0) { ReportImportStatus += $" {invalid} device line(s) were invalid or incomplete; review the raw lines."; }
+                if (read.Truncated) { ReportImportStatus += " The read limit was reached; later device input was not read."; }
+                if (read.Fault is { } fault) { ReportImportStatus += " Device read failed: " + fault; }
+                if (sets.Values.Any(x => x.ShiftedCount > 0))
+                { ReportImportStatus += " UTC device timestamps were compared using the explicit local clock UTC offset; original device values are unchanged."; }
+                if (ReportImportWarnings.Length != 0) { ReportImportStatus += " " + ReportImportWarnings; }
+                ReportDeviceStatus = read.Status + $" · {read.PacketCount} packet(s) received in memory";
+                SetStatus(ReportImportStatus);
+            });
+        }
+        finally { IsReportBusy = false; }
+        if (IsError) { ReportImportStatus = StatusMessage; }
+    }
+
+    // Stops the source and discards all packets read in this dialog. Nothing was persisted.
+    private void ResetReportDeviceRead()
+    {
+        var read = _reportDeviceRead;
+        _reportDeviceRead = null; _reportDeviceConnection = null; _reportDeviceMonitor = null;
+        IsReportDeviceReading = false; ReportDeviceObservations.Clear(); ReportDeviceAlgePassword = "";
+        ReportDeviceStatus = ReportDeviceIdleStatus;
+        if (read is null) { return; }
+        var previous = _reportDeviceStopping;
+        _reportDeviceStopping = DisposeReportDeviceReadAsync(previous, read);
+    }
+
+    private static async Task DisposeReportDeviceReadAsync(Task previous, TimingDeviceRead read)
+    {
+        await previous;
+        await read.DisposeAsync();
+    }
+}
