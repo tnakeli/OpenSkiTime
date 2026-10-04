@@ -160,7 +160,7 @@ public partial class DesktopWorkflowTests
             menu.Hide();
             Assert.True(vm.IsTimingSection);
             Assert.Contains("Run 1", vm.TimingContext, StringComparison.Ordinal);
-            Assert.Equal(vm.FileLabel, vm.WindowTitle);
+            Assert.StartsWith(vm.FileLabel + " — OpenSkiTime ", vm.WindowTitle, StringComparison.Ordinal);
             Assert.Equal(vm.TimingCompetition!.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             CaptureDraw(window, output, "timing-device.png");
             vm.TimingSource = "Simulator";

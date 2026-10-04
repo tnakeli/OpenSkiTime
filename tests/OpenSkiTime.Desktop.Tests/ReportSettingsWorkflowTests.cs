@@ -16,7 +16,7 @@ namespace OpenSkiTime.Tests;
 
 public partial class DesktopWorkflowTests
 {
-    private static readonly string[] s_reportSettingsTabs = ["FIS", "Timing devices", "Timing report"];
+    private static readonly string[] s_reportSettingsTabs = ["FIS", "Timing devices", "Timing report", "Live timing", "About"];
     private static readonly string[] s_reportSettingsCalls = ["equipment", "upload", "upload"];
     [Fact]
     public void CloudDeviceCannotBeReusedAsAnIndependentTimingSystem()
@@ -168,6 +168,45 @@ public partial class DesktopWorkflowTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [AvaloniaFact]
+    public async Task AboutAndLiveTimingTabsShowVersionLinksAndSavePublisherKeyPerServer()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-about-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = "", OpenPath = "", BackupPath = "" },
+                fisStore: new FisLocalStore(root, new ReportSettingsCredential()), recentSeriesStore: new(root));
+            var stores = new Dictionary<string, ReportSettingsCredential>();
+            vm.LiveCredentialStore = target => stores.TryGetValue(target, out var store) ? store : stores[target] = new();
+            Assert.Equal(ProductInfo.DisplayName + " · FIS rules 2026-27", vm.WindowTitle);
+            vm.ShowSettingsCommand.Execute(null);
+            var window = new Window { Content = new ScrollViewer { Content = new SettingsView { DataContext = vm } }, Width = 1100, Height = 900 };
+            window.Show();
+            var tabs = window.GetVisualDescendants().OfType<TabControl>().Single();
+            tabs.SelectedIndex = 4; window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("OpenSkiTime", window.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Name == "AboutProductText").Text);
+            Assert.Contains("Version " + ProductInfo.Version, window.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Name == "AboutVersionText").Text, StringComparison.Ordinal);
+            var links = window.GetVisualDescendants().OfType<HyperlinkButton>().Select(x => x.NavigateUri!.ToString()).ToArray();
+            foreach (var url in new[] { ProductInfo.RepositoryUrl, ProductInfo.LicenseUrl, ProductInfo.ThirdPartyNoticesUrl, ProductInfo.IssuesUrl, ProductInfo.SecurityReportUrl, ProductInfo.PrivacyUrl, ProductInfo.WebsiteUrl })
+            { Assert.Contains(url, links); }
+            tabs.SelectedIndex = 3; window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("No publisher key saved for this server.", vm.LivePublisherKeyStatus);
+            vm.LivePublisherKeyInput = "ost_pk_synthetic-publisher-key-0123456789";
+            PressSettingsControl(window, window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save key")));
+            Assert.False(vm.IsError, vm.StatusMessage); Assert.Equal("", vm.LivePublisherKeyInput);
+            Assert.Equal("ost_pk_synthetic-publisher-key-0123456789", stores["OpenSkiTime.LiveTiming.PublisherKey:https://live.openskiti.me"].Read());
+            // Keys belong to one server origin: another server shows none until its own key is saved.
+            vm.LiveCloudEndpoint = "https://self-hosted.example.invalid/";
+            Assert.Equal("No publisher key saved for this server.", vm.LivePublisherKeyStatus);
+            vm.LiveCloudEndpoint = "https://LIVE.openskiti.me";
+            Assert.Equal("Publisher key saved for this server and Windows user.", vm.LivePublisherKeyStatus);
+            PressSettingsControl(window, window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Remove key")));
+            Assert.Null(stores["OpenSkiTime.LiveTiming.PublisherKey:https://live.openskiti.me"].Read());
+            window.Close();
+        }
+        finally { Directory.Delete(root, true); }
+    }
     private sealed class ReportSettingsCredential : ICredentialStore
     {
         private string? _key;

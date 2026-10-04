@@ -36,6 +36,7 @@
             <TextBlock Text="O" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Foreground="White" />
           </Border>
           <TextBlock Text="OpenSkiTime" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+          <TextBlock Name="ProductVersionText" Text="{Binding ProductVersionLabel}" Foreground="#B8C9D1" FontSize="12" VerticalAlignment="Center" ToolTip.Tip="{Binding ProductLabel}" />
         </StackPanel>
         <Button Name="ActiveRaceButton" Grid.Column="1" Content="{Binding ActiveRaceLabel}" Click="ActiveRace_Click"
                 IsVisible="{Binding IsOpen}" IsEnabled="{Binding CanEditCompetitions}" Classes="activeRace" HorizontalAlignment="Left"

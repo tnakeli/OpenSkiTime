@@ -136,6 +136,10 @@ gh variable set WEBSITE_DEPLOY_ENABLED --repo tnakeli/OpenSkiTime --body false
 
 These flags stop deployment jobs, not an already running service or all spending. Adjust/disable public ingress or remove resources deliberately if service operation must stop. Do not stop a race's local capture.
 
+## Versioning
+
+OpenSkiTime uses [Semantic Versioning](https://semver.org/) `MAJOR.MINOR.PATCH`, with optional `-preview.N` pre-release labels. `VersionPrefix` in `Directory.Build.props` is the single source (currently `0.1.0`); `ProductInfo` in `OpenSkiTime.Application` reads it from the informational version, dropping build metadata. While the version is `0.x`, the `.ost` format and APIs are not yet stable. Bump PATCH for fixes, MINOR for compatible features and MAJOR for incompatible changes once 1.0 is released. Bump `VersionPrefix` in the release commit, then tag `vX.Y.Z`; `Assert-ReleaseSource.ps1` refuses a tag whose version differs from `VersionPrefix`. The version appears in the window title, Settings → About, general PDF footers, the timing report form and the timing report XML `Software` element. The implemented FIS rule season (`ProductInfo.FisRulesSeason`, currently 2026-27) is shown beside it and changes only with a reviewed rules update. Live server tags (`live-vX.Y.Z`) version the hosted service independently.
+
 ## Unsigned Windows release
 
 `vX.Y.Z` creates a stable release; `vX.Y.Z-preview.N` creates a prerelease. Build/test occurs before publishing. The Windows runner provides Inno Setup 6; compilation fails rather than silently falling back if it is missing. The package contains the desktop UI, separate control panel, worker, local server, OCR assets, MIT license and notices. Each .NET component is self-contained for Windows x64; the legacy USB host still requires Windows .NET Framework 4.8. Vendor Timy driver/SDK are separate.

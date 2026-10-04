@@ -36,6 +36,11 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <!-- Semantic Versioning (MAJOR.MINOR.PATCH). Bump before tagging a release; release builds pass the tag version. -->
+    <VersionPrefix>0.1.0</VersionPrefix>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <Authors>Open Ski Time contributors</Authors>
     <Product>Open Ski Time</Product>
     <Copyright>Open Ski Time contributors</Copyright>
