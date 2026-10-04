@@ -130,7 +130,8 @@ jobs:
         run: |
           version="${RELEASE_TAG#live-v}"
           node scripts/release-notes.mjs live "$version" release-notes.md
-          # Never "latest": the website download and releases/latest belong to application releases.
+          # Never "latest" while an application release can be. GitHub still reports this release as latest when no
+          # stable application release exists, so the website download must not rely on releases/latest.
           flags=(--latest=false)
           if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$RELEASE_TAG" --repo "$REPOSITORY" --verify-tag --title "OpenSkiTime Live $RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
