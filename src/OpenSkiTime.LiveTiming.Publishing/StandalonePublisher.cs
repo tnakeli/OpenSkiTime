@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -20,6 +21,7 @@ public sealed class StandalonePublisher : IDisposable
         if (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback))
         { throw new LiveValidationException("Cloud publishing requires HTTPS (HTTP permitted only on loopback)."); }
         _http = new(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = uri, Timeout = TimeSpan.FromSeconds(5) };
+        _http.DefaultRequestHeaders.Add(LiveProtocol.Header, LiveProtocol.Version.ToString(CultureInfo.InvariantCulture));
         if (resumeSession is not null && resumeSession.ExpiresAt > DateTimeOffset.UtcNow)
         {
             Session = resumeSession;
@@ -45,7 +47,7 @@ public sealed class StandalonePublisher : IDisposable
                     ? "This live timing server requires a publisher key. Save the key in Settings → Live timing."
                     : "The live timing server rejected the publisher key. Check the key in Settings → Live timing.");
             }
-            response.EnsureSuccessStatusCode();
+            Ensure(response);
             Session = await response.Content.ReadFromJsonAsync<LiveSession>(LiveJson.Options, ct) ?? throw new IOException("Missing session credential.");
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Session.PublisherToken);
             refresh = true;
@@ -60,7 +62,7 @@ public sealed class StandalonePublisher : IDisposable
         {
             using var response = await _http.PutAsJsonAsync($"api/sessions/{Session.SessionId}/state", snapshot, LiveJson.Options, ct);
             _log($"Full snapshot publish HTTP {(int)response.StatusCode}, version {snapshot.Version}");
-            response.EnsureSuccessStatusCode();
+            Ensure(response);
         }
         else
         {
@@ -76,9 +78,9 @@ public sealed class StandalonePublisher : IDisposable
                 {
                     using var restore = await _http.PutAsJsonAsync($"api/sessions/{Session.SessionId}/state", snapshot, LiveJson.Options, ct);
                     _log($"Snapshot resync HTTP {(int)restore.StatusCode}");
-                    restore.EnsureSuccessStatusCode(); break;
+                    Ensure(restore); break;
                 }
-                response.EnsureSuccessStatusCode();
+                Ensure(response);
             }
         }
         _sent = snapshot;
@@ -90,7 +92,7 @@ public sealed class StandalonePublisher : IDisposable
         _log($"Server health HTTP {(int)response.StatusCode}");
         // RAM state is lost on every restart, new revision or scale-to-zero while the stateless session token stays valid.
         if (Session is not null && response.StatusCode == HttpStatusCode.NotFound) { return false; }
-        response.EnsureSuccessStatusCode();
+        Ensure(response);
         return true;
     }
     public async Task PauseAsync(CancellationToken ct)
@@ -98,15 +100,22 @@ public sealed class StandalonePublisher : IDisposable
         if (Session is null) { return; }
         using var response = await _http.PostAsync($"api/sessions/{Session.SessionId}/pause", null, ct);
         _log($"Session pause HTTP {(int)response.StatusCode}");
-        response.EnsureSuccessStatusCode();
+        Ensure(response);
     }
     public async Task DeleteAsync(bool allData, CancellationToken ct)
     {
         if (Session is null) { return; }
         using var response = await _http.DeleteAsync($"api/sessions/{Session.SessionId}" + (allData ? "/data" : ""), ct);
         _log($"Session deletion HTTP {(int)response.StatusCode}");
-        response.EnsureSuccessStatusCode();
+        Ensure(response);
         Session = null; _sent = null; _http.DefaultRequestHeaders.Authorization = null;
+    }
+    private static void Ensure(HttpResponseMessage response)
+    {
+        // 426 is permanent until either side is updated; the message is OpenSkiTime's own, never server text.
+        if (response.StatusCode == HttpStatusCode.UpgradeRequired)
+        { throw new LiveValidationException("The live timing server uses an incompatible protocol version. Update OpenSkiTime or choose a compatible server."); }
+        response.EnsureSuccessStatusCode();
     }
     private static (int Run, LiveResult Result)[] Changes(LiveSnapshot before, LiveSnapshot after) =>
         after.Runs.SelectMany(run => run.Results.Where(r =>
