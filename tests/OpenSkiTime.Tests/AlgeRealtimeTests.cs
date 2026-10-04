@@ -138,6 +138,19 @@ public sealed class AlgeRealtimeTests
     }
 
     [Fact]
+    public void ALivePushOnAnotherDeviceDayIsShownForReviewWhileOldHistoryStaysInformational()
+    {
+        var options = Options() with { DeviceDate = new DateOnly(2026, 9, 13) };
+        var session = new CaptureSession(Guid.NewGuid(), Guid.Empty, options, DateTimeOffset.UtcNow, null, false);
+        var body = Encoding.UTF8.GetBytes(Trigger("231203016", "C1", Stamp()));
+        var live = Assert.Single(new AlgeResultsDecoder(session).Feed(new(session.Id, 1, DateTimeOffset.UtcNow, "alge-results/v1", "231203016", "push", body)));
+        Assert.Equal(ObservationKind.Invalid, live.Kind);
+        Assert.Contains("device date 2026-10-04 differs from the capture device date 2026-09-13", live.Message, StringComparison.Ordinal);
+        var history = Assert.Single(new AlgeResultsDecoder(session).Feed(new(session.Id, 2, DateTimeOffset.UtcNow, "alge-results/v1", "231203016", "cloud", body)));
+        Assert.Equal(ObservationKind.Information, history.Kind);
+    }
+
+    [Fact]
     public async Task AccountDevicesAreListedForChoosingDeviceIds()
     {
         var http = new FakeAlge();

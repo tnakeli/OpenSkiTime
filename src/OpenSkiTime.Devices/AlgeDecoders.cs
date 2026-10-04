@@ -220,7 +220,10 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         var falling = trigger.TryGetProperty("fallingEdge", out var f) && f.ValueKind == JsonValueKind.True;
         var kind = type == "ClearTrigger" ? ObservationKind.DeviceCorrection
             : type == "StartNumberTrigger" && valid && !blocked && falling ? ObservationKind.Impulse : ObservationKind.Invalid;
-        if (deviceDate != session.Options.DeviceDate) { kind = ObservationKind.Information; }
+        // A trigger from another device day: history reads may include earlier days and stay informational, but a live
+        // push on another day means the capture's device date is wrong, so it is shown for review instead of disappearing.
+        var otherDay = deviceDate != session.Options.DeviceDate;
+        if (otherDay) { kind = packet.Stream == "push" ? ObservationKind.Invalid : ObservationKind.Information; }
         int? bib = null;
         if (trigger.TryGetProperty("startNumber", out var number) && number.ValueKind == JsonValueKind.Object
             && number.TryGetProperty("type", out var numberType) && numberType.GetString() == "MANUAL"
@@ -234,7 +237,8 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         var clockId = session.Options.ClockGroup is { } group ? $"sync:{group}:0" : "alge-results";
         return new($"{session.Id:N}:{packet.Sequence}:json:{index}", session.Id, packet.Sequence, device,
             "mt1:" + fingerprint, kind, session.Options.Position(channel, device) ?? channel + 10,
-            local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}");
+            local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}"
+                + (otherDay ? $" · device date {deviceDate:yyyy-MM-dd} differs from the capture device date {session.Options.DeviceDate:yyyy-MM-dd}; check Device date in Settings" : ""));
     }
 
     private static TimingObservation Invalid(RawTimingPacket packet, string message, int index = 0) => new(
