@@ -113,8 +113,8 @@ jobs:
         run: |
           # Application and live server notes come from CHANGELOG.md / CHANGELOG-LIVE.md at the tagged commit.
           node source/scripts/release-notes.mjs app "${RELEASE_TAG#v}" release-notes.md
-          # Stable application releases are explicitly "latest": the website download reads releases/latest,
-          # and live-v* server releases are never marked latest.
+          # Stable application releases are explicitly "latest" on the Releases page; live-v* releases never are.
+          # The website download selects the newest stable vX.Y.Z itself (scripts/read-release.mjs).
           flags=(--latest)
           if [ "$PRERELEASE" = "true" ]; then flags=(--prerelease --latest=false); fi
           gh release create "$RELEASE_TAG" release/* --repo "$REPOSITORY" --verify-tag --title "OpenSkiTime $RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
