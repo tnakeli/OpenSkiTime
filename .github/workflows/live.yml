@@ -30,6 +30,11 @@ jobs:
       - name: Validate publication source
         shell: pwsh
         run: ./scripts/Assert-ReleaseSource.ps1 -Live
+      - name: Require changelog release notes
+        if: github.event_name == 'push'
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/release-notes.mjs live "${RELEASE_TAG#live-v}"
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.x'
@@ -100,3 +105,32 @@ jobs:
           AZURE_LIVE_APP: ${{ vars.AZURE_LIVE_APP }}
           LIVE_PUBLISHER_KEY: ${{ secrets.LIVE_PUBLISHER_KEY }}
         run: ./deploy/azure/Deploy-Live.ps1 -Image $env:LIVE_IMAGE -ResourceGroup $env:AZURE_RESOURCE_GROUP -AppName $env:AZURE_LIVE_APP
+  release:
+    # A live-v* tag gets a GitHub release only after its image is deployed and verified.
+    needs: [build, deploy]
+    if: github.event_name == 'push' && needs.deploy.result == 'success'
+    environment: production-live
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Publish live server release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          LIVE_IMAGE: ${{ needs.build.outputs.image }}
+        run: |
+          version="${RELEASE_TAG#live-v}"
+          node scripts/release-notes.mjs live "$version" release-notes.md
+          # Never "latest": the website download and releases/latest belong to application releases.
+          flags=(--latest=false)
+          if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --repo "$REPOSITORY" --verify-tag --title "OpenSkiTime Live $RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"

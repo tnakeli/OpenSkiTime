@@ -55,6 +55,53 @@ public sealed class ServerHardeningE2ETests
     }
 
     [Fact]
+    public async Task PublisherDeclaringAnotherProtocolIsRefusedWithoutCreatingSessions()
+    {
+        await using var server=new ServerProcess(); await server.Start();
+        using var http=new HttpClient { BaseAddress=new(server.Endpoint) };
+        using(var response=await http.GetAsync("health"))
+        {
+            response.EnsureSuccessStatusCode();
+            Assert.Equal(LiveProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture),Assert.Single(response.Headers.GetValues(LiveProtocol.Header)));
+            Assert.Equal(LiveProtocol.Version,(await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("protocol").GetInt32());
+        }
+        using(var request=server.CreateSession())
+        {
+            request.Headers.Add(LiveProtocol.Header,(LiveProtocol.Version+1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            using var response=await http.SendAsync(request);
+            Assert.Equal(HttpStatusCode.UpgradeRequired,response.StatusCode);
+        }
+        using(var request=server.CreateSession())
+        {
+            request.Headers.Add(LiveProtocol.Header,LiveProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            using var response=await http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+        }
+        // Only the accepted request created a session; its state is still unpublished so the public list stays empty.
+        Assert.Empty((await http.GetFromJsonAsync<LiveSessionSummary[]>("api/sessions",LiveJson.Options))!);
+    }
+
+    [Fact]
+    public async Task PublisherReportsIncompatibleServerProtocolAsOwnValidationError()
+    {
+        using var listener=new System.Net.Sockets.TcpListener(IPAddress.Loopback,0); listener.Start();
+        var port=((IPEndPoint)listener.LocalEndpoint).Port;
+        var served=Task.Run(async()=>
+        {
+            using var client=await listener.AcceptTcpClientAsync();
+            var stream=client.GetStream(); var buffer=new byte[8192]; var request=new StringBuilder();
+            while(!request.ToString().Contains("\r\n\r\n",StringComparison.Ordinal)) { var read=await stream.ReadAsync(buffer); if(read==0) { break; } request.Append(Encoding.ASCII.GetString(buffer,0,read)); }
+            await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 426 Upgrade Required\r\nContent-Length: 6\r\nConnection: close\r\n\r\nsecret"));
+            return request.ToString();
+        });
+        using var publisher=new OpenSkiTime.LiveTiming.Publishing.StandalonePublisher($"http://127.0.0.1:{port}",publisherKey:LivePublisherKey.Generate());
+        var error=await Assert.ThrowsAsync<LiveValidationException>(()=>publisher.PublishAsync(SyntheticRace.Create(),true,CancellationToken.None));
+        Assert.Contains("incompatible protocol version",error.Message,StringComparison.Ordinal);
+        Assert.DoesNotContain("secret",error.Message,StringComparison.Ordinal);
+        Assert.Contains($"{LiveProtocol.Header}: {LiveProtocol.Version}",await served,StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SecurityTxtIsServedWithContactCanonicalAndFutureExpiry()
     {
         await using var server=new ServerProcess(); await server.Start();

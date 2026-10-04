@@ -34,6 +34,11 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+      - name: Require changelog release notes
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/release-notes.mjs app $env:RELEASE_VERSION
       - run: dotnet restore OpenSkiTime.slnx -p:SecurityAudit=true
       - run: dotnet test OpenSkiTime.slnx -c Release
       - name: Build unsigned Windows installer and portable package
@@ -92,6 +97,13 @@ jobs:
         with:
           name: windows-reviewed-release
           path: release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
       - name: Publish immutable release files
         env:
           GH_TOKEN: ${{ github.token }}
@@ -99,19 +111,12 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           PRERELEASE: ${{ needs.package.outputs.prerelease }}
         run: |
-          cat > release-notes.md <<'EOF'
-          Windows x64 installer and portable package. The .NET 10 runtime is included.
-
-          **Unsigned build:** Windows may show an unknown-publisher warning. Code signing is not enabled yet.
-
-          Rehearse before race day and back up event files before updating. Incompatible development series files are preserved and rejected; automatic schema upgrades are not available. ALGE native USB needs the vendor driver and SDK separately.
-
-          The attached CycloneDX SBOM describes detected runtime dependencies. CVE reports include all severities; high and critical findings block publication. Native vendor components may need separate advisories.
-
-          Compare downloaded files with SHA256SUMS.txt. Checksums verify file integrity, not publisher identity.
-          EOF
-          flags=()
-          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          # Application and live server notes come from CHANGELOG.md / CHANGELOG-LIVE.md at the tagged commit.
+          node source/scripts/release-notes.mjs app "${RELEASE_TAG#v}" release-notes.md
+          # Stable application releases are explicitly "latest": the website download reads releases/latest,
+          # and live-v* server releases are never marked latest.
+          flags=(--latest)
+          if [ "$PRERELEASE" = "true" ]; then flags=(--prerelease --latest=false); fi
           gh release create "$RELEASE_TAG" release/* --repo "$REPOSITORY" --verify-tag --title "OpenSkiTime $RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
   website:
     needs: [package, publish]

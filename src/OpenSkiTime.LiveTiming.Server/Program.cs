@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Http.Json;
@@ -55,6 +56,11 @@ app.Use(async (context, next) =>
     context.Response.Headers.CacheControl = "no-store";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    context.Response.Headers[LiveProtocol.Header] = LiveProtocol.Version.ToString(CultureInfo.InvariantCulture);
+    // A publisher declaring another protocol is refused before any mutation; requests without the header are treated as current.
+    if (context.Request.Headers.TryGetValue(LiveProtocol.Header, out var declared)
+        && declared.ToString() != LiveProtocol.Version.ToString(CultureInfo.InvariantCulture))
+    { context.Response.StatusCode = 426; await context.Response.WriteAsync("Unsupported live timing protocol version."); return; }
     try { await next(context); }
     catch (LiveValidationException) { context.Response.StatusCode = 400; await context.Response.WriteAsync("Invalid live timing payload."); }
     catch (LiveConflictException) { context.Response.StatusCode = 409; await context.Response.WriteAsync("Full snapshot required."); }
@@ -62,7 +68,7 @@ app.Use(async (context, next) =>
 });
 app.UseRateLimiter();
 app.UseDefaultFiles(); app.UseStaticFiles();
-app.MapGet("/health", () => Results.Ok(new { status = "Running", processId = Environment.ProcessId }));
+app.MapGet("/health", () => Results.Ok(new { status = "Running", processId = Environment.ProcessId, protocol = LiveProtocol.Version }));
 app.MapGet("/.well-known/security.txt", (HttpContext context, IConfiguration config, TimeProvider time) =>
     Results.Text(SecurityTxt.Create(PublicBase(context, config), config, time.GetUtcNow()), "text/plain; charset=utf-8"));
 app.MapGet("/api/sessions", (SessionStore store) => Results.Ok(store.List()));

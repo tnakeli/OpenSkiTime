@@ -3,7 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
-for (const page of ['index.html', 'download/index.html', 'guide/index.html', 'privacy/index.html', '404.html']) {
+for (const page of ['index.html', 'download/index.html', 'guide/index.html', 'privacy/index.html', 'code-signing/index.html', '404.html']) {
   const html = await readFile(path.join(root, page), 'utf8');
   assert.match(html, /<html lang="en">/);
   assert.match(html, /<main id="main">/);

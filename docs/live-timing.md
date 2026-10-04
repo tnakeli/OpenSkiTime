@@ -53,7 +53,7 @@ The latest snapshot is bounded by the contract (2,000 competitors, nine runs, tw
 
 | API | Access / meaning |
 |---|---|
-| `GET /health` | Public process health (Running and process ID). No race data or secrets. |
+| `GET /health` | Public process health (Running, process ID and supported live protocol). No race data or secrets. |
 | `GET /api/sessions` | Public list of active sessions with published state (ID, name, place, discipline, date, gender, category, codex, update time, paused). No credentials. |
 | `POST /api/sessions` | Requires `Authorization: Bearer <publisher key>` issued by the server operator; anonymous or unknown keys get 401. Rate-limited; returns session ID, session-scoped publisher token, expiry and public URL. |
 | `GET /api/sessions/{id}/state` | Public snapshot; missing/unpublished/expired/deleted state returns 404. |
@@ -66,6 +66,8 @@ The latest snapshot is bounded by the contract (2,000 competitors, nine runs, tw
 | `/r/{id}` | Responsive public view. No credential in the path or query. |
 | `/` | Lists all active published races with links to their `/r/{id}` views. |
 | `/.well-known/security.txt` | RFC 9116 security contact. |
+
+Every response carries the server's live protocol version in `X-OpenSkiTime-Live-Protocol`. The publisher sends its `LiveProtocol.Version` in the same header on every request. A request declaring a different version is refused with HTTP 426 before routing or mutation; the worker reports an incompatible server and stops rather than retrying. Requests without the header, such as browsers and diagnostic tools, are treated as the current version. Application and server release versions are independent; see [release process](release-process.md#versioning).
 
 Normally the publisher compares latest snapshots and sends changed result rows as events, including changed rankings/corrections. Competitor/order/metadata/run topology changes use a snapshot. Multiple changes are sent with contiguous wire revisions. IPC may coalesce intermediate snapshots; it cannot lose final authoritative state. A failed partial publish, version conflict, health 404 or restart triggers replacement with the latest full snapshot. A health 404 for an existing session means the server lost its RAM state (restart, new revision or scale-to-zero) while the stateless session token remains valid; the worker republishes every run on its next pass without entering Reconnecting or error backoff. There is one writer per session; multiple competing authoritative publishers are not supported.
 

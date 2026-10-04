@@ -80,6 +80,15 @@ public sealed record PublisherOptions(PublisherKind Kind, string Endpoint, strin
 public sealed record WorkerInput(string Command, PublisherOptions? Options = null, LiveSnapshot? Snapshot = null);
 // Private current-user IPC only. Never serialize this envelope into diagnostic logs.
 public sealed record WorkerOutput(PublisherHealth Health, LiveSession? Session);
+/// <summary>
+/// Publisher wire protocol version, independent of application and server release versions.
+/// Increment only for an incompatible change to the publishing API or its payloads.
+/// </summary>
+public static class LiveProtocol
+{
+    public const int Version = 1;
+    public const string Header = "X-OpenSkiTime-Live-Protocol";
+}
 public static class LiveJson
 {
     public static JsonSerializerOptions Options { get; } = Create();
