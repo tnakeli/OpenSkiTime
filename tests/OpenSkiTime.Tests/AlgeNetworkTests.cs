@@ -36,7 +36,7 @@ public sealed class AlgeNetworkTests
         });
         using var client = new HttpClient(handler);
         var options = new CaptureOptions("MT1", "100;200", TimingRulesTests.Date, StartDeviceId: "100", FinishDeviceId: "200", FromUtc: TimingRulesTests.At);
-        await using var source = new AlgeResultsSource(client, "synthetic-user", "synthetic-password", options);
+        await using var source = new AlgeResultsSource(client, "synthetic-user", "synthetic-password", options, Unavailable, AlgeRealtimeTests.Fast);
         var packets = new List<TransportPacket>();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.ReceiveAsync(packet =>
         {
@@ -78,7 +78,7 @@ public sealed class AlgeNetworkTests
             return Task.FromResult(Json("malformed original body"));
         });
         using var client = new HttpClient(handler);
-        await using var source = new AlgeResultsSource(client, "synthetic", "synthetic", new("MT1", "100", TimingRulesTests.Date, StartDeviceId: "100", FinishDeviceId: "100"));
+        await using var source = new AlgeResultsSource(client, "synthetic", "synthetic", new("MT1", "100", TimingRulesTests.Date, StartDeviceId: "100", FinishDeviceId: "100"), Unavailable, AlgeRealtimeTests.Fast);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.ReceiveAsync(packet =>
         {
             received.Add(packet);
@@ -96,7 +96,7 @@ public sealed class AlgeNetworkTests
         { Content = new StringContent("secret server diagnostics") }));
         using var client = new HttpClient(handler);
         await using var source = new AlgeResultsSource(client, "private-user", "private-password",
-            new("MT1", "100", TimingRulesTests.Date, StartDeviceId: "100", FinishDeviceId: "100"));
+            new("MT1", "100", TimingRulesTests.Date, StartDeviceId: "100", FinishDeviceId: "100"), Unavailable, AlgeRealtimeTests.Fast);
         var packets = new List<TransportPacket>();
         var error = await Assert.ThrowsAsync<IOException>(() => source.ReceiveAsync(p => { packets.Add(p); return ValueTask.CompletedTask; }, _ => { }, CancellationToken.None));
         Assert.Empty(packets);
@@ -104,6 +104,8 @@ public sealed class AlgeNetworkTests
         Assert.DoesNotContain("secret", error.Message, StringComparison.Ordinal);
     }
 
+    // These REST tests exercise the safety-net path: realtime push is unavailable, so history is polled.
+    private static AlgeRealtimeTests.FakeRealtime Unavailable() => new AlgeRealtimeTests.FakeRealtime { RefuseConnect = true };
     private static HttpResponseMessage Json(string text) => new(HttpStatusCode.OK) { Content = new StringContent(text, Encoding.UTF8, "application/json") };
     private sealed class StubHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> response) : HttpMessageHandler
     {
