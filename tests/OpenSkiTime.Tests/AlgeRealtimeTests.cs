@@ -140,16 +140,60 @@ public sealed class AlgeRealtimeTests
     }
 
     [Fact]
-    public void ALivePushOnAnotherDeviceDayIsShownForReviewWhileOldHistoryStaysInformational()
+    public void AlgeTimesUseTheTimeOfDayOnTheDeviceDateLikeOtherDevices()
     {
         var options = Options() with { DeviceDate = new DateOnly(2026, 9, 13) };
         var session = new CaptureSession(Guid.NewGuid(), Guid.Empty, options, DateTimeOffset.UtcNow, null, false);
         var body = Encoding.UTF8.GetBytes(Trigger("231203016", "C1", Stamp()));
-        var live = Assert.Single(new AlgeResultsDecoder(session).Feed(new(session.Id, 1, DateTimeOffset.UtcNow, "alge-results/v1", "231203016", "push", body)));
-        Assert.Equal(ObservationKind.Invalid, live.Kind);
-        Assert.Contains("device date 2026-10-04 differs from the capture device date 2026-09-13", live.Message, StringComparison.Ordinal);
-        var history = Assert.Single(new AlgeResultsDecoder(session).Feed(new(session.Id, 2, DateTimeOffset.UtcNow, "alge-results/v1", "231203016", "cloud", body)));
-        Assert.Equal(ObservationKind.Information, history.Kind);
+        foreach (var stream in new[] { "push", "cloud" })
+        {
+            var observation = Assert.Single(new AlgeResultsDecoder(session).Feed(new(session.Id, 1, DateTimeOffset.UtcNow, "alge-results/v1", "231203016", stream, body)));
+            // Only the clock time counts: 20:06:44 device time, on the capture device date, whatever the calendar day was.
+            Assert.Equal((ObservationKind.Impulse, new DateTime(2026, 9, 13, 20, 6, 44).Ticks), (observation.Kind, observation.DeviceTicks));
+            Assert.Equal(new DateOnly(2026, 10, 4), observation.CalendarDate);
+            Assert.DoesNotContain("date", observation.Message, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public async Task ReadingDeviceMemoryForTheReportKeepsOnlyTheChosenRaceDay()
+    {
+        var today = Trigger("231203016", "C1", Stamp());
+        var yesterday = Trigger("231203016", "C1", Stamp() - TimeSpan.TicksPerDay);
+        var options = new CaptureOptions(TimingSourceTypes.AlgeResultsLabel, "231203016/1", new DateOnly(2026, 10, 4), 1, 1,
+            StartDeviceId: "231203016", FinishDeviceId: "231203016");
+        await using var read = new TimingDeviceRead(new PacketsSource(today, yesterday), AuxiliaryTimingRole.HandFinish, options);
+        read.Start(); await read.Completion;
+        var impulse = Assert.Single(read.Decode(new AlgeDecoderFactory()), x => x.Observation.Kind == ObservationKind.Impulse);
+        Assert.Equal(new DateOnly(2026, 10, 4), impulse.Observation.CalendarDate);
+    }
+
+    private sealed class PacketsSource(params string[] bodies) : ITimingSource
+    {
+        public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
+        { foreach (var body in bodies) { await receive(new("alge-results/v1", "231203016", "cloud", Encoding.UTF8.GetBytes(body))); } }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task RegularChecksReadOnlyTheRecentWindowWhileSubscriptionReadsFullHistory()
+    {
+        var http = new FakeAlge();
+        var push = new FakeRealtime();
+        using var client = new HttpClient(http);
+        var timings = Fast with { ReconcileInterval = TimeSpan.FromMilliseconds(150) };
+        var options = Options() with { FromUtc = DateTimeOffset.UtcNow.AddHours(-3) };
+        await using var source = new AlgeResultsSource(client, "club@example.test", "secret", options, () => push, timings);
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var running = source.ReceiveAsync(_ => ValueTask.CompletedTask, _ => { }, stop.Token);
+        while (http.HistoryQueries.Count < 1) { await Task.Delay(10, stop.Token); }
+        http.Add(Trigger("231203016", "C1", Stamp())); // the count changes; the next regular check reads history
+        while (http.HistoryQueries.Count < 2) { await Task.Delay(10, stop.Token); }
+        await stop.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+        long From(string query) => long.Parse(query.Split('&').Single(x => x.TrimStart('?').StartsWith("timestampFrom_ms=", StringComparison.Ordinal)).Split('=')[1], System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(options.FromUtc!.Value.ToUnixTimeMilliseconds(), From(http.HistoryQueries[0])); // full history on subscribe
+        Assert.InRange(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - From(http.HistoryQueries[1]), 9 * 60_000, 11 * 60_000); // recent window only
     }
 
     [Fact]
@@ -198,6 +242,7 @@ public sealed class AlgeRealtimeTests
         public int Logins { get; private set; }
         public int Counts { get; private set; }
         public int DeviceLists { get; private set; }
+        public List<string> HistoryQueries { get; } = [];
         public string? RefusedDevice { get; init; }
         public void Add(string trigger) { lock (_gate) { _history.Add(trigger); } }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -222,6 +267,7 @@ public sealed class AlgeRealtimeTests
                 { return Task.FromResult(Json("""{"status":-2011,"message":"Not allowed","data":[]}""")); }
                 if (request.RequestUri!.AbsolutePath.EndsWith("/count", StringComparison.Ordinal))
                 { Counts++; return Task.FromResult(Json($$"""{"status":0,"data":[{"value":{{_history.Count}}}]}""")); }
+                HistoryQueries.Add(request.RequestUri.Query);
                 var dtos = _history.Select(x => x[(x.IndexOf("\"dto\":", StringComparison.Ordinal) + 6)..x.LastIndexOf(",\"entityType\"", StringComparison.Ordinal)]);
                 return Task.FromResult(Json("{\"status\":0,\"data\":[" + string.Join(",", dtos) + "]}"));
             }

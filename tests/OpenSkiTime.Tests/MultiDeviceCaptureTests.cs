@@ -169,6 +169,32 @@ public sealed class MultiDeviceCaptureTests : IDisposable
     }
 
     [Fact]
+    public async Task SignalMonitorKeepsTheNewestTimeWhenHistoryArrivesNewestFirst()
+    {
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, Path.Combine(_root, "history.ost"), 1);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        static string Dto(int second) => $$"""{"deviceId":"231203016","timestamp":{{new DateTime(2026, 10, 4, 21, 0, second, DateTimeKind.Utc).Ticks - DateTime.UnixEpoch.Ticks}},"timingChannel":"C1","fallingEdge":true,"valid":true,"blocked":false,"type":"StartNumberTrigger","timeOffset":180}""";
+        var page = "{\"status\":0,\"data\":[" + Dto(30) + "," + Dto(20) + "," + Dto(10) + "]}";
+        var options = new CaptureOptions(TimingSourceTypes.AlgeResultsLabel, "231203016/1", TimingRulesTests.Date, Simulation: true)
+            { Routes = [new(0, 0, "231203016"), new(2, 1, "231203016"), new(1, 2, "231203016")], ClockGroup = "g6" };
+        await timing.StartAsync([new(new OnePacket(page), options)], "Synthetic operator");
+        await UntilAsync(() => timing.RecentSignals.Count == 1);
+        var signal = Assert.Single(timing.RecentSignals);
+        // 21:00:30 UTC with timeOffset 180 is device time 00:00:30, the newest of the three.
+        Assert.Equal(("alge:231203016", 1, new TimeSpan(0, 0, 30)), (signal.Device, signal.Channel, new DateTime(signal.DeviceTicks).TimeOfDay));
+        await timing.StopAsync();
+    }
+
+    private sealed class OnePacket(string body) : ITimingSource
+    {
+        public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
+        { await receive(new("alge-results/v1", "231203016", "cloud", Encoding.UTF8.GetBytes(body))); await Task.Delay(Timeout.Infinite, ct); }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [Fact]
     public void RunningDisplayTimeIgnoresADeviceTimeFromAnotherDay()
     {
         var time = new StepTime();

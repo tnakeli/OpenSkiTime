@@ -100,7 +100,10 @@ public sealed class TimingDeviceRead : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(decoders);
         var session = Fault is null ? _session : _session with { Capture = _session.Capture with { CleanStop = false } };
-        return new AuxiliaryTimingData(Guid.Empty, [session], Packets()).Decode(decoders);
+        // Reading a device's memory for the timing report takes the chosen race day only, so the same time of day from
+        // another day is never matched. Sources without a calendar date (Timy, MT1 serial) are unaffected.
+        return new AuxiliaryTimingData(Guid.Empty, [session], Packets()).Decode(decoders)
+            .Where(x => x.Observation.CalendarDate is not { } day || day == Options.DeviceDate).ToArray();
     }
 
     public async ValueTask DisposeAsync()

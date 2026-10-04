@@ -144,7 +144,9 @@ public static class TimingSignals
         {
             if (o.PhysicalChannel is not { } channel || o.DeviceTicks is not { } ticks || o.Kind is not (ObservationKind.Impulse or ObservationKind.Information)) { continue; }
             var device = DeviceKey(options, o.Source);
-            signals[(device, channel)] = new(device, channel, ticks, o.Precision, receivedAt);
+            // History pages arrive newest first; keep the latest device time per channel, not the last one processed.
+            signals.AddOrUpdate((device, channel), new TimingSignal(device, channel, ticks, o.Precision, receivedAt),
+                (_, old) => ticks >= old.DeviceTicks ? new TimingSignal(device, channel, ticks, o.Precision, receivedAt) : old);
         }
     }
 }

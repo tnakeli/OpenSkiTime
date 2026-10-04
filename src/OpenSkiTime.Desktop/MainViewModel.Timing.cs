@@ -315,9 +315,7 @@ public sealed partial class MainViewModel
             ConfigureTimingCheckpoints();
             if (_current is not null) { _current = await workspace.ReadAsync(); }
             RefreshTiming();
-            var today = DateOnly.FromDateTime(DateTime.Today);
-            SetStatus("Timing connected in HOLD. Check the race, then resume each timing position before assigning impulses."
-                + (date == today ? "" : $" Device date {date:yyyy-MM-dd} is not today ({today:yyyy-MM-dd}): Timy/MT1 times use the device date, and ALGE Results impulses from another day are shown for review only. Change Device date in Settings if this is wrong."));
+            SetStatus("Timing connected in HOLD. Check the race, then resume each timing position before assigning impulses.");
             // B Clock follows only after A is capturing. It runs detached and reports through B Clock status only.
             StartBackupClock(date, since);
         });

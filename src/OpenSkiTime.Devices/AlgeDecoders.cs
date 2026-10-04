@@ -214,16 +214,11 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         var type = trigger.GetProperty("type").GetString();
         var ticks = checked(DateTime.UnixEpoch.Ticks + stamp);
         var timeOffset = trigger.TryGetProperty("timeOffset", out var offset) ? offset.GetInt32() : 0;
-        var deviceDate = DateOnly.FromDateTime(new DateTime(checked(ticks + timeOffset * TimeSpan.TicksPerMinute), DateTimeKind.Unspecified));
         var valid = trigger.TryGetProperty("valid", out var v) && v.ValueKind == JsonValueKind.True;
         var blocked = trigger.TryGetProperty("blocked", out var b) && b.ValueKind == JsonValueKind.True;
         var falling = trigger.TryGetProperty("fallingEdge", out var f) && f.ValueKind == JsonValueKind.True;
         var kind = type == "ClearTrigger" ? ObservationKind.DeviceCorrection
             : type == "StartNumberTrigger" && valid && !blocked && falling ? ObservationKind.Impulse : ObservationKind.Invalid;
-        // A trigger from another device day: history reads may include earlier days and stay informational, but a live
-        // push on another day means the capture's device date is wrong, so it is shown for review instead of disappearing.
-        var otherDay = deviceDate != session.Options.DeviceDate;
-        if (otherDay) { kind = packet.Stream == "push" ? ObservationKind.Invalid : ObservationKind.Information; }
         // Push delivers every channel of a subscribed device. A channel no role uses is kept as raw input and shown in the
         // Settings signal monitor, but does not enter race timing.
         var position = session.Options.Position(channel, device);
@@ -235,15 +230,16 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         // Semantic fingerprint: JSON whitespace/property order cannot create a second impulse.
         // A changed bib/validity/type remains a separate reviewable observation, never a silent overwrite.
         var fingerprint = $"{device}:{stamp}:{channel}:{type}:{valid}:{blocked}:{falling}:{bib}";
-        // The device clock time is the one set in ALGE Results for this device (its stored instant plus the device's own
-        // time offset), the same wall-clock time every other timing device shows. The raw JSON keeps both values.
-        var local = checked(ticks + timeOffset * TimeSpan.TicksPerMinute);
+        // Timing uses the time of day only, like Timy and MT1 serial: the device clock time set in ALGE Results (stored
+        // instant plus the device's own time offset) placed on the capture's device date. Races are never held at night.
+        // The raw JSON keeps both original values; the calendar date is kept only for reading a race day's device memory.
+        var clockTime = new DateTime(checked(ticks + timeOffset * TimeSpan.TicksPerMinute), DateTimeKind.Unspecified);
+        var local = session.Options.DeviceDate.ToDateTime(TimeOnly.MinValue).Ticks + clockTime.TimeOfDay.Ticks;
         var clockId = session.Options.ClockGroup is { } group ? $"sync:{group}:0" : "alge-results";
         return new($"{session.Id:N}:{packet.Sequence}:json:{index}", session.Id, packet.Sequence, device,
             "mt1:" + fingerprint, kind, position ?? channel + 10,
-            local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}"
-                + (otherDay ? $" · device date {deviceDate:yyyy-MM-dd} differs from the capture device date {session.Options.DeviceDate:yyyy-MM-dd}; check Device date in Settings" : ""))
-            { PhysicalChannel = channel };
+            local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}")
+            { PhysicalChannel = channel, CalendarDate = DateOnly.FromDateTime(clockTime) };
     }
 
     private static TimingObservation Invalid(RawTimingPacket packet, string message, int index = 0) => new(

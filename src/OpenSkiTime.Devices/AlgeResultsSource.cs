@@ -214,6 +214,8 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
     }
 
     // Refused device channels for the status line, e.g. "231203037 C3 refused (-2011)".
+    private static readonly TimeSpan RecentWindow = TimeSpan.FromMinutes(10);
+
     private string RefusedSummary => _refused.Count == 0 ? ""
         : " · " + string.Join(", ", _refused.Select(x => $"{x.Key} refused ({x.Value.ToString(CultureInfo.InvariantCulture)})"));
 
@@ -229,6 +231,10 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         { await receive(new("transport-status", endpoint.Device!, "cloud", Encoding.UTF8.GetBytes("ALGE Results history count decreased. Review server/device changes; local raw records were retained."))); }
         if (known && old == count && !forceHistory) { return; }
         var until = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        // A changed count between full checks reads only the recent window: a missed push is detected within a minute.
+        // Full history is read on every (re)subscription and with the periodic full check, so nothing older is lost.
+        if (known && !forceHistory)
+        { filter = "timestampFrom_ms=" + Math.Max(_from, until - (long)RecentWindow.TotalMilliseconds).ToString(CultureInfo.InvariantCulture); }
         var offset = 0;
         while (true)
         {
