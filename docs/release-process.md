@@ -35,9 +35,11 @@ This sequence is not implemented yet because only protocol 1 exists. Implement m
 
 ## Development phase and series file migrations
 
-OpenSkiTime is in development and testing, expected to last about one year (through the 2026-27 season), with real-race testing planned for the following season. During this phase releases are `0.x` previews for rehearsal and evaluation, and series files are not migrated: a new version may reject files created by an earlier one, without modifying them.
+OpenSkiTime is in development and testing, expected to last about one year (through the 2026-27 season), with real-race testing planned for the following season. During this phase releases are `0.x` previews for rehearsal and evaluation, and there is no migration code. A version with breaking changes to the `.ost` format refuses to open files created by earlier versions and leaves them unchanged; the operator creates a new series file. Keeping older versions and their files lets earlier series still be opened.
 
-Database migrations are introduced before the first release intended for real race use, and earlier if testers need to keep series files across versions. Existing `.ost` files are never upgraded in place: a migration always creates a new series file from the old one and leaves the original unchanged, so the previous version can still open it. From that release on, a changelog section must state when a version creates a new series file from older ones, and a release that cannot migrate the previous release's files is not allowed.
+Each changelog section states whether the version breaks `.ost` compatibility ("Series files from earlier versions cannot be opened; create a new series file") or keeps it.
+
+Database migrations are introduced later, before the first release intended for real race use. Their design is decided then.
 
 ## Changelog practice
 
@@ -45,7 +47,7 @@ Add user-visible changes under `## [Unreleased]` in the relevant changelog durin
 
 ## Application release checklist
 
-1. **Decide the version.** Confirm that `.ost` compatibility and migration expectations for the version are stated in the changelog. Until migrations exist, every release must say that older development files are rejected.
+1. **Decide the version.** Confirm that `.ost` compatibility and migration expectations for the version are stated in the changelog. Until migrations exist, state whether the version breaks `.ost` compatibility and requires a new series file.
 2. **Rehearse on a clean Windows machine** using a CI build from the release candidate commit (the `windows-release` workflow artifact of a previous preview, or a local `Package-Windows.ps1` build). CI does not cover the desktop GUI, physical timing devices or a Cloud publishing rehearsal against `live.openskiti.me`.
 3. **Prepare a release pull request** to master:
    - Move `## [Unreleased]` entries into `## [X.Y.Z] - YYYY-MM-DD` (or `X.Y.Z-preview.N`) and keep an empty `## [Unreleased]` heading. Update the link references at the bottom.
