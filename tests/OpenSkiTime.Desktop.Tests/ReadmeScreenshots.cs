@@ -121,8 +121,7 @@ public partial class DesktopWorkflowTests
                 ranking.Columns[1].Width = new DataGridLength(80);
                 ranking.Columns[2].Width = new DataGridLength(80);
                 ranking.Columns[4].Width = new DataGridLength(85);
-                vm.TimingSource = "Simulator";
-                vm.TimingIntermediateChannels = "2";
+                UseSimulatorTiming(vm, 2);
                 await vm.ConnectTimingCommand.ExecuteAsync(null);
                 Assert.False(vm.IsError, vm.StatusMessage);
                 await vm.ToggleTimingChannelCommand.ExecuteAsync("start");

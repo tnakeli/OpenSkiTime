@@ -45,11 +45,25 @@ public sealed partial class MainViewModel
     {
         _backupMonitor.Reset(); _backupDisplay.Hide(); BackupMonitorRows.Clear();
         _backupObservationSource = null; _backupObservations = [];
-        _backupTargetUsesUtc = null; _backupClockWarnings = [];
+        _backupTargetUsesUtc = null; _backupClockWarnings = []; _backupComparison = null;
         ShowBackupTimes = false; CanShowBackup = false; BackupWarning = "";
     }
 
+    // B comparison is optional evidence. A failure here is shown as a B warning and never reaches A refresh paths.
     internal void RefreshBackupMonitor()
+    {
+        try { RefreshBackupMonitorCore(); }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _backupDisplay.Hide(); ShowBackupTimes = false; CanShowBackup = false; _backupComparison = null;
+            BackupWarning = "B comparison is unavailable: " + ex.Message;
+        }
+        try { RefreshBackupClockStatus(); }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        { BackupClockHealth = BackupClockHealth.DeviceUnavailable; BackupClockStatusText = "B Clock · status unavailable · " + ex.Message; }
+    }
+
+    private void RefreshBackupMonitorCore()
     {
         var now = DateTimeOffset.UtcNow;
         var state = workspace.Auxiliary?.State(AuxiliaryTimingRole.B);
@@ -59,7 +73,7 @@ public sealed partial class MainViewModel
         if (!active)
         {
             ResetBackupMonitor();
-            BackupWarning = state is { IsActive: true, Live: true } ? AuxiliaryRunSwitchError : "";
+            BackupWarning = state is { IsActive: true, Live: true } ? _backupRunSwitchMessage : "";
             return;
         }
         // Cloud polling/history recovery takes longer than directly attached devices.
@@ -74,7 +88,7 @@ public sealed partial class MainViewModel
             .Select(x => AuxiliaryClockComparison.UsesUtc(x.Observation)).Distinct().ToArray();
         if (contexts.Length > 1)
         {
-            _backupDisplay.Hide(); ShowBackupTimes = false; CanShowBackup = false;
+            _backupDisplay.Hide(); ShowBackupTimes = false; CanShowBackup = false; _backupComparison = null;
             BackupWarning = "A capture contains both UTC and local clock contexts. Review its source settings before comparing B.";
             return;
         }
@@ -89,6 +103,7 @@ public sealed partial class MainViewModel
             _backupClockWarnings = normalized.Warnings.ToArray();
         }
         var comparison = _backupMonitor.Update(state.SessionId, a, _backupObservations, now, policy);
+        _backupComparison = comparison;
         BackupWarning = state.Fault ?? string.Join(" · ", _backupClockWarnings.Concat(comparison.Warnings.Take(3)))
             + (comparison.Warnings.Count > 3 ? $" · +{comparison.Warnings.Count - 3} more" : "");
         ShowBackupTimes = _backupDisplay.IsVisible(now);

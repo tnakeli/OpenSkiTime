@@ -6,6 +6,8 @@
  </UserControl.Resources>
  <UserControl.Styles>
   <Style Selector="Button.backupWarning"><Setter Property="Background" Value="#F3C969" /><Setter Property="Foreground" Value="#3B2C00" /></Style>
+  <Style Selector="Border.backupClockProblem"><Setter Property="Background" Value="#F3C969" /></Style>
+  <Style Selector="Border.backupClockProblem TextBlock"><Setter Property="Foreground" Value="#3B2C00" /></Style>
  </UserControl.Styles>
  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
   <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
@@ -32,6 +34,9 @@
      <ToggleButton Content="FINISH" IsChecked="{Binding FinishInputOn, Mode=OneWay}" Command="{Binding ToggleTimingChannelCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" />
      <TextBlock Classes="raceConnectionText" Text="{Binding TimingHoldSummary}" VerticalAlignment="Center" Margin="6,0,0,0" FontWeight="SemiBold" />
      <Button Name="ShowBackupButton" Content="{Binding BackupButtonText}" Command="{Binding ShowBackupCommand}" IsEnabled="{Binding CanShowBackup}" Classes.backupWarning="{Binding HasBackupWarning}" MinHeight="19" Padding="7,1" FontSize="10" Focusable="False" ToolTip.Tip="Show independent B timestamps for 30 seconds. A timing remains unchanged." />
+     <Border Name="BackupClockStatusBadge" Classes.backupClockProblem="{Binding HasBackupClockProblem}" CornerRadius="3" Padding="6,1" VerticalAlignment="Center" ToolTip.Tip="{Binding BackupClockStatusText, StringFormat='{}{0} · B never changes A timing.'}">
+      <TextBlock Name="BackupClockStatusText" Classes="raceConnectionText" Text="{Binding BackupClockStatusText}" FontSize="10" MaxWidth="320" TextTrimming="CharacterEllipsis" />
+     </Border>
     </StackPanel>
    </StackPanel></Border>
    <TextBlock Text="{Binding LiveTimingError}" IsVisible="{Binding HasLiveTimingError}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />

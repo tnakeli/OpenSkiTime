@@ -179,7 +179,6 @@ public sealed partial class MainViewModel
                 : stale && saved is not null ? "" : "Current competition timing data. Changes are saved automatically.";
             _current = await workspace.ReadAsync();
             UpdateReportPreviewValidity();
-            if (ReportImportRun is { } run) { await SelectAuxiliaryReportRunAsync(competition.Id, run); }
             NotifyReportDefaults(); OnPropertyChanged(nameof(ReportIdentity));
         });
         IsReportBusy = false;

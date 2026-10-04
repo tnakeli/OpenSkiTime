@@ -92,7 +92,6 @@
         </StackPanel></Border>
        </DataTemplate></ItemsControl.ItemTemplate>
       </ItemsControl>
-      <Expander Header="Temporary device connection"><local:AuxiliaryConnectionView/></Expander>
      </StackPanel></ScrollViewer>
    </TabItem>
   </TabControl>
