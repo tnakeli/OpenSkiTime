@@ -37,7 +37,9 @@ Use an end date later than the start date. Azure may require time before cost da
 
 ## Website development
 
-The dependency-free Node builder generates a responsive English website: landing page, download page, first-race guide, privacy page and 404 page. The screenshots are synthetic desktop captures. There are no visitor scripts, forms or analytics cookies. Security headers are in `website/staticwebapp.config.json`. Download links are generated only from a published stable `vX.Y.Z` release with the expected upstream installer; before that, the site honestly offers source instructions.
+The dependency-free Node builder generates a responsive English website: landing page, download page, first-race guide, privacy page, code signing policy and 404 page, plus a Finnish overview at `/fi/`. The screenshots are synthetic desktop captures. There are no visitor scripts, forms or analytics cookies.
+
+Search and answer engines read the same content visitors see. Page titles and descriptions use the terms people search for (alpine ski race timing software, ajanotto-ohjelma). The English and Finnish landing pages declare `hreflang` alternates and carry one JSON-LD `application/ld+json` data block (WebSite, SoftwareApplication, SoftwareSourceCode, FAQPage). The FAQ is defined once in `website/build.mjs` and renders both the visible questions and the structured data, so keep its answers factual and in step with the application. `website/llms.txt` gives AI tools a short project summary with links; `website/check.mjs` verifies that its site links resolve. JSON-LD blocks are not executed, so the CSP needs no `script-src`. The 404 page is `noindex`. Security headers are in `website/staticwebapp.config.json`. Download links are generated only from a published stable `vX.Y.Z` release with the expected upstream installer; before that, the site honestly offers source instructions.
 
 ```powershell
 node website/build.mjs
