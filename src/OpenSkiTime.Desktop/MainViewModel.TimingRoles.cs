@@ -4,6 +4,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.Application;
+using OpenSkiTime.Devices;
 using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Desktop;
@@ -75,11 +76,43 @@ public sealed partial class MainViewModel
     {
         var usernames = PrimaryTimingRoles.Concat(BackupTimingRoles).Where(x => x.IsAlgeResults)
             .Select(x => x.ToConnection().AlgeUsername).Where(x => x.Length != 0).Distinct(StringComparer.Ordinal).ToArray();
-        if (AlgeAccounts.Select(x => x.Username).SequenceEqual(usernames)) { return; }
-        var existing = AlgeAccounts.ToDictionary(x => x.Username, StringComparer.Ordinal);
-        AlgeAccounts.Clear();
-        foreach (var username in usernames) { AlgeAccounts.Add(existing.GetValueOrDefault(username) ?? new AlgeAccountEditor(username)); }
-        OnPropertyChanged(nameof(UsesAlgeResultsAccount));
+        if (!AlgeAccounts.Select(x => x.Username).SequenceEqual(usernames))
+        {
+            var existing = AlgeAccounts.ToDictionary(x => x.Username, StringComparer.Ordinal);
+            AlgeAccounts.Clear();
+            foreach (var username in usernames) { AlgeAccounts.Add(existing.GetValueOrDefault(username) ?? new AlgeAccountEditor(username)); }
+            OnPropertyChanged(nameof(UsesAlgeResultsAccount));
+        }
+        ShareAlgeDevices();
+    }
+
+    // Each ALGE Results role row offers the fetched devices of its own account.
+    private void ShareAlgeDevices()
+    {
+        foreach (var editor in PrimaryTimingRoles.Concat(BackupTimingRoles))
+        {
+            var username = editor.IsAlgeResults ? editor.ToConnection().AlgeUsername : "";
+            editor.SetAlgeDevices(AlgeAccounts.FirstOrDefault(x => x.Username == username)?.Devices.ToArray() ?? []);
+        }
+    }
+
+    [RelayCommand]
+    private async Task FetchAlgeDevicesAsync(AlgeAccountEditor? account)
+    {
+        if (account is null || account.IsFetching) { return; }
+        var password = account.PeekPassword();
+        if (password.Length == 0) { account.Status = "Enter the password first."; return; }
+        account.IsFetching = true; account.Status = "Fetching devices…";
+        try
+        {
+            var devices = await AlgeResultsSource.ListDevicesAsync(_timingHttp, account.Username, password);
+            account.Devices.Clear(); foreach (var device in devices) { account.Devices.Add(device); }
+            account.Status = devices.Count == 0 ? "No devices in this account." : devices.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " device(s) · choose them in the role rows";
+            ShareAlgeDevices();
+        }
+        catch (Exception ex) when (ex is IOException or HttpRequestException or System.Text.Json.JsonException or TaskCanceledException or InvalidOperationException or KeyNotFoundException)
+        { account.Status = "Devices could not be fetched: " + ex.Message; }
+        finally { account.IsFetching = false; }
     }
 
     // Passwords are taken once per connection and kept in memory only while timing is connected, so B Clock retries work.

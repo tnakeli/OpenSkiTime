@@ -21,8 +21,9 @@
       <Button Content="Refresh ports" Command="{Binding $parent[UserControl].DataContext.RefreshTimingPortsCommand}" Classes="secondaryAction" />
       <NumericUpDown Value="{Binding BaudRate}" Minimum="1200" Maximum="115200" FormatString="0" Width="135" ToolTip.Tip="Serial baud rate. Timy PC Timer defaults to 38400; check the connected device." />
      </StackPanel>
-     <TextBox Text="{Binding AlgeDeviceId}" IsVisible="{Binding IsAlgeResults}" Width="130" Watermark="MT1 device ID" ToolTip.Tip="ALGE Results device ID for this role" />
      <TextBox Text="{Binding AlgeUsername}" IsVisible="{Binding IsOwnAlgeResults}" Width="220" Watermark="ALGE Results username" ToolTip.Tip="Account that owns this device in ALGE Results (for example the club of an intermediate)" />
+     <TextBox Text="{Binding AlgeDeviceId}" IsVisible="{Binding ShowAlgeDeviceText}" Width="150" Watermark="MT1 device ID" ToolTip.Tip="ALGE Results device ID for this role. Fetch the account's devices below to choose from a list." />
+     <ComboBox ItemsSource="{Binding AlgeDevices}" SelectedItem="{Binding SelectedAlgeDevice}" IsVisible="{Binding ShowAlgeDeviceList}" Width="220" PlaceholderText="Choose MT1 device" ToolTip.Tip="ALGE Results device for this role" />
      <TextBox Text="{Binding ReplayPath}" IsVisible="{Binding IsReplay}" Width="280" Watermark="Path to raw ALGE ASCII file" />
      <TextBlock Text="Training data only" IsVisible="{Binding IsSimulator}" Classes="supportingText" VerticalAlignment="Center" />
     </WrapPanel>
@@ -75,10 +76,12 @@
     <ItemsControl Name="AlgeAccountsList" ItemsSource="{Binding AlgeAccounts}">
      <ItemsControl.ItemTemplate>
       <DataTemplate>
-       <Grid ColumnDefinitions="2*,8,2*,8,Auto" Margin="0,0,0,6">
+       <Grid ColumnDefinitions="2*,8,2*,8,Auto,8,Auto,8,2*" Margin="0,0,0,6">
         <TextBlock Text="{Binding Username}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         <TextBox Grid.Column="2" Text="{Binding Password}" PasswordChar="•" Watermark="{Binding PasswordWatermark}" />
         <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding RememberPassword}" />
+        <Button Grid.Column="6" Content="Fetch devices" Command="{Binding DataContext.FetchAlgeDevicesCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" IsEnabled="{Binding !IsFetching}" Classes="secondaryAction" />
+        <TextBlock Grid.Column="8" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Classes="supportingText" />
        </Grid>
       </DataTemplate>
      </ItemsControl.ItemTemplate>

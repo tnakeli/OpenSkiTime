@@ -113,6 +113,18 @@ public sealed class AlgeRealtimeTests
         Assert.Equal(1, http.Logins);
     }
 
+    [Fact]
+    public async Task AccountDevicesAreListedForChoosingDeviceIds()
+    {
+        var http = new FakeAlge();
+        using var client = new HttpClient(http);
+        var devices = await AlgeResultsSource.ListDevicesAsync(client, "club@example.test", "secret");
+        Assert.Equal(["231203016", "231203037"], devices.Select(x => x.Id));
+        Assert.Equal("231203037 · Club B split", devices[1].Label);
+        Assert.Equal("231203016", devices[0].Label);
+        Assert.Equal((1, 1), (http.Logins, http.DeviceLists));
+    }
+
     internal sealed class FakeRealtime(params string[] messages) : IAlgeRealtimeConnection
     {
         private readonly Queue<string> _messages = new(messages);
@@ -146,6 +158,7 @@ public sealed class AlgeRealtimeTests
         private readonly object _gate = new();
         public int Logins { get; private set; }
         public int Counts { get; private set; }
+        public int DeviceLists { get; private set; }
         public void Add(string trigger) { lock (_gate) { _history.Add(trigger); } }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -158,6 +171,12 @@ public sealed class AlgeRealtimeTests
                     var response = Json("""{"status":0,"data":[{"id":"user-1","roles":["TIMING_POINT_ACCOUNT"]}]}""");
                     response.Headers.Add("authorization", "token-" + Logins);
                     return Task.FromResult(response);
+                }
+                if (request.RequestUri!.AbsolutePath.EndsWith("/user/user-1/devices", StringComparison.Ordinal))
+                {
+                    DeviceLists++;
+                    Assert.Equal("token-" + Logins, Assert.Single(request.Headers.GetValues("authorization")));
+                    return Task.FromResult(Json("""{"status":0,"data":[{"id":"231203037","type":"MT1","deviceComponents":{"info":{"name":"Club B split"}}},{"id":"231203016","type":"MT1","deviceComponents":{}}]}"""));
                 }
                 if (request.RequestUri!.AbsolutePath.EndsWith("/count", StringComparison.Ordinal))
                 { Counts++; return Task.FromResult(Json($$"""{"status":0,"data":[{"value":{{_history.Count}}}]}""")); }

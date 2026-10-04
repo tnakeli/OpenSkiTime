@@ -1,4 +1,6 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using OpenSkiTime.Devices;
 
 namespace OpenSkiTime.Desktop;
 
@@ -10,10 +12,18 @@ public sealed partial class AlgeAccountEditor : ObservableObject
     public string Username { get; }
     [ObservableProperty] private string _password = "";
     [ObservableProperty] private bool _rememberPassword;
+    [ObservableProperty] private string _status = "";
+    [ObservableProperty] private bool _isFetching;
+    // MT1 devices of this account, fetched on request for choosing device IDs.
+    public ObservableCollection<AlgeResultsDevice> Devices { get; } = [];
 
     private WindowsCredentialStore Credential => new("OpenSkiTime.ALGE.Results.Password:" + Username);
     public bool HasSavedPassword => OperatingSystem.IsWindows() && Credential.Exists();
     public string PasswordWatermark => HasSavedPassword ? "Password (empty = saved password)" : "Password";
+
+    // The typed or remembered password without changing what is remembered (used for listing devices).
+    public string PeekPassword() => Password.Length != 0 ? Password
+        : OperatingSystem.IsWindows() ? Credential.Read() ?? "" : "";
 
     // The password for connecting: the typed one, otherwise the remembered one. Applies the Remember choice.
     public string TakePassword()

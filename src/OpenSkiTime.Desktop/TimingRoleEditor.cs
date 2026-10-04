@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using OpenSkiTime.Application;
+using OpenSkiTime.Devices;
 using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Desktop;
@@ -58,6 +60,29 @@ public sealed partial class TimingRoleEditor : ObservableObject
     // ALGE Results device IDs belong to each role, also when the account connection is shared.
     public bool IsAlgeResults => EffectiveSourceType == TimingSourceType.AlgeResults;
     public bool IsOwnAlgeResults => ShowOwnConnection && SourceType == TimingSourceType.AlgeResults;
+    // Devices of this row's ALGE Results account, once fetched. The ID can still be typed when no list is available.
+    public ObservableCollection<AlgeResultsDevice> AlgeDevices { get; } = [];
+    public bool ShowAlgeDeviceList => IsAlgeResults && AlgeDevices.Count != 0;
+    public bool ShowAlgeDeviceText => IsAlgeResults && AlgeDevices.Count == 0;
+    public AlgeResultsDevice? SelectedAlgeDevice
+    {
+        get => AlgeDevices.FirstOrDefault(x => x.Id == AlgeDeviceId.Trim());
+        set { if (value is not null) { AlgeDeviceId = value.Id; } }
+    }
+
+    public void SetAlgeDevices(IReadOnlyList<AlgeResultsDevice> devices)
+    {
+        ArgumentNullException.ThrowIfNull(devices);
+        var list = devices.ToList();
+        // Keep a configured ID visible even when the account no longer lists it.
+        if (AlgeDeviceId.Trim().Length != 0 && list.Count != 0 && !list.Any(x => x.Id == AlgeDeviceId.Trim()))
+        { list.Add(new(AlgeDeviceId.Trim(), "not in account list", "")); }
+        if (AlgeDevices.SequenceEqual(list)) { return; }
+        AlgeDevices.Clear(); foreach (var device in list) { AlgeDevices.Add(device); }
+        OnPropertyChanged(nameof(ShowAlgeDeviceList)); OnPropertyChanged(nameof(ShowAlgeDeviceText)); OnPropertyChanged(nameof(SelectedAlgeDevice));
+    }
+
+    partial void OnAlgeDeviceIdChanged(string value) => OnPropertyChanged(nameof(SelectedAlgeDevice));
 
     partial void OnSourceChanged(string value) => NotifyConnection();
     partial void OnUsesLeaderConnectionChanged(bool value) => NotifyConnection();
@@ -65,13 +90,13 @@ public sealed partial class TimingRoleEditor : ObservableObject
     private void OnLeaderChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(Source) or nameof(EffectiveSourceType))
-        { OnPropertyChanged(nameof(IsAlgeResults)); OnPropertyChanged(nameof(EffectiveSourceType)); OnPropertyChanged(nameof(LeaderSourceLabel)); }
+        { OnPropertyChanged(nameof(IsAlgeResults)); OnPropertyChanged(nameof(ShowAlgeDeviceList)); OnPropertyChanged(nameof(ShowAlgeDeviceText)); OnPropertyChanged(nameof(EffectiveSourceType)); OnPropertyChanged(nameof(LeaderSourceLabel)); }
     }
 
     private void NotifyConnection()
     {
         foreach (var name in new[] { nameof(SourceType), nameof(EffectiveSourceType), nameof(ShowOwnConnection), nameof(ShowsLeaderConnection),
-            nameof(IsTimyUsb), nameof(IsSerial), nameof(IsReplay), nameof(IsSimulator), nameof(IsAlgeResults), nameof(IsOwnAlgeResults) }) { OnPropertyChanged(name); }
+            nameof(IsTimyUsb), nameof(IsSerial), nameof(IsReplay), nameof(IsSimulator), nameof(IsAlgeResults), nameof(IsOwnAlgeResults), nameof(ShowAlgeDeviceList), nameof(ShowAlgeDeviceText) }) { OnPropertyChanged(name); }
     }
 
     public void Detach() { if (Leader is not null) { Leader.PropertyChanged -= OnLeaderChanged; } }

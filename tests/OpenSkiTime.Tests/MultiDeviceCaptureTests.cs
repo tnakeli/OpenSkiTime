@@ -41,6 +41,8 @@ public sealed class MultiDeviceCaptureTests : IDisposable
         await startClock.PulseAsync(0, Noon + 1234);
         await UntilAsync(() => timing.Snapshot!.Results.Single(x => x.Bib == bib).Status == TimingStatus.OnCourse);
         await splitClock.PulseAsync(3, Noon + TimeSpan.FromSeconds(30).Ticks + 1234);
+        // Devices deliver independently; send the finish after the split was processed, as on a real course.
+        await UntilAsync(() => timing.Snapshot!.Results.Single(x => x.Bib == bib).Splits[0].ObservationKey is not null);
         await finishClock.PulseAsync(0, Noon + TimeSpan.FromSeconds(62).Ticks + 3456 + 1234);
         await UntilAsync(() => timing.Snapshot!.Results.Single(x => x.Bib == bib).Status == TimingStatus.Finished);
         await UntilAsync(() => timing.Snapshot!.Results.Single(x => x.Bib == bib).Splits[0].Hundredths is not null);

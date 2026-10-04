@@ -51,6 +51,46 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _reportDeviceAlgeFinishDevice = "";
     [ObservableProperty] private string _reportDeviceAlgeUsername = "";
     [ObservableProperty] private string _reportDeviceAlgePassword = "";
+    [ObservableProperty] private string _reportDeviceAlgeStatus = "";
+    [ObservableProperty] private bool _isReportDeviceAlgeFetching;
+    // Devices of the entered ALGE Results account, fetched on request. IDs can still be typed without a list.
+    public ObservableCollection<AlgeResultsDevice> ReportDeviceAlgeDevices { get; } = [];
+    public bool HasReportDeviceAlgeDevices => ReportDeviceAlgeDevices.Count != 0;
+    public AlgeResultsDevice? SelectedReportDeviceAlgeStart
+    {
+        get => ReportDeviceAlgeDevices.FirstOrDefault(x => x.Id == ReportDeviceAlgeStartDevice.Trim());
+        set { if (value is not null) { ReportDeviceAlgeStartDevice = value.Id; } }
+    }
+    public AlgeResultsDevice? SelectedReportDeviceAlgeFinish
+    {
+        get => ReportDeviceAlgeDevices.FirstOrDefault(x => x.Id == ReportDeviceAlgeFinishDevice.Trim());
+        set { if (value is not null) { ReportDeviceAlgeFinishDevice = value.Id; } }
+    }
+    partial void OnReportDeviceAlgeStartDeviceChanged(string value) => OnPropertyChanged(nameof(SelectedReportDeviceAlgeStart));
+    partial void OnReportDeviceAlgeFinishDeviceChanged(string value) => OnPropertyChanged(nameof(SelectedReportDeviceAlgeFinish));
+    partial void OnReportDeviceAlgeUsernameChanged(string value)
+    { ReportDeviceAlgeDevices.Clear(); ReportDeviceAlgeStatus = ""; OnPropertyChanged(nameof(HasReportDeviceAlgeDevices)); }
+
+    [RelayCommand]
+    private async Task FetchReportDeviceAlgeDevicesAsync()
+    {
+        if (IsReportDeviceAlgeFetching) { return; }
+        var username = ReportDeviceAlgeUsername.Trim();
+        var password = new AlgeAccountEditor(username) { Password = ReportDeviceAlgePassword }.PeekPassword();
+        if (username.Length == 0 || password.Length == 0) { ReportDeviceAlgeStatus = "Enter the username and password first."; return; }
+        IsReportDeviceAlgeFetching = true; ReportDeviceAlgeStatus = "Fetching devices…";
+        try
+        {
+            var devices = await AlgeResultsSource.ListDevicesAsync(_timingHttp, username, password);
+            ReportDeviceAlgeDevices.Clear(); foreach (var device in devices) { ReportDeviceAlgeDevices.Add(device); }
+            ReportDeviceAlgeStatus = devices.Count == 0 ? "No devices in this account." : devices.Count.ToString(CultureInfo.InvariantCulture) + " device(s)";
+            OnPropertyChanged(nameof(HasReportDeviceAlgeDevices));
+            OnPropertyChanged(nameof(SelectedReportDeviceAlgeStart)); OnPropertyChanged(nameof(SelectedReportDeviceAlgeFinish));
+        }
+        catch (Exception ex) when (ex is IOException or HttpRequestException or System.Text.Json.JsonException or TaskCanceledException or InvalidOperationException or KeyNotFoundException)
+        { ReportDeviceAlgeStatus = "Devices could not be fetched: " + ex.Message; }
+        finally { IsReportDeviceAlgeFetching = false; }
+    }
     [ObservableProperty] private bool _reportDeviceRememberPassword;
     [ObservableProperty] private string _reportDeviceReplayPath = "";
     [ObservableProperty] private int _reportDeviceStartChannel;
