@@ -51,6 +51,13 @@ public sealed record TimingSplit(int Number, string? ObservationKey, long? Hundr
     public string Time => TimingTime.Format(Hundredths);
 }
 
+public enum ElapsedProblem { None, DifferentClock, NotAfterStart, OverTwoHours, LowPrecision }
+
+public readonly record struct TimingElapsed(long? Hundredths, ElapsedProblem Problem);
+
+// Hundredths is null whenever Problem is set; a preview never invents a time.
+public sealed record AssignmentPreview(int Bib, int? Channel, long? Hundredths, string? Problem);
+
 public sealed record ObservationReview(TimingObservation Observation, int? Bib, bool Ignored,
     string? DuplicateOf, string State);
 

@@ -49,6 +49,8 @@ public sealed class FisE2ETests
             }
             catch(OperationCanceledException) when(stop.IsCancellationRequested) { }
             catch(IOException) when(stop.IsCancellationRequested) { }
+            // Teardown can stop the listener just after the loop checked for cancellation.
+            catch(ObjectDisposedException) when(stop.IsCancellationRequested) { }
         },stop.Token);
         var logs=new List<string>();
         await using var publisher=new FisPublisher(new FisTcpTransport("127.0.0.1",port,logs.Add),"synthetic-test-secret");

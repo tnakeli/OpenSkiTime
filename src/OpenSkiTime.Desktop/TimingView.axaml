@@ -161,5 +161,14 @@
    <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />
    <Button Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
   </StackPanel>
+  <!-- Drag preview overlay: never hit-testable, so it cannot steal or block a drop target. -->
+  <Canvas Name="TimingDropPreviewLayer" Grid.RowSpan="5" IsHitTestVisible="False">
+   <Border Name="TimingDropPreview" Classes="timingDropPreview" IsVisible="False">
+    <StackPanel Spacing="1">
+     <TextBlock Name="TimingDropPreviewBib" FontWeight="SemiBold" />
+     <TextBlock Name="TimingDropPreviewResult" Classes="timingDropPreviewResult" />
+    </StackPanel>
+   </Border>
+  </Canvas>
  </Grid>
 </UserControl>

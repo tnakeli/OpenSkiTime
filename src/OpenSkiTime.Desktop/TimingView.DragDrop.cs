@@ -96,6 +96,7 @@ public sealed partial class TimingView
 
     private void HighlightDrop(Control? control, string className = "timingDropTarget")
     {
+        if (control is null) { ShowDropPreview(null, null, null); }
         if (_dropHighlight == control && _dropHighlightClass == className) { return; }
         if (_dropHighlightClass is not null) { _dropHighlight?.Classes.Remove(_dropHighlightClass); }
         _dropHighlight = control;
@@ -111,6 +112,7 @@ public sealed partial class TimingView
         {
             var statusProblem = vm.StatusDropProblem(item, status);
             HighlightDrop(statusProblem is null ? button : null, "timingStatusDropTarget");
+            ShowDropPreview(null, null, null);
             vm.TimingDropHint = statusProblem ?? $"Bib {item.Bib} · {item.Name} → {status}";
             e.DragEffects = statusProblem is null ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
@@ -123,6 +125,7 @@ public sealed partial class TimingView
         var highlightClass = target.QueueTargetBib is not null
             ? target.VisuallyAbove ? "timingDropAbove" : "timingDropBelow" : "timingDropTarget";
         HighlightDrop(problem is null ? target.Target : null, highlightClass);
+        ShowDropPreview(problem is null ? target.Target : null, item, target.Cell);
         if (problem is null)
         {
             e.DragEffects = DragDropEffects.Move;
@@ -134,6 +137,30 @@ public sealed partial class TimingView
         }
         else { vm.TimingDropHint = problem; }
         e.Handled = true;
+    }
+
+    // Shows what the dragged competitor would get for the hovered intermediate/finish timestamp.
+    // Recalculated on every drag-over from the loaded snapshot (cheap, and never stale if impulses
+    // arrive mid-drag); it writes nothing.
+    private void ShowDropPreview(Control? target, TimingDragCompetitor? item, TimingTimestampCell? cell)
+    {
+        var popup = this.FindControl<Border>("TimingDropPreview")!;
+        if (target is null || item is null || cell is null || _viewModel?.TimingDropPreviewFor(item, cell) is not { } preview)
+        { popup.IsVisible = false; return; }
+        this.FindControl<TextBlock>("TimingDropPreviewBib")!.Text = preview.Bib;
+        this.FindControl<TextBlock>("TimingDropPreviewResult")!.Text = preview.Result;
+        if (preview.IsValid) { popup.Classes.Remove("invalid"); } else if (!popup.Classes.Contains("invalid")) { popup.Classes.Add("invalid"); }
+        popup.IsVisible = true;
+        var layer = this.FindControl<Canvas>("TimingDropPreviewLayer")!;
+        popup.Measure(Size.Infinity);
+        var size = popup.DesiredSize;
+        // Prefer just above the hovered cell so the cell, its row and the pointer stay visible.
+        var origin = target.TranslatePoint(default, layer) ?? default;
+        var y = origin.Y - size.Height - 2;
+        if (y < 0) { y = origin.Y + target.Bounds.Height + 2; }
+        var x = Math.Clamp(origin.X, 0, Math.Max(0, layer.Bounds.Width - size.Width));
+        Canvas.SetLeft(popup, x);
+        Canvas.SetTop(popup, y);
     }
 
     private async void DropCompetitor(object? sender, DragEventArgs e)

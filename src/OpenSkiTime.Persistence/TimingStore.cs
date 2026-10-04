@@ -16,10 +16,13 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
     private readonly SemaphoreSlim _captureOwnership = new(1, 1);
 
     // One process owns the file lease, while A and independent auxiliary sessions own their own lifetimes.
+    // FileShare.None: on Unix .NET maps only None to an exclusive flock (anything else is a shared lock that
+    // never conflicts with the shared idle-write check below). On Windows it matches the former FileShare.Read,
+    // because every opener of the lock file requests write access.
     private void EnsureCaptureLease()
     {
         if (_captureLease is not null) { return; }
-        try { _captureLease = new(FilePath + ".capture.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read); }
+        try { _captureLease = new(FilePath + ".capture.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
         catch (IOException ex) { throw new SeriesFileException("Another instance is capturing this event file.", ex); }
     }
 

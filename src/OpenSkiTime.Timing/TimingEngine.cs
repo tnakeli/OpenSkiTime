@@ -53,19 +53,19 @@ public static class TimingEngine
             else if (starts.Length == 1 && finishes.Length == 0) { status = TimingStatus.OnCourse; }
             else if (starts.Length == 1 && finishes.Length == 1)
             {
-                var elapsed = finishes[0].DeviceTicks!.Value - starts[0].DeviceTicks!.Value;
-                if (starts[0].ClockId != finishes[0].ClockId)
+                var elapsed = Elapsed(starts[0], finishes[0], finish: true);
+                if (elapsed.Problem == ElapsedProblem.DifferentClock)
                 { status = TimingStatus.Review; detail = "Start and finish belong to different device clock sessions. Correct the time using verified timing."; }
-                else if (elapsed < TimingTime.TicksPerHundredth)
+                else if (elapsed.Problem == ElapsedProblem.NotAfterStart)
                 { status = TimingStatus.Review; detail = "Finish is not at least one hundredth after start. Check the assigned competitor and device clock."; }
-                else if (elapsed > TimeSpan.FromHours(2).Ticks)
+                else if (elapsed.Problem == ElapsedProblem.OverTwoHours)
                 { status = TimingStatus.Review; detail = "Elapsed time exceeds two hours. Check the device date or correct the time."; }
-                else if (!HasUsablePrecision(starts[0]) || !HasUsablePrecision(finishes[0]))
+                else if (elapsed.Problem == ElapsedProblem.LowPrecision)
                 { status = TimingStatus.Review; detail = "Device output precision is too low. Gate inputs need at least milliseconds; device keyboard inputs need at least hundredths."; }
                 else
                 {
                     status = TimingStatus.Finished;
-                    time = elapsed / TimingTime.TicksPerHundredth; // Alpine elapsed times are truncated, never rounded up.
+                    time = elapsed.Hundredths;
                     if (starts[0].Manual || finishes[0].Manual) { detail = "Includes a device keyboard impulse; verify against backup timing."; }
                 }
             }
@@ -78,11 +78,10 @@ public static class TimingEngine
                 var pulses = assigned.Where(x => x.Channel == number + 1).ToArray();
                 var pulse = pulses.FirstOrDefault();
                 if (pulse is null) { return new TimingSplit(number, null, null, "Awaiting intermediate"); }
-                var valid = pulses.Length == 1 && starts.Length == 1 && pulse.ClockId == starts[0].ClockId
-                    && HasUsablePrecision(pulse) && HasUsablePrecision(starts[0]) && pulse.DeviceTicks > starts[0].DeviceTicks
-                    && pulse.DeviceTicks - starts[0].DeviceTicks <= TimeSpan.FromHours(2).Ticks
+                var elapsed = starts.Length == 1 ? Elapsed(starts[0], pulse, finish: false) : default;
+                var valid = pulses.Length == 1 && starts.Length == 1 && elapsed.Problem == ElapsedProblem.None
                     && (finishes.Length == 0 || pulse.DeviceTicks < finishes[0].DeviceTicks);
-                return new TimingSplit(number, pulse.Key, valid ? (pulse.DeviceTicks - starts[0].DeviceTicks) / TimingTime.TicksPerHundredth : null,
+                return new TimingSplit(number, pulse.Key, valid ? elapsed.Hundredths : null,
                     valid ? "" : "Review intermediate impulses / clock continuity");
             }).ToArray();
             rows.Add(new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
@@ -104,6 +103,59 @@ public static class TimingEngine
     // Timy keyboard impulses carry the manual marker and may contain only hundredths.
     // They use the same exact scale/calculation; this does not claim automatic gate timing or verified EET.
     private static bool HasUsablePrecision(TimingObservation observation) => observation.Precision >= (observation.Manual ? 2 : 3);
+
+    // The one elapsed-time rule shared by results, splits and drag previews: same clock session,
+    // usable source precision, at most two hours, then subtraction on the full tick scale before
+    // truncation to hundredths. A finish must be at least one hundredth after start; an
+    // intermediate only has to be later than start.
+    public static TimingElapsed Elapsed(TimingObservation start, TimingObservation end, bool finish)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        ArgumentNullException.ThrowIfNull(end);
+        if (start.DeviceTicks is not { } startTicks || end.DeviceTicks is not { } endTicks)
+        { throw new ArgumentException("Elapsed time needs two device timestamps.", start.DeviceTicks is null ? nameof(start) : nameof(end)); }
+        var elapsed = endTicks - startTicks;
+        var problem = start.ClockId != end.ClockId ? ElapsedProblem.DifferentClock
+            : elapsed < (finish ? TimingTime.TicksPerHundredth : 1) ? ElapsedProblem.NotAfterStart
+            : elapsed > TimeSpan.FromHours(2).Ticks ? ElapsedProblem.OverTwoHours
+            : !HasUsablePrecision(start) || !HasUsablePrecision(end) ? ElapsedProblem.LowPrecision
+            : ElapsedProblem.None;
+        // Alpine elapsed times are truncated, never rounded up.
+        return new(problem == ElapsedProblem.None ? elapsed / TimingTime.TicksPerHundredth : null, problem);
+    }
+
+    // Side-effect free "what if" for assigning one recorded impulse to a competitor. It reads the
+    // given snapshot only and applies the same rules Replay would after the existing drop action
+    // (which displaces the competitor's other impulses on the same channel).
+    public static AssignmentPreview PreviewAssignment(TimingSnapshot snapshot, int bib, string observationKey,
+        int startChannel, int finishChannel)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(observationKey);
+        var target = snapshot.Observations.FirstOrDefault(x => x.Observation.Key == observationKey)?.Observation;
+        if (target is not { Kind: ObservationKind.Impulse, DeviceTicks: { } targetTicks, Channel: { } channel })
+        { return new(bib, null, null, "Not a timing impulse"); }
+        if (channel == startChannel) { return new(bib, channel, null, "Start timestamp"); }
+        var assigned = snapshot.Observations.Where(x => x.Bib == bib && x.State == "Assigned"
+            && x.Observation.Key != observationKey).Select(x => x.Observation).ToArray();
+        var starts = assigned.Where(x => x.Channel == startChannel).ToArray();
+        if (starts.Length == 0) { return new(bib, channel, null, "No start time"); }
+        if (starts.Length > 1) { return new(bib, channel, null, "No start time: multiple start impulses"); }
+        var finish = channel == finishChannel;
+        var elapsed = Elapsed(starts[0], target, finish);
+        var problem = elapsed.Problem switch
+        {
+            ElapsedProblem.DifferentClock => "Invalid: different device clock",
+            ElapsedProblem.NotAfterStart => targetTicks < starts[0].DeviceTicks ? "Invalid: time is before start" : "Invalid: time is not after start",
+            ElapsedProblem.OverTwoHours => "Invalid: over two hours after start",
+            ElapsedProblem.LowPrecision => "Invalid: device precision too low",
+            _ => null
+        };
+        var finishes = assigned.Where(x => x.Channel == finishChannel).ToArray();
+        if (problem is null && !finish && finishes.Length > 0 && targetTicks >= finishes[0].DeviceTicks)
+        { problem = "Invalid: time is after finish"; }
+        return new(bib, channel, problem is null ? elapsed.Hundredths : null, problem);
+    }
 
     public static string DecisionKey(TimingDecision decision)
     {
