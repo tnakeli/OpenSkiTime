@@ -24,6 +24,8 @@ internal static class RefereeReportDocument
         return reader.ReadToEnd();
     });
 
+    internal static string FisLogo => s_logo.Value;
+
     public static IDocument Create(PdfReportData data)
     {
         var run = data.Descriptor.RunNumber ?? throw new ArgumentException("A referee report requires a run number.", nameof(data));

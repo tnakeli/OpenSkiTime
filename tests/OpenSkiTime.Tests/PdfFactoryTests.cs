@@ -506,6 +506,121 @@ public sealed class PdfFactoryTests
         Assert.Contains("SYNTHETICSPONSORFOOTER", text, StringComparison.Ordinal);
         Assert.Contains("OpenSkiTime", text, StringComparison.Ordinal);
     }
+    [Fact]
+    public async Task SeriesEntriesMarkEachCompetitionAndOmitColumnsNobodyUses()
+    {
+        using var folder = new TestFolder();
+        var source = MemorySource(folder.PathFor("test.ost"), 6);
+        var first = source.Competition! with { Values = Competition with { ShortLabel = "SL-A" } };
+        var second = new CompetitionDetails(Guid.NewGuid(), Competition with { Name = "Synthetic GS", ShortLabel = "GS-B", Date = s_date.AddDays(1), Discipline = Discipline.GiantSlalom });
+        var racers = source.Desk.Competitors;
+        source = source with
+        {
+            // Declared out of date order: columns follow race order, not storage order.
+            Series = source.Series with { Competitions = [second, first] }, Competition = first,
+            Desk = source.Desk with
+            {
+                Categories = [],
+                Participations = [.. source.Desk.Participations.Select(p => p with { CompetitionId = first.Id }),
+                    new(racers[5].Id, second.Id, true, null, null), new(racers[0].Id, second.Id, false, null, null)]
+            }
+        };
+        var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.EventSeriesEntries);
+        Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
+        var path = folder.PathFor(descriptor.FileName);
+        CopyQa(path, "series-entries.pdf");
+        using var pdf = PdfDocument.Open(path);
+        var words = pdf.GetPages().SelectMany(x => x.GetWords()).ToArray();
+        // Nobody has a bib or a category in this series, so both columns are omitted.
+        Assert.DoesNotContain(words, x => x.Text is "Bib" or "Category");
+        var sl = words.Single(x => x.Text == "SL-A"); var gs = words.Single(x => x.Text == "GS-B");
+        Assert.True(sl.BoundingBox.Left < gs.BoundingBox.Left);
+        string Marks(int racer)
+        {
+            var row = words.Single(x => x.Text == "RACER" + racer.ToString("D4", CultureInfo.InvariantCulture)).BoundingBox.Bottom;
+            var marks = words.Where(x => x.Text == "X" && Math.Abs(x.BoundingBox.Bottom - row) < 2).ToArray();
+            return (marks.Any(x => Math.Abs(x.BoundingBox.Left - sl.BoundingBox.Left) < 30) ? "S" : "") + (marks.Any(x => Math.Abs(x.BoundingBox.Left - gs.BoundingBox.Left) < 30) ? "G" : "");
+        }
+        Assert.Equal(["S", "S", "S", "", "", "G"], Enumerable.Range(1, 6).Select(Marks));
+        Assert.Contains("OpenSkiTime" + ProductInfo.Version, string.Concat(pdf.GetPages().SelectMany(x => x.Text).Where(c => !char.IsWhiteSpace(c))), StringComparison.Ordinal);
+    }
+    [Fact]
+    public async Task CompetitionEntriesKeepBibAndCategoryWhenAnyEntrantHasOne()
+    {
+        using var folder = new TestFolder();
+        var source = MemorySource(folder.PathFor("test.ost"), 4);
+        source = source with { Desk = source.Desk with { Participations = [.. source.Desk.Participations.Select((p, i) => i == 0 ? p with { ImportedBib = 17 } : p)] } };
+        var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.CompetitionEntries);
+        Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
+        using var pdf = PdfDocument.Open(folder.PathFor(descriptor.FileName));
+        var words = pdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text).ToArray();
+        Assert.Contains("Bib", words); Assert.Contains("17", words); Assert.Contains("Category", words); Assert.Contains("Young", words);
+        // Competition entries list a single race, so no per-competition participation columns are added.
+        Assert.DoesNotContain("X", words);
+    }
+    [Fact]
+    public async Task TimingReportUsesTheFisFormLayoutWithEveryDeclaredValue()
+    {
+        using var folder = new TestFolder();
+        TimingReportStamp At(int h, int m, int s, int tenThousandths = 0, int precision = 4)
+            => new(new TimeSpan(h, m, s).Ticks + tenThousandths * 1000L, precision);
+        TimingReportBib Bib(int bib, TimingReportStamp start, TimingReportStamp finish, long net) => new()
+        {
+            Bib = bib, AStart = start, BStart = start with { Ticks = start.Ticks + 4000 }, HandStart = start with { Ticks = start.Ticks - 790000, Precision = 2 },
+            AFinish = finish, BFinish = finish with { Ticks = finish.Ticks + 11000 }, HandFinish = finish with { Ticks = finish.Ticks - 258000, Precision = 2 }, NetHundredths = net
+        };
+        var draft = new TimingReportDraft
+        {
+            Header = new(2027, "0593", "FIN", "SL", "FIS", "M", "", "Synthetic Fell", s_date),
+            TechnicalDelegate = new("Alex", "Example", "DEN", Number: "718"),
+            Defaults = new TimingReportDefaults
+            {
+                TimerA = new("ALGE", "Timy3 WP", "SYN-A-001", "ALG.090.14"), TimerB = new("ALGE", "TdC 8001", "SYN-B-002", "ALG.003T.10"),
+                StartDevice = new("ALGE", "STScM2S", "SYN-S-003", "ALG.S51.03"),
+                FinishCellsA = new("ALGE", "PR1aW", "SYN-F-004", "ALG.L91.14"), FinishCellsB = new("ALGE", "PR1aW", "SYN-F-005", "ALG.L91.14"),
+                ChiefOfTiming = new("Casey", "Chief", "FIN", "chief@example.invalid", "+000 0000001"),
+                Timekeeper = new("Taylor", "Timer", "FIN", "timer@example.invalid", "+000 0000002", Company: "Synthetic Timing Co"),
+                ConnectionA = "Cable", ConnectionB = "Radio", Voice = "Cable"
+            },
+            Sync = At(8, 44, 0, precision: 0), HandSync = At(8, 44, 0, precision: 0), SyncCheckA = At(8, 45, 0), SyncCheckB = At(8, 45, 0),
+            Runs =
+            [
+                new() { Run = 1, First = Bib(31, At(10, 32, 47, 5075), At(10, 33, 34, 5104), 4700), Last = Bib(72, At(11, 0, 8, 1576), At(11, 1, 3, 1366), 5497), BestBib = 34, BestHundredths = 4606 },
+                new() { Run = 2, First = Bib(72, At(12, 44, 31, 1600), At(12, 45, 25, 7370), 5457), Last = Bib(34, At(12, 57, 10, 1861), At(12, 57, 58, 988), 4791), BestBib = 39, BestHundredths = 4684,
+                    AllResultsA = false, MissedA = [new(12, "Finish cell A failure", "B")], Comment = "Synthetic comment" }
+            ],
+            CertifyFis = true, Reviewed = true
+        };
+        var source = MemorySource(folder.PathFor("test.ost"), 0) with
+        {
+            // A configured organizer background must not appear on the FIS form.
+            Settings = new(new(TemplateName: "synthetic-background.pdf", TemplatePdf: BackgroundPdf()), []),
+            TimingReport = new(Guid.NewGuid(), 3, draft, s_at, "Operator", "Synthetic")
+        };
+        var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.TimingReport);
+        Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
+        var path = folder.PathFor(descriptor.FileName);
+        CopyQa(path, "timing-report.pdf");
+        using var pdf = PdfDocument.Open(path);
+        var page = Assert.Single(pdf.GetPages());
+        Assert.InRange(page.Width, 594, 596); Assert.InRange(page.Height, 841, 843);
+        var text = string.Concat(page.Text.Where(c => !char.IsWhiteSpace(c)));
+        foreach (var expected in new[]
+        {
+            "Timing&DataTechnicalReportAlpine", "transmitimmediatelyonlyasXMLandNOTasPDF", "Season2027", "Codex0593", "Slalom", "Men", "12.12.26",
+            "SystemATimer(atfinish)ALGETimy3WPSYN-A-001ALG.090.14", "TimerAStart(ifused)-", "PhotoFinishB-", "Videofinish-",
+            "OpenSkiTimeOpenSkiTime" + ProductInfo.Version, "CableRadioCable",
+            "Syncronizationtime08:44:0008:44:00", "Syncronizationconfirmation08:45:00.000008:45:00.0000",
+            "1stRun", "2ndRun", "StartTODFirst10:32:47.507510:32:47.507910:32:47.42", "NetTimeSystemA/BIBFirst0:47.0031",
+            "NetTimeSystemA/BIBBest0:46.06340:46.8439", "Bib12:FinishcellAfailure(timefromB)", "Syntheticcomment",
+            "AlexExample(DEN)", "TDNumber718", "ChiefCasey(FIN)", "chief@example.invalid", "SyntheticTimingCo", "TimerTaylor(FIN)",
+            "TimingReportversionusedOpenSkiTime" + ProductInfo.Version, "page1of1"
+        })
+        { Assert.Contains(expected, text, StringComparison.Ordinal); }
+        // Not every run used system A, so "No" is checked rather than "Yes".
+        Assert.Contains("WereallresultsfromsystemA?YesNoX", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("SYNTHETICORGANIZERBACKGROUND", text, StringComparison.Ordinal);
+    }
     private static void AssertPdf(string path)
     {
         Assert.True(File.Exists(path));
