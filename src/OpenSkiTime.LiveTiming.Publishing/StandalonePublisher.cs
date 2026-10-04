@@ -83,11 +83,15 @@ public sealed class StandalonePublisher : IDisposable
         }
         _sent = snapshot;
     }
-    public async Task HealthAsync(CancellationToken ct)
+    /// <summary>Returns false when the server no longer holds this session's state and needs the full snapshot again.</summary>
+    public async Task<bool> HealthAsync(CancellationToken ct)
     {
         using var response = await _http.GetAsync(Session is null ? "health" : $"api/sessions/{Session.SessionId}/state", ct);
         _log($"Server health HTTP {(int)response.StatusCode}");
+        // RAM state is lost on every restart, new revision or scale-to-zero while the stateless session token stays valid.
+        if (Session is not null && response.StatusCode == HttpStatusCode.NotFound) { return false; }
         response.EnsureSuccessStatusCode();
+        return true;
     }
     public async Task PauseAsync(CancellationToken ct)
     {
