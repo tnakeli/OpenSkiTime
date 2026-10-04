@@ -94,18 +94,19 @@ public sealed record DeskMutationResult<T>(long Revision, T Value);
 
 public static class CategoryResolver
 {
+    public const string Unclassified = "Unclassified";
     public static string Resolve(CompetitorValues competitor, IEnumerable<CategoryRuleDetails> rules)
     {
         ArgumentNullException.ThrowIfNull(competitor);
         ArgumentNullException.ThrowIfNull(rules);
-        if (competitor.BirthYear is not { } year) { return "Unclassified"; }
+        if (competitor.BirthYear is not { } year) { return Unclassified; }
         var matches = rules.Where(rule => year >= rule.Values.BirthYearMin
             && year <= rule.Values.BirthYearMax
             && (rule.Values.Gender is null || rule.Values.Gender == competitor.Gender))
             .Take(2).ToArray();
         return matches.Length switch
         {
-            0 => "Unclassified",
+            0 => Unclassified,
             1 => matches[0].Values.Label,
             _ => "Ambiguous",
         };

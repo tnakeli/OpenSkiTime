@@ -48,7 +48,9 @@ try {
         competitors=@(@{bib=1;lastName='TEST';firstName='Synthetic';nation='FIN';club='Test';fisCode=''}); currentRun=1;
         runs=@(@{number=1;listCreatedAt=$at;startOrder=@(1);results=@(@{bib=1;status='Ready';at=$at})});updatedAt=$at;paused=$false
     }
-    $command = @{command='start';options=@{kind='Local';endpoint=$endpoint;localServerAssembly=$serverPath};snapshot=$snapshot}
+    # A known local publisher key lets the REST/SignalR check below create its own synthetic session.
+    $env:LIVE_PUBLISHER_KEY = 'ost_pk_' + [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    $command = @{command='start';options=@{kind='Local';endpoint=$endpoint;localServerAssembly=$serverPath;publisherKey=$env:LIVE_PUBLISHER_KEY};snapshot=$snapshot}
     $writer.WriteLine(($command | ConvertTo-Json -Depth 12 -Compress))
     $running = Read-Running
     $state = Invoke-RestMethod -Uri "$endpoint/api/sessions/$($running.session.sessionId)/state"

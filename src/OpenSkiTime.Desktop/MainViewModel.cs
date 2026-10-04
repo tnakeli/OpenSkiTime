@@ -115,7 +115,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [RelayCommand] private void ShowSettings()
     {
         SwitchSection(WorkspaceSection.Settings);
-        if (IsSettingsSection) { RefreshFisSettingsStatus(); }
+        if (IsSettingsSection) { RefreshFisSettingsStatus(); RefreshLivePublisherKeyStatus(); }
     }
 
     private void SwitchSection(WorkspaceSection section)
@@ -137,7 +137,11 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private string _fileLabel = "No series file open";
-    public string WindowTitle => FileLabel == "No series file open" ? "OpenSkiTime" : FileLabel;
+    public string ProductLabel { get; } = ProductInfo.DisplayName + " · " + ProductInfo.FisRulesLabel;
+    public string ProductVersionLabel { get; } = ProductInfo.Version + " · " + ProductInfo.FisRulesLabel;
+    public string ProductInfoName { get; } = ProductInfo.Name;
+    public string ProductInfoVersionLine { get; } = "Version " + ProductInfo.Version + " · Implements " + ProductInfo.FisRulesLabel + " (FIS season " + ProductInfo.FisRulesSeason + ")";
+    public string WindowTitle => FileLabel == "No series file open" ? ProductLabel : FileLabel + " — " + ProductLabel;
     private static string CompetitionCodexLabel(CompetitionValues competition)
         => competition.RaceType == RaceType.Fis ? $" · Codex {competition.FisCode ?? "—"}" : "";
     [ObservableProperty] private string _statusMessage = "Create a series file or open an existing one.";

@@ -20,7 +20,8 @@ $previous = $app.properties.template.containers[0].image
 $origin = 'https://' + $app.properties.configuration.ingress.fqdn
 try {
     Invoke-Azure @('containerapp','update','--name',$AppName,'--resource-group',$ResourceGroup,'--image',$Image,'--output','none')
-    & node (Join-Path $PSScriptRoot '../../scripts/live-smoke.mjs') $origin
+    # LIVE_PUBLISHER_KEY is the dedicated deployment-check key; anonymous creation must be refused.
+    & node (Join-Path $PSScriptRoot '../../scripts/live-smoke.mjs') $origin '--require-publisher-key'
     if ($LASTEXITCODE -ne 0) { throw 'New live revision failed the functional check.' }
     # Also verifies DNS and TLS on the public domain, without creating another race session.
     $health = Invoke-WebRequest -Uri 'https://live.openskiti.me/health' -TimeoutSec 60 -MaximumRedirection 0

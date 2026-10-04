@@ -6,7 +6,7 @@ $repo = & gh api repos/tnakeli/OpenSkiTime --jq '{private: .private, default_bra
 if ($LASTEXITCODE -ne 0 -or $repo.private -or $repo.default_branch -ne 'master') { throw 'Expected the public upstream repository on master.' }
 # Functional acceptance must precede enabling automated live deployment.
 if (!$WebsiteOnly) {
-    & node (Join-Path $PSScriptRoot '../../scripts/live-smoke.mjs') 'https://live.openskiti.me'
+    & node (Join-Path $PSScriptRoot '../../scripts/live-smoke.mjs') 'https://live.openskiti.me' '--require-publisher-key'
     if ($LASTEXITCODE -ne 0) { throw 'Live acceptance failed; automation remains disabled.' }
 }
 foreach ($origin in @('https://openskiti.me','https://www.openskiti.me')) {

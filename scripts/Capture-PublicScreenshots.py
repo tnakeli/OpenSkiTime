@@ -1,6 +1,7 @@
 """Render the real live viewer and website in an isolated CI browser using fictional data."""
 import argparse
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -40,14 +41,16 @@ def main():
         reserve.bind(('127.0.0.1', 0))
         port = reserve.getsockname()[1]
     base = f'http://127.0.0.1:{port}'
+    publisher_key = 'ost_pk_' + secrets.token_urlsafe(32)
     env = dict(os.environ, LiveTiming__SigningKey=base64.b64encode(secrets.token_bytes(32)).decode(),
+               LiveTiming__PublisherKeys='screenshots:' + hashlib.sha256(publisher_key.encode()).hexdigest(),
                Logging__LogLevel__Default='Warning')
     process = subprocess.Popen([args.dotnet, str(assembly), '--urls', base, '--contentRoot', str(server)],
                                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     website = None
     try:
         wait_ready(base + '/health', process)
-        request = urllib.request.Request(base + '/api/sessions', data=b'', method='POST')
+        request = urllib.request.Request(base + '/api/sessions', data=b'', method='POST', headers={'Authorization': 'Bearer ' + publisher_key})
         with urllib.request.urlopen(request) as response:
             session = json.load(response)
         snapshot = (root / 'docs/screenshots/live-demo.json').read_bytes()
