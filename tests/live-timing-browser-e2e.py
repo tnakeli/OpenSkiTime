@@ -4,6 +4,7 @@ Requires: pip install playwright; python -m playwright install chromium.
 """
 import argparse
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,7 +27,9 @@ def main():
         reserve.bind(('127.0.0.1', 0))
         port = reserve.getsockname()[1]
     base = f'http://127.0.0.1:{port}'
-    env = dict(os.environ, LiveTiming__SigningKey=base64.b64encode(secrets.token_bytes(32)).decode(), Logging__LogLevel__Default='Warning')
+    publisher_key = 'ost_pk_' + secrets.token_urlsafe(32)
+    env = dict(os.environ, LiveTiming__SigningKey=base64.b64encode(secrets.token_bytes(32)).decode(), Logging__LogLevel__Default='Warning',
+               LiveTiming__PublisherKeys='e2e:' + hashlib.sha256(publisher_key.encode()).hexdigest())
     process = None
 
     def start():
@@ -53,7 +56,7 @@ def main():
 
     try:
         start()
-        session = request('POST', '/api/sessions')
+        session = request('POST', '/api/sessions', token=publisher_key)
         sid, token = session['sessionId'], session['publisherToken']
         state = {'version': 1, 'competition': {'name': 'Synthetic browser race', 'place': 'Test slope', 'discipline': 'SL', 'date': '2026-10-02',
                  'isFis': False, 'codex': '', 'gender': 'M', 'category': 'Club', 'intermediateCount': 2, 'slope': 'Offline slope'},
@@ -70,10 +73,18 @@ def main():
             page = context.new_page()
             failures = []
             page.on('pageerror', lambda error: failures.append(str(error)))
-            page.goto(base + '/r/' + sid)
+            # The landing page lists every active published race and links to it.
+            page.goto(base + '/')
+            expect(page.locator('#races a')).to_have_text('Synthetic browser race')
+            expect(page.locator('footer a', has_text='Privacy')).to_have_attribute('href', 'https://openskiti.me/privacy/')
+            page.locator('#races a').click()
+            expect(page).to_have_url(base + '/r/' + sid)
             expect(page.locator('#connection')).to_have_text('Live')
             expect(page.locator('#name')).to_have_text('Synthetic browser race')
             expect(page.locator('#results tr')).to_have_count(6)
+            # No intermediate times yet: the column is removed rather than filled with dashes.
+            expect(page.locator('#intermediates')).to_be_hidden()
+            expect(page.locator('tr[data-bib="1"] td')).to_have_count(7)
             navigations = []
             page.on('framenavigated', lambda frame: navigations.append(frame.url))
             for bib, status, kind in [(1, 'OnCourse', 'CompetitorStarted'), (1, 'OnCourse', 'IntermediateTime'), (1, 'Finished', 'CompetitorFinished'),
