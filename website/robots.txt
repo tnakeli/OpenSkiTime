@@ -1,3 +1,6 @@
+# Search engines and AI answer engines are welcome to read and cite this site.
+# A short machine-readable overview is available at https://openskiti.me/llms.txt
 User-agent: *
 Allow: /
+
 Sitemap: https://openskiti.me/sitemap.xml
