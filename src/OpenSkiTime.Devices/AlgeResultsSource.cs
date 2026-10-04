@@ -12,7 +12,7 @@ namespace OpenSkiTime.Devices;
 public sealed record AlgeResultsTimings(TimeSpan ReconcileInterval, TimeSpan HeartbeatInterval, TimeSpan SilenceLimit,
     TimeSpan PollInterval, TimeSpan FirstReconnectDelay, TimeSpan MaxReconnectDelay)
 {
-    public static AlgeResultsTimings Default { get; } = new(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30),
+    public static AlgeResultsTimings Default { get; } = new(TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30),
         TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(60));
 }
 
@@ -68,7 +68,9 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
                 await ReconcileAsync(receive, forceHistory: true, ct);
                 wasConnected = true; reconnectDelay = _timings.FirstReconnectDelay;
                 _baseStatus = "Connected · ALGE Results realtime push · REST check every "
-                    + _timings.ReconcileInterval.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s";
+                    + (_timings.ReconcileInterval.TotalMinutes >= 1
+                        ? _timings.ReconcileInterval.TotalMinutes.ToString("0", CultureInfo.InvariantCulture) + " min"
+                        : _timings.ReconcileInterval.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s");
                 status(_baseStatus + RefusedSummary);
                 await ListenAsync(connection, receive, ct);
             }
@@ -127,8 +129,9 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
             { throw new AlgeRealtimeException("No data or heartbeat from ALGE Results realtime."); }
             if (now >= nextReconcile)
             {
-                // Count check per endpoint; history only on change, plus a periodic full check for server-side edits.
-                await ReconcileAsync(receive, forceHistory: ++_reconciles % 10 == 0, ct);
+                // Count check per endpoint every few minutes; history only on change, plus a full check every second round
+                // (about ten minutes) for server-side edits. Push delivers triggers; this only catches a lost push message.
+                await ReconcileAsync(receive, forceHistory: ++_reconciles % 2 == 0, ct);
                 nextReconcile = DateTimeOffset.UtcNow + _timings.ReconcileInterval;
             }
         }
@@ -231,7 +234,7 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         { await receive(new("transport-status", endpoint.Device!, "cloud", Encoding.UTF8.GetBytes("ALGE Results history count decreased. Review server/device changes; local raw records were retained."))); }
         if (known && old == count && !forceHistory) { return; }
         var until = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        // A changed count between full checks reads only the recent window: a missed push is detected within a minute.
+        // A changed count between full checks reads only the recent window, which is longer than the check interval.
         // Full history is read on every (re)subscription and with the periodic full check, so nothing older is lost.
         if (known && !forceHistory)
         { filter = "timestampFrom_ms=" + Math.Max(_from, until - (long)RecentWindow.TotalMilliseconds).ToString(CultureInfo.InvariantCulture); }
