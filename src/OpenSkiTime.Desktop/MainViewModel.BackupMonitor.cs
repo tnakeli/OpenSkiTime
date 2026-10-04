@@ -15,8 +15,6 @@ public sealed partial class MainViewModel
     private readonly BackupDisplayWindow _backupDisplay = new();
     private IReadOnlyList<AuxiliaryTimingObservation>? _backupObservationSource;
     private TimingObservation[] _backupObservations = [];
-    private bool? _backupTargetUsesUtc;
-    private string[] _backupClockWarnings = [];
     public ObservableCollection<BackupMonitorRow> BackupMonitorRows { get; } = [];
     [ObservableProperty] private bool _canShowBackup;
     [ObservableProperty] private bool _showBackupTimes;
@@ -45,7 +43,7 @@ public sealed partial class MainViewModel
     {
         _backupMonitor.Reset(); _backupDisplay.Hide(); BackupMonitorRows.Clear();
         _backupObservationSource = null; _backupObservations = [];
-        _backupTargetUsesUtc = null; _backupClockWarnings = []; _backupComparison = null;
+        _backupComparison = null;
         ShowBackupTimes = false; CanShowBackup = false; BackupWarning = "";
     }
 
@@ -77,34 +75,21 @@ public sealed partial class MainViewModel
             return;
         }
         // Cloud polling/history recovery takes longer than directly attached devices.
-        var cloud = state!.Options?.Device.Contains("ALGE Results", StringComparison.Ordinal) == true;
+        var cloud = state!.AllOptions.Any(x => x.Device.Contains("ALGE Results", StringComparison.Ordinal));
         var grace = Math.Max(cloud ? 10m : 1m, BackupMissingGraceSeconds);
         var policy = new BackupComparisonPolicy(
             (long)(Math.Clamp(BackupStartWarningMilliseconds, 0.01m, 60000m) * TimeSpan.TicksPerMillisecond),
             (long)(Math.Clamp(BackupFinishWarningMilliseconds, 0.01m, 60000m) * TimeSpan.TicksPerMillisecond),
             MissingGraceTicks: (long)(Math.Min(grace, 300m) * TimeSpan.TicksPerSecond));
-        var assignedKeys = a!.Results.SelectMany(x => new[] { x.StartKey, x.FinishKey }).Where(x => x is not null).ToHashSet(StringComparer.Ordinal);
-        var contexts = a.Observations.Where(x => assignedKeys.Contains(x.Observation.Key))
-            .Select(x => AuxiliaryClockComparison.UsesUtc(x.Observation)).Distinct().ToArray();
-        if (contexts.Length > 1)
-        {
-            _backupDisplay.Hide(); ShowBackupTimes = false; CanShowBackup = false; _backupComparison = null;
-            BackupWarning = "A capture contains both UTC and local clock contexts. Review its source settings before comparing B.";
-            return;
-        }
-        var targetUsesUtc = contexts.Length == 1 ? contexts[0]
-            : workspace.Timing?.LastCaptureOptions?.Device.Contains("ALGE Results", StringComparison.Ordinal) == true;
-        if (!ReferenceEquals(_backupObservationSource, state.Observations) || _backupTargetUsesUtc != targetUsesUtc)
+        if (!ReferenceEquals(_backupObservationSource, state.Observations))
         {
             _backupObservationSource = state.Observations;
-            _backupTargetUsesUtc = targetUsesUtc;
-            var normalized = AuxiliaryClockComparison.Normalize(targetUsesUtc, state.Observations);
-            _backupObservations = normalized.Observations.ToArray();
-            _backupClockWarnings = normalized.Warnings.ToArray();
+            _backupObservations = state.Observations.Select(x => x.Observation)
+                .Where(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null).ToArray();
         }
         var comparison = _backupMonitor.Update(state.SessionId, a, _backupObservations, now, policy);
         _backupComparison = comparison;
-        BackupWarning = state.Fault ?? string.Join(" · ", _backupClockWarnings.Concat(comparison.Warnings.Take(3)))
+        BackupWarning = state.Fault ?? string.Join(" · ", comparison.Warnings.Take(3))
             + (comparison.Warnings.Count > 3 ? $" · +{comparison.Warnings.Count - 3} more" : "");
         ShowBackupTimes = _backupDisplay.IsVisible(now);
         if (!ShowBackupTimes) { return; }

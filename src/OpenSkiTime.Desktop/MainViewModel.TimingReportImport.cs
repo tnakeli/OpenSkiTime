@@ -199,7 +199,7 @@ public sealed partial class MainViewModel
         var evidence = images.SelectMany(image => image.RecognizedText.Split('\n').SelectMany((line, index) =>
             TimingEvidenceMatching.ParseLine($"image:{image.Id:D}:{index}", line, date,
                 image.Role == TimingReportImageRole.B ? null : image.Role == TimingReportImageRole.HandStart ? 0 : 1))).ToArray();
-        if (!await PreviewReportEvidenceCoreAsync(_ => new(evidence, [], 0), compareClockBasis: false, ImageImportProvenance)) { return; }
+        if (!await PreviewReportEvidenceCoreAsync(evidence, ImageImportProvenance)) { return; }
         ReportImportStatus = $"{images.Length} image(s) in memory; {evidence.Length} timestamp(s) read; {ReportImportPreview.Count(x => x.CanAccept)} report timestamps matched. Check selected timestamps before pressing OK. Unmatched fields remain unchanged.";
         var disputed = images.Sum(image => image.RecognizedText.Split('\n')
             .Count(line => line.StartsWith(TimingEvidenceMatching.OcrReviewRequiredPrefix, StringComparison.Ordinal)));
@@ -213,8 +213,8 @@ public sealed partial class MainViewModel
     private string _reportImportProvenance = ImageImportProvenance;
 
     // One matching/preview path for every evidence input. OCR text and device impulses both arrive as
-    // EvidenceTimestamp values; device evidence may depend on whether the A target uses a UTC or local clock.
-    private async Task<bool> PreviewReportEvidenceCoreAsync(Func<bool, DeviceEvidenceSet> evidenceFor, bool compareClockBasis, string provenance)
+    // EvidenceTimestamp values on the same device clock time as A.
+    private async Task<bool> PreviewReportEvidenceCoreAsync(IReadOnlyList<EvidenceTimestamp> evidence, string provenance)
     {
         if (_reportDraft is null) { return false; }
         _reportSelectingImportRow = true;
@@ -226,15 +226,7 @@ public sealed partial class MainViewModel
         ClearReportPreview();
         var run = ReportImportRun ?? throw new DomainValidationException("Choose a saved run before reviewing its receipts.");
         var targets = ReportTargets(run, ReportImageRole);
-        var usesUtc = compareClockBasis ? ReportTargetClockBasis(run) : _ => false;
-        var matches = new List<EvidenceMatch>(); var warnings = new List<string>();
-        foreach (var group in targets.GroupBy(usesUtc))
-        {
-            var set = evidenceFor(group.Key);
-            warnings.AddRange(set.Warnings.Except(warnings, StringComparer.Ordinal));
-            matches.AddRange(TimingEvidenceMatching.Match(group.ToArray(), set.Evidence, tolerance, allowAdjacentDay: true));
-        }
-        ReportImportWarnings = string.Join("\n", warnings);
+        var matches = TimingEvidenceMatching.Match(targets, evidence, tolerance, allowAdjacentDay: true);
         _reportImportProvenance = provenance;
         foreach (var match in matches.OrderBy(x => Array.IndexOf(targets, x.Target)))
         {

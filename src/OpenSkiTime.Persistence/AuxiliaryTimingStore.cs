@@ -10,6 +10,8 @@ namespace OpenSkiTime.Persistence;
 internal sealed partial class SqliteSeriesFileSession : IAuxiliaryTimingStore
 {
     private readonly ConcurrentDictionary<Guid, AuxiliaryTimingRole> _auxiliaryCaptureIds = new();
+    // Several sessions may serve one role only when they belong to the same multi-device capture (clock group).
+    private readonly ConcurrentDictionary<Guid, string?> _auxiliaryCaptureGroups = new();
     private readonly HashSet<Guid> _closedAuxiliaryIds = [];
     private sealed record AuxiliarySwitch(Guid NextSessionId, Guid ListId, DateTimeOffset At);
     private readonly Dictionary<Guid, AuxiliarySwitch> _auxiliarySwitches = [];
@@ -44,7 +46,9 @@ internal sealed partial class SqliteSeriesFileSession : IAuxiliaryTimingStore
         await _captureOwnership.WaitAsync(ct);
         try
         {
-            if (_auxiliaryCaptureIds.Values.Contains(role))
+            var sameRole = _auxiliaryCaptureIds.Where(x => x.Value == role).Select(x => x.Key).ToArray();
+            if (sameRole.Length != 0 && (options.ClockGroup is null
+                || sameRole.Any(id => _auxiliaryCaptureGroups.GetValueOrDefault(id) != options.ClockGroup)))
             { throw new DomainValidationException("An auxiliary source is already connected for this role."); }
             EnsureCaptureLease();
             var result = await TimingWriteAsync(async db =>
@@ -59,6 +63,7 @@ internal sealed partial class SqliteSeriesFileSession : IAuxiliaryTimingStore
                 return ToAuxiliaryCapture(row);
             }, ct);
             _auxiliaryCaptureIds.TryAdd(result.Capture.Id, role);
+            _auxiliaryCaptureGroups[result.Capture.Id] = options.ClockGroup;
             return result;
         }
         catch { ReleaseCaptureLeaseIfIdle(); throw; }
@@ -136,6 +141,8 @@ internal sealed partial class SqliteSeriesFileSession : IAuxiliaryTimingStore
             }, ct);
             _auxiliaryCaptureIds.TryRemove(sessionId, out _);
             _auxiliaryCaptureIds.TryAdd(next.Capture.Id, next.Role);
+            _auxiliaryCaptureGroups.TryRemove(sessionId, out var switchedGroup);
+            _auxiliaryCaptureGroups[next.Capture.Id] = switchedGroup;
             _closedAuxiliaryIds.Add(sessionId);
             return next;
         }
@@ -158,6 +165,7 @@ internal sealed partial class SqliteSeriesFileSession : IAuxiliaryTimingStore
                 return true;
             }, ct);
             _auxiliaryCaptureIds.TryRemove(sessionId, out _);
+            _auxiliaryCaptureGroups.TryRemove(sessionId, out _);
             _closedAuxiliaryIds.Add(sessionId);
             ReleaseCaptureLeaseIfIdle();
         }

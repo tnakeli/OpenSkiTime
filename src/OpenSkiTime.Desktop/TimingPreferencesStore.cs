@@ -21,16 +21,14 @@ public sealed class TimingPreferencesStore(string? directory = null)
     private string LegacyAuxiliaryPath => Path.Combine(_directory, "auxiliary-settings.json");
 
     private sealed record Document(int Version, TimingRoleConfigurationDocument Configuration);
-    private sealed record TimingRoleConfigurationDocument(TimingSourceAssignment[] Assignments, BackupClockWarnings BackupWarnings,
-        int? BackupClockUtcOffsetMinutes);
+    private sealed record TimingRoleConfigurationDocument(TimingSourceAssignment[] Assignments, BackupClockWarnings BackupWarnings);
 
     // Legacy shapes, read only for migration.
     private sealed record LegacyTiming(string Source, string Port, string UsbId, int Baud,
         int StartChannel, int FinishChannel, string IntermediateChannels, string Firmware);
     private sealed record LegacyAuxiliary(string Source, string Port, string UsbId, int Baud, int StartChannel,
         int FinishChannel, string Firmware, string StartDevice, string FinishDevice, string Username,
-        int BackupStartWarningMilliseconds = 1, int BackupFinishWarningMilliseconds = 10, int BackupMissingGraceSeconds = 5,
-        int? AuxiliaryClockOffsetMinutes = null);
+        int BackupStartWarningMilliseconds = 1, int BackupFinishWarningMilliseconds = 10, int BackupMissingGraceSeconds = 5);
 
     public TimingRoleConfiguration? Load() => LoadWithNotes()?.Configuration;
 
@@ -43,7 +41,7 @@ public sealed class TimingPreferencesStore(string? directory = null)
                 var document = JsonSerializer.Deserialize<Document>(File.ReadAllText(RolePath), s_json);
                 if (document is not { Version: FormatVersion, Configuration: { } c }) { return null; }
                 var configuration = new TimingRoleConfiguration(c.Assignments ?? [])
-                { BackupWarnings = c.BackupWarnings ?? new(), BackupClockUtcOffsetMinutes = c.BackupClockUtcOffsetMinutes };
+                { BackupWarnings = c.BackupWarnings ?? new() };
                 return new(configuration, []);
             }
             return Migrate();
@@ -56,8 +54,7 @@ public sealed class TimingPreferencesStore(string? directory = null)
         ArgumentNullException.ThrowIfNull(configuration);
         configuration.Validate();
         Directory.CreateDirectory(_directory);
-        var document = new Document(FormatVersion, new(configuration.Assignments.ToArray(), configuration.BackupWarnings,
-            configuration.BackupClockUtcOffsetMinutes));
+        var document = new Document(FormatVersion, new(configuration.Assignments.ToArray(), configuration.BackupWarnings));
         var temporary = RolePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try { File.WriteAllText(temporary, JsonSerializer.Serialize(document, s_json)); File.Move(temporary, RolePath, overwrite: true); }
         finally { if (File.Exists(temporary)) { File.Delete(temporary); } }
@@ -91,8 +88,7 @@ public sealed class TimingPreferencesStore(string? directory = null)
             configuration = configuration with
             {
                 BackupWarnings = new(Math.Clamp(auxiliary.BackupStartWarningMilliseconds, 1, 10000),
-                    Math.Clamp(auxiliary.BackupFinishWarningMilliseconds, 1, 10000), Math.Clamp(auxiliary.BackupMissingGraceSeconds, 1, 300)),
-                BackupClockUtcOffsetMinutes = auxiliary.AuxiliaryClockOffsetMinutes is >= -840 and <= 840 ? auxiliary.AuxiliaryClockOffsetMinutes : null
+                    Math.Clamp(auxiliary.BackupFinishWarningMilliseconds, 1, 10000), Math.Clamp(auxiliary.BackupMissingGraceSeconds, 1, 300))
             };
             if (TimingSourceTypes.Parse(auxiliary.Source) is { } backupSource && TimingSourceTypes.Backup.Contains(backupSource))
             {

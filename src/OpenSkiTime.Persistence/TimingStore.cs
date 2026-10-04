@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,8 @@ namespace OpenSkiTime.Persistence;
 internal sealed partial class SqliteSeriesFileSession : ITimingStore
 {
     private FileStream? _captureLease;
-    private Guid? _activeCaptureId;
+    // Replaced atomically under _captureOwnership; device writer threads read it without locking.
+    private volatile ImmutableHashSet<Guid> _activeCaptureIds = [];
     private readonly SemaphoreSlim _captureOwnership = new(1, 1);
 
     // One process owns the file lease, while A and independent auxiliary sessions own their own lifetimes.
@@ -23,7 +25,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
 
     private void ReleaseCaptureLeaseIfIdle()
     {
-        if (_activeCaptureId is not null || !_auxiliaryCaptureIds.IsEmpty) { return; }
+        if (_activeCaptureIds.Count != 0 || !_auxiliaryCaptureIds.IsEmpty) { return; }
         _captureLease?.Dispose(); _captureLease = null;
     }
 
@@ -61,7 +63,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
             list = list with { Plan = list.Plan with
             { Competition = list.Plan.Competition with { IntermediateCount = currentIntermediateCount } } };
             var sessions = (await db.Captures.AsNoTracking().Where(x => x.ListId == listId).ToArrayAsync(ct))
-                .OrderBy(x => x.StartedAt).Select(ToCapture).ToArray();
+                .OrderBy(x => x.StartedAt).ThenBy(x => x.Id).Select(ToCapture).ToArray();
             var ids = sessions.Select(x => x.Id).ToArray();
             var raw = await db.RawPackets.AsNoTracking().Where(x => ids.Contains(x.SessionId)).ToArrayAsync(ct);
             var audit = await db.TimingAudit.AsNoTracking().Where(x => x.ListId == listId).OrderBy(x => x.Id).ToArrayAsync(ct);
@@ -73,28 +75,48 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
     }
 
     public async Task<CaptureSession> BeginCaptureAsync(Guid listId, CaptureOptions options, string operatorName, DateTimeOffset at, CancellationToken ct = default)
-        => await BeginCaptureCoreAsync(listId, options, operatorName, at, null, ct);
+        => (await BeginCaptureCoreAsync(listId, [options], operatorName, at, [], ct))[0];
 
     public async Task<CaptureSession> SwitchCaptureAsync(Guid previousSessionId, Guid listId, CaptureOptions options, string operatorName, DateTimeOffset at, CancellationToken ct = default)
     {
         RequireCaptureOwner(previousSessionId);
-        return await BeginCaptureCoreAsync(listId, options, operatorName, at, previousSessionId, ct);
+        return (await BeginCaptureCoreAsync(listId, [options], operatorName, at, [previousSessionId], ct))[0];
     }
 
-    private async Task<CaptureSession> BeginCaptureCoreAsync(Guid listId, CaptureOptions options, string operatorName, DateTimeOffset at, Guid? previousSessionId, CancellationToken ct)
+    // Several device connections of one A capture begin, and later switch runs, in one transaction: either every
+    // session exists in the run or none does.
+    public Task<IReadOnlyList<CaptureSession>> BeginCaptureGroupAsync(Guid listId, IReadOnlyList<CaptureOptions> options,
+        string operatorName, DateTimeOffset at, CancellationToken ct = default)
+        => BeginCaptureCoreAsync(listId, options, operatorName, at, [], ct);
+
+    public Task<IReadOnlyList<CaptureSession>> SwitchCaptureGroupAsync(IReadOnlyList<Guid> previousSessionIds, Guid listId,
+        IReadOnlyList<CaptureOptions> options, string operatorName, DateTimeOffset at, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        options.Validate();
+        ArgumentNullException.ThrowIfNull(previousSessionIds);
+        foreach (var id in previousSessionIds) { RequireCaptureOwner(id); }
+        return BeginCaptureCoreAsync(listId, options, operatorName, at, previousSessionIds, ct);
+    }
+
+    private async Task<IReadOnlyList<CaptureSession>> BeginCaptureCoreAsync(Guid listId, IReadOnlyList<CaptureOptions> requested, string operatorName,
+        DateTimeOffset at, IReadOnlyList<Guid> previousSessionIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(requested);
+        if (requested.Count == 0) { throw new DomainValidationException("Choose at least one timing device."); }
+        foreach (var item in requested) { ArgumentNullException.ThrowIfNull(item); item.Validate(); }
+        if (requested.Select(x => x.Simulation).Distinct().Count() > 1)
+        { throw new DomainValidationException("Simulation/replay and real timing cannot be mixed in one run. Use a separate test event file."); }
+        if (requested.Count > 1 && (requested.Any(x => x.ClockGroup is null) || requested.Select(x => x.ClockGroup).Distinct().Count() != 1))
+        { throw new DomainValidationException("Several timing devices must share one synchronized clock group."); }
         if (string.IsNullOrWhiteSpace(operatorName)) { throw new DomainValidationException("An operator identity is required."); }
-        options = options with { Operator = operatorName.Trim() };
+        var options = requested.Select(x => x with { Operator = operatorName.Trim() }).ToArray();
         await _captureOwnership.WaitAsync(ct);
         try
         {
-            if (previousSessionId is null && _activeCaptureId is not null)
+            if (previousSessionIds.Count == 0 && _activeCaptureIds.Count != 0)
             { throw new SeriesFileException("Disconnect the active A source before connecting another."); }
-            if (previousSessionId is { } previousOwner) { RequireCaptureOwner(previousOwner); }
+            foreach (var previousOwner in previousSessionIds) { RequireCaptureOwner(previousOwner); }
             EnsureCaptureLease();
-            var capture = await TimingWriteAsync(async db =>
+            var captures = await TimingWriteAsync(async db =>
             {
                 var listRow = await db.StartLists.SingleOrDefaultAsync(x => x.Id == listId, ct)
                     ?? throw new DomainValidationException("Select a saved start list.");
@@ -102,24 +124,24 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 { throw new DomainValidationException("A newer starting order exists. Select the latest start list."); }
                 var list = await ReadListAsync(db, listRow, ct);
                 var old = await db.Captures.Where(x => x.ListId == listId).ToArrayAsync(ct);
-                if (old.Any(x => ToCapture(x).Options.Simulation != options.Simulation))
+                if (old.Any(x => ToCapture(x).Options.Simulation != options[0].Simulation))
                 { throw new DomainValidationException("Simulation/replay and real timing cannot be mixed in one run. Use a separate test event file."); }
                 if (listRow.StartedAt is null)
                 {
                     await ValidateStartPlanAsync(db, list.Plan, ct);
                     await ValidateTimingSourceAsync(db, listRow, list.Plan, ct);
                 }
-                var row = new CaptureRow { Id = Guid.NewGuid(), ListId = listId, OptionsJson = JsonSerializer.Serialize(options), StartedAt = at };
-                if (previousSessionId is { } previousId)
+                foreach (var previousId in previousSessionIds)
                 {
                     var previous = await db.Captures.SingleAsync(x => x.Id == previousId, ct);
                     previous.StoppedAt = at; previous.CleanStop = true;
                 }
-                db.Captures.Add(row);
-                return ToCapture(row);
+                var rows = options.Select(x => new CaptureRow { Id = Guid.NewGuid(), ListId = listId, OptionsJson = JsonSerializer.Serialize(x), StartedAt = at }).ToArray();
+                db.Captures.AddRange(rows);
+                return rows.Select(ToCapture).ToArray();
             }, ct);
-            _activeCaptureId = capture.Id;
-            return capture;
+            _activeCaptureIds = _activeCaptureIds.Except(previousSessionIds).Union(captures.Select(x => x.Id));
+            return captures;
         }
         catch
         {
@@ -166,7 +188,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 session.StoppedAt = at; session.CleanStop = true;
                 return true;
             }, ct);
-            _activeCaptureId = null;
+            _activeCaptureIds = _activeCaptureIds.Remove(sessionId);
             ReleaseCaptureLeaseIfIdle();
         }
         finally { _captureOwnership.Release(); }
@@ -240,7 +262,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
 
     private void RequireCaptureOwner(Guid sessionId)
     {
-        if (_captureLease is null || _activeCaptureId != sessionId)
+        if (_captureLease is null || !_activeCaptureIds.Contains(sessionId))
         { throw new SeriesFileException("Only the active capture owner can append or close this device session."); }
     }
 

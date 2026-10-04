@@ -71,7 +71,6 @@ public partial class DesktopWorkflowTests
                 Assert.DoesNotContain(TimingSourceTypes.SimulatorLabel, vm.BackupTimingRoles[0].Sources);
                 vm.BackupTimingRoles[0].UsbId = "SYNTHETIC-B";
                 vm.BackupStartWarningMilliseconds = 2; vm.BackupFinishWarningMilliseconds = 20; vm.BackupMissingGraceSeconds = 7;
-                vm.BackupClockUtcOffsetMinutes = 180;
                 window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
                 var rows = window.GetVisualDescendants().OfType<ItemsControl>().Single(x => x.Name == "PrimaryTimingRolesList");
                 Assert.Equal(4, rows.GetVisualDescendants().OfType<NumericUpDown>().Count(x => x.IsEffectivelyVisible && x.Maximum == 8));
@@ -89,8 +88,7 @@ public partial class DesktopWorkflowTests
                 Assert.Equal("SYNTHETIC-B", saved.BackupStart!.Connection.UsbId);
                 Assert.Equal(saved.BackupStart.Connection, saved.BackupFinish!.Connection);
                 Assert.Equal(new BackupClockWarnings(2, 20, 7), saved.BackupWarnings);
-                Assert.Equal(180, saved.BackupClockUtcOffsetMinutes);
-                var compiled = saved.PrimaryCaptureOptions(new DateOnly(2026, 10, 4));
+                var compiled = Assert.Single(saved.PrimaryCapture(new DateOnly(2026, 10, 4))).Options;
                 Assert.Equal(("MT1 · USB / serial", "COM7", 0, 1), (compiled.Device, compiled.Endpoint, compiled.StartChannel, compiled.FinishChannel));
                 Assert.Equal([2, 4], compiled.IntermediateChannels);
 
@@ -100,13 +98,20 @@ public partial class DesktopWorkflowTests
                 Assert.True(vm.IsError);
                 Assert.Equal([2, 4], preferences.Load()!.Intermediates.Select(x => x.Channel));
                 vm.TimingIntermediateRoles[1].Channel = 4;
-                // Primary roles on different connections are rejected with the explicit restriction.
+                // Any device can serve any role: Intermediate 1 on its own Timy alongside the serial MT1.
                 vm.TimingIntermediateRoles[0].UsesLeaderConnection = false;
                 vm.TimingIntermediateRoles[0].Source = TimingSourceTypes.TimyUsbLabel;
                 PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
-                Assert.True(vm.IsError);
-                Assert.Contains("share one device connection", vm.StatusMessage, StringComparison.Ordinal);
+                Assert.True(vm.IsError); // A Timy without an explicit ID is ambiguous next to the B Clock Timy.
+                vm.TimingIntermediateRoles[0].UsbId = "SPLIT-1";
+                PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
+                Assert.False(vm.IsError, vm.StatusMessage);
+                var split = preferences.Load()!;
+                Assert.Equal("SPLIT-1", split.Intermediates[0].Connection.UsbId);
+                Assert.Equal(2, split.PrimaryCapture(new DateOnly(2026, 10, 4)).Count);
                 vm.TimingIntermediateRoles[0].UsesLeaderConnection = true;
+                PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
+                Assert.False(vm.IsError, vm.StatusMessage);
             }
             finally { window.Close(); }
 
@@ -120,8 +125,8 @@ public partial class DesktopWorkflowTests
             Assert.Equal([2, 4], reloaded.TimingIntermediateRoles.Select(x => x.Channel));
             Assert.Equal("SYNTHETIC-B", reloaded.BackupTimingRoles[0].UsbId);
             Assert.True(reloaded.BackupTimingRoles[1].UsesLeaderConnection);
-            Assert.Equal((2, 20, 7, 180), (reloaded.BackupStartWarningMilliseconds, reloaded.BackupFinishWarningMilliseconds,
-                reloaded.BackupMissingGraceSeconds, reloaded.BackupClockUtcOffsetMinutes));
+            Assert.Equal((2, 20, 7), (reloaded.BackupStartWarningMilliseconds, reloaded.BackupFinishWarningMilliseconds,
+                reloaded.BackupMissingGraceSeconds));
 
             // B Clock is optional and can be cleared.
             await reloaded.ClearBackupClockCommand.ExecuteAsync(null);

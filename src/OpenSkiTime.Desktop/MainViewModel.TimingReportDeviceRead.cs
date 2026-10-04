@@ -52,13 +52,11 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _reportDeviceAlgeUsername = "";
     [ObservableProperty] private string _reportDeviceAlgePassword = "";
     [ObservableProperty] private bool _reportDeviceRememberPassword;
-    [ObservableProperty] private string _reportDeviceFromUtc = "";
     [ObservableProperty] private string _reportDeviceReplayPath = "";
     [ObservableProperty] private int _reportDeviceStartChannel;
     [ObservableProperty] private int _reportDeviceFinishChannel = 1;
     [ObservableProperty] private int _reportDeviceHandChannel;
     [ObservableProperty] private string _reportDeviceDate = "";
-    [ObservableProperty] private string _reportDeviceUtcOffset = "";
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditReportDevice))]
     private bool _isReportDeviceReading;
@@ -96,8 +94,6 @@ public sealed partial class MainViewModel
         if (_reportDraft is { } draft)
         {
             ReportDeviceDate = draft.Header.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            if (ReportDeviceFromUtc.Length == 0)
-            { ReportDeviceFromUtc = draft.Header.Date.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " 12:00"; }
         }
         if (ReportDevicePorts.Count == 0) { RefreshReportDevicePorts(); }
     }
@@ -124,14 +120,6 @@ public sealed partial class MainViewModel
         { throw new DomainValidationException("Choose a timing device source."); }
         if (!DateOnly.TryParseExact(ReportDeviceDate.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
         { throw new DomainValidationException("Device date must use YYYY-MM-DD."); }
-        int? offset = null;
-        if (ReportDeviceUtcOffset.Trim().Length != 0)
-        {
-            if (!int.TryParse(ReportDeviceUtcOffset.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var minutes)
-                || minutes is < -840 or > 840)
-            { throw new DomainValidationException("Local clock UTC offset must be whole minutes between -840 and 840, or blank."); }
-            offset = minutes;
-        }
         var role = ReportImageRole switch
         {
             TimingReportImageRole.B => AuxiliaryTimingRole.B,
@@ -149,10 +137,9 @@ public sealed partial class MainViewModel
         {
             if (startDevice.Length == 0 || !startDevice.All(char.IsAsciiDigit) || !finishDevice.All(char.IsAsciiDigit))
             { throw new DomainValidationException("Enter the ALGE Results device ID (digits only)."); }
-            if (!DateTimeOffset.TryParse(ReportDeviceFromUtc, CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
-            { throw new DomainValidationException("Enter a valid ALGE Results receive-from date/time in UTC (YYYY-MM-DD HH:mm)."); }
-            fromUtc = parsed;
+            // Read the whole device day: a bound 14 hours before the date covers every device clock setting. The decoder keeps
+            // only triggers whose device time falls on the chosen device date.
+            fromUtc = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddHours(-14);
         }
         if (type == TimingSourceType.Mt1Serial && (ReportDevicePort ?? "").Trim().Length == 0)
         { throw new DomainValidationException("Choose the MT1 COM port."); }
@@ -171,7 +158,7 @@ public sealed partial class MainViewModel
         var endpoint = alge ? $"{startDevice}/{startChannel};{finishDevice}/{finishChannel}" : connection.Endpoint;
         var options = new CaptureOptions(connection.SourceLabel, endpoint, date, startChannel, finishChannel,
             type == TimingSourceType.ReplayFile, "Not queried", alge ? startDevice : null, alge ? finishDevice : null, fromUtc)
-        { BaudRate = connection.BaudRate, ComparisonUtcOffsetMinutes = offset };
+        { BaudRate = connection.BaudRate };
         AuxiliaryTimingValidation.Validate(role, options);
         return (connection, options, role);
     }
@@ -179,13 +166,13 @@ public sealed partial class MainViewModel
     // A device endpoint used by live capture is never opened a second time from this dialog.
     private void ValidateReportDeviceEndpoint(CaptureOptions options)
     {
-        if (workspace.Timing is { IsActive: true, LastCaptureOptions: { } live } && SameLocalTimingEndpoint(options, live))
+        if (workspace.Timing is { IsActive: true } timing && timing.ActiveCaptureOptions.Any(live => SameLocalTimingEndpoint(options, live)))
         { throw new DomainValidationException("This device is in use by live timing (A). Choose another device, or read it after live capture is disconnected."); }
         if (workspace.Auxiliary is not { } auxiliary) { return; }
         foreach (var role in Enum.GetValues<AuxiliaryTimingRole>())
         {
             var state = auxiliary.State(role);
-            if (state is { IsActive: true, Options: { } active } && SameLocalTimingEndpoint(options, active))
+            if (state.IsActive && state.AllOptions.Any(active => SameLocalTimingEndpoint(options, active)))
             {
                 throw new DomainValidationException((role == AuxiliaryTimingRole.B ? "This device is in use by live B Clock capture."
                     : $"This device is in use by {role} capture.") + " Choose another device, or read it after that capture is disconnected.");
@@ -208,7 +195,9 @@ public sealed partial class MainViewModel
             {
                 var (connection, options, role) = BuildReportDeviceRead();
                 ValidateReportDeviceEndpoint(options);
-                var source = TimingSourceFactory.Create(connection, options, _timingHttp, password, ReportDeviceRememberPassword);
+                var remember = ReportDeviceRememberPassword;
+                var source = TimingSourceFactory.Create(connection, options, _timingHttp,
+                    username => new AlgeAccountEditor(username) { Password = password, RememberPassword = remember }.TakePassword());
                 TimingDeviceRead read;
                 try { read = new TimingDeviceRead(source, role, options); }
                 catch { _ = source.DisposeAsync().AsTask(); throw; }
@@ -297,14 +286,8 @@ public sealed partial class MainViewModel
                 if (!ReferenceEquals(_reportDeviceRead, read)) { return; }
                 ShowReportDeviceObservations(read, observations);
                 var provenance = ReportDeviceProvenance(read);
-                var sets = new Dictionary<bool, DeviceEvidenceSet>();
-                DeviceEvidenceSet For(bool targetUsesUtc)
-                {
-                    if (!sets.TryGetValue(targetUsesUtc, out var set))
-                    { set = DeviceEvidence.ToEvidence(observations, targetUsesUtc, provenance); sets.Add(targetUsesUtc, set); }
-                    return set;
-                }
-                if (!await PreviewReportEvidenceCoreAsync(For, compareClockBasis: true, ReportDeviceImportDescription(read))) { return; }
+                var evidence = DeviceEvidence.ToEvidence(observations, provenance).Evidence;
+                if (!await PreviewReportEvidenceCoreAsync(evidence, ReportDeviceImportDescription(read))) { return; }
                 var impulses = observations.Count(x => x.Observation.Kind == ObservationKind.Impulse);
                 var invalid = observations.Count(x => x.Observation.Kind == ObservationKind.Invalid);
                 ReportImportStatus = $"{read.PacketCount} packet(s) read from {read.Options.Device} in memory; {impulses} impulse(s) decoded; "
@@ -312,9 +295,6 @@ public sealed partial class MainViewModel
                 if (invalid > 0) { ReportImportStatus += $" {invalid} device line(s) were invalid or incomplete; review the raw lines."; }
                 if (read.Truncated) { ReportImportStatus += " The read limit was reached; later device input was not read."; }
                 if (read.Fault is { } fault) { ReportImportStatus += " Device read failed: " + fault; }
-                if (sets.Values.Any(x => x.ShiftedCount > 0))
-                { ReportImportStatus += " UTC device timestamps were compared using the explicit local clock UTC offset; original device values are unchanged."; }
-                if (ReportImportWarnings.Length != 0) { ReportImportStatus += " " + ReportImportWarnings; }
                 ReportDeviceStatus = read.Status + $" · {read.PacketCount} packet(s) received in memory";
                 SetStatus(ReportImportStatus);
             });

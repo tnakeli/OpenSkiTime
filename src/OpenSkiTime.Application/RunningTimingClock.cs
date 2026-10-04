@@ -18,7 +18,7 @@ public sealed class RunningTimingClock(TimeProvider? timeProvider = null)
         lock (_gate)
         {
             var delay = Math.Max(0, (_time.GetUtcNow() - receivedAt).Ticks);
-            var deviceNow = observation.ClockId == "UTC" ? _time.GetUtcNow().UtcTicks : ticks + delay;
+            var deviceNow = ticks + delay;
             if (!_anchors.TryGetValue(observation.ClockId, out var old) || deviceNow >= old.Device)
             { _anchors[observation.ClockId] = (deviceNow, _time.GetTimestamp()); _latestClockId = observation.ClockId; }
         }

@@ -16,10 +16,13 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
     public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(receive); ArgumentNullException.ThrowIfNull(status);
-        var endpoints = new[] { (Device: options.StartDeviceId, Channel: options.StartChannel),
-            (Device: options.FinishDeviceId, Channel: options.FinishChannel) }.Distinct().ToArray();
+        // Every routed role (start, finish, intermediates) is polled as its own device/channel endpoint.
+        var endpoints = (options.Routes is { } routes
+            ? routes.Select(x => (Device: x.DeviceId, x.Channel))
+            : [(Device: options.StartDeviceId, Channel: options.StartChannel), (Device: options.FinishDeviceId, Channel: options.FinishChannel)])
+            .Distinct().ToArray();
         if (endpoints.Any(x => string.IsNullOrWhiteSpace(x.Device) || !x.Device.All(char.IsAsciiDigit)))
-        { throw new IOException("Enter the MT1 device IDs for start and finish."); }
+        { throw new IOException("Enter the MT1 device ID for every ALGE Results timing role."); }
         var from = (options.FromUtc ?? DateTimeOffset.UtcNow).ToUnixTimeMilliseconds();
         var counts = new Dictionary<string, long>(StringComparer.Ordinal);
         var cycles = 0;

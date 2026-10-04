@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.Application;
@@ -14,7 +13,8 @@ public sealed partial class MainViewModel
 {
     private ObservableCollection<TimingRoleEditor>? _primaryTimingRoles;
     private ObservableCollection<TimingRoleEditor>? _backupTimingRoles;
-    [ObservableProperty] private int? _backupClockUtcOffsetMinutes;
+    private readonly Dictionary<string, string> _algeSessionPasswords = new(StringComparer.Ordinal);
+    public ObservableCollection<AlgeAccountEditor> AlgeAccounts { get; } = [];
     [ObservableProperty] private string _timingMigrationNotes = "";
 
     public ObservableCollection<TimingRoleEditor> PrimaryTimingRoles => _primaryTimingRoles ??= CreateRoleCollection(DefaultPrimaryRoles());
@@ -26,13 +26,13 @@ public sealed partial class MainViewModel
     public bool HasBackupClockRoles => BackupTimingRoles.Count > 0;
     public bool HasNoBackupClockRoles => !HasBackupClockRoles;
     public bool HasTimingMigrationNotes => TimingMigrationNotes.Length != 0;
-    public bool UsesAlgeResultsAccount => PrimaryTimingRoles.Concat(BackupTimingRoles).Any(x => x.IsAlgeResults);
+    public bool UsesAlgeResultsAccount => AlgeAccounts.Count != 0;
     public bool IsTimingSimulator => PrimaryTimingRoles.FirstOrDefault()?.SourceType == TimingSourceType.Simulator;
     public string TimingDeviceHelp => PrimaryTimingRoles.FirstOrDefault()?.SourceType switch
     {
         TimingSourceType.TimyUsb => "Timy PC Timer mode · install the ALGE USB driver once. Native USB uses the vendor library.",
         TimingSourceType.Mt1Serial => "Choose the MT1 virtual COM port. Each role uses its own channel on this device.",
-        TimingSourceType.AlgeResults => "Timekeeper account required. Start and finish device IDs may be the same. Receive-from uses UTC; empty means connect time.",
+        TimingSourceType.AlgeResults => "Each ALGE Results role has its own account and device ID; different clubs may use different accounts. Timekeeper role required.",
         TimingSourceType.ReplayFile => "Replays a raw ALGE ASCII file as training data.",
         _ => "Training data only. Use a separate test event file; it cannot be mixed with real timing in one run."
     };
@@ -65,9 +65,34 @@ public sealed partial class MainViewModel
 
     private void NotifyTimingRoles()
     {
+        RefreshAlgeAccounts();
         foreach (var name in new[] { nameof(TimingIntermediateRoles), nameof(HasTimingIntermediateRoles), nameof(HasBackupClockRoles),
             nameof(HasNoBackupClockRoles), nameof(UsesAlgeResultsAccount), nameof(IsTimingSimulator), nameof(TimingDeviceHelp) }) { OnPropertyChanged(name); }
     }
+
+    // One account row per distinct ALGE Results username used by any role. Typed passwords survive role edits.
+    private void RefreshAlgeAccounts()
+    {
+        var usernames = PrimaryTimingRoles.Concat(BackupTimingRoles).Where(x => x.IsAlgeResults)
+            .Select(x => x.ToConnection().AlgeUsername).Where(x => x.Length != 0).Distinct(StringComparer.Ordinal).ToArray();
+        if (AlgeAccounts.Select(x => x.Username).SequenceEqual(usernames)) { return; }
+        var existing = AlgeAccounts.ToDictionary(x => x.Username, StringComparer.Ordinal);
+        AlgeAccounts.Clear();
+        foreach (var username in usernames) { AlgeAccounts.Add(existing.GetValueOrDefault(username) ?? new AlgeAccountEditor(username)); }
+        OnPropertyChanged(nameof(UsesAlgeResultsAccount));
+    }
+
+    // Passwords are taken once per connection and kept in memory only while timing is connected, so B Clock retries work.
+    private string AlgePassword(string username)
+    {
+        if (_algeSessionPasswords.TryGetValue(username, out var known) && known.Length != 0) { return known; }
+        var account = AlgeAccounts.FirstOrDefault(x => x.Username == username) ?? new AlgeAccountEditor(username);
+        var password = account.TakePassword();
+        _algeSessionPasswords[username] = password;
+        return password;
+    }
+
+    private void ForgetAlgeSessionPasswords() => _algeSessionPasswords.Clear();
 
     public void LoadTimingPreferences()
     {
@@ -79,8 +104,6 @@ public sealed partial class MainViewModel
     // Replaces the Settings editors with a configuration. Primary and B groups can be applied independently.
     private void ApplyTimingConfiguration(TimingRoleConfiguration configuration, bool primary, bool backup)
     {
-        if (configuration.Assignments.Select(x => x.Connection).FirstOrDefault(x => x.Source == TimingSourceType.AlgeResults
-            && x.AlgeUsername.Trim().Length != 0) is { } alge) { Mt1Username = alge.AlgeUsername.Trim(); }
         if (primary && configuration.Start is { } start)
         {
             var editors = DefaultPrimaryRoles();
@@ -111,7 +134,6 @@ public sealed partial class MainViewModel
         BackupStartWarningMilliseconds = configuration.BackupWarnings.StartWarningMilliseconds;
         BackupFinishWarningMilliseconds = configuration.BackupWarnings.FinishWarningMilliseconds;
         BackupMissingGraceSeconds = configuration.BackupWarnings.MissingSignalWaitSeconds;
-        BackupClockUtcOffsetMinutes = configuration.BackupClockUtcOffsetMinutes;
     }
 
     private static void ReplaceRoles(ObservableCollection<TimingRoleEditor> target, IReadOnlyList<TimingRoleEditor> editors)
@@ -124,11 +146,9 @@ public sealed partial class MainViewModel
     // The configuration currently shown in Settings. It is validated before saving or connecting.
     public TimingRoleConfiguration CurrentTimingConfiguration()
     {
-        var username = Mt1Username.Trim();
-        return new(PrimaryTimingRoles.Concat(BackupTimingRoles).Select(x => x.ToAssignment(username)).ToArray())
+        return new(PrimaryTimingRoles.Concat(BackupTimingRoles).Select(x => x.ToAssignment()).ToArray())
         {
-            BackupWarnings = new(BackupStartWarningMilliseconds, BackupFinishWarningMilliseconds, BackupMissingGraceSeconds),
-            BackupClockUtcOffsetMinutes = BackupClockUtcOffsetMinutes
+            BackupWarnings = new(BackupStartWarningMilliseconds, BackupFinishWarningMilliseconds, BackupMissingGraceSeconds)
         };
     }
 
@@ -181,12 +201,4 @@ public sealed partial class MainViewModel
         SetStatus("Timing settings saved on this computer.");
         return Task.CompletedTask;
     });
-
-    private DateTimeOffset ReadAlgeReceiveFrom()
-    {
-        if (string.IsNullOrWhiteSpace(Mt1FromUtc)) { return DateTimeOffset.UtcNow; }
-        if (DateTimeOffset.TryParse(Mt1FromUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
-        { return parsed; }
-        throw new DomainValidationException("Enter a valid receive-from date/time in UTC, e.g. 2026-09-27 10:00:00.");
-    }
 }

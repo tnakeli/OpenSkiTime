@@ -164,8 +164,8 @@ public partial class DesktopWorkflowTests
             var timing = new TimingPreferencesStore(root);
             var backup = new TimingConnection(TimingSourceType.Mt1Serial) { Port = "COM9" };
             timing.Save(new TimingRoleConfiguration([new(TimingRole.BackupStart, backup, 0), new(TimingRole.BackupFinish, backup, 1)])
-            { BackupClockUtcOffsetMinutes = 180 });
-            Assert.Equal(180, new TimingPreferencesStore(root).Load()!.BackupClockUtcOffsetMinutes);
+            { BackupWarnings = new(3, 12, 9) });
+            Assert.Equal(new BackupClockWarnings(3, 12, 9), new TimingPreferencesStore(root).Load()!.BackupWarnings);
         }
         finally { Directory.Delete(root, recursive: true); }
     }

@@ -38,6 +38,7 @@ public sealed partial class TimingRoleEditor : ObservableObject
     [ObservableProperty] private string _firmware = "Not queried";
     [ObservableProperty] private int _baudRate = 38400;
     [ObservableProperty] private string _algeDeviceId = "";
+    [ObservableProperty] private string _algeUsername = "";
     [ObservableProperty] private string _replayPath = "";
 
     // A port list control must not clear the configured port.
@@ -56,6 +57,7 @@ public sealed partial class TimingRoleEditor : ObservableObject
     public bool IsSimulator => ShowOwnConnection && SourceType == TimingSourceType.Simulator;
     // ALGE Results device IDs belong to each role, also when the account connection is shared.
     public bool IsAlgeResults => EffectiveSourceType == TimingSourceType.AlgeResults;
+    public bool IsOwnAlgeResults => ShowOwnConnection && SourceType == TimingSourceType.AlgeResults;
 
     partial void OnSourceChanged(string value) => NotifyConnection();
     partial void OnUsesLeaderConnectionChanged(bool value) => NotifyConnection();
@@ -69,15 +71,14 @@ public sealed partial class TimingRoleEditor : ObservableObject
     private void NotifyConnection()
     {
         foreach (var name in new[] { nameof(SourceType), nameof(EffectiveSourceType), nameof(ShowOwnConnection), nameof(ShowsLeaderConnection),
-            nameof(IsTimyUsb), nameof(IsSerial), nameof(IsReplay), nameof(IsSimulator), nameof(IsAlgeResults) }) { OnPropertyChanged(name); }
+            nameof(IsTimyUsb), nameof(IsSerial), nameof(IsReplay), nameof(IsSimulator), nameof(IsAlgeResults), nameof(IsOwnAlgeResults) }) { OnPropertyChanged(name); }
     }
 
     public void Detach() { if (Leader is not null) { Leader.PropertyChanged -= OnLeaderChanged; } }
 
     // The connection this row would use on its own. Fields that do not belong to the source are normalized.
-    public TimingConnection OwnConnection(string algeUsername)
+    public TimingConnection OwnConnection()
     {
-        ArgumentNullException.ThrowIfNull(algeUsername);
         var source = SourceType ?? throw new DomainValidationException($"{Label}: choose a timing source.");
         return new TimingConnection(source)
         {
@@ -86,19 +87,19 @@ public sealed partial class TimingRoleEditor : ObservableObject
             Port = source == TimingSourceType.Mt1Serial ? Port.Trim() : "",
             BaudRate = source == TimingSourceType.Mt1Serial ? BaudRate : 38400,
             AlgeDeviceId = source == TimingSourceType.AlgeResults ? AlgeDeviceId.Trim() : "",
-            AlgeUsername = source == TimingSourceType.AlgeResults ? algeUsername.Trim() : "",
+            AlgeUsername = source == TimingSourceType.AlgeResults ? AlgeUsername.Trim() : "",
             ReplayPath = source == TimingSourceType.ReplayFile ? ReplayPath.Trim() : ""
         };
     }
 
-    public TimingConnection ToConnection(string algeUsername)
+    public TimingConnection ToConnection()
     {
-        if (!UsesLeaderConnection || Leader is null) { return OwnConnection(algeUsername); }
-        var shared = Leader.ToConnection(algeUsername);
+        if (!UsesLeaderConnection || Leader is null) { return OwnConnection(); }
+        var shared = Leader.ToConnection();
         return shared with { AlgeDeviceId = shared.Source == TimingSourceType.AlgeResults ? AlgeDeviceId.Trim() : "" };
     }
 
-    public TimingSourceAssignment ToAssignment(string algeUsername) => new(Role, ToConnection(algeUsername), Channel);
+    public TimingSourceAssignment ToAssignment() => new(Role, ToConnection(), Channel);
 
     public void Load(TimingSourceAssignment assignment)
     {
@@ -106,11 +107,11 @@ public sealed partial class TimingRoleEditor : ObservableObject
         var c = assignment.Connection;
         Source = Sources.Contains(c.SourceLabel) ? c.SourceLabel : Sources[0];
         UsbId = c.UsbId; Firmware = c.Firmware; Port = c.Port; BaudRate = c.BaudRate;
-        AlgeDeviceId = c.AlgeDeviceId; ReplayPath = c.ReplayPath; Channel = assignment.Channel;
+        AlgeDeviceId = c.AlgeDeviceId; AlgeUsername = c.AlgeUsername; ReplayPath = c.ReplayPath; Channel = assignment.Channel;
         if (Leader is not null)
         {
-            var leader = Leader.ToConnection(c.AlgeUsername) with { AlgeDeviceId = "" };
-            UsesLeaderConnection = SourceType is not null && OwnConnection(c.AlgeUsername) with { AlgeDeviceId = "" } == leader;
+            var leader = Leader.ToConnection() with { AlgeDeviceId = "" };
+            UsesLeaderConnection = SourceType is not null && OwnConnection() with { AlgeDeviceId = "" } == leader;
         }
     }
 }

@@ -22,6 +22,7 @@
       <NumericUpDown Value="{Binding BaudRate}" Minimum="1200" Maximum="115200" FormatString="0" Width="135" ToolTip.Tip="Serial baud rate. Timy PC Timer defaults to 38400; check the connected device." />
      </StackPanel>
      <TextBox Text="{Binding AlgeDeviceId}" IsVisible="{Binding IsAlgeResults}" Width="130" Watermark="MT1 device ID" ToolTip.Tip="ALGE Results device ID for this role" />
+     <TextBox Text="{Binding AlgeUsername}" IsVisible="{Binding IsOwnAlgeResults}" Width="220" Watermark="ALGE Results username" ToolTip.Tip="Account that owns this device in ALGE Results (for example the club of an intermediate)" />
      <TextBox Text="{Binding ReplayPath}" IsVisible="{Binding IsReplay}" Width="280" Watermark="Path to raw ALGE ASCII file" />
      <TextBlock Text="Training data only" IsVisible="{Binding IsSimulator}" Classes="supportingText" VerticalAlignment="Center" />
     </WrapPanel>
@@ -68,15 +69,20 @@
     <Button Content="Add intermediate" Command="{Binding AddTimingIntermediateCommand}" Classes="secondaryAction" />
     <Button Content="Remove last intermediate" Command="{Binding RemoveTimingIntermediateCommand}" IsEnabled="{Binding HasTimingIntermediateRoles}" Classes="secondaryAction" />
    </StackPanel>
-   <TextBlock Text="All primary roles currently share one device connection and use different channels. A race uses as many intermediates as its competition defines. ALGE Results supports start/finish only." Classes="supportingText" TextWrapping="Wrap" />
+   <TextBlock Text="Any device can serve any role. Roles on one device use different channels; different devices, source types and ALGE Results accounts may be combined. All device clocks are set to the same time. A race uses as many intermediates as its competition defines." Classes="supportingText" TextWrapping="Wrap" />
    <StackPanel Spacing="6" IsVisible="{Binding UsesAlgeResultsAccount}">
-    <TextBlock Text="ALGE RESULTS ACCOUNT · SHARED BY ALL ROLES" Classes="fieldLabel" />
-    <Grid ColumnDefinitions="*,8,*,8,Auto,8,*">
-     <TextBox Text="{Binding Mt1Username}" Watermark="ALGE Results username" />
-     <TextBox Grid.Column="2" Text="{Binding Mt1Password}" PasswordChar="•" Watermark="Password (empty = saved password)" />
-     <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding RememberAlgePassword}" />
-     <TextBox Grid.Column="6" Text="{Binding Mt1FromUtc}" Watermark="Receive from UTC (empty = now)" />
-    </Grid>
+    <TextBlock Text="ALGE RESULTS ACCOUNTS" Classes="fieldLabel" />
+    <ItemsControl Name="AlgeAccountsList" ItemsSource="{Binding AlgeAccounts}">
+     <ItemsControl.ItemTemplate>
+      <DataTemplate>
+       <Grid ColumnDefinitions="2*,8,2*,8,Auto" Margin="0,0,0,6">
+        <TextBlock Text="{Binding Username}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBox Grid.Column="2" Text="{Binding Password}" PasswordChar="•" Watermark="{Binding PasswordWatermark}" />
+        <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding RememberPassword}" />
+       </Grid>
+      </DataTemplate>
+     </ItemsControl.ItemTemplate>
+    </ItemsControl>
    </StackPanel>
 
    <Separator />
@@ -92,14 +98,12 @@
      <TextBlock Grid.Column="4" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Text="CONNECTION" Classes="fieldLabel" />
     </Grid>
     <ItemsControl Name="BackupTimingRolesList" ItemsSource="{Binding BackupTimingRoles}" ItemTemplate="{StaticResource TimingRoleRowTemplate}" />
-    <TextBlock Text="Both B roles share one device connection. Use a device separate from primary timing (own USB ID, COM port or ALGE Results device IDs)." Classes="supportingText" TextWrapping="Wrap" />
-    <Grid ColumnDefinitions="*,8,*,8,*,8,*" Width="760" HorizontalAlignment="Left">
+    <TextBlock Text="B Clock Start and B Clock Finish may use the same or different devices. Use devices separate from primary timing (own USB ID, COM port or ALGE Results device ID)." Classes="supportingText" TextWrapping="Wrap" />
+    <Grid ColumnDefinitions="*,8,*,8,*" Width="570" HorizontalAlignment="Left">
      <StackPanel Classes="field"><TextBlock Text="START WARNING (MS)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupStartWarningMilliseconds}" Minimum="1" Maximum="10000" FormatString="0" /></StackPanel>
      <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="FINISH WARNING (MS)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupFinishWarningMilliseconds}" Minimum="1" Maximum="10000" FormatString="0" /></StackPanel>
      <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="MISSING SIGNAL WAIT (S)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupMissingGraceSeconds}" Minimum="1" Maximum="300" FormatString="0" /></StackPanel>
-     <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="B CLOCK UTC OFFSET (MIN)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupClockUtcOffsetMinutes}" Minimum="-840" Maximum="840" FormatString="0" /></StackPanel>
     </Grid>
-    <TextBlock Text="Leave the UTC offset blank when A and B use the same time basis. For a cloud (UTC) clock compared with a local clock, enter the local clock offset, e.g. 180 for UTC+03:00. Original timestamps stay unchanged." Classes="supportingText" TextWrapping="Wrap" />
     <Button Content="Clear B Clock" Command="{Binding ClearBackupClockCommand}" Classes="secondaryAction" HorizontalAlignment="Left" />
    </StackPanel>
    <Button Content="Save timing settings" Command="{Binding SaveTimingPreferencesCommand}" Classes="primaryAction" HorizontalAlignment="Left" />

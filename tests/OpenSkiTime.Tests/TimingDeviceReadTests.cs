@@ -28,8 +28,7 @@ public sealed class TimingDeviceReadTests
             Assert.Contains(observations, x => x.Observation.Kind == ObservationKind.Invalid && x.Observation.Message.Contains("not a timing line", StringComparison.Ordinal));
 
             var provenance = DeviceEvidence.Provenance(options.Device, options.Endpoint);
-            var set = DeviceEvidence.ToEvidence(observations, targetUsesUtc: false, provenance);
-            Assert.Empty(set.Warnings); Assert.Equal(0, set.ShiftedCount);
+            var set = DeviceEvidence.ToEvidence(observations, provenance);
             Assert.Equal(3, set.Evidence.Count);
             Assert.All(set.Evidence, x => Assert.StartsWith("device:Replay file:Replay:", x.Key, StringComparison.Ordinal));
             var start = Assert.Single(set.Evidence, x => x.Channel == 0);
@@ -54,7 +53,7 @@ public sealed class TimingDeviceReadTests
         var options = new CaptureOptions(TimingSourceTypes.Mt1SerialLabel, "COM7", Date, 3, 3);
         await using var read = new TimingDeviceRead(source, AuxiliaryTimingRole.HandFinish, options);
         read.Start(); await read.Completion;
-        var evidence = Assert.Single(DeviceEvidence.ToEvidence(read.Decode(new AlgeDecoderFactory()), false, "device:test").Evidence);
+        var evidence = Assert.Single(DeviceEvidence.ToEvidence(read.Decode(new AlgeDecoderFactory()), "device:test").Evidence);
         Assert.Equal(1, evidence.Channel); Assert.Equal(2, evidence.Precision);
     }
 
@@ -86,25 +85,6 @@ public sealed class TimingDeviceReadTests
         failing.Start(); await failing.Completion;
         Assert.Equal("Port is unavailable.", failing.Fault);
         Assert.Contains(failing.Decode(new AlgeDecoderFactory()), x => x.Observation.Kind == ObservationKind.Invalid);
-    }
-
-    [Fact]
-    public void UtcDeviceEvidenceUsesTheExplicitOffsetOnlyForComparisonValues()
-    {
-        var utc = new TimingObservation("k1", Guid.Empty, 1, "123", "f", ObservationKind.Impulse, 0, At(9, 0, 0, 12_345), 5,
-            null, false, "UTC", "123 C0 · 09:00:00.0012345 UTC");
-        var withOffset = new AuxiliaryTimingObservation(AuxiliaryTimingRole.B, false, utc) { ComparisonUtcOffsetMinutes = 180 };
-        var set = DeviceEvidence.ToEvidence([withOffset], targetUsesUtc: false, "device:MT1 · ALGE Results:123/0;123/1");
-        var evidence = Assert.Single(set.Evidence);
-        Assert.Equal(At(12, 0, 0, 12_345), evidence.Ticks); Assert.Equal(5, evidence.Precision);
-        Assert.Contains("+180 min", evidence.Text, StringComparison.Ordinal);
-        Assert.Equal(1, set.ShiftedCount);
-        Assert.Equal(At(9, 0, 0, 12_345), utc.DeviceTicks); // The original decoded value is unchanged.
-
-        var missing = DeviceEvidence.ToEvidence([withOffset with { ComparisonUtcOffsetMinutes = null }], false, "device:x");
-        Assert.Empty(missing.Evidence);
-        Assert.Contains("UTC", Assert.Single(missing.Warnings), StringComparison.Ordinal);
-        Assert.Empty(DeviceEvidence.ToEvidence([withOffset with { ComparisonUtcOffsetMinutes = null }], true, "device:x").Warnings);
     }
 
     private sealed class ScriptedSource(string text) : ITimingSource

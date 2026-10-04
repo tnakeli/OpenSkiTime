@@ -31,7 +31,7 @@ public sealed partial class MainViewModel
     partial void OnBackupClockHealthChanged(BackupClockHealth value) => OnPropertyChanged(nameof(HasBackupClockProblem));
 
     // Called after A has started capturing. Never throws and never awaits B.
-    private void StartBackupClock(DateOnly date, DateTimeOffset? since, string algePassword)
+    private void StartBackupClock(DateOnly date, DateTimeOffset? since)
     {
         var generation = ++_backupClockGeneration;
         _backupClockError = ""; _backupRunSwitchMessage = ""; _backupRunSwitchFailed = false;
@@ -43,8 +43,7 @@ public sealed partial class MainViewModel
             {
                 var candidate = CurrentTimingConfiguration();
                 candidate.Validate();
-                // A primary ALGE Results capture passes its bound; otherwise B reads the receive-from field itself.
-                if (candidate.BackupStart!.Connection.Source == TimingSourceType.AlgeResults) { since ??= ReadAlgeReceiveFrom(); }
+                since ??= DateTimeOffset.UtcNow;
                 configuration = candidate;
             }
         }
@@ -55,15 +54,15 @@ public sealed partial class MainViewModel
         _backupClockConnecting = true;
         RefreshBackupClockStatus();
         var previous = _backupClockTask;
-        _backupClockTask = ConnectBackupClockAsync(previous, generation, configuration, date, since, algePassword);
+        _backupClockTask = ConnectBackupClockAsync(previous, generation, configuration, date, since);
     }
 
     private async Task ConnectBackupClockAsync(Task previous, int generation, TimingRoleConfiguration configuration,
-        DateOnly date, DateTimeOffset? since, string algePassword)
+        DateOnly date, DateTimeOffset? since)
     {
         // Yield first so the A connect path completes before any B work starts.
         await Task.Yield();
-        ITimingSource? source = null;
+        var sources = new List<ITimingSource>();
         var error = "";
         try
         {
@@ -71,13 +70,18 @@ public sealed partial class MainViewModel
             if (generation != _backupClockGeneration || workspace.Auxiliary is not { } auxiliary
                 || workspace.Timing is not { IsActive: true, ListId: { } listId }) { return; }
             if (auxiliary.State(AuxiliaryTimingRole.B).IsActive) { await auxiliary.StopAsync(AuxiliaryTimingRole.B); }
-            var connection = configuration.BackupStart!.Connection;
-            var options = configuration.BackupCaptureOptions(date, connection.Source == TimingSourceType.AlgeResults ? since : null);
-            ValidateAuxiliaryTimingEndpoint(options, AuxiliaryTimingRole.B);
-            source = TimingSourceFactory.Create(connection, options, _timingHttp, algePassword, RememberAlgePassword);
+            // One live auxiliary session per B device connection (B Start and B Finish may be different devices).
+            var devices = configuration.BackupCapture(date, since);
+            foreach (var device in devices) { ValidateAuxiliaryTimingEndpoint(device.Options, AuxiliaryTimingRole.B); }
+            var inputs = new List<TimingSourceInput>();
+            foreach (var device in devices)
+            {
+                var created = TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword);
+                sources.Add(created); inputs.Add(new(created, device.Options));
+            }
             if (generation != _backupClockGeneration) { return; }
-            await auxiliary.StartAsync(listId, AuxiliaryTimingRole.B, source, options, TimingOperator, live: true);
-            source = null; // owned by the auxiliary capture from here on
+            await auxiliary.StartAsync(listId, AuxiliaryTimingRole.B, inputs, TimingOperator, live: true);
+            sources.Clear(); // owned by the auxiliary capture from here on
             if (generation != _backupClockGeneration || workspace.Timing?.IsActive != true)
             { await auxiliary.StopAsync(AuxiliaryTimingRole.B); return; }
             if (workspace.Timing?.ListId is { } current && current != listId) { QueueLiveBackupRunSwitch(auxiliary, current); }
@@ -85,9 +89,9 @@ public sealed partial class MainViewModel
         catch (Exception ex) when (ex is not OutOfMemoryException) { error = "connect failed: " + ex.Message; }
         finally
         {
-            if (source is not null)
+            foreach (var unused in sources)
             {
-                try { await source.DisposeAsync(); }
+                try { await unused.DisposeAsync(); }
                 catch (Exception ex) when (ex is not OutOfMemoryException) { /* the unused B source failed to close; A is unaffected */ }
             }
             if (generation == _backupClockGeneration)
@@ -141,10 +145,7 @@ public sealed partial class MainViewModel
             RefreshBackupClockStatus();
             return;
         }
-        var password = Mt1Password;
-        if (password.Length == 0 && UsesAlgeResultsAccount && OperatingSystem.IsWindows()) { password = AlgeCredential.Read() ?? ""; }
-        StartBackupClock(_backupClockDate, _backupClockSince, password);
-        if (UsesAlgeResultsAccount) { Mt1Password = ""; }
+        StartBackupClock(_backupClockDate, _backupClockSince);
         SetStatus("Reconnecting B Clock. A timing continues unchanged.");
     }
 
@@ -218,20 +219,20 @@ public sealed partial class MainViewModel
         foreach (var role in Enum.GetValues<AuxiliaryTimingRole>())
         {
             var state = auxiliary.State(role);
-            if (state is { IsActive: true, Options: { } active } && SameLocalTimingEndpoint(options, active))
+            if (state.IsActive && state.AllOptions.Any(active => SameLocalTimingEndpoint(options, active)))
             { throw new DomainValidationException($"The selected device is already connected as {role}. Choose a different physical device with its own port or device ID."); }
         }
     }
 
     private void ValidateAuxiliaryTimingEndpoint(CaptureOptions options, AuxiliaryTimingRole role)
     {
-        if (workspace.Timing is { IsActive: true, LastCaptureOptions: { } activeA } && SameLocalTimingEndpoint(options, activeA))
+        if (workspace.Timing is { IsActive: true } timing && timing.ActiveCaptureOptions.Any(activeA => SameLocalTimingEndpoint(options, activeA)))
         { throw new DomainValidationException("The selected device is already connected as A. Choose a different physical device with its own port or device ID."); }
         if (workspace.Auxiliary is not { } auxiliary) { return; }
         foreach (var other in Enum.GetValues<AuxiliaryTimingRole>().Where(x => x != role))
         {
             var state = auxiliary.State(other);
-            if (state is { IsActive: true, Options: { } active } && SameLocalTimingEndpoint(options, active))
+            if (state.IsActive && state.AllOptions.Any(active => SameLocalTimingEndpoint(options, active)))
             { throw new DomainValidationException($"The selected device is already connected as {other}. Disconnect that role before reusing its device."); }
         }
     }
@@ -249,9 +250,9 @@ public sealed partial class MainViewModel
         }
         if (left.Device.Contains("ALGE Results", StringComparison.Ordinal) && right.Device.Contains("ALGE Results", StringComparison.Ordinal))
         {
-            var leftDevices = new[] { left.StartDeviceId?.Trim(), left.FinishDeviceId?.Trim() }.Where(x => !string.IsNullOrEmpty(x));
-            var rightDevices = new[] { right.StartDeviceId?.Trim(), right.FinishDeviceId?.Trim() }.Where(x => !string.IsNullOrEmpty(x));
-            return leftDevices.Intersect(rightDevices, StringComparer.Ordinal).Any();
+            static IEnumerable<string> Devices(CaptureOptions o) => (o.Routes is { } routes ? routes.Select(x => x.DeviceId?.Trim())
+                : new[] { o.StartDeviceId?.Trim(), o.FinishDeviceId?.Trim() }).Where(x => !string.IsNullOrEmpty(x)).Select(x => x!);
+            return Devices(left).Intersect(Devices(right), StringComparer.Ordinal).Any();
         }
         return left.Device.Contains("serial", StringComparison.OrdinalIgnoreCase)
             && right.Device.Contains("serial", StringComparison.OrdinalIgnoreCase)

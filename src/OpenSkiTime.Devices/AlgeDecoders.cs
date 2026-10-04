@@ -115,7 +115,7 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
         {
             return AdvanceClock(heartbeat) ? Make(ObservationKind.Information, text) with
                 { DeviceTicks = session.Options.DeviceDate.ToDateTime(TimeOnly.MinValue).Ticks + _currentClock,
-                  ClockId = $"{session.Id:N}:{source}:{stream}:{_clockEpoch}" }
+                  ClockId = ClockId() }
                 : Make(ObservationKind.Invalid, "Device clock moved backwards/reset: " + text);
         }
         if (text.StartsWith("TIMY:", StringComparison.Ordinal) || text.StartsWith("NSFV", StringComparison.Ordinal)
@@ -134,17 +134,20 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
         var kind = flag is "c" or "C" or "d" or "D" or "i" or "n" ? ObservationKind.DeviceCorrection : ObservationKind.Impulse;
         if (!clockOk) { kind = ObservationKind.Invalid; }
         var explicitBib = (flag == "*" || match.Groups["star"].Success) && number > 0 ? (int?)number : null;
-        var intermediate = Array.IndexOf(session.Options.IntermediateChannels, channel);
-        var normalizedChannel = channel == session.Options.StartChannel ? 0 : channel == session.Options.FinishChannel ? 1
-            : intermediate >= 0 ? intermediate + 2 : channel + 100;
+        var normalizedChannel = session.Options.Position(channel) ?? channel + 100;
         return Make(kind, clockOk ? text : "Device clock moved backwards/reset. Review clock setup: " + text) with
         {
             Fingerprint = $"{source}:{session.Options.DeviceDate:yyyyMMdd}:{_currentClock}:{flag}:{number}:{channel}:{_clockEpoch}",
             Channel = normalizedChannel, DeviceTicks = ticks, Precision = precision,
             SuggestedBib = explicitBib, Manual = match.Groups["manual"].Success,
-            ClockId = $"{session.Id:N}:{source}:{stream}:{_clockEpoch}"
+            ClockId = ClockId()
         };
     }
+
+    // A synchronized multi-device capture shares one time-of-day basis; a clock reset still starts a new epoch.
+    // Otherwise each session/stream keeps its own clock context, as before.
+    private string ClockId() => session.Options.ClockGroup is { } group
+        ? $"sync:{group}:{_clockEpoch}" : $"{session.Id:N}:{source}:{stream}:{_clockEpoch}";
 
     private bool AdvanceClock(long tod)
     {
@@ -225,11 +228,13 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         // Semantic fingerprint: JSON whitespace/property order cannot create a second impulse.
         // A changed bib/validity/type remains a separate reviewable observation, never a silent overwrite.
         var fingerprint = $"{device}:{stamp}:{channel}:{type}:{valid}:{blocked}:{falling}:{bib}";
+        // The device clock time is the one set in ALGE Results for this device (its stored instant plus the device's own
+        // time offset), the same wall-clock time every other timing device shows. The raw JSON keeps both values.
+        var local = checked(ticks + timeOffset * TimeSpan.TicksPerMinute);
+        var clockId = session.Options.ClockGroup is { } group ? $"sync:{group}:0" : "alge-results";
         return new($"{session.Id:N}:{packet.Sequence}:json:{index}", session.Id, packet.Sequence, device,
-            "mt1:" + fingerprint, kind,
-            channel == session.Options.StartChannel && (session.Options.StartDeviceId is null || device == session.Options.StartDeviceId) ? 0
-                : channel == session.Options.FinishChannel && (session.Options.FinishDeviceId is null || device == session.Options.FinishDeviceId) ? 1 : channel + 10,
-            ticks, 5, bib, false, "UTC", $"{device} {channelText} · {TimingTime.FormatTimeOfDay(ticks)} UTC · {type}");
+            "mt1:" + fingerprint, kind, session.Options.Position(channel, device) ?? channel + 10,
+            local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}");
     }
 
     private static TimingObservation Invalid(RawTimingPacket packet, string message, int index = 0) => new(

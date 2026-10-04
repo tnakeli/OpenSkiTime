@@ -19,18 +19,19 @@ public sealed class TimingRoleConfigurationTests
     { BackupWarnings = new(1, 10, 5) };
 
     [Fact]
-    public void RolesCompileToExistingCaptureOptionsForSharedPrimaryAndSeparateBDevice()
+    public void SingleDeviceRolesCompileToTheOriginalSessionMapping()
     {
         var configuration = Example();
         configuration.Validate();
-        var a = configuration.PrimaryCaptureOptions(Date);
+        var a = Assert.Single(configuration.PrimaryCapture(Date)).Options;
         Assert.Equal(TimingSourceTypes.TimyUsbLabel, a.Device);
         Assert.Equal("Timy USB 1", a.Endpoint);
         Assert.Equal((0, 1), (a.StartChannel, a.FinishChannel));
         Assert.Equal([2, 3], a.IntermediateChannels);
         Assert.Equal("1.9", a.Firmware);
+        Assert.Null(a.Routes); Assert.Null(a.ClockGroup);
         Assert.False(a.Simulation);
-        var b = configuration.BackupCaptureOptions(Date);
+        var b = Assert.Single(configuration.BackupCapture(Date)).Options;
         Assert.Equal((TimingSourceTypes.Mt1SerialLabel, "COM7", 0, 1), (b.Device, b.Endpoint, b.StartChannel, b.FinishChannel));
         Assert.Empty(b.IntermediateChannels);
     }
@@ -44,12 +45,12 @@ public sealed class TimingRoleConfigurationTests
         var configuration = Example(count);
         configuration.Validate();
         Assert.Equal(Enumerable.Range(1, count), configuration.Intermediates.Select(x => x.Role.Index));
-        Assert.Equal(Enumerable.Range(2, count), configuration.PrimaryCaptureOptions(Date).IntermediateChannels);
+        Assert.Equal(Enumerable.Range(2, count), Assert.Single(configuration.PrimaryCapture(Date)).Options.IntermediateChannels);
         Assert.Equal("Intermediate " + Math.Max(count, 1), TimingRole.Intermediate(Math.Max(count, 1)).Label);
     }
 
     [Fact]
-    public void IntermediateGapsAndDuplicateChannelsAreRejected()
+    public void IntermediateGapsAndDuplicateChannelsOnOneDeviceAreRejected()
     {
         var gap = Example(0).With(new(TimingRole.Intermediate(2), TimyA, 3));
         Assert.Throws<DomainValidationException>(gap.Validate);
@@ -64,23 +65,54 @@ public sealed class TimingRoleConfigurationTests
         var withoutB = Example().Without(TimingRole.BackupStart).Without(TimingRole.BackupFinish);
         withoutB.Validate();
         Assert.False(withoutB.HasBackupClock);
-        Assert.Throws<DomainValidationException>(() => withoutB.BackupCaptureOptions(Date));
+        Assert.Throws<DomainValidationException>(() => withoutB.BackupCapture(Date));
         Assert.Throws<DomainValidationException>(Example().Without(TimingRole.BackupFinish).Validate);
         Assert.True(Example().HasBackupClock);
     }
 
     [Fact]
-    public void PrimaryRolesOnDifferentConnectionsAreAnExplicitRestriction()
+    public void AnyDeviceCanServeAnyRoleWithOneSessionPerConnectionInOneClockGroup()
     {
-        var other = TimyA with { UsbId = "2" };
-        var split = Example().With(new(TimingRole.Finish, other, 1));
-        var error = Assert.Throws<DomainValidationException>(split.Validate);
-        Assert.Contains("different connections", error.Message, StringComparison.Ordinal);
-        Assert.Throws<DomainValidationException>(Example().With(new(TimingRole.BackupFinish, Mt1B with { Port = "COM8" }, 1)).Validate);
+        var timyStart = TimyA;
+        var timyFinish = new TimingConnection(TimingSourceType.TimyUsb) { UsbId = "2" };
+        var serial = new TimingConnection(TimingSourceType.Mt1Serial) { Port = "COM3" };
+        var configuration = new TimingRoleConfiguration([
+            new(TimingRole.Start, timyStart, 0), new(TimingRole.Finish, timyFinish, 0),
+            new(TimingRole.Intermediate(1), serial, 0), new(TimingRole.Intermediate(2), timyStart, 4)]);
+        configuration.Validate();
+        var sources = configuration.PrimaryCapture(Date, clockGroup: "race-1");
+        Assert.Equal(3, sources.Count);
+        Assert.All(sources, x => Assert.Equal("race-1", x.Options.ClockGroup));
+        var start = sources.Single(x => x.Connection.UsbId == "1");
+        Assert.Equal([new CaptureChannelRoute(0, 0), new CaptureChannelRoute(4, 3)], start.Options.Routes!);
+        Assert.Equal([TimingRole.Start, TimingRole.Intermediate(2)], start.Roles);
+        Assert.Equal(1, sources.Single(x => x.Connection.UsbId == "2").Options.Position(0));
+        Assert.Equal(2, sources.Single(x => x.Connection.Source == TimingSourceType.Mt1Serial).Options.Position(0));
+        Assert.Null(start.Options.Position(1));
     }
 
     [Fact]
-    public void AlgeResultsRolesMayUseDifferentDevicesOnOneAccountButNoIntermediates()
+    public void AlgeResultsIntermediatesMayComeFromDifferentClubAccountsAndDevices()
+    {
+        var clubA = new TimingConnection(TimingSourceType.AlgeResults) { AlgeUsername = "club-a@example.test" };
+        var clubB = new TimingConnection(TimingSourceType.AlgeResults) { AlgeUsername = "club-b@example.test" };
+        var configuration = new TimingRoleConfiguration([
+            new(TimingRole.Start, TimyA, 0), new(TimingRole.Finish, TimyA, 1),
+            new(TimingRole.Intermediate(1), clubA with { AlgeDeviceId = "231203037" }, 0),
+            new(TimingRole.Intermediate(2), clubB with { AlgeDeviceId = "231203016" }, 1)]);
+        configuration.Validate();
+        var sources = configuration.PrimaryCapture(Date, clockGroup: "g");
+        Assert.Equal(3, sources.Count);
+        var first = sources.Single(x => x.Connection.AlgeUsername == "club-a@example.test").Options;
+        Assert.Equal([new CaptureChannelRoute(0, 2, "231203037")], first.Routes!);
+        Assert.Equal("231203037/0", first.Endpoint);
+        Assert.Equal(2, first.Position(0, "231203037"));
+        Assert.Null(first.Position(0, "231203016"));
+        Assert.Equal(3, sources.Single(x => x.Connection.AlgeUsername == "club-b@example.test").Options.Position(1, "231203016"));
+    }
+
+    [Fact]
+    public void AlgeResultsRolesOnOneAccountShareOneConnection()
     {
         var account = new TimingConnection(TimingSourceType.AlgeResults) { AlgeUsername = "timekeeper" };
         var configuration = new TimingRoleConfiguration([
@@ -88,10 +120,25 @@ public sealed class TimingRoleConfigurationTests
             new(TimingRole.Finish, account with { AlgeDeviceId = "202" }, 0)]);
         configuration.Validate();
         var from = new DateTimeOffset(2026, 12, 12, 9, 0, 0, TimeSpan.Zero);
-        var options = configuration.PrimaryCaptureOptions(Date, from);
+        var options = Assert.Single(configuration.PrimaryCapture(Date, from)).Options;
         Assert.Equal(("101", "202", "101/0;202/0", from), (options.StartDeviceId, options.FinishDeviceId, options.Endpoint, options.FromUtc));
-        Assert.Throws<DomainValidationException>(configuration.With(new(TimingRole.Intermediate(1), account with { AlgeDeviceId = "101" }, 2)).Validate);
+        var withSplit = configuration.With(new(TimingRole.Intermediate(1), account with { AlgeDeviceId = "303" }, 2));
+        withSplit.Validate();
+        var routed = Assert.Single(withSplit.PrimaryCapture(Date)).Options;
+        Assert.Equal(3, routed.Routes!.Length);
         Assert.Throws<DomainValidationException>(configuration.With(new(TimingRole.Finish, account with { AlgeDeviceId = "101" }, 0)).Validate);
+    }
+
+    [Fact]
+    public void AmbiguousOrSharedPhysicalConnectionsAreRejected()
+    {
+        var automatic = new TimingConnection(TimingSourceType.TimyUsb);
+        Assert.Throws<DomainValidationException>(new TimingRoleConfiguration([
+            new(TimingRole.Start, automatic, 0), new(TimingRole.Finish, TimyA with { UsbId = "2" }, 1)]).Validate);
+        Assert.Throws<DomainValidationException>(new TimingRoleConfiguration([
+            new(TimingRole.Start, Mt1B, 0), new(TimingRole.Finish, Mt1B with { BaudRate = 9600 }, 1)]).Validate);
+        Assert.Throws<DomainValidationException>(new TimingRoleConfiguration([
+            new(TimingRole.Start, new(TimingSourceType.Simulator), 0), new(TimingRole.Finish, TimyA, 1)]).Validate);
     }
 
     [Fact]
@@ -100,15 +147,12 @@ public sealed class TimingRoleConfigurationTests
         var timyB = new TimingConnection(TimingSourceType.TimyUsb) { UsbId = "1" };
         Assert.Throws<DomainValidationException>(Example()
             .With(new(TimingRole.BackupStart, timyB, 0)).With(new(TimingRole.BackupFinish, timyB, 1)).Validate);
-        var anyTimy = TimyA with { UsbId = "" };
-        var automatic = Example().With(new(TimingRole.Start, anyTimy, 0)).With(new(TimingRole.Finish, anyTimy, 1))
-            .Without(TimingRole.Intermediate(1)).Without(TimingRole.Intermediate(2))
-            .With(new(TimingRole.BackupStart, timyB with { UsbId = "3" }, 0)).With(new(TimingRole.BackupFinish, timyB with { UsbId = "3" }, 1));
-        Assert.Throws<DomainValidationException>(automatic.Validate);
-        var serialA = Mt1B;
         Assert.Throws<DomainValidationException>(new TimingRoleConfiguration([
-            new(TimingRole.Start, serialA, 0), new(TimingRole.Finish, serialA, 1),
-            new(TimingRole.BackupStart, serialA, 2), new(TimingRole.BackupFinish, serialA, 3)]).Validate);
+            new(TimingRole.Start, Mt1B, 0), new(TimingRole.Finish, Mt1B, 1),
+            new(TimingRole.BackupStart, Mt1B, 2), new(TimingRole.BackupFinish, Mt1B, 3)]).Validate);
+        var splitB = Example().With(new(TimingRole.BackupFinish, Mt1B with { Port = "COM8" }, 1));
+        splitB.Validate();
+        Assert.Equal(2, splitB.BackupCapture(Date).Count);
     }
 
     [Fact]
@@ -129,7 +173,7 @@ public sealed class TimingRoleConfigurationTests
     {
         foreach (var connection in new[] { new TimingConnection(TimingSourceType.Simulator), new TimingConnection(TimingSourceType.ReplayFile) { ReplayPath = "x.txt" } })
         {
-            var options = new TimingRoleConfiguration([new(TimingRole.Start, connection, 0), new(TimingRole.Finish, connection, 1)]).PrimaryCaptureOptions(Date);
+            var options = Assert.Single(new TimingRoleConfiguration([new(TimingRole.Start, connection, 0), new(TimingRole.Finish, connection, 1)]).PrimaryCapture(Date)).Options;
             Assert.True(options.Simulation);
             Assert.Equal(connection.SourceLabel, options.Device);
         }
@@ -138,22 +182,25 @@ public sealed class TimingRoleConfigurationTests
     [Fact]
     public void SavedCaptureOptionsRoundTripIntoRoleAssignments()
     {
-        var original = Example().PrimaryCaptureOptions(Date);
+        var original = Assert.Single(Example().PrimaryCapture(Date)).Options;
         var restored = TimingRoleConfiguration.FromCaptureOptions(original);
         restored.Validate();
-        Assert.Equal(original, restored.PrimaryCaptureOptions(Date) with { IntermediateChannels = original.IntermediateChannels });
-        Assert.Equal(original.IntermediateChannels, restored.PrimaryCaptureOptions(Date).IntermediateChannels);
+        var again = Assert.Single(restored.PrimaryCapture(Date)).Options;
+        Assert.Equal(original with { IntermediateChannels = [] }, again with { IntermediateChannels = [] });
+        Assert.Equal(original.IntermediateChannels, again.IntermediateChannels);
+
+        var multi = new TimingRoleConfiguration([new(TimingRole.Start, TimyA, 0), new(TimingRole.Finish, TimyA with { UsbId = "2" }, 0)]);
+        var sessions = multi.PrimaryCapture(Date, clockGroup: "g").Select(x => x.Options).ToArray();
+        var rebuilt = TimingRoleConfiguration.FromCaptureOptions(sessions);
+        rebuilt.Validate();
+        Assert.Equal(("1", "2"), (rebuilt.Start!.Connection.UsbId, rebuilt.Finish!.Connection.UsbId));
     }
 
     [Fact]
-    public void BClockOffsetIsRecordedOnBCaptureOnlyAndValidated()
+    public void BackupWarningThresholdsAreValidated()
     {
-        var configuration = Example() with { BackupClockUtcOffsetMinutes = 120 };
-        Assert.Equal(120, configuration.BackupCaptureOptions(Date).ComparisonUtcOffsetMinutes);
-        Assert.Null(configuration.PrimaryCaptureOptions(Date).ComparisonUtcOffsetMinutes);
-        Assert.Throws<DomainValidationException>((configuration with { BackupClockUtcOffsetMinutes = 900 }).Validate);
-        Assert.Throws<DomainValidationException>((configuration with { BackupWarnings = new(0, 10, 5) }).Validate);
-        Assert.Throws<DomainValidationException>((configuration with { BackupWarnings = new(1, 10, 0) }).Validate);
+        Assert.Throws<DomainValidationException>((Example() with { BackupWarnings = new(0, 10, 5) }).Validate);
+        Assert.Throws<DomainValidationException>((Example() with { BackupWarnings = new(1, 10, 0) }).Validate);
     }
 
     [Fact]

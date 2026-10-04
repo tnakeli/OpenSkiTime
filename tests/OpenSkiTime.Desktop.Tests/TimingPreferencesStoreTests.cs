@@ -18,7 +18,7 @@ public sealed class TimingPreferencesStoreTests : IDisposable
             new(TimingRole.Start, timy, 0), new(TimingRole.Finish, timy, 1),
             new(TimingRole.Intermediate(1), timy, 2), new(TimingRole.Intermediate(2), timy, 3), new(TimingRole.Intermediate(3), timy, 4),
             new(TimingRole.BackupStart, mt1, 0), new(TimingRole.BackupFinish, mt1, 1)])
-        { BackupWarnings = new(2, 15, 7), BackupClockUtcOffsetMinutes = 180 };
+        { BackupWarnings = new(2, 15, 7) };
         new TimingPreferencesStore(_root).Save(saved);
         var loaded = new TimingPreferencesStore(_root).LoadWithNotes()!;
         Assert.Empty(loaded.MigrationNotes);
@@ -26,7 +26,6 @@ public sealed class TimingPreferencesStoreTests : IDisposable
         Assert.Equal(saved.Assignments.OrderBy(x => x.Role.Kind).ThenBy(x => x.Role.Index),
             c.Assignments.OrderBy(x => x.Role.Kind).ThenBy(x => x.Role.Index));
         Assert.Equal(new BackupClockWarnings(2, 15, 7), c.BackupWarnings);
-        Assert.Equal(180, c.BackupClockUtcOffsetMinutes);
         Assert.Equal([2, 3, 4], c.Intermediates.Select(x => x.Channel));
         Assert.Equal("COM4", c.BackupStart!.Connection.Port);
         Assert.DoesNotContain("Password", File.ReadAllText(Path.Combine(_root, "timing-roles.json")), StringComparison.OrdinalIgnoreCase);
@@ -66,13 +65,12 @@ public sealed class TimingPreferencesStoreTests : IDisposable
     }
 
     [Fact]
-    public void LegacyWarningThresholdsAndOffsetMigrateWithoutAPrimarySource()
+    public void LegacyWarningThresholdsMigrateWithoutAPrimarySource()
     {
         File.WriteAllText(Path.Combine(_root, "auxiliary-settings.json"),
             """{"Source":"Unknown","Port":"","UsbId":"","Baud":38400,"StartChannel":0,"FinishChannel":1,"Firmware":"","StartDevice":"","FinishDevice":"","Username":"","BackupStartWarningMilliseconds":3,"BackupFinishWarningMilliseconds":12,"BackupMissingGraceSeconds":9,"AuxiliaryClockOffsetMinutes":120}""");
         var c = new TimingPreferencesStore(_root).Load()!;
         Assert.Equal(new BackupClockWarnings(3, 12, 9), c.BackupWarnings);
-        Assert.Equal(120, c.BackupClockUtcOffsetMinutes);
         Assert.False(c.HasBackupClock);
         Assert.False(c.HasPrimary);
     }

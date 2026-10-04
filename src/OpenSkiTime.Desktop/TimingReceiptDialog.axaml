@@ -54,15 +54,12 @@
          <StackPanel Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="USERNAME" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceAlgeUsername}"/></StackPanel>
          <StackPanel Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="PASSWORD" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceAlgePassword}" PasswordChar="•" Watermark="Empty = saved"/></StackPanel>
          <CheckBox Content="Remember password" IsChecked="{Binding ReportDeviceRememberPassword}" IsVisible="{Binding IsReportDeviceAlge}" VerticalAlignment="Bottom" Margin="0,0,8,4"/>
-         <StackPanel Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="RECEIVE FROM (UTC)" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceFromUtc}" Watermark="YYYY-MM-DD HH:mm"/></StackPanel>
          <StackPanel Name="ReportDeviceReplayFields" Width="330" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceReplay}"><TextBlock Text="RAW ALGE ASCII FILE" Classes="eyebrow"/>
           <Grid ColumnDefinitions="*,Auto"><TextBox Name="ReportDeviceReplayPathBox" Text="{Binding ReportDeviceReplayPath}"/><Button Grid.Column="1" Content="Browse…" Click="BrowseReplay_Click" Margin="4,0,0,0"/></Grid></StackPanel>
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceB}"><TextBlock Text="START CH" Classes="eyebrow"/><ComboBox Name="ReportDeviceStartChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceStartChannel}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceB}"><TextBlock Text="FINISH CH" Classes="eyebrow"/><ComboBox Name="ReportDeviceFinishChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceFinishChannel}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceHand}"><TextBlock Text="CHANNEL" Classes="eyebrow"/><ComboBox Name="ReportDeviceHandChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceHandChannel}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="120" Margin="0,0,8,4"><TextBlock Text="DEVICE DATE" Classes="eyebrow"/><TextBox Name="ReportDeviceDateBox" Text="{Binding ReportDeviceDate}" Watermark="YYYY-MM-DD"/></StackPanel>
-         <StackPanel Width="190" Margin="0,0,8,4"><TextBlock Text="LOCAL CLOCK UTC OFFSET (MIN)" Classes="eyebrow"/><TextBox Name="ReportDeviceUtcOffsetBox" Text="{Binding ReportDeviceUtcOffset}" Watermark="Blank = same clock basis"/>
-          <ToolTip.Tip><TextBlock MaxWidth="360" TextWrapping="Wrap" Text="Needed only when the device and the A timestamps use different clock bases (ALGE Results UTC versus a local device clock). Local clock minus UTC in whole minutes, for example 180. It changes only the comparison values; original device timestamps are kept."/></ToolTip.Tip></StackPanel>
         </WrapPanel>
        </ScrollViewer>
        <WrapPanel Grid.Row="1" Margin="0,4,0,4">

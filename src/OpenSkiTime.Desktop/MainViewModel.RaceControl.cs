@@ -108,7 +108,7 @@ public sealed partial class MainViewModel
                 && int.TryParse(position[13..], out var number) && number >= 1 && number <= TimingCheckpoints.Count => number + 1,
             _ => throw new DomainValidationException("Choose a configured timing position.")
         };
-        if (channel >= 2 && channel - 2 >= (timing.LastCaptureOptions?.IntermediateChannels.Length ?? 0))
+        if (channel >= 2 && !timing.ActiveCaptureOptions.Any(x => x.Channel(channel) is not null))
         { throw new DomainValidationException($"Configure the channel for intermediate {channel - 1} in Settings, then reconnect timing."); }
         await timing.ExpectAsync(channel, null, !timing.IsHeld(channel));
         RefreshTiming();

@@ -8,10 +8,12 @@ namespace OpenSkiTime.Desktop;
 // Used by primary capture, live B Clock and operator-triggered device reads; no source has a parallel implementation.
 internal static class TimingSourceFactory
 {
+    // algePassword returns the password for an ALGE Results username (typed or remembered); it is only called for ALGE Results.
     public static ITimingSource Create(TimingConnection connection, CaptureOptions options, HttpClient http,
-        string algePassword, bool rememberAlgePassword, Func<SimulatorTimingSource>? simulator = null)
+        Func<string, string> algePassword, Func<SimulatorTimingSource>? simulator = null)
     {
-        ArgumentNullException.ThrowIfNull(connection); ArgumentNullException.ThrowIfNull(options); ArgumentNullException.ThrowIfNull(http);
+        ArgumentNullException.ThrowIfNull(connection); ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(http); ArgumentNullException.ThrowIfNull(algePassword);
         switch (connection.Source)
         {
             case TimingSourceType.TimyUsb: return new TimyUsbSource(connection.UsbId.Trim());
@@ -20,11 +22,9 @@ internal static class TimingSourceFactory
                 return new SerialTimingSource(connection.Port.Trim(), connection.BaudRate);
             case TimingSourceType.AlgeResults:
                 var username = connection.AlgeUsername.Trim();
-                var credential = new WindowsCredentialStore("OpenSkiTime.ALGE.Results.Password:" + username);
-                var password = algePassword;
-                if (password.Length == 0 && OperatingSystem.IsWindows()) { password = credential.Read() ?? ""; }
-                if (username.Length == 0 || password.Length == 0) { throw new DomainValidationException("Enter the ALGE Results username and password."); }
-                if (OperatingSystem.IsWindows()) { if (rememberAlgePassword) { credential.Save(password); } else { credential.Remove(); } }
+                if (username.Length == 0) { throw new DomainValidationException("Enter the ALGE Results username for every ALGE Results timing role."); }
+                var password = algePassword(username);
+                if (password.Length == 0) { throw new DomainValidationException($"Enter the ALGE Results password for {username}."); }
                 return new AlgeResultsSource(http, username, password, options);
             case TimingSourceType.Simulator:
                 return simulator?.Invoke() ?? throw new DomainValidationException("The simulator is available for primary training capture only.");

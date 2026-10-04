@@ -15,7 +15,6 @@ public static class LiveSnapshotMapper
         {
             if (key is null || !observations.TryGetValue(key, out var o) || o.DeviceTicks is not { } ticks) { return (null, null); }
             var local = new DateTime(ticks,DateTimeKind.Unspecified); // The decoder has already supplied the date and midnight rollover.
-            if (o.ClockId == "UTC") { return (new DateTimeOffset(local,TimeSpan.Zero),ticks); }
             if (zone.IsInvalidTime(local) || zone.IsAmbiguousTime(local))
             { throw new LiveValidationException("Device timestamp needs an unambiguous race time zone. Review live timing clock settings."); }
             return (new DateTimeOffset(local, zone.GetUtcOffset(local)), ticks);

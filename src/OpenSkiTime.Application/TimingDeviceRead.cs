@@ -114,7 +114,7 @@ public sealed class TimingDeviceRead : IAsyncDisposable
     }
 }
 
-public sealed record DeviceEvidenceSet(IReadOnlyList<EvidenceTimestamp> Evidence, IReadOnlyList<string> Warnings, int ShiftedCount);
+public sealed record DeviceEvidenceSet(IReadOnlyList<EvidenceTimestamp> Evidence);
 
 // Converts decoded device impulses to the evidence representation shared with receipt OCR.
 public static class DeviceEvidence
@@ -128,25 +128,13 @@ public static class DeviceEvidence
         return $"{KeyPrefix}:{sourceLabel}:{endpoint}";
     }
 
-    // The explicit UTC offset is applied through AuxiliaryClockComparison to derived comparison values only.
     // Full device precision is retained; the raw line text remains the evidence text for review.
-    public static DeviceEvidenceSet ToEvidence(IReadOnlyList<AuxiliaryTimingObservation> observations, bool targetUsesUtc, string provenance)
+    public static DeviceEvidenceSet ToEvidence(IReadOnlyList<AuxiliaryTimingObservation> observations, string provenance)
     {
         ArgumentNullException.ThrowIfNull(observations); ArgumentNullException.ThrowIfNull(provenance);
-        var normalized = AuxiliaryClockComparison.Normalize(targetUsesUtc, observations);
-        var original = observations.Select(x => x.Observation).Where(x => x.DeviceTicks is not null)
-            .GroupBy(x => x.Key, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.First().DeviceTicks!.Value, StringComparer.Ordinal);
-        var shifted = 0;
-        var evidence = normalized.Observations.Select(x =>
-        {
-            var moved = original.TryGetValue(x.Key, out var ticks) && ticks != x.DeviceTicks;
-            if (moved) { shifted++; }
-            var offset = moved ? (x.DeviceTicks!.Value - ticks) / TimeSpan.TicksPerMinute : 0;
-            var text = moved ? $"{x.Message} · compared with explicit UTC offset {(offset >= 0 ? "+" : "")}{offset} min" : x.Message;
-            return new EvidenceTimestamp($"{provenance}:{x.Key}", x.DeviceTicks!.Value, x.Precision, x.Channel, text);
-        }).ToArray();
-        return new(evidence, normalized.Warnings.Count == 0 ? [] :
-            ["Device and A timestamps use different clock bases (UTC and local clock). Enter the local clock UTC offset and read again, or enter verified values manually."],
-            shifted);
+        var evidence = observations.Select(x => x.Observation)
+            .Where(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null)
+            .Select(x => new EvidenceTimestamp($"{provenance}:{x.Key}", x.DeviceTicks!.Value, x.Precision, x.Channel, x.Message)).ToArray();
+        return new(evidence);
     }
 }

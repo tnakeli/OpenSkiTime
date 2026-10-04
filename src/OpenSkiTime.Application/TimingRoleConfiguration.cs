@@ -142,9 +142,6 @@ public sealed record BackupClockWarnings(int StartWarningMilliseconds = 1, int F
 public sealed record TimingRoleConfiguration(IReadOnlyList<TimingSourceAssignment> Assignments)
 {
     public BackupClockWarnings BackupWarnings { get; init; } = new();
-    // Explicit local-clock UTC offset (minutes) for comparing a UTC B Clock (ALGE Results) with a local A clock, or vice versa.
-    // Recorded with each B capture; original timestamps are never rewritten.
-    public int? BackupClockUtcOffsetMinutes { get; init; }
 
     public static TimingRoleConfiguration Empty { get; } = new([]);
 
@@ -170,8 +167,6 @@ public sealed record TimingRoleConfiguration(IReadOnlyList<TimingSourceAssignmen
     {
         if (Assignments is null) { throw new DomainValidationException("Timing role assignments are missing."); }
         BackupWarnings.Validate();
-        if (BackupClockUtcOffsetMinutes is < -840 or > 840)
-        { throw new DomainValidationException("B Clock UTC offset must be between -840 and 840 minutes, or blank."); }
         if (Assignments.Select(x => x.Role).Distinct().Count() != Assignments.Count)
         { throw new DomainValidationException("Each timing role can be assigned only once."); }
         foreach (var assignment in Assignments)
@@ -190,52 +185,92 @@ public sealed record TimingRoleConfiguration(IReadOnlyList<TimingSourceAssignmen
         { throw new DomainValidationException("Assign both Start and Finish."); }
         if (HasBackupClock && (BackupStart is null || BackupFinish is null))
         { throw new DomainValidationException("Assign both B Clock Start and B Clock Finish, or leave B Clock unconfigured."); }
-        if (HasPrimary) { _ = PrimaryCaptureOptions(DateOnly.FromDayNumber(0)); }
-        if (HasBackupClock) { _ = BackupCaptureOptions(DateOnly.FromDayNumber(0)); }
+        if (HasPrimary) { _ = PrimaryCapture(DateOnly.FromDayNumber(0), clockGroup: "validation"); }
+        if (HasBackupClock) { _ = BackupCapture(DateOnly.FromDayNumber(0), clockGroup: "validation"); }
         if (HasPrimary && HasBackupClock) { ValidateIndependentBackup(); }
     }
 
-    // A single capture source reads all primary roles. Roles on different physical connections are a technical restriction
-    // of the current A capture pipeline (one ordered journal and clock context per capture), so they are rejected explicitly.
-    public CaptureOptions PrimaryCaptureOptions(DateOnly deviceDate, DateTimeOffset? fromUtc = null)
+    // One capture source per physical connection. Roles may use any combination of devices and source types.
+    // When more than one connection is used, the sessions share an explicit synchronized clock group so elapsed times
+    // may span devices. All devices are set to the same clock time.
+    public IReadOnlyList<TimingCaptureSource> PrimaryCapture(DateOnly deviceDate, DateTimeOffset? fromUtc = null, string? clockGroup = null)
     {
         var start = Start ?? throw new DomainValidationException("Assign the Start timing role in Settings.");
         var finish = Finish ?? throw new DomainValidationException("Assign the Finish timing role in Settings.");
         var roles = new[] { start, finish }.Concat(Intermediates).ToArray();
-        var connection = SharedConnection(roles, "Primary timing");
-        if (connection.Source == TimingSourceType.AlgeResults && Intermediates.Count > 0)
-        { throw new DomainValidationException("ALGE Results supports start/finish only. Use USB/serial for intermediate capture."); }
-        var options = Compile(connection, start, finish, deviceDate, fromUtc)
-            with { IntermediateChannels = Intermediates.Select(x => x.Channel).ToArray() };
-        options.Validate();
-        return options;
+        return Capture(roles, "Primary timing", deviceDate, fromUtc, clockGroup,
+            legacy: connection => connection.Source != TimingSourceType.AlgeResults || Intermediates.Count == 0);
     }
 
-    public CaptureOptions BackupCaptureOptions(DateOnly deviceDate, DateTimeOffset? fromUtc = null)
+    public IReadOnlyList<TimingCaptureSource> BackupCapture(DateOnly deviceDate, DateTimeOffset? fromUtc = null, string? clockGroup = null)
     {
         var start = BackupStart ?? throw new DomainValidationException("B Clock is not configured.");
         var finish = BackupFinish ?? throw new DomainValidationException("B Clock is not configured.");
-        var connection = SharedConnection([start, finish], "B Clock");
-        var options = Compile(connection, start, finish, deviceDate, fromUtc) with { ComparisonUtcOffsetMinutes = BackupClockUtcOffsetMinutes };
-        AuxiliaryTimingValidation.Validate(AuxiliaryTimingRole.B, options);
-        return options;
+        var sources = Capture([start, finish], "B Clock", deviceDate, fromUtc, clockGroup, legacy: _ => true);
+        foreach (var source in sources) { AuxiliaryTimingValidation.Validate(AuxiliaryTimingRole.B, source.Options); }
+        return sources;
     }
 
-    private static TimingConnection SharedConnection(TimingSourceAssignment[] roles, string group)
+    private static TimingCaptureSource[] Capture(TimingSourceAssignment[] roles, string group, DateOnly deviceDate,
+        DateTimeOffset? fromUtc, string? clockGroup, Func<TimingConnection, bool> legacy)
     {
-        var first = roles[0].Connection;
-        foreach (var other in roles.Skip(1))
+        var connections = roles.GroupBy(x => x.Connection.ConnectionKey, StringComparer.Ordinal).ToArray();
+        if (connections.Select(x => x.First().Connection.Source is TimingSourceType.Simulator or TimingSourceType.ReplayFile).Distinct().Count() > 1)
+        { throw new DomainValidationException($"{group}: training sources (Simulator, Replay file) and real devices cannot be mixed."); }
+        var timys = connections.Where(x => x.First().Connection.Source == TimingSourceType.TimyUsb).ToArray();
+        if (timys.Length > 1 && timys.Any(x => x.First().Connection.UsbId.Trim().Length == 0))
+        { throw new DomainValidationException($"{group}: with several Timy USB devices, enter an explicit USB device ID for each."); }
+        var ports = connections.Where(x => x.First().Connection.Source == TimingSourceType.Mt1Serial)
+            .Select(x => x.First().Connection.Port.Trim().ToUpperInvariant()).ToArray();
+        if (ports.Distinct().Count() != ports.Length)
+        { throw new DomainValidationException($"{group}: a serial port can be used by one connection only (same baud rate for all its roles)."); }
+        if (roles.Where(x => x.Connection.Source == TimingSourceType.AlgeResults).GroupBy(x => (x.Connection.AlgeDeviceId.Trim(), x.Channel)).Any(x => x.Count() > 1))
+        { throw new DomainValidationException($"{group}: each ALGE Results device channel can serve one role only."); }
+        if (connections.Length == 1)
         {
-            if (other.Connection.Source != first.Source || other.Connection.ConnectionKey != first.ConnectionKey
-                || (first.Source != TimingSourceType.AlgeResults && other.Connection with { AlgeDeviceId = "" } != first with { AlgeDeviceId = "" }))
+            var only = connections[0].ToArray();
+            var connection = only[0].Connection;
+            if (legacy(connection) && only.Length >= 2 && only[0].Role.Kind is TimingRoleKind.Start or TimingRoleKind.BackupStart)
             {
-                throw new DomainValidationException($"{group}: {roles[0].Role} and {other.Role} use different connections. "
-                    + "All roles in this group must currently share one device connection (use different channels). "
-                    + "ALGE Results may use different device IDs on one account.");
+                // A single connection keeps the original session mapping, so existing behavior and files are unchanged.
+                var options = Compile(connection, only[0], only[1], deviceDate, fromUtc)
+                    with { IntermediateChannels = only.Skip(2).Select(x => x.Channel).ToArray() };
+                options.Validate();
+                return [new(connection, options, only.Select(x => x.Role).ToArray())];
             }
         }
-        return first;
+        var shared = clockGroup ?? Guid.NewGuid().ToString("N");
+        var result = new List<TimingCaptureSource>();
+        foreach (var connectionRoles in connections)
+        {
+            var items = connectionRoles.ToArray();
+            var connection = items[0].Connection;
+            var alge = connection.Source == TimingSourceType.AlgeResults;
+            var routes = items.Select(x => new CaptureChannelRoute(x.Channel, Position(x.Role), alge ? x.Connection.AlgeDeviceId.Trim() : null)).ToArray();
+            if (routes.Select(x => (x.Channel, x.DeviceId)).Distinct().Count() != routes.Length)
+            {
+                throw new DomainValidationException($"{group}: {string.Join(", ", items.Select(x => x.Role.Label))} use the same channel on "
+                    + $"{connection.SourceLabel} ({connection.Summary}). Use a different channel for each role on one device.");
+            }
+            var endpoint = alge ? string.Join(";", routes.Select(x => $"{x.DeviceId}/{x.Channel}")) : connection.Endpoint;
+            var options = new CaptureOptions(connection.SourceLabel, endpoint, deviceDate,
+                Simulation: connection.Source is TimingSourceType.Simulator or TimingSourceType.ReplayFile, Firmware: connection.Firmware,
+                FromUtc: alge ? fromUtc : null)
+            {
+                BaudRate = connection.BaudRate, Routes = routes, ClockGroup = shared
+            };
+            options.Validate();
+            result.Add(new(connection, options, items.Select(x => x.Role).ToArray()));
+        }
+        return result.ToArray();
     }
+
+    public static int Position(TimingRole role) => role.Kind switch
+    {
+        TimingRoleKind.Start or TimingRoleKind.BackupStart => 0,
+        TimingRoleKind.Finish or TimingRoleKind.BackupFinish => 1,
+        _ => role.Index + 1
+    };
 
     private static CaptureOptions Compile(TimingConnection connection, TimingSourceAssignment start, TimingSourceAssignment finish,
         DateOnly deviceDate, DateTimeOffset? fromUtc)
@@ -253,41 +288,57 @@ public sealed record TimingRoleConfiguration(IReadOnlyList<TimingSourceAssignmen
         return options;
     }
 
+    // Primary timing and B Clock must be physically independent devices.
     private void ValidateIndependentBackup()
     {
-        var a = Start!.Connection; var b = BackupStart!.Connection;
-        if (a.Source == TimingSourceType.TimyUsb && b.Source == TimingSourceType.TimyUsb
-            && (a.UsbId.Trim().Length == 0 || b.UsbId.Trim().Length == 0 || string.Equals(a.UsbId.Trim(), b.UsbId.Trim(), StringComparison.OrdinalIgnoreCase)))
-        { throw new DomainValidationException("For two Timy USB clocks, enter separate explicit USB device IDs for primary timing and B Clock."); }
-        if (a.Source == TimingSourceType.Mt1Serial && b.Source == TimingSourceType.Mt1Serial
-            && string.Equals(a.Port.Trim(), b.Port.Trim(), StringComparison.OrdinalIgnoreCase))
-        { throw new DomainValidationException("Primary timing and B Clock cannot use the same serial port."); }
-        if (a.Source == TimingSourceType.AlgeResults && b.Source == TimingSourceType.AlgeResults)
+        var primary = Assignments.Where(x => x.Role.IsPrimary).Select(x => x.Connection).ToArray();
+        var backup = Assignments.Where(x => x.Role.IsBackup).Select(x => x.Connection).ToArray();
+        foreach (var a in primary)
         {
-            var primary = new[] { Start, Finish }.Select(x => x!.Connection.AlgeDeviceId.Trim()).Where(x => x.Length != 0);
-            var backup = new[] { BackupStart, BackupFinish }.Select(x => x!.Connection.AlgeDeviceId.Trim()).Where(x => x.Length != 0);
-            if (primary.Intersect(backup, StringComparer.Ordinal).Any())
-            { throw new DomainValidationException("Primary timing and B Clock cannot share an ALGE Results device ID."); }
+            foreach (var b in backup)
+            {
+                if (a.Source == TimingSourceType.TimyUsb && b.Source == TimingSourceType.TimyUsb
+                    && (a.UsbId.Trim().Length == 0 || b.UsbId.Trim().Length == 0 || string.Equals(a.UsbId.Trim(), b.UsbId.Trim(), StringComparison.OrdinalIgnoreCase)))
+                { throw new DomainValidationException("For Timy USB clocks in both primary timing and B Clock, enter separate explicit USB device IDs."); }
+                if (a.Source == TimingSourceType.Mt1Serial && b.Source == TimingSourceType.Mt1Serial
+                    && string.Equals(a.Port.Trim(), b.Port.Trim(), StringComparison.OrdinalIgnoreCase))
+                { throw new DomainValidationException("Primary timing and B Clock cannot use the same serial port."); }
+                if (a.Source == TimingSourceType.AlgeResults && b.Source == TimingSourceType.AlgeResults
+                    && a.AlgeDeviceId.Trim().Length != 0 && a.AlgeDeviceId.Trim() == b.AlgeDeviceId.Trim())
+                { throw new DomainValidationException("Primary timing and B Clock cannot share an ALGE Results device ID."); }
+            }
         }
     }
 
-    // Reconstructs role assignments from a capture session's saved options, for files opened without saved preferences.
-    public static TimingRoleConfiguration FromCaptureOptions(CaptureOptions options)
+    // Reconstructs role assignments from the saved options of one capture start (one or several device sessions),
+    // for files opened without saved preferences.
+    public static TimingRoleConfiguration FromCaptureOptions(params CaptureOptions[] sessions)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        var source = TimingSourceTypes.Parse(options.Device) ?? throw new DomainValidationException("Unknown saved timing source.");
-        var connection = new TimingConnection(source)
+        ArgumentNullException.ThrowIfNull(sessions);
+        var assignments = new List<TimingSourceAssignment>();
+        foreach (var options in sessions)
         {
-            UsbId = source == TimingSourceType.TimyUsb && options.Endpoint.StartsWith("Timy USB", StringComparison.Ordinal) ? options.Endpoint[8..].Trim() : "",
-            Port = source == TimingSourceType.Mt1Serial ? options.Endpoint : "",
-            BaudRate = options.BaudRate, Firmware = options.Firmware
-        };
-        var assignments = new List<TimingSourceAssignment>
-        {
-            new(TimingRole.Start, connection with { AlgeDeviceId = options.StartDeviceId ?? "" }, options.StartChannel),
-            new(TimingRole.Finish, connection with { AlgeDeviceId = options.FinishDeviceId ?? "" }, options.FinishChannel)
-        };
-        assignments.AddRange(options.IntermediateChannels.Select((channel, i) => new TimingSourceAssignment(TimingRole.Intermediate(i + 1), connection, channel)));
+            var source = TimingSourceTypes.Parse(options.Device) ?? throw new DomainValidationException("Unknown saved timing source.");
+            var connection = new TimingConnection(source)
+            {
+                UsbId = source == TimingSourceType.TimyUsb && options.Endpoint.StartsWith("Timy USB", StringComparison.Ordinal) ? options.Endpoint[8..].Trim() : "",
+                Port = source == TimingSourceType.Mt1Serial ? options.Endpoint : "",
+                BaudRate = options.BaudRate, Firmware = options.Firmware
+            };
+            if (options.Routes is { } routes)
+            {
+                assignments.AddRange(routes.Select(x => new TimingSourceAssignment(
+                    x.Position switch { 0 => TimingRole.Start, 1 => TimingRole.Finish, _ => TimingRole.Intermediate(x.Position - 1) },
+                    connection with { AlgeDeviceId = x.DeviceId ?? "" }, x.Channel)));
+                continue;
+            }
+            assignments.Add(new(TimingRole.Start, connection with { AlgeDeviceId = options.StartDeviceId ?? "" }, options.StartChannel));
+            assignments.Add(new(TimingRole.Finish, connection with { AlgeDeviceId = options.FinishDeviceId ?? "" }, options.FinishChannel));
+            assignments.AddRange(options.IntermediateChannels.Select((channel, i) => new TimingSourceAssignment(TimingRole.Intermediate(i + 1), connection, channel)));
+        }
         return new(assignments);
     }
 }
+
+// One physical connection of a capture: the existing driver configuration, its compiled session options and served roles.
+public sealed record TimingCaptureSource(TimingConnection Connection, CaptureOptions Options, IReadOnlyList<TimingRole> Roles);
