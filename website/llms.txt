@@ -1,0 +1,29 @@
+# OpenSkiTime
+
+> OpenSkiTime is free, open-source (MIT) timing and results software for alpine ski races. It is a Windows desktop application for the race office: competitor registration, start lists, timing from ALGE devices, classification, race points and FIS penalty, FIS XML results, the alpine timing report, PDF reports and live results in the browser. Local race operation works offline.
+
+Key facts:
+
+- Category: alpine ski race timing software / ski racing results software
+- Platform: Windows 11 (x64); built with .NET 10 and Avalonia
+- Price and license: free, MIT license, source code on GitHub
+- Timing input: ALGE Timy (USB), ALGE MT1 (serial) and ALGE Results sources; optional B timing and hand-timing evidence
+- FIS: points-list lookup, start list draw, race points and FIS penalty calculation, TD-approved FIS XML results and timing report; FIS submission is currently test mode only
+- Live results: self-hosted live timing server or the hosted live.openskiti.me service
+- Status: pre-release development; rehearse with the simulator and independent backup timing before use at a race
+- Languages: user interface and documentation in English; Finnish overview page available
+
+## Website
+
+- [Home](https://openskiti.me/): features, integrations and FAQ
+- [Suomeksi](https://openskiti.me/fi/): Finnish overview and FAQ
+- [Download](https://openskiti.me/download/): Windows installer, requirements and release notes
+- [Getting started](https://openskiti.me/guide/): preparing, timing and publishing a first race
+- [Privacy](https://openskiti.me/privacy/): local race data and optional online integrations
+- [Code signing policy](https://openskiti.me/code-signing/): how releases are built, approved and signed
+
+## Source and documentation
+
+- [GitHub repository](https://github.com/tnakeli/OpenSkiTime): source code, issues and releases
+- [README](https://github.com/tnakeli/OpenSkiTime/blob/master/README.md): full race-office workflow with screenshots
+- [Releases](https://github.com/tnakeli/OpenSkiTime/releases): Windows installers, SBOM and checksums
