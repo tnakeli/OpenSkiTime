@@ -61,24 +61,30 @@ public sealed partial class MainViewModel
         { row.Clock.Marker = row.Bib == timing?.ArmedFinish ? "▶" : ""; }
         ExpectedFinishTime = OnCourseRows.FirstOrDefault(x => x.Bib == timing?.ArmedFinish)?.Clock.Time ?? "—";
     }
-
+    // Interim bridge: maps role assignments onto the existing single-source fields. Replaced by the role-based Settings UI.
     public void LoadTimingPreferences()
     {
-        if (timingPreferencesStore?.Load() is not { } p) { return; }
-        if (TimingSources.Contains(p.Source)) { TimingSource = p.Source; }
-        TimingPort = p.Port; TimyDeviceId = p.UsbId; TimingBaud = p.Baud;
-        TimingStartChannel = p.StartChannel; TimingFinishChannel = p.FinishChannel;
-        TimingIntermediateChannels = p.IntermediateChannels; TimingFirmware = p.Firmware;
+        if (timingPreferencesStore?.Load() is not { Start: { } start } p) { return; }
+        var c = start.Connection;
+        TimingSource = c.SourceLabel;
+        TimingPort = c.Port; TimyDeviceId = c.UsbId; TimingBaud = c.BaudRate; TimingFirmware = c.Firmware;
+        TimingStartChannel = start.Channel; TimingFinishChannel = p.Finish?.Channel ?? 1;
+        TimingIntermediateChannels = string.Join(",", p.Intermediates.Select(x => x.Channel));
     }
 
     [RelayCommand] private async Task SaveTimingPreferencesAsync() => await GuardAsync(() =>
     {
         if (!CanChangeTimingDevice) { throw new DomainValidationException("Disconnect capture before changing settings."); }
-        new Application.CaptureOptions(TimingSource, "Settings", DateOnly.FromDateTime(DateTime.Today), TimingStartChannel, TimingFinishChannel,
-            StartDeviceId: IsAlgeResults ? Mt1StartDevice : null, FinishDeviceId: IsAlgeResults ? Mt1FinishDevice : null)
-            { BaudRate = TimingBaud, IntermediateChannels = ReadIntermediateChannels() }.Validate();
-        timingPreferencesStore?.Save(new(TimingSource, TimingPort, TimyDeviceId, TimingBaud,
-            TimingStartChannel, TimingFinishChannel, TimingIntermediateChannels, TimingFirmware));
+        var connection = new TimingConnection(TimingSourceTypes.Parse(TimingSource) ?? throw new DomainValidationException("Choose a timing source."))
+        { Port = TimingPort, UsbId = TimyDeviceId, BaudRate = TimingBaud, Firmware = TimingFirmware, AlgeUsername = Mt1Username };
+        var assignments = new List<TimingSourceAssignment>
+        {
+            new(TimingRole.Start, connection with { AlgeDeviceId = Mt1StartDevice }, TimingStartChannel),
+            new(TimingRole.Finish, connection with { AlgeDeviceId = Mt1FinishDevice }, TimingFinishChannel)
+        };
+        assignments.AddRange(ReadIntermediateChannels().Select((channel, i) => new TimingSourceAssignment(TimingRole.Intermediate(i + 1), connection, channel)));
+        var existing = timingPreferencesStore?.Load() ?? TimingRoleConfiguration.Empty;
+        timingPreferencesStore?.Save(existing with { Assignments = existing.Assignments.Where(x => x.Role.IsBackup).Concat(assignments).ToArray() });
         SetStatus("Timing settings saved on this computer.");
         return Task.CompletedTask;
     });
