@@ -84,6 +84,58 @@ public sealed class StandaloneE2ETests
         Assert.Equal(HttpStatusCode.NotFound,(await http.GetAsync($"api/sessions/{session.SessionId}/state")).StatusCode);
     }
     [Fact]
+    public async Task IdleCloudPublisherRestoresEveryRunAfterServerLosesRamStateAndViewersRewatch()
+    {
+        await using var server = new ServerProcess(); await server.Start();
+        await using var publisher = new PublisherProcess();
+        var state = SyntheticRace.Create(6);
+        state = SyntheticRace.Update(state,1,LiveStatus.OnCourse); state = SyntheticRace.Update(state,1,LiveStatus.OnCourse,split:1);
+        state = SyntheticRace.Update(state,1,LiveStatus.Finished,6012); state = SyntheticRace.Update(state,2,LiveStatus.DNF);
+        int[] order = [6,5,4,3,1];
+        var second = new LiveRun(2,state.UpdatedAt,order,[.. order.Select(b => new LiveResult(b,LiveStatus.Ready,null,null,null,state.UpdatedAt))]);
+        state = SyntheticRace.Update(state with { CurrentRun = 2, Runs = [.. state.Runs, second] },6,LiveStatus.Finished,5899);
+        publisher.Offer(state);
+        var options = new PublisherOptions(PublisherKind.Cloud, server.Endpoint, PublisherKey: server.PublisherKey);
+        await publisher.StartAsync(ProcessFixture.Artifact("Worker"),options,ProcessFixture.Host);
+        await ProcessFixture.Until(() => publisher.Health.State == PublisherState.Running && publisher.Health.LastEvent == state.UpdatedAt);
+        var session = publisher.ResumeSession!;
+        using var http = new HttpClient { BaseAddress = new(server.Endpoint), Timeout = TimeSpan.FromSeconds(3) };
+        var before = await Read(http,session);
+        // Restart right after a health tick, as a new revision or scale-to-zero does: same signing key, empty RAM, no new race data offered.
+        var tick = publisher.Health.LastConnected; await ProcessFixture.Until(() => publisher.Health.LastConnected != tick);
+        var observed = new System.Collections.Concurrent.ConcurrentBag<PublisherState>();
+        using var watching = new CancellationTokenSource();
+        var monitor = Task.Run(async () => { while (!watching.IsCancellationRequested) { observed.Add(publisher.Health.State); await Task.Delay(20); } });
+        var restart = System.Diagnostics.Stopwatch.StartNew();
+        await server.Kill(); await server.Start(); restart.Stop();
+        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+        {
+            while (true)
+            {
+                using var response = await http.GetAsync($"api/sessions/{session.SessionId}/state",timeout.Token);
+                if (response.IsSuccessStatusCode) { break; }
+                Assert.Equal(HttpStatusCode.NotFound,response.StatusCode); await Task.Delay(50,timeout.Token);
+            }
+        }
+        await watching.CancelAsync(); await monitor;
+        var restored = await Read(http,session);
+        // All runs, competitors, results, intermediates and source ticks return; only the wire revision may differ.
+        Assert.Equal(JsonSerializer.Serialize(before with { Version = 0 },LiveJson.Options),JsonSerializer.Serialize(restored with { Version = 0 },LiveJson.Options));
+        Assert.Equal(2,restored.Runs.Length);
+        Assert.Equal(session.SessionId,publisher.ResumeSession!.SessionId);
+        Assert.Equal(PublisherState.Running,publisher.Health.State); Assert.Null(publisher.Health.Error);
+        Assert.DoesNotContain(PublisherState.Error,observed);
+        // A restart completed before the next five-second health check is seen as missing state, which is restored without error backoff.
+        if (restart.Elapsed < TimeSpan.FromSeconds(4)) { Assert.DoesNotContain(PublisherState.Reconnecting,observed); }
+        using var socket = await Watch(http,session.SessionId);
+        var viewed = await ReceiveState(socket);
+        Assert.Equal(5899,viewed!.Runs.Single(r => r.Number == 2).Results.Single(r => r.Bib == 6).Hundredths);
+        Assert.Equal(6012,viewed.Runs.Single(r => r.Number == 1).Results.Single(r => r.Bib == 1).Hundredths);
+        // Restored sessions keep accepting incremental events with contiguous revisions.
+        state = SyntheticRace.Update(state,5,LiveStatus.OnCourse); publisher.Offer(state);
+        Assert.Equal(LiveStatus.OnCourse,(await ReceiveState(socket))!.Runs.Single(r => r.Number == 2).Results.Single(r => r.Bib == 5).Status);
+    }
+    [Fact]
     public async Task ManagedLocalProcessWorksOfflineAndCoalescesBoundedSnapshots()
     {
         await using var publisher = new PublisherProcess();
