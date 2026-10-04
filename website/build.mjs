@@ -10,11 +10,12 @@ const pages = [
   ['download', '/download/', 'Download OpenSkiTime', 'Windows downloads, release notes and installation requirements for OpenSkiTime.'],
   ['guide', '/guide/', 'Your first race', 'Get started with event series, competitors, start lists, timing and optional live publishing.'],
   ['privacy', '/privacy/', 'Privacy & your race data', 'How local race data and optional online integrations work in OpenSkiTime.'],
+  ['code-signing', '/code-signing/', 'Code signing policy', 'How OpenSkiTime Windows releases are built, approved and signed.'],
   ['404', '/404.html', 'Page not found', 'Find your way back to OpenSkiTime.']
 ];
 const header = `<a class="skip" href="#main">Skip to content</a>
 <header class="site-header"><div class="shell header-inner"><a class="brand" href="/" aria-label="OpenSkiTime home"><img src="/favicon.svg" width="34" height="34" alt="">OpenSkiTime<span class="brand-dot">.</span></a><nav aria-label="Main navigation"><a href="/#workflow">Features</a><a href="/guide/">Get started</a><a href="${repo}">GitHub <span aria-hidden="true">↗</span></a><a class="nav-download" href="/download/">Download <span aria-hidden="true">↓</span></a></nav></div></header>`;
-const footer = `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="/">OpenSkiTime<span class="brand-dot">.</span></a><p>Made for the people behind the race.</p></div><div class="shell footer-bottom"><span>Open source · MIT license</span><nav aria-label="Footer"><a href="/privacy/">Privacy</a><a href="${repo}/blob/master/LICENSE">License</a><a href="${repo}/issues">Report an issue ↗</a><a href="${repo}/security/advisories/new">Report a vulnerability ↗</a><a href="${repo}">Source code ↗</a></nav></div></footer>`;
+const footer = `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="/">OpenSkiTime<span class="brand-dot">.</span></a><p>Made for the people behind the race.</p></div><div class="shell footer-bottom"><span>Open source · MIT license</span><nav aria-label="Footer"><a href="/privacy/">Privacy</a><a href="/code-signing/">Code signing</a><a href="${repo}/blob/master/LICENSE">License</a><a href="${repo}/issues">Report an issue ↗</a><a href="${repo}/security/advisories/new">Report a vulnerability ↗</a><a href="${repo}">Source code ↗</a></nav></div></footer>`;
 
 let release = null;
 if (process.env.OPENSKITIME_RELEASE_FILE) {
