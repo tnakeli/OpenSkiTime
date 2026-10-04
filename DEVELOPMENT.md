@@ -32,21 +32,25 @@ dotnet test OpenSkiTime.slnx -c Release
 
 See [AGENTS.md](AGENTS.md) for engineering guidelines and development workflow.
 
-## OCR Dependencies
+## OCR and Platform-Specific Tests
 
-The project uses Tesseract 5.2.0 for offline receipt OCR. On Windows, the NuGet package includes native binaries. On Linux, you must install the Tesseract and Leptonica development libraries via your system package manager (apt, yum, dnf, etc.) before running tests or the application.
+### OCR (Tesseract) — Windows only
 
-### Troubleshooting OCR on Linux
+The project uses Tesseract 5.2.0 for offline receipt OCR. The Tesseract.Sharp NuGet package v5.2.0 only supports Windows. The timing feature tests and most domain/persistence tests run on Linux, but OCR receipt recognition tests are skipped.
 
-If you see `DllNotFoundException` for `libleptonica-1.82.0.so`, install the required libraries:
+When running tests locally on Linux, OCR tests are excluded:
 
 ```bash
-# Ubuntu/Debian
-sudo apt-get install -y libtesseract-dev libleptonica-dev
-
-# Fedora/RHEL
-sudo dnf install -y tesseract-devel leptonica-devel
+dotnet test OpenSkiTime.slnx -c Release --filter "FullyQualifiedName !~ TimingReceiptOcrTests"
 ```
+
+### Timy USB Support — Windows only
+
+The native USB library for ALGE Timy timing devices is Windows-only. These tests are also skipped on Linux.
+
+### Credential Storage — Platform-specific
+
+Windows-specific credential storage (Windows Data Protection API) tests only run on Windows.
 
 ## Testing
 
