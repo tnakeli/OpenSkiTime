@@ -80,16 +80,20 @@ public partial class DesktopWorkflowTests
                 Click(window, button); await vm.SimulatePulseCommand.ExecutionTask!;
                 await WaitTimingAsync(vm, done);
             }
+            // Capture assigns simulated impulses asynchronously; wait for each assignment so the
+            // snapshot is settled before checking that hovering leaves it untouched.
+            bool Assigned(int channel) => vm.TimestampRows.SelectMany(x => x.Cells).Any(x => x?.Channel == channel && x.Review.Bib is not null);
             await Pulse("Test start", "12:00:00.0000", () => vm.OnCourseRows.Count == 1);
             var a = Assert.Single(vm.OnCourseRows).Bib;
-            await Pulse("Test I1", "12:00:25.0000", () => vm.TimestampRows.SelectMany(x => x.Cells).Any(x => x?.Channel == 2));
+            await Pulse("Test I1", "12:00:25.0000", () => Assigned(2));
             await Pulse("Test start", "12:00:30.0000", () => vm.OnCourseRows.Count == 2);
             var b = vm.OnCourseRows.Single(x => x.Bib != a).Bib;
             var c = vm.TimingRows.First(x => x.Bib != a && x.Bib != b).Bib;
-            await Pulse("Test I2", "12:00:52.5000", () => vm.TimestampRows.SelectMany(x => x.Cells).Any(x => x?.Channel == 3));
-            await Pulse("Test finish", "12:01:13.3100", () => vm.TimestampRows.SelectMany(x => x.Cells).Any(x => x?.Channel == 1));
+            await Pulse("Test I2", "12:00:52.5000", () => Assigned(3));
+            await Pulse("Test finish", "12:01:13.3100", () => Assigned(1));
             string Key(int channel) => vm.TimestampRows.SelectMany(x => x.Cells).OfType<TimingTimestampCell>().Single(x => x.Channel == channel).Key;
             var (i1, i2, finish, start) = (Key(2), Key(3), Key(1), vm.TimestampRows.SelectMany(x => x.Cells).OfType<TimingTimestampCell>().First(x => x.Channel == 0).Key);
+            await WaitTimingAsync(vm, () => workspace.Timing!.Snapshot is { Unresolved: 0 });
             var before = workspace.Timing!.Snapshot!;
             var preview = view.FindControl<Border>("TimingDropPreview")!;
             Assert.False(preview.IsVisible);
