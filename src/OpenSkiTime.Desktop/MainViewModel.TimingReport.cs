@@ -179,7 +179,6 @@ public sealed partial class MainViewModel
                 : stale && saved is not null ? "" : "Current competition timing data. Changes are saved automatically.";
             _current = await workspace.ReadAsync();
             UpdateReportPreviewValidity();
-            if (ReportImportRun is { } run) { await SelectAuxiliaryReportRunAsync(competition.Id, run); }
             NotifyReportDefaults(); OnPropertyChanged(nameof(ReportIdentity));
         });
         IsReportBusy = false;
@@ -243,10 +242,8 @@ public sealed partial class MainViewModel
     private void ApplyAutomaticAuxiliary(int run, IReadOnlyList<AuxiliaryTimingObservation> observations)
     {
         if (run == _reportSources.Min(x => x.List.Plan.RunNumber)) { ReportAuxiliaryClockWarning = ""; }
-        var source = _reportSources.Single(x => x.List.Plan.RunNumber == run);
-        var a = TimingReplay.Restore(source, new AlgeDecoderFactory());
-        var byKey = a.Observations.ToDictionary(x => x.Observation.Key, x => x.Observation, StringComparer.Ordinal);
         var rows = ReportEvidence.Where(x => x.Run == run).ToDictionary(x => x.Bib);
+        var targetUsesUtc = ReportTargetClockBasis(run);
         var warnings = new HashSet<string>(StringComparer.Ordinal);
         foreach (var role in Enum.GetValues<TimingReportImageRole>())
         {
@@ -255,13 +252,7 @@ public sealed partial class MainViewModel
                 TimingReportImageRole.HandStart => AuxiliaryTimingRole.HandStart, _ => AuxiliaryTimingRole.HandFinish };
             var roleEvidence = observations.Where(x => x.Role == auxiliaryRole).ToArray();
             var proposals = new List<EvidenceMatch>();
-            bool TargetUsesUtc(EvidenceTarget target)
-            {
-                var row = rows[target.Bib];
-                var stamp = target.Channel == 0 ? row.AStartStamp : row.AFinishStamp;
-                return stamp is not null && byKey.TryGetValue(stamp.SourceReference, out var value) && AuxiliaryClockComparison.UsesUtc(value);
-            }
-            foreach (var group in targets.GroupBy(TargetUsesUtc))
+            foreach (var group in targets.GroupBy(targetUsesUtc))
             {
                 var normalized = AuxiliaryClockComparison.Normalize(group.Key, roleEvidence);
                 foreach (var warning in normalized.Warnings) { warnings.Add($"Run {run}, {role}: {warning}"); }
@@ -278,6 +269,21 @@ public sealed partial class MainViewModel
         }
         if (warnings.Count != 0)
         { ReportAuxiliaryClockWarning = string.Join("\n", new[] { ReportAuxiliaryClockWarning }.Where(x => x.Length != 0).Concat(warnings)); }
+    }
+
+    // Whether the A timestamp behind a report target was captured on a UTC clock (ALGE Results) or a local device clock.
+    private Func<EvidenceTarget, bool> ReportTargetClockBasis(int run)
+    {
+        var source = _reportSources.Single(x => x.List.Plan.RunNumber == run);
+        var a = TimingReplay.Restore(source, new AlgeDecoderFactory());
+        var byKey = a.Observations.ToDictionary(x => x.Observation.Key, x => x.Observation, StringComparer.Ordinal);
+        var rows = ReportEvidence.Where(x => x.Run == run).ToDictionary(x => x.Bib);
+        return target =>
+        {
+            var row = rows[target.Bib];
+            var stamp = target.Channel == 0 ? row.AStartStamp : row.AFinishStamp;
+            return stamp is not null && byKey.TryGetValue(stamp.SourceReference, out var value) && AuxiliaryClockComparison.UsesUtc(value);
+        };
     }
 
     private EvidenceTarget[] ReportTargets(int run, TimingReportImageRole role) => ReportEvidence.Where(x => x.Run == run && x.Sample.Length > 0)
