@@ -119,8 +119,13 @@ try
                 }
                 else if (now >= nextHealth && published is not null)
                 {
-                    if (standalone is not null)
-                    { await standalone.HealthAsync(lifetime.Token); health = health with { State = PublisherState.Running, Error = null, LastConnected = now }; }
+                    if (standalone is not null && await standalone.HealthAsync(lifetime.Token))
+                    { health = health with { State = PublisherState.Running, Error = null, LastConnected = now }; }
+                    else if (standalone is not null)
+                    {
+                        // Server restarted and lost its RAM state: restore every run on the next pass, without error backoff.
+                        refresh = true; nextAttempt = now; log.Write("Server is missing session state; republishing full snapshot");
+                    }
                     // FIS recommends keepalive after 5–10 minutes of inactivity (v53 p75).
                     if (fis is not null && now - health.LastSuccessfulPublish >= TimeSpan.FromMinutes(5))
                     { await fis.KeepAliveAsync(lifetime.Token); health = health with { State = PublisherState.Running, Error = null, LastSuccessfulPublish = now, LastConnected = now }; }
