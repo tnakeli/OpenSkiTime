@@ -68,6 +68,7 @@ public sealed class LiveControlSession : IAsyncDisposable
                     selected.CredentialTarget = "OpenSkiTime.LiveTiming:" + _competitionId!.Value.ToString("N") + ":" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(options.Endpoint)))[..16];
                     if (selected.Process.ResumeSession is null && new WindowsCredentialStore(selected.CredentialTarget).Read() is { } saved)
                     { selected.Process.ResumeSession = JsonSerializer.Deserialize<LiveSession>(saved, LiveJson.Options); }
+                    options = options with { PublisherKey = new WindowsCredentialStore(PublisherKeyCredential.Target(options.Endpoint)).Read() };
                 }
                 await selected.Process.StartAsync(Artifact("Worker"), options).ConfigureAwait(false);
             }

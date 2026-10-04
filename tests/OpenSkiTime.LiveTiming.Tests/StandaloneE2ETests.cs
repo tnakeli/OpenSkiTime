@@ -22,7 +22,16 @@ public sealed class StandaloneE2ETests
         await using var server = new ServerProcess(); await server.Start();
         await using var publisher = new PublisherProcess();
         var state = SyntheticRace.Create(6); publisher.Offer(state);
-        var options = new PublisherOptions(PublisherKind.Cloud, server.Endpoint);
+        // Without the operator-issued key the server refuses session creation and the worker stops with an actionable error.
+        await using (var unauthorized = new PublisherProcess())
+        {
+            unauthorized.Offer(state);
+            await unauthorized.StartAsync(ProcessFixture.Artifact("Worker"),new PublisherOptions(PublisherKind.Cloud, server.Endpoint),ProcessFixture.Host);
+            await ProcessFixture.Until(() => unauthorized.Health.State == PublisherState.Error);
+            Assert.Contains("publisher key",unauthorized.Health.Error,StringComparison.OrdinalIgnoreCase);
+            Assert.Null(unauthorized.ResumeSession);
+        }
+        var options = new PublisherOptions(PublisherKind.Cloud, server.Endpoint, PublisherKey: server.PublisherKey);
         await publisher.StartAsync(ProcessFixture.Artifact("Worker"),options,ProcessFixture.Host);
         await ProcessFixture.Until(() => publisher.Health.State == PublisherState.Running);
         var session = publisher.ResumeSession!;
@@ -116,7 +125,12 @@ public sealed class StandaloneE2ETests
         await using var server = new ServerProcess(); await server.Start();
         using var http = new HttpClient { BaseAddress = new(server.Endpoint) };
         async Task<LiveSession> Create()
-        { using var response=await http.PostAsync("api/sessions",null); response.EnsureSuccessStatusCode(); return (await response.Content.ReadFromJsonAsync<LiveSession>(LiveJson.Options))!; }
+        { using var request=server.CreateSession(); using var response=await http.SendAsync(request); response.EnsureSuccessStatusCode(); return (await response.Content.ReadFromJsonAsync<LiveSession>(LiveJson.Options))!; }
+        // Session creation requires a configured publisher key; anonymous and unknown keys create nothing.
+        using (var response=await http.PostAsync("api/sessions",null)) { Assert.Equal(HttpStatusCode.Unauthorized,response.StatusCode); }
+        using (var request=server.CreateSession(LivePublisherKey.Generate()))
+        using (var response=await http.SendAsync(request)) { Assert.Equal(HttpStatusCode.Unauthorized,response.StatusCode); }
+        Assert.Empty((await http.GetFromJsonAsync<LiveSessionSummary[]>("api/sessions",LiveJson.Options))!);
         var first = await Create(); var second = await Create();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",second.PublisherToken);
         using (var response=await http.PutAsJsonAsync($"api/sessions/{first.SessionId}/state",SyntheticRace.Create(),LiveJson.Options)) { Assert.Equal(HttpStatusCode.Unauthorized,response.StatusCode); }
@@ -127,8 +141,14 @@ public sealed class StandaloneE2ETests
         using (var response=await http.PutAsJsonAsync($"api/sessions/{first.SessionId}/state",invalid,LiveJson.Options)) { Assert.Equal(HttpStatusCode.BadRequest,response.StatusCode); }
         using (var response=await http.PostAsJsonAsync($"api/sessions/{first.SessionId}/events",new LiveEvent(99,1,LiveEventKind.ResultUpdated,state.Runs[0].Results[0],state.UpdatedAt),LiveJson.Options)) { Assert.Equal(HttpStatusCode.Conflict,response.StatusCode); }
         Assert.Equal(state.Version,(await Read(http,first)).Version); Assert.Equal(50,(await Read(http,first)).Competitors.Length);
-        for(var i=0;i<3;i++) { await Create(); }
-        using var limited=await http.PostAsync("api/sessions",null); Assert.Equal(HttpStatusCode.TooManyRequests,limited.StatusCode);
+        // Only sessions with published state are listed, with public race metadata and no credentials.
+        var listed = (await http.GetFromJsonAsync<LiveSessionSummary[]>("api/sessions",LiveJson.Options))!;
+        Assert.Equal(first.SessionId,Assert.Single(listed).SessionId);
+        Assert.Equal(state.Competition.Name,listed[0].Name);
+        Assert.DoesNotContain(first.PublisherToken,await http.GetStringAsync("api/sessions"),StringComparison.Ordinal);
+        await Create();
+        using var limitedRequest=server.CreateSession();
+        using var limited=await http.SendAsync(limitedRequest); Assert.Equal(HttpStatusCode.TooManyRequests,limited.StatusCode);
     }
     private static async Task<LiveSnapshot> Read(HttpClient http,LiveSession session) => (await http.GetFromJsonAsync<LiveSnapshot>($"api/sessions/{session.SessionId}/state",LiveJson.Options))!;
     private static async Task UntilState(HttpClient http,LiveSession session,Func<LiveSnapshot,bool> condition)

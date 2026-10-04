@@ -54,7 +54,8 @@ The latest snapshot is bounded by the contract (2,000 competitors, nine runs, tw
 | API | Access / meaning |
 |---|---|
 | `GET /health` | Public process health (Running and process ID). No race data or secrets. |
-| `POST /api/sessions` | Rate-limited anonymous creation; returns session ID, session-scoped publisher token, expiry and public URL. |
+| `GET /api/sessions` | Public list of active sessions with published state (ID, name, place, discipline, date, gender, category, codex, update time, paused). No credentials. |
+| `POST /api/sessions` | Requires `Authorization: Bearer <publisher key>` issued by the server operator; anonymous or unknown keys get 401. Rate-limited; returns session ID, session-scoped publisher token, expiry and public URL. |
 | `GET /api/sessions/{id}/state` | Public snapshot; missing/unpublished/expired/deleted state returns 404. |
 | `PUT /api/sessions/{id}/state` | Bearer credential required. Validates the complete snapshot before replacement. Restores a missing RAM session after restart. |
 | `POST /api/sessions/{id}/events` | Credential required. Replaces one result row with start/intermediate/finish/status/correction data. Version must be exactly current + 1; gap/replay returns 409 and triggers full resync. |
@@ -63,6 +64,8 @@ The latest snapshot is bounded by the contract (2,000 competitors, nine runs, tw
 | `DELETE /api/sessions/{id}/data` | Credential required; explicit Delete All Data alias with the same complete removal behavior. |
 | `/live` and `/live/negotiate` | SignalR JSON protocol. `Watch(sessionId)` subscribes to one public session per connection; `State` pushes the latest snapshot or null after deletion. |
 | `/r/{id}` | Responsive public view. No credential in the path or query. |
+| `/` | Lists all active published races with links to their `/r/{id}` views. |
+| `/.well-known/security.txt` | RFC 9116 security contact. |
 
 Normally the publisher compares latest snapshots and sends changed result rows as events, including changed rankings/corrections. Competitor/order/metadata/run topology changes use a snapshot. Multiple changes are sent with contiguous wire revisions. IPC may coalesce intermediate snapshots; it cannot lose final authoritative state. A failed partial publish, version conflict, health 404 or restart triggers replacement with the latest full snapshot. There is one writer per session; multiple competing authoritative publishers are not supported.
 
@@ -76,7 +79,9 @@ Windows desktop retains cloud credentials in Windows Credential Manager, scoped 
 
 Deletion wipes the cached snapshot and all race content immediately. A bounded RAM revocation marker retains only opaque session ID and expiry to prevent the old credential recreating it during that server lifetime. No race/event history/cache survives deletion, and desktop removes its retained token. **Stateless credentials and RAM revocations mean an independently retained old token could restore a deleted ID after a whole server restart, until token expiry.** Rotate the signing key to invalidate every outstanding credential if compromised; persistent per-token revocation would require an additional durable revocation store and is not part of this RAM-only first version. Normal desktop never reuses a successfully deleted credential.
 
-Anonymous creation has a per-IP fixed-window limit (five/minute), a global request limit, session/revocation capacity, payload and connection limits, no queued rate-limited requests and fourteen-day maximum lifetime. Session expiry is pruned during requests. Deleted-ID markers consume capacity until expiry; adjust capacity for the expected event calendar. Device pairing can later gate creation without changing session-scoped publish credentials or state/event APIs.
+Session creation requires an operator-issued publisher key (stored only as a SHA-256 hash on the server; see [publisher keys](live-timing-cloud-deployment.md#publisher-keys)) and has a per-client fixed-window limit (five/minute). Every client also has its own request budget and concurrent viewer-connection limit, so one source cannot exhaust the service for others. Session/revocation capacity, payload and connection limits, no queued rate-limited requests and a fourteen-day maximum lifetime still apply. Session expiry is pruned during requests. Deleted-ID markers consume capacity until expiry; adjust capacity for the expected event calendar.
+
+The viewer's front page lists every active published race. Viewer pages hide the intermediates column while the selected run has no intermediate times, and link to the [privacy statement](https://openskiti.me/privacy/) and the server's `security.txt`.
 
 ## FIS TCP and HTTPS
 
@@ -110,10 +115,12 @@ Local cloud simulation, in a separate terminal:
 ```powershell
 $env:LiveTiming__SigningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 $env:LiveTiming__PublicBaseUrl = 'http://localhost:5080'
+$key = 'ost_pk_' + [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$env:LiveTiming__PublisherKeys = 'local-test:' + [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($key))).ToLowerInvariant()
 dotnet run --project src/OpenSkiTime.LiveTiming.Server -- --urls http://localhost:5080
 ```
 
-Use this as the Cloud URL in desktop. Preserve the signing key when restarting that server. Managed Local uses a separate port and does not depend on this process. For a network-local server, run the same server independently with an explicit signing key/public origin and a LAN bind address; the current publisher permits HTTP only on loopback, so use HTTPS for a publisher on another machine. Public LAN viewers may access an HTTP listener if publishing remains on loopback.
+Use this as the Cloud URL in desktop and save `$key` in Settings → Live timing. Preserve the signing key when restarting that server. Managed Local uses a separate port and does not depend on this process. For a network-local server, run the same server independently with an explicit signing key/public origin and a LAN bind address; the current publisher permits HTTP only on loopback, so use HTTPS for a publisher on another machine. Public LAN viewers may access an HTTP listener if publishing remains on loopback.
 
 The harness generates fifty synthetic competitors with deterministic starts, two intermediates, finishes, DNS/DNF/DSQ and integer times. For example after building:
 

@@ -13,6 +13,9 @@ param publicBaseUrl string
 @secure()
 @description('Base64 encoding of at least 32 cryptographically random bytes. Keep stable across ordinary restarts.')
 param signingKey string
+@secure()
+@description('Publisher key entries as name:sha256hex separated by semicolons. Hashes only; keys stay with publishers.')
+param publisherKeys string
 
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: appName
@@ -21,7 +24,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: environmentId
     configuration: {
       activeRevisionsMode: 'Single'
-      secrets: [{ name: 'live-signing-key', value: signingKey }]
+      secrets: [
+        { name: 'live-signing-key', value: signingKey }
+        { name: 'live-publisher-keys', value: publisherKeys }
+      ]
       ingress: {
         external: true
         targetPort: 8080
@@ -38,6 +44,8 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         env: [
           { name: 'ASPNETCORE_HTTP_PORTS', value: '8080' }
           { name: 'LiveTiming__SigningKey', secretRef: 'live-signing-key' }
+          { name: 'LiveTiming__PublisherKeys', secretRef: 'live-publisher-keys' }
+          { name: 'LiveTiming__TrustForwardedFor', value: 'true' }
           { name: 'LiveTiming__PublicBaseUrl', value: publicBaseUrl }
           { name: 'LiveTiming__TokenDays', value: '14' }
           { name: 'LiveTiming__MaxSessions', value: '100' }

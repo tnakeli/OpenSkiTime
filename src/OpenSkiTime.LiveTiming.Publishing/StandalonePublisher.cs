@@ -10,10 +10,12 @@ public sealed class StandalonePublisher : IDisposable
     private LiveSnapshot? _sent;
     private readonly Action<string> _log;
     public LiveSession? Session { get; private set; }
-    public StandalonePublisher(string endpoint, LiveSession? resumeSession = null, Action<string>? log = null)
+    private readonly string? _publisherKey;
+    public StandalonePublisher(string endpoint, LiveSession? resumeSession = null, Action<string>? log = null, string? publisherKey = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         _log = log ?? (_ => { });
+        _publisherKey = publisherKey;
         var uri = new Uri(endpoint.TrimEnd('/') + "/");
         if (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback))
         { throw new LiveValidationException("Cloud publishing requires HTTPS (HTTP permitted only on loopback)."); }
@@ -32,8 +34,17 @@ public sealed class StandalonePublisher : IDisposable
         { Session = null; _sent = null; _http.DefaultRequestHeaders.Authorization = null; }
         if (Session is null)
         {
-            using var response = await _http.PostAsync("api/sessions", null, ct);
+            // The publisher key authorizes only session creation; later requests use the session's own token.
+            using var creation = new HttpRequestMessage(HttpMethod.Post, "api/sessions");
+            if (!string.IsNullOrEmpty(_publisherKey)) { creation.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _publisherKey); }
+            using var response = await _http.SendAsync(creation, ct);
             _log($"Session creation HTTP {(int)response.StatusCode}");
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                throw new LiveValidationException(string.IsNullOrEmpty(_publisherKey)
+                    ? "This live timing server requires a publisher key. Save the key in Settings → Live timing."
+                    : "The live timing server rejected the publisher key. Check the key in Settings → Live timing.");
+            }
             response.EnsureSuccessStatusCode();
             Session = await response.Content.ReadFromJsonAsync<LiveSession>(LiveJson.Options, ct) ?? throw new IOException("Missing session credential.");
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Session.PublisherToken);

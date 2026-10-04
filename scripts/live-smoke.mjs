@@ -24,7 +24,7 @@ async function request(origin, route, method = 'GET', body, token) {
   } catch { throw new Error(`Live check request failed: ${method} ${route.split('/')[0]}`); }
 }
 
-export async function smoke(origin, {websocket = true} = {}) {
+export async function smoke(origin, {websocket = true, publisherKey = process.env.LIVE_PUBLISHER_KEY, requirePublisherKey = false} = {}) {
   const url = new URL(origin);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost','127.0.0.1'].includes(url.hostname))) {
     throw new Error('Live check requires HTTPS, except on loopback.');
@@ -38,7 +38,11 @@ export async function smoke(origin, {websocket = true} = {}) {
     await new Promise(resolve => setTimeout(resolve, 2000));
   } while (Date.now() < readinessDeadline);
   assert(healthy, 'Health endpoint did not become ready');
-  const creation = await request(url, 'api/sessions', 'POST');
+  if (requirePublisherKey) {
+    assert(publisherKey, 'A publisher key is required for this check (LIVE_PUBLISHER_KEY).');
+    assert.equal((await request(url, 'api/sessions', 'POST')).status, 401, 'Reject anonymous session creation');
+  }
+  const creation = await request(url, 'api/sessions', 'POST', undefined, publisherKey);
   assert.equal(creation.status, 200, 'Session creation');
   const session = await creation.json();
   assert.match(session.sessionId, /^[0-9a-f-]{36}$/i);
@@ -104,6 +108,9 @@ export async function smoke(origin, {websocket = true} = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { await smoke(process.argv[2]); console.log('Live check passed: health, authentication, snapshot, WebSocket, event, pause and deletion.'); }
+  try {
+    await smoke(process.argv[2], {requirePublisherKey: process.argv.includes('--require-publisher-key')});
+    console.log('Live check passed: health, authentication, snapshot, WebSocket, event, pause and deletion.');
+  }
   catch { console.error('Live check failed. Inspect deployment health; request data and credentials are intentionally not logged.'); process.exitCode = 1; }
 }

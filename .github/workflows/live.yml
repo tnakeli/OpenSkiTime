@@ -98,4 +98,5 @@ jobs:
           LIVE_IMAGE: ${{ needs.build.outputs.image }}
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           AZURE_LIVE_APP: ${{ vars.AZURE_LIVE_APP }}
+          LIVE_PUBLISHER_KEY: ${{ secrets.LIVE_PUBLISHER_KEY }}
         run: ./deploy/azure/Deploy-Live.ps1 -Image $env:LIVE_IMAGE -ResourceGroup $env:AZURE_RESOURCE_GROUP -AppName $env:AZURE_LIVE_APP

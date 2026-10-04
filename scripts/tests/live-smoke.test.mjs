@@ -25,3 +25,20 @@ test('smoke rejects insecure remote origins before sending data', async () => {
   await assert.rejects(smoke('http://example.com'), /requires HTTPS/);
   assert.equal(syntheticSnapshot().competitors[0].lastName, 'TEST');
 });
+
+test('smoke requires the server to reject anonymous session creation when asked', async () => {
+  const seen = [];
+  const server = http.createServer((request, response) => {
+    seen.push(request.headers.authorization ?? '');
+    response.setHeader('Content-Type','application/json');
+    if (request.url === '/health') response.end('{}');
+    else response.end(JSON.stringify({sessionId:'00000000-0000-0000-0000-000000000002',publisherToken:'test-credential'}));
+  });
+  await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
+  try {
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    await assert.rejects(smoke(origin,{websocket:false,requirePublisherKey:true,publisherKey:''}), /publisher key is required/);
+    await assert.rejects(smoke(origin,{websocket:false,requirePublisherKey:true,publisherKey:'synthetic-publisher-key'}), /Reject anonymous session creation/);
+    assert(!seen.includes('Bearer synthetic-publisher-key'), 'The key is not sent when anonymous creation is wrongly accepted');
+  } finally { await new Promise(resolve => server.close(resolve)); }
+});
