@@ -119,7 +119,7 @@ jobs:
           if [ "$PRERELEASE" = "true" ]; then flags=(--prerelease --latest=false); fi
           gh release create "$RELEASE_TAG" release/* --repo "$REPOSITORY" --verify-tag --title "OpenSkiTime $RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
   website:
+    # Previews are offered on the download page until a stable release exists; scripts/read-release.mjs decides.
     needs: [package, publish]
-    if: needs.package.outputs.prerelease == 'false'
     uses: ./.github/workflows/website.yml
     secrets: inherit
