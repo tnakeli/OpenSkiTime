@@ -15,13 +15,13 @@ public static class TimingEngine
         var seen = new Dictionary<string, string>(StringComparer.Ordinal);
         var physical = new HashSet<string>(StringComparer.Ordinal);
         var reviewed = new List<ObservationReview>();
-        foreach (var observation in observations)
+        foreach (var observation in WithManualEntries(observations, audit))
         {
             if (observation.Kind == ObservationKind.Information) { continue; }
             decisions.TryGetValue("a:" + observation.Key, out var decision);
             var duplicate = seen.GetValueOrDefault(observation.Fingerprint);
             if (duplicate is null) { seen[observation.Fingerprint] = observation.Key; }
-            var changedImpulse = observation.Kind == ObservationKind.Impulse && duplicate is null
+            var changedImpulse = observation.Kind == ObservationKind.Impulse && !observation.ManualEntry && duplicate is null
                 && !physical.Add($"{observation.Source}:{observation.DeviceTicks}:{observation.Channel}");
             var bib = decision?.Bib;
             var ignored = decision?.Ignored == true;
@@ -66,7 +66,8 @@ public static class TimingEngine
                 {
                     status = TimingStatus.Finished;
                     time = elapsed.Hundredths;
-                    if (starts[0].Manual || finishes[0].Manual) { detail = "Includes a device keyboard impulse; verify against backup timing."; }
+                    if (starts[0].ManualEntry || finishes[0].ManualEntry) { detail = "Includes a manually entered time; verify against backup timing."; }
+                    else if (starts[0].Manual || finishes[0].Manual) { detail = "Includes a device keyboard impulse; verify against backup timing."; }
                 }
             }
             if (decisions.TryGetValue("t:" + id, out var correction) && correction.Hundredths is { } corrected)
@@ -82,10 +83,12 @@ public static class TimingEngine
                 var valid = pulses.Length == 1 && starts.Length == 1 && elapsed.Problem == ElapsedProblem.None
                     && (finishes.Length == 0 || pulse.DeviceTicks < finishes[0].DeviceTicks);
                 return new TimingSplit(number, pulse.Key, valid ? elapsed.Hundredths : null,
-                    valid ? "" : "Review intermediate impulses / clock continuity");
+                    valid ? "" : "Review intermediate impulses / clock continuity")
+                { Manual = pulse.ManualEntry || starts.Length == 1 && starts[0].ManualEntry };
             }).ToArray();
             rows.Add(new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
-            { Splits = splits, Disqualification = status == TimingStatus.DSQ ? classification?.Disqualification : null });
+            { Splits = splits, Disqualification = status == TimingStatus.DSQ ? classification?.Disqualification : null,
+              StartManual = starts.Length == 1 && starts[0].ManualEntry, FinishManual = finishes.Length == 1 && finishes[0].ManualEntry });
         }
         var finishedTimes = rows.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
         var badSplits = rows.SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
@@ -96,6 +99,38 @@ public static class TimingEngine
             rows.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
             reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray())
         { StartOrder = startOrder };
+    }
+
+    // Operator-entered timestamps come only from audited ManualTime decisions (their latest state, so an undo removes
+    // the entry and a redo restores it). Each is placed in journal order right after the device impulse it was entered
+    // against, so history order is the same live and after reopening; entries made before any device input lead.
+    private static IEnumerable<TimingObservation> WithManualEntries(IReadOnlyList<TimingObservation> observations,
+        IReadOnlyList<TimingAudit> audit)
+    {
+        var latest = new Dictionary<string, TimingAudit>(StringComparer.Ordinal);
+        foreach (var change in audit.Where(x => x.After.Kind == DecisionKind.ManualTime).OrderBy(x => x.Id))
+        { latest[change.After.ObservationKey!] = change; }
+        var manual = latest.Values.Where(x => x.After.Timestamp is not null).Select(change =>
+        {
+            var entry = change.After.Timestamp!;
+            return new TimingObservation(change.After.ObservationKey!, Guid.Empty, 0, "Manual entry",
+                "manual-entry:" + change.After.ObservationKey, ObservationKind.Impulse, entry.Channel, entry.DeviceTicks,
+                entry.Precision, null, true, entry.ClockId, $"Manual time entered by {change.Operator} · {change.Reason}")
+            { ManualEntry = true };
+        }).ToArray();
+        if (manual.Length == 0) { return observations; }
+        var byReference = manual.Where(x => latest[x.Key].After.Timestamp!.ReferenceKey is not null)
+            .ToLookup(x => latest[x.Key].After.Timestamp!.ReferenceKey!, StringComparer.Ordinal);
+        var keys = observations.Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
+        var merged = new List<TimingObservation>(observations.Count + manual.Length);
+        merged.AddRange(manual.Where(x => latest[x.Key].After.Timestamp!.ReferenceKey is null));
+        foreach (var observation in observations)
+        {
+            merged.Add(observation);
+            merged.AddRange(byReference[observation.Key]);
+        }
+        merged.AddRange(manual.Where(x => latest[x.Key].After.Timestamp!.ReferenceKey is { } reference && !keys.Contains(reference)));
+        return merged;
     }
 
     // Timy keyboard impulses carry the manual marker and may contain only hundredths.
@@ -164,6 +199,7 @@ public static class TimingEngine
             DecisionKind.Status => "s:" + decision.CompetitorId,
             DecisionKind.Time => "t:" + decision.CompetitorId,
             DecisionKind.StartOrder => "q",
+            DecisionKind.ManualTime => "m:" + decision.ObservationKey,
             _ => throw new DomainValidationException("Unknown timing correction.")
         };
     }
@@ -197,6 +233,18 @@ public static class TimingEngine
                 if (!snapshot.Results.Any(x => x.Bib == bib)) { throw new DomainValidationException("That bib is not on this run's start list."); }
             }
         }
+        else if (decision.Kind == DecisionKind.ManualTime)
+        {
+            var current = snapshot.Observations.SingleOrDefault(x => x.Observation.Key == decision.ObservationKey);
+            if (decision.Timestamp is { } entry)
+            {
+                var intermediates = snapshot.Results.Count == 0 ? 0 : snapshot.Results[0].Splits.Count;
+                if (entry.Channel is not (0 or 1) && entry.Channel >= 2 + intermediates)
+                { throw new DomainValidationException("Choose start, finish or an intermediate timing position of this run."); }
+            }
+            else if (current is { Bib: not null, Ignored: false })
+            { throw new DomainValidationException("The manual time is assigned to a competitor. Unassign it before removing it."); }
+        }
         else if (decision.Kind == DecisionKind.StartOrder)
         {
             if (decision.StartOrder is { } order && !ParseStartOrder(order).Order()
@@ -221,8 +269,13 @@ public static class TimingEngine
             { throw new DomainValidationException("Gate, disqualification reason and judge belong to a DSQ classification only."); }
             dsq.Validate();
         }
+        if (decision.Timestamp is { } timestamp && (decision.Kind != DecisionKind.ManualTime || !timestamp.IsValid))
+        { throw new DomainValidationException("A manual time needs a timing position, a time of day with at least hundredths and a clock."); }
         var valid = decision.Kind switch
         {
+            DecisionKind.ManualTime => ManualTimestamp.IsKey(decision.ObservationKey) && decision.CompetitorId is null
+                && decision.Bib is null && !decision.Ignored && decision.Status is null && decision.Hundredths is null
+                && decision.StartOrder is null,
             DecisionKind.Assignment => !string.IsNullOrWhiteSpace(decision.ObservationKey) && decision.ObservationKey.Split(':').Length >= 2
                 && decision.CompetitorId is null && decision.Status is null && decision.Hundredths is null
                 && decision.StartOrder is null && !(decision.Ignored && decision.Bib is not null),

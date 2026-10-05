@@ -1,11 +1,13 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Timing;
 
 public enum ObservationKind { Impulse, DeviceCorrection, Invalid, Information }
 public enum TimingStatus { Ready, OnCourse, Finished, DNS, DNF, DSQ, NPS, Review }
-public enum DecisionKind { Assignment, Status, Time, StartOrder }
+// ManualTime is appended so the numeric values stored in existing audit rows keep their meaning.
+public enum DecisionKind { Assignment, Status, Time, StartOrder, ManualTime }
 
 // Ticks are integer 100 ns units. Device precision is retained separately; receive time never determines race time.
 public sealed record TimingObservation(string Key, Guid SessionId, long PacketSequence, string Source,
@@ -17,11 +19,31 @@ public sealed record TimingObservation(string Key, Guid SessionId, long PacketSe
     // The device's calendar date when the source reports one (ALGE Results). Timing never uses it; reading a race day's
     // device memory for the timing report does.
     public DateOnly? CalendarDate { get; init; }
+    // A time of day typed by the operator for a missing impulse. It comes from an audited ManualTime decision, never
+    // from a device; Manual is also set so the hand-clock precision rule (hundredths) applies.
+    public bool ManualEntry { get; init; }
 }
 
 public sealed record TimingDecision(DecisionKind Kind, string? ObservationKey = null, Guid? CompetitorId = null,
     int? Bib = null, bool Ignored = false, TimingStatus? Status = null, long? Hundredths = null,
-    string? StartOrder = null, DisqualificationDetails? Disqualification = null);
+    string? StartOrder = null, DisqualificationDetails? Disqualification = null,
+    // Omitted when null, so audit rows and approved-result fingerprints of every other decision are unchanged.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ManualTimestamp? Timestamp = null);
+
+// An operator-entered timestamp for one timing position. DeviceTicks is the typed time of day placed on the clock of
+// ReferenceKey (the newest device impulse when it was entered) so it can be combined with that clock's impulses;
+// without device input it uses its own run clock. Everything is resolved once at entry and replayed verbatim.
+public sealed record ManualTimestamp(int Channel, long DeviceTicks, int Precision, string ClockId, string? ReferenceKey = null)
+{
+    public const string KeyPrefix = "manual:";
+
+    public static bool IsKey(string? key) => key is not null && key.Length == KeyPrefix.Length + 32
+        && key.StartsWith(KeyPrefix, StringComparison.Ordinal) && Guid.TryParseExact(key[KeyPrefix.Length..], "N", out _);
+
+    public bool IsValid => Channel is >= 0 and <= 21 && DeviceTicks > 0 && DeviceTicks < DateTime.MaxValue.Ticks
+        && Precision is >= 2 and <= 7 && !string.IsNullOrWhiteSpace(ClockId) && ClockId.Length <= 200
+        && ReferenceKey is null or { Length: > 0 and <= 200 };
+}
 
 public sealed record DisqualificationDetails(int? Gate = null, string Reason = "", string Judge = "")
 {
@@ -43,6 +65,9 @@ public sealed record TimingResult(StartListEntry Entry, TimingStatus Status, lon
 {
     public IReadOnlyList<TimingSplit> Splits { get; init; } = [];
     public DisqualificationDetails? Disqualification { get; init; }
+    // The assigned start/finish is an operator-entered time (shown as "m" next to the time).
+    public bool StartManual { get; init; }
+    public bool FinishManual { get; init; }
     public int Bib => Entry.Bib;
     public Guid CompetitorId => Entry.Entrant.CompetitorId;
     public string Name => Entry.Entrant.Athlete.Surname + " " + Entry.Entrant.Athlete.FirstName;
@@ -51,6 +76,8 @@ public sealed record TimingResult(StartListEntry Entry, TimingStatus Status, lon
 
 public sealed record TimingSplit(int Number, string? ObservationKey, long? Hundredths, string Detail)
 {
+    // The intermediate impulse, or the start it is measured from, is an operator-entered time.
+    public bool Manual { get; init; }
     public string Time => TimingTime.Format(Hundredths);
 }
 
