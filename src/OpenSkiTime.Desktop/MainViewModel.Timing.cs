@@ -14,6 +14,13 @@ namespace OpenSkiTime.Desktop;
 public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalRank)
 {
     public string PreviousRunTime { get; init; } = "";
+    public long? PreviousRunHundredths { get; init; }
+    // Rank in the previous run and at each intermediate of this run, within the row's ranking group.
+    public int? PreviousRunRank { get; init; }
+    public IReadOnlyList<int?> IntermediateRanks { get; init; } = [];
+    public string PreviousRunRanked => WithRank(PreviousRunTime, PreviousRunRank);
+    public IReadOnlyList<string> RankedIntermediates => Result.Splits
+        .Select((x, i) => WithRank(x.Time, IntermediateRanks.ElementAtOrDefault(i))).ToArray();
     public string Category { get; init; } = "";
     public int? DisplayRank { get; init; }
     public bool IsLatestFinish { get; init; }
@@ -33,6 +40,8 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public string Label => $"{Bib} · {Name}";
     public string SplitTimes => string.Join("  ·  ", Result.Splits.Where(x => x.ObservationKey is not null).Select(x => $"I{x.Number} {x.Time}"));
     public bool HasSplits => Result.Splits.Any(x => x.ObservationKey is not null);
+    private static string WithRank(string time, int? rank) =>
+        rank is { } value ? string.Create(CultureInfo.InvariantCulture, $"{time} ({value})") : time;
 }
 
 public sealed class RunningTimeDisplay : INotifyPropertyChanged
@@ -601,6 +610,7 @@ public sealed partial class MainViewModel
             if (i == target.Count) { target.Add(rows[i]); }
             else if (target[i].Total != rows[i].Total || target[i].TotalRank != rows[i].TotalRank
                 || target[i].Category != rows[i].Category || target[i].DisplayRank != rows[i].DisplayRank || target[i].IsLatestFinish != rows[i].IsLatestFinish
+                || target[i].PreviousRunRank != rows[i].PreviousRunRank || !target[i].IntermediateRanks.SequenceEqual(rows[i].IntermediateRanks)
                 || !target[i].Result.Splits.SequenceEqual(rows[i].Result.Splits)
                 || target[i].Result != (rows[i].Result with { Splits = target[i].Result.Splits }))
             { target[i] = rows[i]; }
