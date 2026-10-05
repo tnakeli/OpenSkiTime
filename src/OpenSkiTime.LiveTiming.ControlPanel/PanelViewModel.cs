@@ -89,7 +89,7 @@ public sealed partial class PanelChannel(string label, PublisherKind kind) : Obs
         var h = channel.Health;
         Status = h.State.ToString(); PublicUrl = h.PublicUrl ?? "";
         Expiration = h.ExpiresAt is { } expiry ? "Expires " + expiry.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) : "";
-        Detail = h.Error ?? (h.LastSuccessfulPublish is { } last ? "Last published " + last.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "Ready to start");
+        Detail = h.Error ?? h.Notice ?? (h.LastSuccessfulPublish is { } last ? "Last published " + last.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "Ready to start");
         IndicatorColor = h.State == PublisherState.Stopped ? "#DCE6E9" : h.State == PublisherState.Running ? "#238067" : "#B94B4B";
     }
 }
