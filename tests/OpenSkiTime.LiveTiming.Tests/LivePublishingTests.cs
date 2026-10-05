@@ -12,6 +12,8 @@ using Xunit;
 namespace OpenSkiTime.LiveTiming.Tests;
 
 // What the publishers put on the wire for a race in progress: FIS live XML v53 messages and the standalone server API.
+// Runs with the process tests: the publisher's 5 s request timeout must not race CPU-heavy E2E tests on a busy runner.
+[Collection("Live timing processes")]
 public sealed class LivePublishingTests
 {
     [Fact]
@@ -166,7 +168,11 @@ public sealed class LivePublishingTests
         app.MapPost("/api/sessions", () => { requests.Enqueue("session"); return session(); });
         app.MapPut("/api/sessions/{id:guid}/state", () => { requests.Enqueue("state"); return Results.Ok(); });
         app.MapPost("/api/sessions/{id:guid}/events", () => { requests.Enqueue("event"); return Results.Ok(); });
+        app.MapGet("/warmup", () => Results.Ok());
         await app.StartAsync();
+        // The first request JIT-compiles the server pipeline; do it here, outside the publisher's 5 s request timeout.
+        using (var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) })
+        { (await client.GetAsync($"http://127.0.0.1:{port}/warmup")).EnsureSuccessStatusCode(); }
         return new(app, $"http://127.0.0.1:{port}");
     }
     private sealed class FakeServer(WebApplication app, string endpoint) : IAsyncDisposable
