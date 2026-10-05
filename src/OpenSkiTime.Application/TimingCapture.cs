@@ -417,8 +417,13 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     { throw new DomainValidationException("Competitors are still on course. Finish or classify them before switching the active timing run."); }
                     var data = await store.ReadTimingAsync(change.ListId);
                     var restored = TimingReplay.Restore(data, decoders);
-                    var next = (await store.SwitchCaptureGroupAsync(sessions.Select(x => x.Id).ToArray(), change.ListId,
-                        sessions.Select(x => x.Options).ToArray(), sessions[0].Options.Operator, DateTimeOffset.UtcNow)).ToArray();
+                    // A storage failure is retried like any durable write; the store returns a boundary that already committed.
+                    var previousIds = sessions.Select(x => x.Id).ToArray();
+                    var previousOptions = sessions.Select(x => x.Options).ToArray();
+                    IReadOnlyList<CaptureSession> switched = [];
+                    await RetryDurableAsync(async () => switched = await store.SwitchCaptureGroupAsync(previousIds, change.ListId,
+                        previousOptions, previousOptions[0].Operator, DateTimeOffset.UtcNow));
+                    var next = switched.ToArray();
                     if (next.Length != sessions.Length) { throw new SeriesFileException("The timing store did not switch every device session."); }
                     foreach (var o in _observations.Where(x => x.DeviceTicks is not null && x.ClockId.Length > 0))
                     { _previousRunInput[o.ClockId] = Math.Max(_previousRunInput.GetValueOrDefault(o.ClockId, long.MinValue), o.DeviceTicks!.Value); }

@@ -168,7 +168,7 @@ public sealed class CaptureRecoveryTests : IDisposable
         Guid listId;
         await using (var setup = new SeriesWorkspace(new SqliteSeriesFileStore())) { listId = (await TimingStorageTests.SeedAsync(setup, file, 2)).Id; }
         await using var session = await new SqliteSeriesFileStore().OpenAsync(file);
-        var store = new UncertainAuditStore((ITimingStore)session);
+        var store = new UncertainStore((ITimingStore)session, audit: true);
         var timing = new TimingWorkspace(store, new AlgeDecoderFactory());
         await timing.SelectRunAsync(listId);
         var source = new SimulatorTimingSource();
@@ -188,6 +188,79 @@ public sealed class CaptureRecoveryTests : IDisposable
         await timing.DisposeAsync();
     }
 
+    [Fact]
+    public async Task UncertainCommitOfALiveRunChangeIsAdoptedAfterRetry()
+    {
+        var file = PathFor("uncertain-run-change.ost");
+        StartListRevision first;
+        await using (var setup = new SeriesWorkspace(new SqliteSeriesFileStore()))
+        {
+            first = await TimingStorageTests.SeedAsync(setup, file, 1);
+            await setup.MarkRunStartedAsync(first.Id, (await setup.ReadAsync()).Revision, "Operator", TimingRulesTests.At);
+        }
+        await using var session = await new SqliteSeriesFileStore().OpenAsync(file);
+        var timing = new TimingWorkspace(new UncertainStore((ITimingStore)session, runChange: true), new AlgeDecoderFactory());
+        await timing.SelectRunAsync(first.Id);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, SimulatorOptions(), "Operator");
+        var plan = FisStartOrder.SecondRun(first,
+            first.Plan.Entries.Select(x => new RunFinish(x.Entrant.CompetitorId, FinishStatus.Finished, 6000)).ToArray());
+        var second = (await session.SaveStartListAsync(new(plan, (await session.ReadAsync()).Revision, "Operator", "Run 2", TimingRulesTests.At,
+            TimingReplay.InputVersion(await ((ITimingStore)session).ReadTimingAsync(first.Id))))).Revisions.Single(x => x.Plan.RunNumber == 2);
+        var change = timing.SelectRunAsync(second.Id);
+        await TimingStorageTests.UntilAsync(() => timing.Fault is not null);
+        Assert.False(change.IsCompleted);
+        timing.RetryStorage();
+        await change.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(second.Id, timing.ListId);
+        await timing.ExpectAsync(0, null);
+        await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks, 1);
+        await TimingStorageTests.UntilAsync(() => timing.SavedPackets == 1 && timing.Pending == 0);
+        await timing.StopAsync();
+        Assert.Null(timing.Fault);
+        var run1 = await ((ITimingStore)session).ReadTimingAsync(first.Id);
+        var run2 = await ((ITimingStore)session).ReadTimingAsync(second.Id);
+        Assert.True(Assert.Single(run1.Sessions).CleanStop);
+        Assert.True(Assert.Single(run2.Sessions).CleanStop);
+        Assert.Single(run2.Packets);
+        await timing.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Run2CaptureThatBeganReconnectsAfterAnAuditedRun1Change()
+    {
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var first = await TimingStorageTests.SeedAsync(workspace, PathFor("reconnect.ost"), 2);
+        await workspace.MarkRunStartedAsync(first.Id, (await workspace.ReadAsync()).Revision, "Operator", TimingRulesTests.At);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(first.Id);
+        await timing.StartAsync(new SimulatorTimingSource(), SimulatorOptions(), "Operator");
+        await timing.StopAsync();
+        foreach (var entry in first.Plan.Entries)
+        { await timing.CorrectAsync(new(DecisionKind.Time, CompetitorId: entry.Entrant.CompetitorId, Hundredths: 6000 + entry.Bib), "Operator", "Synthetic time"); }
+        var started = (await workspace.ReadStartListsAsync(first.Plan.CompetitionId)).Revisions.Single(x => x.Id == first.Id);
+        var second = (await workspace.SaveStartListAsync(new(FisStartOrder.SecondRun(started, timing.Snapshot!.ToRunFinishes()),
+            (await workspace.ReadAsync()).Revision, "Operator", "Run 2", TimingRulesTests.At,
+            TimingReplay.InputVersion(await workspace.ReadTimingAsync(first.Id))))).Revisions.Single(x => x.Plan.RunNumber == 2);
+        // Run 2 is connected to check the devices; nobody starts.
+        await timing.SelectRunAsync(second.Id);
+        await timing.StartAsync(new SimulatorTimingSource(), SimulatorOptions(), "Operator");
+        await timing.StopAsync();
+        // A jury decision changes Run 1 afterwards; any audited Run 1 change used to strand Run 2.
+        await timing.SelectRunAsync(first.Id);
+        await timing.CorrectStatusesAsync([first.Plan.Entries[0].Bib], TimingStatus.DSQ, "Operator", "Jury decision");
+        await timing.SelectRunAsync(second.Id);
+        await timing.StartAsync(new SimulatorTimingSource(), SimulatorOptions(), "Operator");
+        Assert.True(timing.IsActive);
+        await timing.StopAsync();
+        // The list on which capture began is still never redrawn.
+        var run1 = TimingReplay.Restore(await workspace.ReadTimingAsync(first.Id), new AlgeDecoderFactory());
+        await Assert.ThrowsAsync<DomainValidationException>(async () => await workspace.SaveStartListAsync(new(
+            FisStartOrder.SecondRun(started, run1.ToRunFinishes()), (await workspace.ReadAsync()).Revision, "Operator", "Redraw",
+            TimingRulesTests.At, TimingReplay.InputVersion(await workspace.ReadTimingAsync(first.Id)))));
+    }
+
+    private static CaptureOptions SimulatorOptions() => new("Test", "Synthetic", TimingRulesTests.Date, Simulation: true);
     [Fact]
     public async Task OverlappingStopCallsShareOneStop()
     {
@@ -225,14 +298,20 @@ public sealed class CaptureRecoveryTests : IDisposable
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    // Commits the audit row, then reports a storage error once: the caller cannot know the write succeeded.
-    private sealed class UncertainAuditStore(ITimingStore inner) : ITimingStore
+    // Commits the write, then reports a storage error once: the caller cannot know the write succeeded.
+    private sealed class UncertainStore(ITimingStore inner, bool audit = false, bool runChange = false) : ITimingStore
     {
         private bool _failed;
+        private void FailOnce() { if (!_failed) { _failed = true; throw new IOException("Injected uncertain commit"); } }
         public Task<TimingReplayData> ReadTimingAsync(Guid id, CancellationToken ct = default) => inner.ReadTimingAsync(id, ct);
         public Task<CaptureSession> BeginCaptureAsync(Guid id, CaptureOptions options, string who, DateTimeOffset at, CancellationToken ct = default) => inner.BeginCaptureAsync(id, options, who, at, ct);
         public Task<IReadOnlyList<CaptureSession>> BeginCaptureGroupAsync(Guid id, IReadOnlyList<CaptureOptions> options, string who, DateTimeOffset at, CancellationToken ct = default) => inner.BeginCaptureGroupAsync(id, options, who, at, ct);
-        public Task<IReadOnlyList<CaptureSession>> SwitchCaptureGroupAsync(IReadOnlyList<Guid> previous, Guid id, IReadOnlyList<CaptureOptions> options, string who, DateTimeOffset at, CancellationToken ct = default) => inner.SwitchCaptureGroupAsync(previous, id, options, who, at, ct);
+        public async Task<IReadOnlyList<CaptureSession>> SwitchCaptureGroupAsync(IReadOnlyList<Guid> previous, Guid id, IReadOnlyList<CaptureOptions> options, string who, DateTimeOffset at, CancellationToken ct = default)
+        {
+            var sessions = await inner.SwitchCaptureGroupAsync(previous, id, options, who, at, ct);
+            if (runChange) { FailOnce(); }
+            return sessions;
+        }
         public Task AppendRawAsync(RawTimingPacket packet, CancellationToken ct = default) => inner.AppendRawAsync(packet, ct);
         public Task EndCaptureAsync(Guid id, DateTimeOffset at, CancellationToken ct = default) => inner.EndCaptureAsync(id, at, ct);
         public Task<IReadOnlyList<TimingAudit>> AppendTimingAuditBatchAsync(Guid id, long version, IReadOnlyList<TimingAuditChange> changes,
@@ -242,7 +321,7 @@ public sealed class CaptureRecoveryTests : IDisposable
             string who, string why, DateTimeOffset at, long? undo = null, bool startsRun = false, CancellationToken ct = default)
         {
             var saved = await inner.AppendTimingAuditAsync(id, version, before, after, who, why, at, undo, startsRun, ct);
-            if (!_failed) { _failed = true; throw new IOException("Injected uncertain audit commit"); }
+            if (audit) { FailOnce(); }
             return saved;
         }
     }
