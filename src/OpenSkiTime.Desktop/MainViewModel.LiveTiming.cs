@@ -148,12 +148,17 @@ public sealed partial class MainViewModel
         }
         if (TimingCompetition?.Id != race.Id || _timingList?.Id != activeList.Id || _liveDisposed)
         { throw new LiveValidationException("Timing selection changed. Start live timing for the selected race."); }
-        var c = race.Values;
-        var state = new LiveSnapshot(++_liveVersion, new(c.Name, c.Calendar?.Location ?? _current?.Values.Location ?? "", DisciplineCode(c.Discipline),
-            c.Date, c.RaceType == RaceType.Fis, c.FisCode ?? "", activeList.Plan.Gender == Gender.Female ? "L" : "M", c.Calendar?.Category ?? "FIS", c.IntermediateCount, c.CourseName ?? ""),
+        var state = new LiveSnapshot(++_liveVersion, LiveCompetitionInfo(race, activeList),
             LiveSnapshotMapper.Competitors(selected), activeList.Plan.RunNumber, LiveSnapshotMapper.WithTotals(runs), DateTimeOffset.UtcNow);
         state.Validate(); _liveSnapshot = state; _liveLists = selected; _liveObservedTiming = current;
         _liveCompetitionId = race.Id; _livePanel?.Offer(race.Id, state);
+    }
+    // Rebuilt on every update: competition settings such as the intermediate count can change while live timing runs.
+    private LiveCompetition LiveCompetitionInfo(CompetitionDetails race, StartListRevision activeList)
+    {
+        var c = race.Values;
+        return new(c.Name, c.Calendar?.Location ?? _current?.Values.Location ?? "", DisciplineCode(c.Discipline),
+            c.Date, c.RaceType == RaceType.Fis, c.FisCode ?? "", activeList.Plan.Gender == Gender.Female ? "L" : "M", c.Calendar?.Category ?? "FIS", c.IntermediateCount, c.CourseName ?? "");
     }
     private void ApplyLivePanelState(ControlPanelOutput state, bool updateError = true)
     {
@@ -191,11 +196,13 @@ public sealed partial class MainViewModel
             _liveLists = _liveLists.Where(x => x.Plan.RunNumber != list.Plan.RunNumber).Append(list).ToArray();
             var run = LiveSnapshotMapper.MapRun(list, current, TimeZoneInfo.FindSystemTimeZoneById(LiveTimeZone), DateTimeOffset.UtcNow);
             _liveSnapshot = _liveSnapshot with { Version = ++_liveVersion, CurrentRun = TimingRun,
+                Competition = TimingCompetition is { } race ? LiveCompetitionInfo(race, list) : _liveSnapshot.Competition,
                 Competitors = LiveSnapshotMapper.Competitors(_liveLists),
                 Runs = LiveSnapshotMapper.WithTotals(_liveSnapshot.Runs.Where(x => x.Number != run.Number).Append(run)), UpdatedAt = DateTimeOffset.UtcNow };
             _liveSnapshot.Validate(); _liveObservedTiming = current;
             _livePanel.Offer(_liveCompetitionId!.Value, _liveSnapshot);
         }
+        catch (LiveValidationException ex) { LiveTimingError = $"Live timing state could not update: {ex.Message} Timing capture continues."; }
         catch (Exception) { LiveTimingError = "Live timing state could not update. Reopen the panel and check race settings. Timing capture continues."; }
     }
     private void DisposeLiveTiming()

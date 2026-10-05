@@ -29,7 +29,8 @@ public partial class DesktopWorkflowTests
             await using var workspace=new SeriesWorkspace(new SqliteSeriesFileStore(),new AlgeDecoderFactory());
             var date=new DateOnly(2026,9,27);
             var series=await workspace.CreateAsync(file,new("Synthetic live race","Test slope","Test club",date,date,"FIN","2026/27"));
-            series=await workspace.SaveCompetitionAsync(null,new("Synthetic SL","SL",date,Discipline.Slalom,RaceType.Fis,2,1,"9754"),series.Revision);
+            // Drawn without intermediates; the intermediate is added while live timing runs.
+            series=await workspace.SaveCompetitionAsync(null,new("Synthetic SL","SL",date,Discipline.Slalom,RaceType.Fis,2,0,"9754"),series.Revision);
             var competition=series.Competitions[0]; competitionId=competition.Id; var revision=series.Revision;
             for(var i=0;i<12;i++)
             { revision=(await workspace.SaveDeskRowAsync(null,new($"TEST{i:00}","Synthetic",2000,$"{123456+i}","FIN","Test Club",Gender.Female),competition.Id,true,null,revision)).Revision; }
@@ -52,7 +53,11 @@ public partial class DesktopWorkflowTests
                 using var http=new HttpClient();
                 var localId=new Uri(local.PublicUrl).Segments[^1]; var cloudId=new Uri(cloud.PublicUrl).Segments[^1];
                 UseSimulatorTiming(vm, 2);
-                await vm.ConnectTimingCommand.ExecuteAsync(null); await vm.ToggleTimingChannelCommand.ExecuteAsync("start"); await vm.ToggleTimingChannelCommand.ExecuteAsync("finish"); await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:1");
+                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                vm.ShowCompetitionsCommand.Execute(null); vm.SelectedCompetition=vm.Competitions.Single(); vm.CompetitionIntermediateCount=1;
+                await vm.SaveCompetitionCommand.ExecuteAsync(null); Assert.False(vm.IsError,vm.StatusMessage);
+                await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition,1)); Assert.False(vm.IsError,vm.StatusMessage);
+                await vm.ToggleTimingChannelCommand.ExecuteAsync("start"); await vm.ToggleTimingChannelCommand.ExecuteAsync("finish"); await vm.ToggleTimingChannelCommand.ExecuteAsync("intermediate:1");
                 var bib=vm.TimingRows[0].Bib; vm.SimulationTime="12:00:00.1234567";
                 await vm.SimulatePulseCommand.ExecuteAsync("start"); await WaitTimingAsync(vm,()=>vm.OnCourseRows.Count==1);
                 await LiveUiUntil(()=>local.Detail.Contains("Last OK",StringComparison.Ordinal));
@@ -62,6 +67,9 @@ public partial class DesktopWorkflowTests
                 Assert.True(vm.IsTimingConnected); Assert.True(workspace.Timing!.IsActive);
                 vm.SimulationTime="12:00:21.9999999"; await vm.SimulatePulseCommand.ExecuteAsync("intermediate:1");
                 await WaitTimingAsync(vm,()=>vm.TimingRows.First(r=>r.Bib==bib).HasSplits);
+                // The live state follows the changed intermediate count instead of rejecting the split.
+                await LiveApiUntil(http,vm.LiveLocalEndpoint,localId,s=>s.Competition.IntermediateCount==1&&s.Runs[0].Results.First(r=>r.Bib==bib).Splits.Length==1);
+                Assert.Equal("",vm.LiveTimingError);
                 vm.SimulationTime="12:01:00.9999999"; await vm.SimulatePulseCommand.ExecuteAsync("finish");
                 await WaitTimingAsync(vm,()=>vm.TimingRows.First(r=>r.Bib==bib).Status=="Finished");
                 Assert.Equal("1:00.87",vm.TimingRows.First(r=>r.Bib==bib).Time);
