@@ -17,6 +17,17 @@ test('equal ranks are listed with the higher bib first, independent of start ord
   assert.deepEqual(order(rows.slice().reverse(), startOrder.slice().reverse()), [7, 3, 1, 5, 4, 2, 6]);
 });
 
+test('from Run 2 on the combined rank orders the list, ex aequo with the higher bib first', () => {
+  const startOrder = [4, 3, 2, 1, 5];
+  // Bib 4 has the fastest Run 2 time but no combined time; bibs 1 and 2 share the best total.
+  const rows = [
+    { bib: 1, rank: 3, totalRank: 1 }, { bib: 2, rank: 2, totalRank: 1 }, { bib: 3, rank: 4, totalRank: 3 },
+    { bib: 4, rank: 1, totalRank: null }, { bib: 5 }
+  ];
+  assert.deepEqual(context.liveResultOrder(rows, startOrder, row => row.totalRank).map(row => row.bib), [2, 1, 3, 4, 5]);
+  assert.deepEqual(order(rows, startOrder), [4, 2, 1, 3, 5]);
+});
+
 test('rows without a rank follow the ranked rows in start order and nothing is dropped', () => {
   const startOrder = [30, 10, 20, 40, 50];
   const rows = [{ bib: 10 }, { bib: 50, rank: 2 }, { bib: 20 }, { bib: 40, rank: 1 }, { bib: 30 }];

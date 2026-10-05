@@ -34,7 +34,11 @@ public sealed class FisPublisher(IFisLiveTimingTransport transport, string passw
             || snapshot.Runs.Any(r => r.Results.Any(x => _sent.Runs.FirstOrDefault(p => p.Number == r.Number)?.Results.FirstOrDefault(p => p.Bib == x.Bib)?.Splits
                 .Any(p => !x.Splits.Any(s => s.Number == p.Number)) == true))
             || snapshot.Runs.Any(r => r.Results.Any(x => x.Status is LiveStatus.Ready or LiveStatus.Review
-                && _sent.Runs.FirstOrDefault(p => p.Number == r.Number)?.Results.FirstOrDefault(p => p.Bib == x.Bib)?.Status != x.Status));
+                && _sent.Runs.FirstOrDefault(p => p.Number == r.Number)?.Results.FirstOrDefault(p => p.Bib == x.Bib)?.Status != x.Status))
+            // FIS has no message that takes back a finish or a status. A racer returned to the course (an ignored false
+            // finish, a cleared DNF) is restored by rebuilding the run, as for any other removal.
+            || snapshot.Runs.Any(r => r.Results.Any(x => x.Status == LiveStatus.OnCourse
+                && HasResult(_sent.Runs.FirstOrDefault(p => p.Number == r.Number)?.Results.FirstOrDefault(p => p.Bib == x.Bib))));
         if (refresh || structural)
         {
             // A startlist clears that run's results (v53 p41). Restore every known run in ascending order.
@@ -43,7 +47,8 @@ public sealed class FisPublisher(IFisLiveTimingTransport transport, string passw
             {
                 await SendAsync(StartList(snapshot, run), ct);
                 await ActivateAsync(run.Number, ct, force: true);
-                foreach (var result in run.Results) { await SendResultAsync(snapshot, run, result, null, ct); }
+                var finishes = FinishValues(snapshot, run);
+                foreach (var result in run.Results) { await SendResultAsync(run, result, null, null, finishes, ct); }
             }
             await ActivateAsync(snapshot.CurrentRun, ct);
         }
@@ -51,11 +56,20 @@ public sealed class FisPublisher(IFisLiveTimingTransport transport, string passw
         {
             foreach (var run in snapshot.Runs)
             {
-                var changes = run.Results.Where(r => !_sent!.Runs.First(x => x.Number == run.Number).Results.Any(p => p.Bib == r.Bib && StandalonePublisher.Equivalent(p,r))).ToArray();
+                var sentRun = _sent!.Runs.First(x => x.Number == run.Number);
+                // Rank and difference describe the standings, so a finish is sent again whenever its transmitted values
+                // change, also when only another racer's result moved them (in Run 2, the combined standings).
+                var finishes = FinishValues(snapshot, run);
+                var sentFinishes = FinishValues(_sent, sentRun);
+                var changes = run.Results.Where(r => !sentRun.Results.Any(p => p.Bib == r.Bib && StandalonePublisher.Equivalent(p, r))
+                    || finishes.GetValueOrDefault(r.Bib) != sentFinishes.GetValueOrDefault(r.Bib)).ToArray();
                 if (changes.Length == 0) { continue; }
                 await ActivateAsync(run.Number, ct);
                 foreach (var result in changes)
-                { await SendResultAsync(snapshot, run, result, _sent!.Runs.First(x => x.Number == run.Number).Results.FirstOrDefault(p => p.Bib == result.Bib), ct); }
+                {
+                    await SendResultAsync(run, result, sentRun.Results.FirstOrDefault(p => p.Bib == result.Bib),
+                        sentFinishes.TryGetValue(result.Bib, out var sent) ? sent : null, finishes, ct);
+                }
             }
             await ActivateAsync(snapshot.CurrentRun, ct);
         }
@@ -89,7 +103,28 @@ public sealed class FisPublisher(IFisLiveTimingTransport transport, string passw
         run.StartOrder.Select((bib, i) => { var c = s.Competitors.First(x => x.Bib == bib); return new XElement("racer", new XAttribute("order", i+1),
             new XElement("bib", bib), new XElement("lastname", c.LastName.ToUpperInvariant()), new XElement("firstname", c.FirstName), new XElement("nat", c.Nation), new XElement("fiscode", c.FisCode)); }));
     private XElement Active(int run) => new("command", new XAttribute("timestamp", Stamp(_clock.GetUtcNow())), new XElement("active", new XAttribute("runno", run)));
-    private async Task SendResultAsync(LiveSnapshot state, LiveRun run, LiveResult r, LiveResult? old, CancellationToken ct)
+    // correction="y" marks a change to a result FIS already has (v53 p69): a finish or a DNS/DNF/DSQ/NPS sent before.
+    // A first finish or status after a start is a new result.
+    private static bool HasResult(LiveResult? sent) => sent?.Status is LiveStatus.Finished or LiveStatus.DNS or LiveStatus.DNF
+        or LiveStatus.DSQ or LiveStatus.NPS;
+    // Alpine finish carries this run's net time; FIS adds the earlier runs itself (v53 p23). Difference and rank describe
+    // the standings: from Run 2 on, the combined time of every run so far, ex aequo for equal totals. A racer without a
+    // finished time in every earlier run has no combined time and is sent with the run time only (v53 p57).
+    private static Dictionary<int, FinishValue> FinishValues(LiveSnapshot state, LiveRun run)
+    {
+        var earlier = state.Runs.Where(x => x.Number < run.Number).ToArray();
+        var finished = run.Results.Where(x => x.Status == LiveStatus.Finished).ToArray();
+        var totals = finished.ToDictionary(x => x.Bib, x => earlier.All(e => e.Results.Any(p => p.Bib == x.Bib && p.Status == LiveStatus.Finished))
+            ? x.Hundredths!.Value + earlier.Sum(e => e.Results.First(p => p.Bib == x.Bib && p.Status == LiveStatus.Finished).Hundredths!.Value)
+            : (long?)null);
+        var ranked = totals.Values.OfType<long>().ToArray();
+        return finished.ToDictionary(x => x.Bib, x => totals[x.Bib] is { } total
+            ? new FinishValue(x.Hundredths!.Value, total - ranked.Min(), ranked.Count(t => t < total) + 1)
+            : new FinishValue(x.Hundredths!.Value, null, null));
+    }
+    private sealed record FinishValue(long Time, long? Diff, int? Rank);
+    private async Task SendResultAsync(LiveRun run, LiveResult r, LiveResult? old, FinishValue? sentFinish,
+        IReadOnlyDictionary<int, FinishValue> finishes, CancellationToken ct)
     {
         var items = new List<XElement>();
         if (r.StartedAt is { } started && (old is null || old.StartedAt != started))
@@ -104,22 +139,14 @@ public sealed class FisPublisher(IFisLiveTimingTransport transport, string passw
         }
         var status = r.Status switch { LiveStatus.DNS => "dns", LiveStatus.DNF => "dnf", LiveStatus.DSQ => "dq", LiveStatus.NPS => "nps", _ => null };
         if (status is not null && old?.Status != r.Status)
-        { items.Add(new(status, new XAttribute("bib", r.Bib), new XAttribute("timestamp", Stamp(r.At)), old is null || status == "nps" ? null : new XAttribute("correction", "y"))); }
-        if (r.Status == LiveStatus.Finished && (old is null || old.Status != r.Status || old.Hundredths != r.Hundredths || old.Rank != r.Rank || old.Difference != r.Difference))
-        {
-            // Alpine finish is this run's net time. The FIS server adds previous runs itself (v53 p23).
-            long Total(LiveResult result) => result.Hundredths!.Value + state.Runs.Where(x => x.Number < run.Number)
-                .Sum(x => x.Results.FirstOrDefault(p => p.Bib == result.Bib && p.Status == LiveStatus.Finished)?.Hundredths ?? 0);
-            var times = run.Results.Where(x => x.Status == LiveStatus.Finished).Select(Total).ToArray();
-            var elapsed = r.Hundredths!.Value;
-            var total = Total(r);
-            items.Add(TimeElement("finish", r.Bib, elapsed, total - times.Min(), times.Count(x => x < total) + 1, r.At, old is not null));
-        }
+        { items.Add(new(status, new XAttribute("bib", r.Bib), new XAttribute("timestamp", Stamp(r.At)), HasResult(old) && status != "nps" ? new XAttribute("correction", "y") : null)); }
+        if (finishes.TryGetValue(r.Bib, out var finish) && (old?.Status != LiveStatus.Finished || finish != sentFinish))
+        { items.Add(TimeElement("finish", r.Bib, finish.Time, finish.Diff, finish.Rank, r.At, HasResult(old))); }
         if (items.Count > 0) { await SendAsync(new XElement("raceevent", new XAttribute("timestamp", Stamp(r.At)), items), ct); }
     }
-    private static XElement TimeElement(string tag, int bib, long elapsed, long diff, int rank, DateTimeOffset at, bool correction, XAttribute? extra = null)
+    private static XElement TimeElement(string tag, int bib, long elapsed, long? diff, int? rank, DateTimeOffset at, bool correction, XAttribute? extra = null)
         => new(tag, new XAttribute("bib", bib), new XAttribute("timestamp", Stamp(at)), correction ? new XAttribute("correction", "y") : null, extra,
-            new XElement("time", Time(elapsed)), new XElement("diff", Time(diff)), new XElement("rank", rank));
+            new XElement("time", Time(elapsed)), diff is { } gap ? new XElement("diff", Time(gap)) : null, rank is { } place ? new XElement("rank", place) : null);
     private static string Time(long value) => value >= 6000 ? string.Create(CultureInfo.InvariantCulture, $"{value / 6000}:{value / 100 % 60:00}.{value % 100:00}") : string.Create(CultureInfo.InvariantCulture, $"{value / 100}.{value % 100:00}");
     private static string Stamp(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture);
     public ValueTask DisposeAsync() => transport.DisposeAsync();

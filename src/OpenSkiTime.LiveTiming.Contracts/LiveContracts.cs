@@ -18,6 +18,11 @@ public sealed record LiveResult(int Bib, LiveStatus Status, long? Hundredths, in
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] long? FinishSourceTicks = null, LiveSplit[]? Intermediates = null)
 {
     public LiveSplit[] Splits => Intermediates ?? [];
+    // From Run 2 on: the combined time of all runs so far, its rank (equal totals share a rank) and the gap to the best
+    // total, as calculated by timing. Null in Run 1 and for a racer without a finished time in every run so far.
+    public long? TotalHundredths { get; init; }
+    public int? TotalRank { get; init; }
+    public long? TotalDifference { get; init; }
 }
 public sealed record LiveRun(int Number, DateTimeOffset ListCreatedAt, int[] StartOrder, LiveResult[] Results);
 public sealed record LiveCompetition(string Name, string Place, string Discipline, DateOnly Date,
@@ -58,6 +63,9 @@ public sealed record LiveSnapshot(long Version, LiveCompetition Competition, Liv
         ArgumentNullException.ThrowIfNull(r);
         if (!Enum.IsDefined(r.Status) || r.Bib is < 1 or > 99999 || r.Hundredths < 0 || r.Difference < 0 || r.At == default
             || r.Rank < 1 || (r.Status == LiveStatus.Finished && r.Hundredths is null)
+            || r.TotalHundredths < 0 || r.TotalDifference < 0 || r.TotalRank < 1
+            || ((r.TotalHundredths is null) != (r.TotalRank is null) || (r.TotalHundredths is null) != (r.TotalDifference is null))
+            || (r.TotalHundredths is not null && (r.Status != LiveStatus.Finished || r.TotalHundredths < r.Hundredths))
             || r.StartSourceTicks < 0 || r.FinishSourceTicks < 0 || r.StartSourceTicks > DateTime.MaxValue.Ticks || r.FinishSourceTicks > DateTime.MaxValue.Ticks || r.Splits.Length > intermediateCount
             || r.Splits.Any(x => x is null || x.Number < 1 || x.Number > intermediateCount || x.Hundredths < 0 || x.SourceTicks < 0 || x.SourceTicks > DateTime.MaxValue.Ticks || x.At == default)
             || r.Splits.Select(x => x.Number).Distinct().Count() != r.Splits.Length)

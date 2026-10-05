@@ -38,11 +38,16 @@
     // Show the intermediates column only when this run has at least one intermediate time.
     const intermediates = run.results.some(r => (r.intermediates || []).length > 0);
     get('intermediates').hidden = !intermediates;
-    const rows = liveResultOrder(run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'}), run.startOrder);
+    // From Run 2 on, standings use the combined time of all runs. A publisher without totals keeps the run standings.
+    const totals = run.number > 1 && run.results.some(r => r.totalHundredths != null);
+    get('total').hidden = !totals;
+    const rank = r => totals ? r.totalRank : r.rank, gap = r => totals ? r.totalDifference : r.difference;
+    const rows = liveResultOrder(run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'}), run.startOrder, rank);
     rows.forEach(r => {
       const c = next.competitors.find(c => c.bib === r.bib), tr = document.createElement('tr'); tr.dataset.bib = r.bib; tr.className = r.status.toLowerCase();
-      [r.rank || '—', r.bib, `${c.lastName} ${c.firstName}`, [c.nation,c.club].filter(Boolean).join(' / '), r.status,
-        intermediates ? (r.intermediates || []).map(i => `I${i.number} ${time(i.hundredths)}`).join(' · ') || '—' : null, time(r.hundredths), r.difference == null ? '—' : '+' + time(r.difference)]
+      [rank(r) || '—', r.bib, `${c.lastName} ${c.firstName}`, [c.nation,c.club].filter(Boolean).join(' / '), r.status,
+        intermediates ? (r.intermediates || []).map(i => `I${i.number} ${time(i.hundredths)}`).join(' · ') || '—' : null, time(r.hundredths),
+        totals ? time(r.totalHundredths) : null, gap(r) == null ? '—' : '+' + time(gap(r))]
         .filter(value => value !== null)
         .forEach(value => { const td = document.createElement('td'); td.textContent = value; tr.append(td); });
       get('results').append(tr);
