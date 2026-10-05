@@ -48,6 +48,7 @@ public sealed partial class TimingView : UserControl
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.HasTimingIntermediates)) { ConfigureColumns(); }
+        if (e.PropertyName == nameof(MainViewModel.TimingRun)) { ConfigureRankingColumns(); }
         if (e.PropertyName == nameof(MainViewModel.TimingChannelStates)) { UpdateChannelVisibility(); }
         if (e.PropertyName == nameof(MainViewModel.RaceQueueVersion))
         { Dispatcher.UIThread.Post(ScrollToNext, DispatcherPriority.Background); }
@@ -96,6 +97,7 @@ public sealed partial class TimingView : UserControl
 
     private void ConfigureColumns()
     {
+        ConfigureRankingColumns();
         var count = _viewModel?.TimingCheckpoints.Count ?? 0;
         if (count == _splitCount) { UpdateChannelVisibility(); return; }
         _splitCount = count;

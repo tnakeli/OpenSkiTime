@@ -136,10 +136,28 @@ public sealed partial class MainViewModel
             _queueSnapshot = snapshot;
             _queueArmedStart = timing.ArmedStart;
             _queueArmedFinish = timing.ArmedFinish;
-            var previousTimes = _previousTiming?.Results.ToDictionary(x => x.CompetitorId, x => x.Time);
-            var currentRows = TimingEngine.Combined(snapshot, _previousTiming)
-                .ToDictionary(x => x.Result.Bib, x => new TimingGridRow(x.Result, x.Total, x.Rank)
-                { PreviousRunTime = previousTimes?.GetValueOrDefault(x.Result.CompetitorId) ?? "" });
+            string CategoryOf(TimingResult result) => HasTimingCategories ? CategoryResolver.Resolve(result.Entry.Entrant.Athlete, _desk!.Categories) : "";
+            var previousResults = _previousTiming?.Results.ToDictionary(x => x.CompetitorId);
+            // Ranking columns rank within the same group as the RK column: the previous run among its finishers and each
+            // intermediate among every valid split time of this run, ex aequo sharing a rank.
+            long? FinishedTime(TimingResult? result) => result?.Status == TimingStatus.Finished ? result.Hundredths : null;
+            var previousFields = (_previousTiming?.Results ?? []).GroupBy(CategoryOf)
+                .ToDictionary(x => x.Key, x => x.Select(FinishedTime).ToArray());
+            var splitFields = snapshot.Results.GroupBy(CategoryOf).ToDictionary(x => x.Key, x => x.SelectMany(r => r.Splits)
+                .GroupBy(split => split.Number).ToDictionary(split => split.Key, split => split.Select(y => y.Hundredths).ToArray()));
+            var currentRows = TimingEngine.Combined(snapshot, _previousTiming).ToDictionary(x => x.Result.Bib, x =>
+            {
+                var category = CategoryOf(x.Result);
+                var previous = previousResults?.GetValueOrDefault(x.Result.CompetitorId);
+                return new TimingGridRow(x.Result, x.Total, x.Rank)
+                {
+                    PreviousRunTime = previous?.Time ?? "",
+                    PreviousRunHundredths = FinishedTime(previous),
+                    PreviousRunRank = ResultOrder.Rank(FinishedTime(previous), previousFields.GetValueOrDefault(category) ?? []),
+                    IntermediateRanks = x.Result.Splits.Select(split => ResultOrder.Rank(split.Hundredths,
+                        splitFields[category].GetValueOrDefault(split.Number) ?? [])).ToArray()
+                };
+            });
             TimingGridRow Map(TimingResult result) => currentRows[result.Bib];
             var onCourse = RaceFlow.OnCourse(snapshot).Select(Map).ToArray();
             SyncTimingRows(OnCourseRows, onCourse);
@@ -150,7 +168,7 @@ public sealed partial class MainViewModel
             TimingGridRow Present(TimingGridRow row) => row with
             {
                 IsLatestFinish = row.Bib == latest,
-                Category = HasTimingCategories ? CategoryResolver.Resolve(row.Result.Entry.Entrant.Athlete, _desk!.Categories) : ""
+                Category = CategoryOf(row.Result)
             };
             SyncTimingRows(AtStartRows, RaceFlow.Waiting(snapshot).Reverse().Select(Map).ToArray());
             var arrivalOrder = onCourse.OrderBy(x => x.Bib == timing.ArmedFinish ? 1 : 0)

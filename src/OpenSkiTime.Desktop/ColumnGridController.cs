@@ -33,9 +33,10 @@ internal sealed class ColumnGridController<T> where T : class
             var key = string.IsNullOrEmpty(column.SortMemberPath) ? binding.Path : column.SortMemberPath;
             if (string.IsNullOrEmpty(key)) { continue; }
             column.SortMemberPath = key;
-            column.HeaderTemplate = new FuncDataTemplate<string>((_, _) =>
+            // The template reads the header it is given, so a column may rename itself (such as the current run).
+            column.HeaderTemplate = new FuncDataTemplate<string>((text, _) =>
             {
-                var header = new ColumnHeaderControls(prefix, key, label, () => _filters.GetValueOrDefault(key, ""),
+                var header = new ColumnHeaderControls(prefix, key, string.IsNullOrEmpty(text) ? label : text, () => _filters.GetValueOrDefault(key, ""),
                     text => ApplyFilter(key, text), () => _sortedKey == key ? _descending : null,
                     () => Sort(key), menu => { FilterMenu?.Hide(); FilterMenu = menu; });
                 _headers.Add(header); return header.Content;

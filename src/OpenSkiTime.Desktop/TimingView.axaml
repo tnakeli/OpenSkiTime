@@ -114,7 +114,8 @@
       <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="130" />
       <DataGridTextColumn Header="NAT" Binding="{Binding Result.Entry.Entrant.Athlete.Nation}" Width="55" />
       <DataGridTextColumn Header="CLUB" Binding="{Binding Result.Entry.Entrant.Athlete.Club}" Width="*" MinWidth="100" />
-      <DataGridTextColumn Header="TIME / STATE" Binding="{Binding DisplayTime}" Width="100" />
+      <DataGridTextColumn Header="RUN 1" Binding="{Binding PreviousRunRanked}" Width="96" IsVisible="{Binding ShowTimingTotal}" Tag="previousRun" />
+      <DataGridTextColumn Header="RUN 1" Binding="{Binding DisplayTime}" Width="90" Tag="runTime" />
       <DataGridTextColumn Header="TOTAL" Binding="{Binding TotalTime}" Width="90" IsVisible="{Binding ShowTimingTotal}" />
      </DataGrid.Columns>
     </DataGrid>
