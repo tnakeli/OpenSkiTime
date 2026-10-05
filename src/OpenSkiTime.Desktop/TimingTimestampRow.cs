@@ -7,9 +7,12 @@ public sealed record TimingTimestampCell(Guid ListId, ObservationReview Review, 
     public string Key => Review.Observation.Key;
     public string Time => TimingTime.FormatTimeOfDay(Review.Observation.DeviceTicks);
     public int Channel => Review.Observation.Channel!.Value;
-    public string Position => Channel == 0 ? "Start" : Channel == 1 ? "Finish" : $"Interm {Channel - 1}";
+    public string Position => MainViewModel.TimingPositionLabel(Channel);
     public string State => Review.Ignored ? "Ignored" : Review.Bib is null ? "Unassigned" : $"Bib {Review.Bib}";
-    public string Hint => $"{Position} · {Time} · {State}. Drop a competitor here to assign this timestamp.";
+    // Operator-entered (not received from a device); shown as a small "m" next to the time.
+    public bool IsManual => Review.Observation.ManualEntry;
+    public string Hint => $"{Position} · {Time}{(IsManual ? " · " + Review.Observation.Message : "")} · {State}. "
+        + "Drop a competitor here to assign this timestamp. Double-click to enter a missing time manually.";
 }
 
 public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IReadOnlyList<TimingTimestampCell?> Cells)
@@ -28,7 +31,8 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
         var rows = new List<TimingTimestampRow>();
         foreach (var pulse in input.Where(x => x.Bib is null).Reverse())
         {
-            rows.Add(new(pulse.Observation.Key, null, pulse.Ignored ? "Ignored impulse" : "Unassigned impulse",
+            var kind = pulse.Observation.ManualEntry ? "manual time" : "impulse";
+            rows.Add(new(pulse.Observation.Key, null, pulse.Ignored ? "Ignored " + kind : "Unassigned " + kind,
                 Cells(c => c == pulse.Observation.Channel ? Cell(pulse) : null).ToArray()));
         }
         var byBib = input.Where(x => x.Bib is not null).GroupBy(x => x.Bib!.Value).ToDictionary(x => x.Key, x => x.ToArray());

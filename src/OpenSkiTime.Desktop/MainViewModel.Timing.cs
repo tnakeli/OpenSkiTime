@@ -18,7 +18,11 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public int? DisplayRank { get; init; }
     public bool IsLatestFinish { get; init; }
     public string FinishMarker => IsLatestFinish ? "◆" : "";
-    public IReadOnlyList<string> Intermediates => Result.Splits.Select(x => x.Time).ToArray();
+    public IReadOnlyList<string> Intermediates => Result.Splits.Select(x => x.Time + ManualMark(x.Manual && x.Hundredths is not null)).ToArray();
+    // A small "m" marks a time that uses an operator-entered timestamp.
+    public static string ManualMark(bool manual) => manual ? " m" : "";
+    public string ClockManualMark => ManualMark(Result.Status == TimingStatus.OnCourse && Result.StartManual
+        || Result.Status == TimingStatus.Finished && (Result.StartManual || Result.FinishManual));
     public RunningTimeDisplay Clock { get; } = new();
     public int Position => Result.Entry.Position;
     public int Bib => Result.Bib;
@@ -26,12 +30,12 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public string Name => Result.Name;
     public string Status => Result.Status switch { TimingStatus.OnCourse => "On course", TimingStatus.Review => "No time", _ => Result.Status.ToString() };
     public string Time => Result.Time;
-    public string DisplayTime => Result.Status == TimingStatus.Finished ? Time : Status;
+    public string DisplayTime => Result.Status == TimingStatus.Finished ? Time + ClockManualMark : Status;
     public string TotalTime => TimingTime.Format(Total);
     public int? Rank => Result.Rank;
     public string Detail => Result.Detail;
     public string Label => $"{Bib} · {Name}";
-    public string SplitTimes => string.Join("  ·  ", Result.Splits.Where(x => x.ObservationKey is not null).Select(x => $"I{x.Number} {x.Time}"));
+    public string SplitTimes => string.Join("  ·  ", Result.Splits.Where(x => x.ObservationKey is not null).Select(x => $"I{x.Number} {x.Time}{ManualMark(x.Manual && x.Hundredths is not null)}"));
     public bool HasSplits => Result.Splits.Any(x => x.ObservationKey is not null);
 }
 
@@ -589,6 +593,8 @@ public sealed partial class MainViewModel
                 dsq.Reason.Length > 0 ? " · " + dsq.Reason : "",
                 dsq.Judge.Length > 0 ? " · Judge " + dsq.Judge : "") : ""),
         DecisionKind.StartOrder => value.StartOrder ?? "Draw order",
+        DecisionKind.ManualTime => value.Timestamp is { } entry
+            ? $"Manual {TimingPositionLabel(entry.Channel)} {TimingTime.FormatTimeOfDay(entry.DeviceTicks)}" : "No manual time",
         _ => value.Hundredths is null ? "Use recorded times" : TimingTime.Format(value.Hundredths)
     };
 

@@ -56,7 +56,7 @@ public sealed partial class MainViewModel
     {
         var timing = workspace.Timing;
         foreach (var row in TimingRows.Concat(OnCourseRows).Concat(RunningRows))
-        { row.Clock.Time = TimingTime.Format(row.Result.Status == TimingStatus.OnCourse ? timing?.RunningHundredths(row.Result.StartKey) : row.Result.Hundredths); }
+        { row.Clock.Time = TimingTime.Format(row.Result.Status == TimingStatus.OnCourse ? timing?.RunningHundredths(row.Result.StartKey) : row.Result.Hundredths) + row.ClockManualMark; }
         foreach (var row in AtStartRows) { row.Clock.Marker = row.Bib == timing?.ArmedStart ? "▶" : ""; }
         foreach (var row in RunningRows)
         { row.Clock.Marker = row.Bib == timing?.ArmedFinish ? "▶" : ""; }

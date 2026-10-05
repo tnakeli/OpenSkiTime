@@ -91,7 +91,8 @@
      <TextBlock Text="TIMESTAMPS · TIME OF DAY" Classes="raceHeading" />
     </Grid>
     <DataGrid Grid.Row="1" Name="TimestampsGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimestampRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
-     AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="26" GridLinesVisibility="All">
+     AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="26" GridLinesVisibility="All"
+     ToolTip.Tip="Drop a competitor on a timestamp to assign it. Double-click a START, INTERM or FINISH cell (or F2) to enter a missing time manually; m marks a manual time.">
      <DataGrid.Columns>
       <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="54" />
       <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="160" />
@@ -150,6 +151,19 @@
       <StackPanel Grid.Column="2"><TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="eyebrow" /><TextBox Text="{Binding TimingReason}" Watermark="Default classification note is recorded when empty" /></StackPanel>
       <Button Grid.Column="4" Name="SaveTimingClassification" Content="Save classification" Command="{Binding SaveTimingClassificationCommand}" VerticalAlignment="Bottom" />
      </Grid>
+    </StackPanel>
+   </Border>
+   <Border Name="ManualTimestampEditor" IsVisible="{Binding ShowManualTimestampEditor}" Classes="racePane" Padding="8">
+    <Border.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SaveManualTimestampCommand}" /><KeyBinding Gesture="Escape" Command="{Binding CancelManualTimestampCommand}" /></Border.KeyBindings>
+    <StackPanel Spacing="4">
+     <Grid ColumnDefinitions="90,8,170,8,*,8,Auto,6,Auto">
+      <StackPanel><TextBlock Text="MANUAL TIME" Classes="eyebrow" /><TextBlock Name="ManualTimestampPositionText" Text="{Binding ManualTimestampPosition}" FontWeight="SemiBold" Margin="0,6,0,0" /></StackPanel>
+      <StackPanel Grid.Column="2"><TextBlock Text="TIME OF DAY HH:MM:SS.FF" Classes="eyebrow" /><TextBox Name="ManualTimestampTime" Text="{Binding ManualTimestampText}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" /></StackPanel>
+      <StackPanel Grid.Column="4"><TextBlock Text="REASON" Classes="eyebrow" /><TextBox Name="ManualTimestampReasonText" Text="{Binding ManualTimestampReason}" /></StackPanel>
+      <Button Grid.Column="6" Name="SaveManualTimestamp" Content="Add timestamp" Command="{Binding SaveManualTimestampCommand}" VerticalAlignment="Bottom" ToolTip.Tip="Enter · saved with operator, reason and time in the correction history" />
+      <Button Grid.Column="8" Content="Cancel" Command="{Binding CancelManualTimestampCommand}" Classes="secondaryAction" VerticalAlignment="Bottom" ToolTip.Tip="Esc" />
+     </Grid>
+     <TextBlock Text="{Binding ManualTimestampError}" IsVisible="{Binding HasManualTimestampError}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
     </StackPanel>
    </Border>
    <TextBlock Text="{Binding SelectedTimingProblem}" IsVisible="{Binding HasSelectedTimingProblem}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
