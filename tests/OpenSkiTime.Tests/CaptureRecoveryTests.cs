@@ -275,6 +275,77 @@ public sealed class CaptureRecoveryTests : IDisposable
         await timing.StopAsync();
     }
 
+    [Fact]
+    public async Task AReconnectedDeviceLineCutOffEarlierDoesNotBlockARunChange()
+    {
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var first = await TimingStorageTests.SeedAsync(workspace, PathFor("reconnect.ost"), 1);
+        await workspace.MarkRunStartedAsync(first.Id, (await workspace.ReadAsync()).Revision, "Operator", TimingRulesTests.At);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(first.Id);
+        var source = new PortSource();
+        await timing.StartAsync(source, SimulatorOptions(), "Operator");
+        // The cable is pulled partway through a line; the reopened port continues on a new stream.
+        await source.SendAsync("alge-ascii/v1", "1", " 0001 C0 10:00:");
+        await source.SendAsync("transport-status", "disconnect", "Serial connection lost/unavailable.");
+        await source.SendAsync("alge-ascii/v1", "2", " 0002 C0 10:05:00.0000 00\r");
+        await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Observations.Any(x => x.Observation.Kind == ObservationKind.Impulse));
+        var live = timing.Snapshot!.Observations.Select(x => (x.Observation.Key, x.Observation.Kind)).ToArray();
+        Assert.Contains(timing.Snapshot.Observations, x => x.Observation.Message.StartsWith("Incomplete device line", StringComparison.Ordinal));
+        var plan = FisStartOrder.SecondRun(first,
+            first.Plan.Entries.Select(x => new RunFinish(x.Entrant.CompetitorId, FinishStatus.Finished, 6000)).ToArray());
+        var second = (await workspace.SaveStartListAsync(new(plan, (await workspace.ReadAsync()).Revision, "Operator", "Run 2",
+            TimingRulesTests.At, TimingReplay.InputVersion(await workspace.ReadTimingAsync(first.Id))))).Revisions.Single(x => x.Plan.RunNumber == 2);
+        // The old stream's fragment can never be completed by the device; it must not hold the run change until disconnect.
+        await timing.SelectRunAsync(second.Id).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(second.Id, timing.Snapshot!.ListId);
+        await timing.StopAsync();
+        // Replaying the journal reproduces exactly what live capture showed for Run 1.
+        var replayed = TimingReplay.Restore(await workspace.ReadTimingAsync(first.Id), new AlgeDecoderFactory());
+        Assert.Equal(live, replayed.Observations.Select(x => (x.Observation.Key, x.Observation.Kind)));
+    }
+
+    [Fact]
+    public async Task CompetitorBatchesAndImportsWaitForCaptureToDrainLikeSingleChanges()
+    {
+        var file = PathFor("registration.ost");
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, file, 1);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        await timing.StartAsync(new SimulatorTimingSource(), SimulatorOptions(), "Operator");
+        var series = await workspace.ReadAsync();
+        var athlete = new CompetitorValues("LATE", "Entry", 2001, "990123", "FIN", "Club", Gender.Female);
+        var batch = new DeskBatch(series.Id, series.Revision, [new DeskBatchRow(null, athlete, [])], []);
+        var import = new ImportCommit(series.Id, series.Revision, new string('a', 64), [new ImportCommitRow(null, athlete, [])]);
+        await Assert.ThrowsAsync<SeriesFileException>(() => workspace.SaveDeskRowAsync(null, athlete, null, false, null, series.Revision));
+        await Assert.ThrowsAsync<SeriesFileException>(() => workspace.ApplyDeskBatchAsync(batch));
+        await Assert.ThrowsAsync<SeriesFileException>(() => workspace.ApplyImportAsync(import));
+        // Another instance of the application is refused too while this one captures.
+        await using (var other = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory()))
+        {
+            await other.OpenAsync(file);
+            await Assert.ThrowsAsync<SeriesFileException>(() => other.ApplyDeskBatchAsync(batch));
+            await Assert.ThrowsAsync<SeriesFileException>(() => other.ApplyImportAsync(import));
+        }
+        Assert.Equal(series.Revision, (await workspace.ReadAsync()).Revision);
+        await timing.StopAsync();
+        Assert.Equal(1, (await workspace.ApplyDeskBatchAsync(batch)).Created);
+    }
+
+    private sealed class PortSource : ITimingSource
+    {
+        private readonly Channel<TransportPacket> _input = Channel.CreateUnbounded<TransportPacket>();
+        public ValueTask SendAsync(string protocol, string stream, string text)
+            => _input.Writer.WriteAsync(new(protocol, "COM3", stream, Encoding.ASCII.GetBytes(text)));
+        public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
+        {
+            status("Synthetic serial port");
+            await foreach (var packet in _input.Reader.ReadAllAsync(ct)) { await receive(packet); }
+        }
+        public ValueTask DisposeAsync() { _input.Writer.TryComplete(); return ValueTask.CompletedTask; }
+    }
+
     private sealed class ControlledSource : ITimingSource
     {
         private readonly Channel<TransportPacket> _input = Channel.CreateUnbounded<TransportPacket>();

@@ -23,15 +23,15 @@ public sealed record AuxiliaryTimingData(Guid ListId, IReadOnlyList<AuxiliaryCap
         foreach (var session in Sessions)
         {
             AuxiliaryTimingValidation.Validate(session.Role, session.Capture.Options);
-            var decoders = new Dictionary<string, ITimingDecoder>(StringComparer.Ordinal);
+            var decoders = new StreamDecoders();
             foreach (var packet in Packets.Where(x => x.SessionId == session.Capture.Id).OrderBy(x => x.Sequence))
             {
-                var key = $"{packet.Protocol}:{packet.Source}:{packet.Stream}";
-                if (!decoders.TryGetValue(key, out var decoder))
-                { decoder = factory.Create(session.Capture, packet.Protocol, packet.Source, packet.Stream); decoders.Add(key, decoder); }
+                var superseded = new List<TimingObservation>();
+                var decoder = decoders.For(factory, session.Capture, packet, superseded);
+                result.AddRange(superseded.Select(x => Wrap(session, x)));
                 result.AddRange(TimingReplay.Decode(decoder, packet).Select(x => Wrap(session, x) with { ReceivedAt = packet.ReceivedAt }));
             }
-            foreach (var decoder in decoders.Values) { result.AddRange(decoder.Complete().Select(x => Wrap(session, x))); }
+            result.AddRange(decoders.Complete().Select(x => Wrap(session, x)));
             if (!session.Capture.CleanStop)
             {
                 result.Add(Wrap(session, new($"{session.Capture.Id:N}:interrupted", session.Capture.Id, 0,
@@ -198,7 +198,7 @@ public sealed class AuxiliaryTimingWorkspace(IAuxiliaryTimingStore store, ITimin
         private readonly Channel<CaptureInput> _queue = Channel.CreateBounded<CaptureInput>(
             new BoundedChannelOptions(2048) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
         private readonly CancellationTokenSource _cancel = new();
-        private readonly Dictionary<string, ITimingDecoder> _decoders = new(StringComparer.Ordinal);
+        private readonly StreamDecoders _decoders = new();
         private readonly List<AuxiliaryTimingObservation> _observations = [];
         private readonly object _viewGate = new();
         private readonly string[] _connections = Enumerable.Repeat("Connecting…", sources.Length).ToArray();
@@ -287,16 +287,16 @@ public sealed class AuxiliaryTimingWorkspace(IAuxiliaryTimingStore store, ITimin
                         packet.Protocol, packet.Source, packet.Stream, packet.Bytes);
                     await DurableAsync(() => store.AppendAuxiliaryRawAsync(raw));
                     Interlocked.Increment(ref _saved); Interlocked.Decrement(ref _pending);
-                    var key = $"{session.Capture.Id:N}:{packet.Protocol}:{packet.Source}:{packet.Stream}";
-                    if (!_decoders.TryGetValue(key, out var decoder))
-                    { decoder = factory.Create(session.Capture, packet.Protocol, packet.Source, packet.Stream); _decoders.Add(key, decoder); }
+                    var superseded = new List<TimingObservation>();
+                    var decoder = _decoders.For(factory, session.Capture, raw, superseded);
+                    _observations.AddRange(superseded.Select(x => AuxiliaryTimingData.Wrap(session, x)));
                     var decoded = TimingReplay.Decode(decoder, raw, includeInformation: true);
                     TimingSignals.Record(_signals, session.Capture.Options, decoded, raw.ReceivedAt);
                     _observations.AddRange(decoded.Where(x => x.Kind != ObservationKind.Information)
                         .Select(x => AuxiliaryTimingData.Wrap(session, x) with { ReceivedAt = raw.ReceivedAt }));
                     Volatile.Write(ref _shown, _observations.ToArray());
                 }
-                if (change is not null && !_decoders.Values.Any(x => x.HasPendingInput))
+                if (change is not null && !_decoders.HasPendingInput)
                 {
                     try
                     {
@@ -321,11 +321,8 @@ public sealed class AuxiliaryTimingWorkspace(IAuxiliaryTimingStore store, ITimin
                 }
             }
             change?.Completion.TrySetException(new SeriesFileException("The auxiliary source stopped partway through a message; its run was not changed."));
-            foreach (var (key, decoder) in _decoders)
-            {
-                var session = sessions.First(x => key.StartsWith(x.Capture.Id.ToString("N"), StringComparison.Ordinal));
-                _observations.AddRange(decoder.Complete().Select(x => AuxiliaryTimingData.Wrap(session, x)));
-            }
+            foreach (var observation in _decoders.Complete())
+            { _observations.Add(AuxiliaryTimingData.Wrap(sessions.First(x => x.Capture.Id == observation.SessionId), observation)); }
             Volatile.Write(ref _shown, _observations.ToArray());
             foreach (var session in sessions) { await DurableAsync(() => store.EndAuxiliaryCaptureAsync(session.Capture.Id, clock.GetUtcNow())); }
         }

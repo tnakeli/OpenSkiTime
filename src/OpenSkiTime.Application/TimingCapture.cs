@@ -162,7 +162,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private readonly SemaphoreSlim _state = new(1, 1);
     private readonly List<TimingObservation> _observations = [];
     private readonly List<TimingAudit> _audit = [];
-    private readonly Dictionary<string, ITimingDecoder> _decoders = new(StringComparer.Ordinal);
+    private readonly StreamDecoders _decoders = new();
     private readonly List<CaptureSession> _sessions = [];
     private StartListRevision? _list;
     private TimingSnapshot? _snapshot;
@@ -408,7 +408,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                 finally { _state.Release(); }
             }
             // Finish a fragmented device line in its original run before moving the routing boundary.
-            if (change is not null && !_decoders.Values.Any(x => x.HasPendingInput))
+            if (change is not null && !_decoders.HasPendingInput)
             {
                 await _state.WaitAsync();
                 try
@@ -473,9 +473,9 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void Decode(CaptureSession session, RawTimingPacket packet, bool live = false)
     {
-        var key = $"{session.Id:N}:{packet.Protocol}:{packet.Source}:{packet.Stream}";
-        if (!_decoders.TryGetValue(key, out var decoder))
-        { decoder = decoders.Create(session, packet.Protocol, packet.Source, packet.Stream); _decoders.Add(key, decoder); }
+        var superseded = new List<TimingObservation>();
+        var decoder = _decoders.For(decoders, session, packet, superseded);
+        _observations.AddRange(superseded);
         var decoded = TimingReplay.Decode(decoder, packet, includeInformation: live);
         if (live)
         {
@@ -492,11 +492,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         _observations.AddRange(decoded.Where(x => x.Kind != ObservationKind.Information));
     }
 
-    private void FinishDecoders()
-    {
-        foreach (var decoder in _decoders.Values) { _observations.AddRange(decoder.Complete()); }
-        _decoders.Clear();
-    }
+    private void FinishDecoders() => _observations.AddRange(_decoders.Complete());
 
     private void Rebuild()
     {

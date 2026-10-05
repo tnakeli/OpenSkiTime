@@ -11,6 +11,8 @@ internal sealed partial class SqliteSeriesFileSession
     {
         ArgumentNullException.ThrowIfNull(commit);
         CheckOpen();
+        // Registration changes wait for timing capture to drain, as every single-row desk change does.
+        using var idleLease = AcquireIdleWriteLease();
         await _write.WaitAsync(ct);
         try
         {
