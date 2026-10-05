@@ -91,4 +91,37 @@
  <Style Selector="local|TimingView ToggleButton:checked">
   <Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" />
  </Style>
+ <!-- Timing position switches and Show B on the dark connection banner. Fluent sets template-part colours per state,
+      so the parts are styled directly: on = filled accent, HOLD = outlined, disabled = dimmed but readable. -->
+ <Style Selector="Border.raceConnection ToggleButton /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#E1F1EF" /><Setter Property="BorderBrush" Value="#8FB3BC" />
+ </Style>
+ <Style Selector="Border.raceConnection ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="#24505F" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="#B7D3D9" />
+ </Style>
+ <Style Selector="Border.raceConnection ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="#0F9A92" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="#0F9A92" />
+ </Style>
+ <Style Selector="Border.raceConnection ToggleButton:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="#13B0A7" /><Setter Property="BorderBrush" Value="#13B0A7" />
+ </Style>
+ <Style Selector="Border.raceConnection ToggleButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#7E9BA4" /><Setter Property="BorderBrush" Value="#3E6370" />
+ </Style>
+ <Style Selector="Border.raceConnection ToggleButton:disabled:checked /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="#2B5A66" /><Setter Property="Foreground" Value="#B7CDD2" /><Setter Property="BorderBrush" Value="#2B5A66" />
+ </Style>
+ <Style Selector="Border.raceConnection Button#ShowBackupButton /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="#1B4050" /><Setter Property="Foreground" Value="#E1F1EF" /><Setter Property="BorderBrush" Value="#8FB3BC" /><Setter Property="BorderThickness" Value="1" />
+ </Style>
+ <Style Selector="Border.raceConnection Button#ShowBackupButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="#24505F" /><Setter Property="Foreground" Value="White" />
+ </Style>
+ <Style Selector="Border.raceConnection Button#ShowBackupButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#7E9BA4" /><Setter Property="BorderBrush" Value="#3E6370" />
+ </Style>
+ <Style Selector="Border.raceConnection Button:disabled, Border.raceConnection ToggleButton:disabled"><Setter Property="Opacity" Value="1" /></Style>
+ <Style Selector="Border.raceConnection Button#ShowBackupButton.backupWarning /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="#F3C969" /><Setter Property="Foreground" Value="#3B2C00" /><Setter Property="BorderBrush" Value="#F3C969" />
+ </Style>
 </Styles>

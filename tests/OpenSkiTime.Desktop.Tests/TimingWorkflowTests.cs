@@ -72,8 +72,7 @@ public partial class DesktopWorkflowTests
             try
             {
                 var view = window.FindControl<TimingView>("TimingWorkspace")!;
-                vm.TimingSource = "Simulator";
-                vm.TimingIntermediateChannels = "2";
+                UseSimulatorTiming(vm, 2);
                 await vm.ConnectTimingCommand.ExecuteAsync(null);
                 Assert.True(vm.IsTimingConnected);
                 Assert.Empty(vm.TimingCheckpoints);
@@ -163,8 +162,7 @@ public partial class DesktopWorkflowTests
             Assert.StartsWith(vm.FileLabel + " — OpenSkiTime ", vm.WindowTitle, StringComparison.Ordinal);
             Assert.Equal(vm.TimingCompetition!.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             CaptureDraw(window, output, "timing-device.png");
-            vm.TimingSource = "Simulator";
-            vm.TimingIntermediateChannels = "2"; // A configured Timy channel must not block a race with no intermediates.
+            UseSimulatorTiming(vm, 2); // A configured Timy channel must not block a race with no intermediates.
             vm.FollowTimingOrder = false; // This reference scenario deliberately operates with manual bib selection.
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);

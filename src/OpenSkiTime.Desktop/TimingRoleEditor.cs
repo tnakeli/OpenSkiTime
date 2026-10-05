@@ -1,0 +1,144 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using OpenSkiTime.Application;
+using OpenSkiTime.Devices;
+using OpenSkiTime.Domain;
+
+namespace OpenSkiTime.Desktop;
+
+// One editable timing role row in Settings: Role -> Source -> Connection -> Channel.
+// Only the connection fields of the chosen source are shown and used. Rows other than Start / B Clock Start default
+// to the connection of their group's leading row, so a shared device is entered once and each row adds only its channel
+// (and its ALGE Results device ID).
+public sealed partial class TimingRoleEditor : ObservableObject
+{
+    private string _port = "";
+
+    public TimingRoleEditor(TimingRole role, TimingRoleEditor? leader = null)
+    {
+        Role = role;
+        Leader = leader;
+        Sources = (role.IsBackup ? TimingSourceTypes.Backup : TimingSourceTypes.Primary).Select(TimingSourceTypes.Label).ToArray();
+        _source = Sources[0];
+        _usesLeaderConnection = leader is not null;
+        if (leader is not null) { leader.PropertyChanged += OnLeaderChanged; }
+    }
+
+    public TimingRole Role { get; }
+    public TimingRoleEditor? Leader { get; }
+    public string Label => Role.Label;
+    public IReadOnlyList<string> Sources { get; }
+    public bool HasLeader => Leader is not null;
+    public string SameConnectionLabel => Leader is null ? "" : "Same as " + Leader.Label;
+    public string LeaderSourceLabel => Leader?.Source ?? "";
+
+    [ObservableProperty] private string _source;
+    [ObservableProperty] private bool _usesLeaderConnection;
+    [ObservableProperty] private int _channel;
+    [ObservableProperty] private string _usbId = "";
+    [ObservableProperty] private string _firmware = "Not queried";
+    [ObservableProperty] private int _baudRate = 38400;
+    [ObservableProperty] private string _algeDeviceId = "";
+    [ObservableProperty] private string _algeUsername = "";
+    // Latest signals of this row's device per channel while timing is connected, e.g. "C0 20:46:44.07 · ●C1 20:47:01.33".
+    [ObservableProperty] private string _signalText = "";
+    [ObservableProperty] private string _replayPath = "";
+
+    // A port list control must not clear the configured port.
+    public string Port
+    {
+        get => _port;
+        set { if (value is not null) { SetProperty(ref _port, value); } }
+    }
+    public TimingSourceType? SourceType => TimingSourceTypes.Parse(Source);
+    public TimingSourceType? EffectiveSourceType => UsesLeaderConnection && Leader is not null ? Leader.EffectiveSourceType : SourceType;
+    public bool ShowOwnConnection => !UsesLeaderConnection || Leader is null;
+    public bool ShowsLeaderConnection => !ShowOwnConnection;
+    public bool IsTimyUsb => ShowOwnConnection && SourceType == TimingSourceType.TimyUsb;
+    public bool IsSerial => ShowOwnConnection && SourceType == TimingSourceType.Mt1Serial;
+    public bool IsReplay => ShowOwnConnection && SourceType == TimingSourceType.ReplayFile;
+    public bool IsSimulator => ShowOwnConnection && SourceType == TimingSourceType.Simulator;
+    // ALGE Results device IDs belong to each role, also when the account connection is shared.
+    public bool IsAlgeResults => EffectiveSourceType == TimingSourceType.AlgeResults;
+    public bool IsOwnAlgeResults => ShowOwnConnection && SourceType == TimingSourceType.AlgeResults;
+    // Devices of this row's ALGE Results account, once fetched. The ID can still be typed when no list is available.
+    public ObservableCollection<AlgeResultsDevice> AlgeDevices { get; } = [];
+    public bool ShowAlgeDeviceList => IsAlgeResults && AlgeDevices.Count != 0;
+    public bool ShowAlgeDeviceText => IsAlgeResults && AlgeDevices.Count == 0;
+    public AlgeResultsDevice? SelectedAlgeDevice
+    {
+        get => AlgeDevices.FirstOrDefault(x => x.Id == AlgeDeviceId.Trim());
+        set { if (value is not null) { AlgeDeviceId = value.Id; } }
+    }
+
+    public void SetAlgeDevices(IReadOnlyList<AlgeResultsDevice> devices)
+    {
+        ArgumentNullException.ThrowIfNull(devices);
+        var list = devices.ToList();
+        // Keep a configured ID visible even when the account no longer lists it.
+        if (AlgeDeviceId.Trim().Length != 0 && list.Count != 0 && !list.Any(x => x.Id == AlgeDeviceId.Trim()))
+        { list.Add(new(AlgeDeviceId.Trim(), "not in account list", "")); }
+        if (AlgeDevices.SequenceEqual(list)) { return; }
+        AlgeDevices.Clear(); foreach (var device in list) { AlgeDevices.Add(device); }
+        OnPropertyChanged(nameof(ShowAlgeDeviceList)); OnPropertyChanged(nameof(ShowAlgeDeviceText)); OnPropertyChanged(nameof(SelectedAlgeDevice));
+    }
+
+    partial void OnAlgeDeviceIdChanged(string value) => OnPropertyChanged(nameof(SelectedAlgeDevice));
+
+    partial void OnSourceChanged(string value) => NotifyConnection();
+    partial void OnUsesLeaderConnectionChanged(bool value) => NotifyConnection();
+
+    private void OnLeaderChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(Source) or nameof(EffectiveSourceType))
+        { OnPropertyChanged(nameof(IsAlgeResults)); OnPropertyChanged(nameof(ShowAlgeDeviceList)); OnPropertyChanged(nameof(ShowAlgeDeviceText)); OnPropertyChanged(nameof(EffectiveSourceType)); OnPropertyChanged(nameof(LeaderSourceLabel)); }
+    }
+
+    private void NotifyConnection()
+    {
+        foreach (var name in new[] { nameof(SourceType), nameof(EffectiveSourceType), nameof(ShowOwnConnection), nameof(ShowsLeaderConnection),
+            nameof(IsTimyUsb), nameof(IsSerial), nameof(IsReplay), nameof(IsSimulator), nameof(IsAlgeResults), nameof(IsOwnAlgeResults), nameof(ShowAlgeDeviceList), nameof(ShowAlgeDeviceText) }) { OnPropertyChanged(name); }
+    }
+
+    public void Detach() { if (Leader is not null) { Leader.PropertyChanged -= OnLeaderChanged; } }
+
+    // The connection this row would use on its own. Fields that do not belong to the source are normalized.
+    public TimingConnection OwnConnection()
+    {
+        var source = SourceType ?? throw new DomainValidationException($"{Label}: choose a timing source.");
+        return new TimingConnection(source)
+        {
+            UsbId = source == TimingSourceType.TimyUsb ? UsbId.Trim() : "",
+            Firmware = source == TimingSourceType.TimyUsb && Firmware.Trim().Length != 0 ? Firmware.Trim() : "Not queried",
+            Port = source == TimingSourceType.Mt1Serial ? Port.Trim() : "",
+            BaudRate = source == TimingSourceType.Mt1Serial ? BaudRate : 38400,
+            AlgeDeviceId = source == TimingSourceType.AlgeResults ? AlgeDeviceId.Trim() : "",
+            AlgeUsername = source == TimingSourceType.AlgeResults ? AlgeUsername.Trim() : "",
+            ReplayPath = source == TimingSourceType.ReplayFile ? ReplayPath.Trim() : ""
+        };
+    }
+
+    public TimingConnection ToConnection()
+    {
+        if (!UsesLeaderConnection || Leader is null) { return OwnConnection(); }
+        var shared = Leader.ToConnection();
+        return shared with { AlgeDeviceId = shared.Source == TimingSourceType.AlgeResults ? AlgeDeviceId.Trim() : "" };
+    }
+
+    public TimingSourceAssignment ToAssignment() => new(Role, ToConnection(), Channel);
+
+    public void Load(TimingSourceAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+        var c = assignment.Connection;
+        Source = Sources.Contains(c.SourceLabel) ? c.SourceLabel : Sources[0];
+        UsbId = c.UsbId; Firmware = c.Firmware; Port = c.Port; BaudRate = c.BaudRate;
+        AlgeDeviceId = c.AlgeDeviceId; AlgeUsername = c.AlgeUsername; ReplayPath = c.ReplayPath; Channel = assignment.Channel;
+        if (Leader is not null)
+        {
+            var leader = Leader.ToConnection() with { AlgeDeviceId = "" };
+            UsesLeaderConnection = SourceType is not null && OwnConnection() with { AlgeDeviceId = "" } == leader;
+        }
+    }
+}

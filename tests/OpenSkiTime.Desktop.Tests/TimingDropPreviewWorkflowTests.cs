@@ -66,7 +66,7 @@ public partial class DesktopWorkflowTests
             var view = window.FindControl<TimingView>("TimingWorkspace")!;
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);
-            vm.TimingSource = "Simulator"; vm.TimingIntermediateChannels = "2,3";
+            UseSimulatorTiming(vm, 2, 3);
             Click(window, "Save timing settings"); await vm.SaveTimingPreferencesCommand.ExecutionTask!;
             Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
             Click(window, "Back to timing"); await vm.ReturnToTimingCommand.ExecutionTask!;

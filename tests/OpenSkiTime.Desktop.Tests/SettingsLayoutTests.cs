@@ -33,7 +33,13 @@ public partial class DesktopWorkflowTests
             var window = new MainWindow { DataContext = vm, Width = width, Height = height, WindowState = WindowState.Normal };
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             vm.ShowSettingsCommand.Execute(null);
-            vm.AuxiliarySource = vm.AuxiliarySources[0]; vm.AuxiliaryUsbId = "SYNTHETIC-B";
+            // Dense role rows: shared and own connections, intermediates and a configured B Clock.
+            vm.AddTimingIntermediateCommand.Execute(null); vm.AddTimingIntermediateCommand.Execute(null);
+            vm.TimingIntermediateRoles[1].UsesLeaderConnection = false;
+            vm.AddBackupClockCommand.Execute(null);
+            vm.BackupTimingRoles[0].UsbId = "SYNTHETIC-B";
+            vm.BackupTimingRoles[1].UsesLeaderConnection = false;
+            vm.BackupTimingRoles[1].Source = TimingSourceTypes.Mt1SerialLabel;
             vm.TimingOperator = "Synthetic timer";
             window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             try

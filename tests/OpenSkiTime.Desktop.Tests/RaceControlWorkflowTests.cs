@@ -139,9 +139,9 @@ public partial class DesktopWorkflowTests
             var view = window.FindControl<TimingView>("TimingWorkspace")!;
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);
-            vm.TimingSource = "Simulator"; vm.TimingIntermediateChannels = "2,3";
+            UseSimulatorTiming(vm, 2, 3);
             Click(window, "Save timing settings"); await vm.SaveTimingPreferencesCommand.ExecutionTask!;
-            Assert.Equal("2,3", preferences.Load()!.IntermediateChannels);
+            Assert.Equal([2, 3], preferences.Load()!.Intermediates.Select(x => x.Channel));
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR");
             CaptureDraw(window, output, "race-settings.png");
             Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
@@ -357,7 +357,7 @@ public partial class DesktopWorkflowTests
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);
             Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
-            vm.TimingIntermediateChannels = "2";
+            UseSimulatorTiming(vm, 2);
             await vm.SaveTimingPreferencesCommand.ExecuteAsync(null);
             await vm.ReturnToTimingCommand.ExecuteAsync(null);
             Assert.True(vm.IsTimingConnected);

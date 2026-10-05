@@ -64,13 +64,11 @@ public sealed partial class MainViewModel
     private TimingSnapshot? _previousTiming;
     private StartListRevision? _timingList;
     private SimulatorTimingSource? _simulator;
-    private WindowsCredentialStore AlgeCredential => new("OpenSkiTime.ALGE.Results.Password:" + Mt1Username.Trim());
     public ObservableCollection<DrawMenuCompetition> TimingMenu { get; } = [];
     public ObservableCollection<TimingGridRow> TimingRows { get; } = [];
     public ObservableCollection<TimingObservationRow> TimingObservations { get; } = [];
     public ObservableCollection<TimingHistoryRow> TimingHistory { get; } = [];
     public ObservableCollection<string> TimingPorts { get; } = [];
-    public IReadOnlyList<string> TimingSources { get; } = ["Timy 2/3 · USB", "MT1 · USB / serial", "MT1 · ALGE Results", "Simulator", "Replay file"];
 
     [ObservableProperty] private CompetitionDetails? _timingCompetition;
     [ObservableProperty] private int _timingRun = 1;
@@ -78,25 +76,14 @@ public sealed partial class MainViewModel
     [ObservableProperty] private bool _isTimingConnected;
     [ObservableProperty] private bool _showAllTimingObservations;
     [ObservableProperty] private bool _showTimingHistory;
-    [ObservableProperty] private string _timingSource = "Timy 2/3 · USB";
-    [ObservableProperty] private string _timingPort = "";
-    [ObservableProperty] private string _timyDeviceId = "";
-    [ObservableProperty] private int _timingBaud = 38400;
-    [ObservableProperty] private int _timingStartChannel;
-    [ObservableProperty] private int _timingFinishChannel = 1;
     [ObservableProperty] private string _timingDeviceDate = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-    [ObservableProperty] private string _timingFirmware = "Not queried";
-    [ObservableProperty] private string _mt1StartDevice = "";
-    [ObservableProperty] private string _mt1FinishDevice = "";
-    [ObservableProperty] private string _mt1Username = "";
-    [ObservableProperty] private string _mt1Password = "";
-    [ObservableProperty] private string _mt1FromUtc = "";
-    [ObservableProperty] private bool _rememberAlgePassword;
-    [ObservableProperty] private string _timingReplayPath = "";
     [ObservableProperty] private string _timingOperator = Environment.UserName;
     [ObservableProperty] private string _timingConnection = "Disconnected";
     [ObservableProperty] private string _timingHoldSummary = "";
     [ObservableProperty] private string _timingAlarm = "";
+    [ObservableProperty] private string _timingClockWarning = "";
+    public bool HasTimingClockWarning => TimingClockWarning.Length != 0;
+    partial void OnTimingClockWarningChanged(string value) => OnPropertyChanged(nameof(HasTimingClockWarning));
     [ObservableProperty] private string _timingSummary = "Choose a saved start list.";
     [ObservableProperty] private string _startBibText = "";
     [ObservableProperty] private string _finishBibText = "";
@@ -139,11 +126,6 @@ public sealed partial class MainViewModel
     }
     [ObservableProperty] private TimingObservationRow? _selectedTimingObservation;
     [ObservableProperty] private TimingHistoryRow? _selectedTimingHistory;
-    public bool IsTimyUsb => TimingSource == TimingSources[0];
-    public bool IsMt1Serial => TimingSource == TimingSources[1];
-    public bool IsAlgeResults => TimingSource == TimingSources[2];
-    public bool IsTimingSimulator => TimingSource == TimingSources[3];
-    public bool IsTimingReplay => TimingSource == TimingSources[4];
     public bool HasTimingAlarm => TimingAlarm.Length > 0;
     public bool CanConnectTiming => _timingList is not null && !IsTimingConnected && !IsTimingBusy;
     public bool CanChangeTimingDevice => !IsTimingConnected && !IsTimingBusy;
@@ -154,12 +136,6 @@ public sealed partial class MainViewModel
         ? $"{c.Values.ShortLabel}  /  Run {TimingRun} of {c.Values.RunCount}{CompetitionCodexLabel(c.Values)}"
         : "Timing · choose a competition and run";
     public string TimingCaptureLabel => IsTimingConnected ? TimingContext + " · " + TimingConnection : "";
-    public string TimingDeviceHelp => IsTimyUsb ? "PC Timer mode · install the ALGE USB driver once. Native USB uses the vendor library."
-        : IsMt1Serial ? "Choose the MT1 virtual COM port. Start and finish must use different channels on this device."
-        : IsAlgeResults ? "Timekeeper account required. Device IDs may be the same. Receive-from uses UTC; empty means connect time."
-        : "Training data only. Use a separate test event file; it cannot be mixed with real timing in one run.";
-
-    partial void OnTimingSourceChanged(string value) => NotifyTiming();
     partial void OnIsTimingConnectedChanged(bool value) => NotifyTiming();
     partial void OnIsTimingBusyChanged(bool value) => NotifyTiming();
     partial void OnTimingAlarmChanged(string value) => OnPropertyChanged(nameof(HasTimingAlarm));
@@ -188,8 +164,7 @@ public sealed partial class MainViewModel
 
     private void NotifyTiming()
     {
-        foreach (var name in new[] { nameof(IsTimyUsb), nameof(IsMt1Serial), nameof(IsAlgeResults), nameof(IsTimingSimulator), nameof(IsTimingReplay),
-            nameof(CanConnectTiming), nameof(CanChangeTimingDevice), nameof(HasTimingRun), nameof(TimingContext),
+        foreach (var name in new[] { nameof(IsTimingSimulator), nameof(CanRetryBackupClock), nameof(CanConnectTiming), nameof(CanChangeTimingDevice), nameof(HasTimingRun), nameof(TimingContext),
             nameof(TimingCaptureLabel), nameof(TimingDeviceHelp), nameof(WindowTitle), nameof(CanPrepareNextTimedRun), nameof(ShowTimingTotal) }) { OnPropertyChanged(name); }
     }
 
@@ -245,17 +220,14 @@ public sealed partial class MainViewModel
             if (!timing.IsActive)
             {
                 SelectedTimingRow = null; StartBibText = FinishBibText = "";
-                if (timing.LastCaptureOptions is { } last && timingPreferencesStore?.Load() is null)
+                if (timing.LastCaptureGroup is { Count: > 0 } last && timingPreferencesStore?.Load() is null)
                 {
-                    if (TimingSources.Contains(last.Device)) { TimingSource = last.Device; }
-                    TimingStartChannel = last.StartChannel; TimingFinishChannel = last.FinishChannel;
-                    TimingFirmware = last.Firmware;
-                    TimingBaud = last.BaudRate;
-                    TimingIntermediateChannels = string.Join(",", last.IntermediateChannels);
-                    if (IsTimyUsb && last.Endpoint.StartsWith("Timy USB ", StringComparison.Ordinal)) { TimyDeviceId = last.Endpoint[9..].Trim(); }
-                    if (IsMt1Serial) { TimingPort = last.Endpoint; }
-                    Mt1StartDevice = last.StartDeviceId ?? ""; Mt1FinishDevice = last.FinishDeviceId ?? "";
-                    Mt1FromUtc = last.FromUtc?.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) ?? "";
+                    // No saved preferences: rebuild the primary roles from this run's last capture session.
+                    // The replay path is not part of the saved session; keep the one already entered.
+                    var replayPath = TimingStartRole.ReplayPath;
+                    try { ApplyTimingConfiguration(TimingRoleConfiguration.FromCaptureOptions([.. last]), primary: true, backup: false); }
+                    catch (DomainValidationException) { /* Unknown saved source: keep the current editors. */ }
+                    if (TimingStartRole.ReplayPath.Length == 0) { TimingStartRole.ReplayPath = replayPath; }
                 }
             }
             _previousTiming = null;
@@ -322,67 +294,55 @@ public sealed partial class MainViewModel
             EnsureDeskClean();
             if (!DateOnly.TryParseExact(TimingDeviceDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             { throw new DomainValidationException("Device date must use YYYY-MM-DD."); }
-            DateTimeOffset? since = null;
-            if (IsAlgeResults)
+            // Primary timing is validated on its own: an incomplete or invalid B Clock never prevents A from connecting.
+            var primary = new TimingRoleConfiguration(PrimaryTimingRoles.Select(x => x.ToAssignment()).ToArray());
+            primary.Validate();
+            var since = AlgeReceiveFrom(timing);
+            var capture = primary.PrimaryCapture(date, since);
+            foreach (var device in capture) { ValidateAuthoritativeTimingEndpoint(device.Options); }
+            var inputs = new List<TimingSourceInput>();
+            try
             {
-                if (string.IsNullOrWhiteSpace(Mt1FromUtc)) { since = DateTimeOffset.UtcNow; }
-                else if (DateTimeOffset.TryParse(Mt1FromUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)) { since = parsed; }
-                else { throw new DomainValidationException("Enter a valid receive-from date/time in UTC, e.g. 2026-09-27 10:00:00."); }
+                foreach (var device in capture)
+                { inputs.Add(new(TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, () => _simulator = new()), device.Options)); }
+                await timing.FollowStartOrderAsync(FollowTimingOrder);
+                await HoldTimingChannelsAsync(timing);
+                await timing.StartAsync(inputs, TimingOperator);
             }
-            var endpoint = IsTimyUsb ? "Timy USB " + TimyDeviceId.Trim() : IsMt1Serial ? TimingPort.Trim()
-                : IsAlgeResults ? $"{Mt1StartDevice.Trim()}/{TimingStartChannel};{Mt1FinishDevice.Trim()}/{TimingFinishChannel}"
-                : IsTimingSimulator ? "Simulator" : "Replay";
-            var options = new CaptureOptions(TimingSource, endpoint, date, TimingStartChannel, TimingFinishChannel,
-                IsTimingSimulator || IsTimingReplay, TimingFirmware, Mt1StartDevice.Trim(), Mt1FinishDevice.Trim(), since)
-                { BaudRate = TimingBaud, IntermediateChannels = ReadIntermediateChannels() };
-            options.Validate();
-            ValidateAuthoritativeTimingEndpoint(options);
-            if (IsAlgeResults && options.IntermediateChannels.Length > 0)
-            { throw new DomainValidationException("ALGE Results supports start/finish only. Use USB/serial for intermediate capture."); }
-            ITimingSource source;
-            if (IsTimyUsb) { source = new TimyUsbSource(TimyDeviceId.Trim()); }
-            else if (IsMt1Serial) { source = new SerialTimingSource(TimingPort.Trim(), TimingBaud); }
-            else if (IsAlgeResults)
+            catch
             {
-                var password = Mt1Password;
-                if (password.Length == 0 && OperatingSystem.IsWindows()) { password = AlgeCredential.Read() ?? ""; }
-                if (Mt1Username.Length == 0 || password.Length == 0) { throw new DomainValidationException("Enter your ALGE Results username and password."); }
-                if (OperatingSystem.IsWindows())
-                {
-                    if (RememberAlgePassword) { AlgeCredential.Save(password); }
-                    else { AlgeCredential.Remove(); }
-                }
-                source = new AlgeResultsSource(_timingHttp, Mt1Username.Trim(), password, options);
-                Mt1Password = "";
+                // Sources created before a failure are not owned by capture; close them so no device stays open.
+                if (!timing.IsActive) { foreach (var input in inputs) { await input.Source.DisposeAsync(); } }
+                throw;
             }
-            else if (IsTimingSimulator) { _simulator = new(); source = _simulator; }
-            else
-            {
-                if (!File.Exists(TimingReplayPath)) { throw new DomainValidationException("Enter the path to an ALGE ASCII capture file."); }
-                source = new ReplayFileTimingSource(TimingReplayPath);
-            }
-            await timing.FollowStartOrderAsync(FollowTimingOrder);
-            await HoldTimingChannelsAsync(timing);
-            await timing.StartAsync(source, options, TimingOperator);
             ConfigureTimingCheckpoints();
             if (_current is not null) { _current = await workspace.ReadAsync(); }
             RefreshTiming();
             SetStatus("Timing connected in HOLD. Check the race, then resume each timing position before assigning impulses.");
+            // B Clock follows only after A is capturing. It runs detached and reports through B Clock status only.
+            StartBackupClock(date, since);
         });
         IsTimingBusy = false;
     }
+
+    // ALGE Results history is read from when this run's capture first started (so triggers during an interruption are
+    // recovered; duplicates are recognized), otherwise from now. This is an absolute instant, not a clock setting.
+    private static DateTimeOffset AlgeReceiveFrom(TimingWorkspace timing) =>
+        timing.LastCaptureGroup.Select(x => x.FromUtc).OfType<DateTimeOffset>().DefaultIfEmpty(DateTimeOffset.UtcNow).Min();
 
     [RelayCommand]
     private async Task DisconnectTimingAsync()
     {
         IsTimingBusy = true;
         await GuardAsync(async () => { if (workspace.Timing is { } timing) { await timing.StopAsync(); } RefreshTiming(); });
+        if (workspace.Timing?.IsActive != true) { StopBackupClock(); ForgetAlgeSessionPasswords(); }
         IsTimingBusy = false;
     }
 
     public async Task<bool> StopTimingForCloseAsync()
     {
         if (!await FlushTimingReportAsync()) { return false; }
+        await EndBackupClockForCloseAsync();
         if (workspace.Auxiliary is { IsActive: true } auxiliary)
         {
             var stopped = false;
@@ -423,22 +383,21 @@ public sealed partial class MainViewModel
     {
         await GuardAsync(async () =>
         {
-            if (_simulator is null || !IsTimingConnected) { throw new DomainValidationException("Connect the simulator first."); }
+            var options = workspace.Timing?.ActiveCaptureOptions.FirstOrDefault(x => x.Device == TimingSourceTypes.SimulatorLabel);
+            if (_simulator is null || !IsTimingConnected || options is null)
+            { throw new DomainValidationException("Connect the simulator first."); }
             if (!TimingTime.TryTimeOfDay(SimulationTime, out var ticks, out _)) { throw new DomainValidationException("Enter simulator time as HH:mm:ss with 1–7 decimal places (for example 12:00:00.1234567)."); }
-            int IntermediateChannel(string? position)
-            {
-                if (position is null || !position.StartsWith("intermediate:", StringComparison.Ordinal)
-                    || !int.TryParse(position.AsSpan("intermediate:".Length), out var checkpoint)
-                    || checkpoint < 1 || checkpoint > TimingCheckpoints.Count)
-                { throw new DomainValidationException("Choose a valid simulator timing position."); }
-                var configured = ReadIntermediateChannels();
-                if (checkpoint > configured.Length)
-                { throw new DomainValidationException($"Configure the channel for intermediate {checkpoint} in Settings."); }
-                return configured[checkpoint - 1];
-            }
-            var physicalChannel = channel switch
-            { "start" => TimingStartChannel, "finish" => TimingFinishChannel, _ => IntermediateChannel(channel) };
-            await _simulator.PulseAsync(physicalChannel, ticks);
+            int position;
+            if (channel == "start") { position = 0; }
+            else if (channel == "finish") { position = 1; }
+            else if (channel.StartsWith("intermediate:", StringComparison.Ordinal)
+                && int.TryParse(channel.AsSpan("intermediate:".Length), out var checkpoint) && checkpoint >= 1 && checkpoint <= TimingCheckpoints.Count)
+            { position = checkpoint + 1; }
+            else { throw new DomainValidationException("Choose a valid simulator timing position."); }
+            // Pulses use the physical channel the connected simulator session maps to this role.
+            var physical = options.Channel(position)
+                ?? throw new DomainValidationException("This timing role is not assigned to the simulator in Settings.");
+            await _simulator.PulseAsync(physical, ticks);
         });
     }
 
@@ -559,7 +518,7 @@ public sealed partial class MainViewModel
         var refreshing = IsRefreshingTimingUi;
         IsRefreshingTimingUi = true;
         try { RefreshTimingCore(); }
-        finally { RefreshRunningTimes(); RefreshTimestamps(); RefreshBackupMonitor(); IsRefreshingTimingUi = refreshing; if (!refreshing) { OnPropertyChanged(nameof(IsRefreshingTimingUi)); } }
+        finally { RefreshRunningTimes(); RefreshTimestamps(); RefreshBackupMonitor(); RefreshTimingRoleSignals(); IsRefreshingTimingUi = refreshing; if (!refreshing) { OnPropertyChanged(nameof(IsRefreshingTimingUi)); } }
     }
 
     private void RefreshTimingCore()
@@ -576,6 +535,9 @@ public sealed partial class MainViewModel
         TimingHoldSummary = heldCount == 0 ? "" : heldCount == TimingCheckpoints.Count + 2
             ? "HOLD · all positions" : $"HOLD · {heldCount} position(s)";
         TimingAlarm = timing?.Fault ?? (timing?.Pending >= 512 ? "CAPTURE BACKLOG: input is waiting for storage. Do not close this file; check the local disk." : "");
+        TimingClockWarning = timing?.DeviceClockDifference is { } clocks && clocks.Difference > TimeSpan.FromSeconds(2)
+            ? $"Device clocks differ by {TimingTime.Format(clocks.Difference.Ticks / TimingTime.TicksPerHundredth)}: {clocks.Ahead} is ahead of {clocks.Behind}. Synchronize the devices; elapsed times between them would be wrong."
+            : "";
         ArmedBibs = $"Start {timing?.ArmedStart?.ToString(CultureInfo.InvariantCulture) ?? "—"}  /  Finish {timing?.ArmedFinish?.ToString(CultureInfo.InvariantCulture) ?? "—"}";
         OnPropertyChanged(nameof(TimingCaptureLabel));
         RefreshRaceQueues();
@@ -642,7 +604,7 @@ public sealed partial class MainViewModel
 
     private void ResetTimingUi()
     {
-        ResetBackupMonitor();
+        ResetBackupMonitor(); ResetBackupClock();
         ResetReportUi();
         _timingDragWorkspace = Guid.NewGuid(); _timestampSnapshot = null; TimestampRows.Clear();
         _timingTimer?.Stop(); _timingList = null; _shownTiming = null; _previousTiming = null;

@@ -37,7 +37,6 @@ public sealed partial class MainViewModel
     {
         if (_reportSettingsLoaded) { return; }
         _reportSettingsLoaded = true;
-        EnsureAuxiliarySettingsLoaded();
         try { _reportDefaults = _reportDefaultsStore.Load(); LoadReportDefaultsEditors(_reportDefaults); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or DomainValidationException)
         { ReportDefaultsStatus = "Defaults could not be loaded: " + ex.Message; }

@@ -61,13 +61,18 @@ public sealed partial class MainViewModel
         old?.Dispose();
         if (!_reportSelectingImportRow) { SelectReportPreviewRowForImage(); }
     }
-    partial void OnReportImageRoleChanged(TimingReportImageRole value) { ReportMatchTolerance = value == TimingReportImageRole.B ? "1.0" : "2.0"; ClearReportPreview(); }
+    partial void OnReportImageRoleChanged(TimingReportImageRole value)
+    {
+        ReportMatchTolerance = value == TimingReportImageRole.B ? "1.0" : "2.0"; ClearReportPreview();
+        ReportDeviceHandChannel = value == TimingReportImageRole.HandFinish ? 1 : 0; NotifyReportDeviceRole();
+    }
     partial void OnReportImportRunChanged(int? value) { if (!_reportRefreshingImportChoices) { ClearReportPreview(); } }
     private void ClearReportPreview()
     {
         foreach (var row in ReportImportPreview) { row.PropertyChanged -= ReportReceiptSelectionChanged; }
         ReportImportPreview.Clear(); SelectedReportImportRow = null; ReportImportVerified = false;
         _importDraftSnapshot = null; _importTargetsSnapshot = null; ReportImportPreviewStale = false;
+        ReportImportWarnings = ""; _reportImportProvenance = ImageImportProvenance;
         OnPropertyChanged(nameof(AllReportMatchesSelected));
     }
 
@@ -190,6 +195,28 @@ public sealed partial class MainViewModel
     private async Task PreviewReportImagesCoreAsync(TimingReportImage[] images)
     {
         if (_reportDraft is null) { return; }
+        var date = _reportDraft.Header.Date;
+        var evidence = images.SelectMany(image => image.RecognizedText.Split('\n').SelectMany((line, index) =>
+            TimingEvidenceMatching.ParseLine($"image:{image.Id:D}:{index}", line, date,
+                image.Role == TimingReportImageRole.B ? null : image.Role == TimingReportImageRole.HandStart ? 0 : 1))).ToArray();
+        if (!await PreviewReportEvidenceCoreAsync(evidence, ImageImportProvenance)) { return; }
+        ReportImportStatus = $"{images.Length} image(s) in memory; {evidence.Length} timestamp(s) read; {ReportImportPreview.Count(x => x.CanAccept)} report timestamps matched. Check selected timestamps before pressing OK. Unmatched fields remain unchanged.";
+        var disputed = images.Sum(image => image.RecognizedText.Split('\n')
+            .Count(line => line.StartsWith(TimingEvidenceMatching.OcrReviewRequiredPrefix, StringComparison.Ordinal)));
+        if (disputed > 0)
+        { ReportImportStatus += $" {disputed} receipt row(s) have conflicting or clipped OCR readings: inspect Recognized text and enter verified values manually."; }
+        SetStatus(ReportImportStatus);
+    }
+
+    private const string ImageImportProvenance = "image import";
+    // Describes the evidence behind the current preview for the accepted change reason (image/OCR or a device source).
+    private string _reportImportProvenance = ImageImportProvenance;
+
+    // One matching/preview path for every evidence input. OCR text and device impulses both arrive as
+    // EvidenceTimestamp values on the same device clock time as A.
+    private async Task<bool> PreviewReportEvidenceCoreAsync(IReadOnlyList<EvidenceTimestamp> evidence, string provenance)
+    {
+        if (_reportDraft is null) { return false; }
         _reportSelectingImportRow = true;
         try
         {
@@ -197,13 +224,11 @@ public sealed partial class MainViewModel
         { throw new DomainValidationException("Match tolerance must be 0-60 seconds (greater than zero)."); }
         var tolerance = checked((long)(seconds * TimeSpan.TicksPerSecond));
         ClearReportPreview();
-        var date = _reportDraft.Header.Date;
-        var evidence = images.SelectMany(image => image.RecognizedText.Split('\n').SelectMany((line, index) =>
-            TimingEvidenceMatching.ParseLine($"image:{image.Id:D}:{index}", line, date,
-                image.Role == TimingReportImageRole.B ? null : image.Role == TimingReportImageRole.HandStart ? 0 : 1))).ToArray();
         var run = ReportImportRun ?? throw new DomainValidationException("Choose a saved run before reviewing its receipts.");
         var targets = ReportTargets(run, ReportImageRole);
-        foreach (var match in TimingEvidenceMatching.Match(targets, evidence, tolerance, allowAdjacentDay: true))
+        var matches = TimingEvidenceMatching.Match(targets, evidence, tolerance, allowAdjacentDay: true);
+        _reportImportProvenance = provenance;
+        foreach (var match in matches.OrderBy(x => Array.IndexOf(targets, x.Target)))
         {
             var stamp = match.Evidence is { } item ? new TimingReportStamp(item.Ticks, item.Precision, item.Key, Verified: false) : null;
             var keyParts = stamp?.SourceReference.Split(':');
@@ -223,12 +248,7 @@ public sealed partial class MainViewModel
         _importTargetsSnapshot = ReadReportImportTargetsSnapshot();
         _importSeriesRevision = (await workspace.ReadAsync()).Revision;
         SelectedReportImportRow = ReportImportPreview.FirstOrDefault(x => x.ImageId == SelectedReportImage?.Id && x.CanAccept);
-        ReportImportStatus = $"{images.Length} image(s) in memory; {evidence.Length} timestamp(s) read; {ReportImportPreview.Count(x => x.CanAccept)} report timestamps matched. Check selected timestamps before pressing OK. Unmatched fields remain unchanged.";
-        var disputed = images.Sum(image => image.RecognizedText.Split('\n')
-            .Count(line => line.StartsWith(TimingEvidenceMatching.OcrReviewRequiredPrefix, StringComparison.Ordinal)));
-        if (disputed > 0)
-        { ReportImportStatus += $" {disputed} receipt row(s) have conflicting or clipped OCR readings: inspect Recognized text and enter verified values manually."; }
-        SetStatus(ReportImportStatus);
+        return true;
         }
         finally { _reportSelectingImportRow = false; }
     }
@@ -271,7 +291,7 @@ public sealed partial class MainViewModel
             var accepted = current with { Associations = assignments.ToArray(), Reviewed = false, CertifyFis = false,
                 Runs = current.Runs.Select(r => r with { First = Sample(r.Run, r.First), Last = Sample(r.Run, r.Last) }).ToArray() };
             await workspace.ApplyTimingReportImportAsync(accepted, _importSeriesRevision, TimingOperator,
-                "Operator verified image import: " + ReportChangeReason, DateTimeOffset.UtcNow);
+                "Operator verified " + _reportImportProvenance + ": " + ReportChangeReason, DateTimeOffset.UtcNow);
             _reportDraft = accepted; _reportSaved = await workspace.ReadTimingReportAsync(current.CompetitionId);
             _current = await workspace.ReadAsync(); await PopulateReportAsync(accepted);
             HasTimingReportEdits = false; ClearReportPreview();
@@ -284,7 +304,8 @@ public sealed partial class MainViewModel
 
     public void ResetReportImport()
     {
-        _reportImageCancellation?.Cancel(); ClearReportPreview(); ReportImages.Clear(); SelectedReportImage = null; ReportImageOriginalSize = false;
+        _reportImageCancellation?.Cancel(); ResetReportDeviceRead(); ClearReportPreview(); ReportImages.Clear(); SelectedReportImage = null; ReportImageOriginalSize = false;
+        ReportInputMode = ReportImageInputMode;
     }
-    private void DisposeReportUi() { DisposeReportAutosave(); _reportImageCancellation?.Cancel(); _reportSubmissionCancellation?.Cancel(); ReportImagePreview?.Dispose(); }
+    private void DisposeReportUi() { DisposeReportAutosave(); _reportImageCancellation?.Cancel(); ResetReportDeviceRead(); _reportSubmissionCancellation?.Cancel(); ReportImagePreview?.Dispose(); }
 }

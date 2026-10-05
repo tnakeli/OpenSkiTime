@@ -18,7 +18,7 @@ OpenSkiTime is a desktop race-office application for alpine skiing. It brings re
 4. **Start lists:** choose a competition and run, draw the first-run bib order, then export TSV or open a printable view. Prepare Run 2 from classified Run 1 results, with first-run times visible alongside its starters.
 5. **Timing:** use **At start**, **Running**, **Timestamps** and **Ranking** to follow the race. Reorder starters, assign impulses, see elapsed times and splits, and classify competitors. Original device input and correction history remain in the event file.
 6. **Results:** prepare jury, course, forerunner and weather information; review calculated race points and the FIS penalty; then record TD approval and export the approved XML. Optional FIS submission is currently limited to test mode.
-7. **Timing report:** review automatically populated A timing, collect optional B and hand-clock evidence, review receipt images in a temporary dialog, and prepare the alpine timing report XML. Equipment and timekeeper defaults are reusable; FIS submission remains test-only.
+7. **Timing report:** review automatically populated A timing, collect optional B and hand-clock evidence, read receipt images or a timing device in one review dialog, and prepare the alpine timing report XML. Equipment and timekeeper defaults are reusable; FIS submission remains test-only.
 
 ### 1 · Event series
 
@@ -74,9 +74,9 @@ After the required runs are complete, Results assembles classified times and rac
 
 ### 7 · Timing report
 
-Review A timestamps and the first, last and fastest samples for each run. An optional independent B connection supplies backup observations without changing race results. **Show B** in Timing displays the backup comparison for 30 seconds; missing signals and excessive differences remain visible as warnings.
+Review A timestamps and the first, last and fastest samples for each run. An optional B Clock, configured by role in Settings, supplies backup observations without changing race results; a B Clock status shows whether it is behaving as expected. **Show B** in Timing displays the backup comparison for 30 seconds; missing signals and excessive differences remain visible as warnings.
 
-Results and Timing report follow the competition selected in the shared header; the run remains available when returning to Timing. The report reads that competition's committed timing data automatically and saves edits in the background. Bring in B or hand-clock output from a temporarily connected ALGE device, or open the B, hand-start or hand-finish receipt dialog and choose, drop or paste images there. The Times tab groups synchronization and run timestamps. Local OCR displays detected timestamps in a dialog; OK applies the checked matches. Images and recognition text remain in dialog memory only. Accepted times and report history stay in the event file. Create and export an approved XML revision or submit it to FIS in test mode. Create local PDFs through PDF Factory. See [timing report operation](docs/timing-report.md) and [Settings](docs/settings.md).
+Results and Timing report follow the competition selected in the shared header; the run remains available when returning to Timing. The report reads that competition's committed timing data automatically and saves edits in the background. Open the B, hand-start or hand-finish dialog to choose, drop or paste receipt images, or to read a Timy, MT1, ALGE Results or replay-file device directly; nothing is saved until you press OK. The Times tab groups synchronization and run timestamps. Local OCR displays detected timestamps in a dialog; OK applies the checked matches. Images and recognition text remain in dialog memory only. Accepted times and report history stay in the event file. Create and export an approved XML revision or submit it to FIS in test mode. Create local PDFs through PDF Factory. See [timing report operation](docs/timing-report.md) and [Settings](docs/settings.md).
 
 ![Timing report with first and last A timestamps from a simulated run](docs/screenshots/08-timing-report.png)
 

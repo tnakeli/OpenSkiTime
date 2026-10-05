@@ -17,19 +17,19 @@ public partial class TimingReceiptDialog : Window
         var panels = this.FindControl<Grid>("ReceiptPanels")!;
         panels.AddHandler(DragDrop.DragOverEvent, (_, e) =>
         {
-            e.DragEffects = DataContext is MainViewModel { IsReportBusy: false } && e.Data.Contains(DataFormats.Files)
+            e.DragEffects = DataContext is MainViewModel { IsReportBusy: false, IsReportImageInput: true } && e.Data.Contains(DataFormats.Files)
                 ? DragDropEffects.Copy : DragDropEffects.None;
             e.Handled = true;
         });
         panels.AddHandler(DragDrop.DropEvent, async (_, e) =>
         {
             e.Handled = true;
-            if (DataContext is MainViewModel vm)
+            if (DataContext is MainViewModel { IsReportImageInput: true } vm)
             { await vm.ImportReportImagesAsync(e.Data.GetFiles()?.Select(x => x.TryGetLocalPath()).OfType<string>().ToArray() ?? []); }
         });
         AddHandler(KeyDownEvent, async (_, e) =>
         {
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key is Key.V or Key.C
+            if (DataContext is MainViewModel { IsReportImageInput: true } && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key is Key.V or Key.C
                 && (e.Key == Key.V || e.Source is not TextBox))
             { e.Handled = true; await PasteImageAsync(); }
         }, RoutingStrategies.Tunnel);
@@ -39,7 +39,12 @@ public partial class TimingReceiptDialog : Window
             if (DataContext is MainViewModel vm) { vm.CancelReportImagesCommand.Execute(null); }
         };
         Closed += (_, _) =>
-        { _closed = true; if (DataContext is MainViewModel vm) { vm.ResetReportImport(); } };
+        {
+            _closed = true;
+            if (DataContext is MainViewModel vm) { vm.ResetReportImport(); }
+            // Detach so a closed dialog's two-way bindings can never write into the next dialog's state.
+            DataContext = null;
+        };
     }
 
     private async void OpenImages_Click(object? sender, RoutedEventArgs e)
@@ -52,6 +57,17 @@ public partial class TimingReceiptDialog : Window
         });
         if (!_closed && images.Count > 0)
         { await vm.ImportReportImagesAsync(images.Select(x => x.TryGetLocalPath()).OfType<string>().ToArray()); }
+    }
+
+    private async void BrowseReplay_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel { IsReportDeviceReading: false } vm) { return; }
+        var files = await StorageProvider.OpenFilePickerAsync(new()
+        {
+            Title = "Raw ALGE ASCII replay file", AllowMultiple = false,
+            FileTypeFilter = [new("Raw device text") { Patterns = ["*.txt", "*.log", "*.asc", "*.*"] }]
+        });
+        if (!_closed && files.Count > 0 && files[0].TryGetLocalPath() is { } path) { vm.ReportDeviceReplayPath = path; }
     }
 
     private async void PasteImage_Click(object? sender, RoutedEventArgs e) => await PasteImageAsync();

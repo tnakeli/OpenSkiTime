@@ -20,22 +20,40 @@ Review the source records, check the review/certification declarations, and sele
 
 Use **Settings > Timing devices** to configure an independent B source. Timy USB, MT1 serial and ALGE Results use the same transport/decoder families as A. Explicitly select different devices; the application rejects a shared COM port, overlapping ALGE device IDs and ambiguous dual-Timy selections. The separate B connection is a convenience for the timekeeper and never provides an automatic fallback into A results or live publishing.
 
-Live B follows the active A run independently. When one source uses UTC (ALGE Results) and the other uses local clock time, set the local UTC offset explicitly in connection settings. Unspecified mixed clock contexts remain unmatched with a warning; raw observations are never rewritten. In Timing, **Show B** displays corresponding start/finish timestamps and elapsed-time comparisons for 30 seconds, without taking keyboard focus. An amber button and red message identify discrepancies or missing signals. Hiding the detail panel does not acknowledge or clear unresolved warnings.
+Live B follows the active A run independently. All sources report device clock time, so B is compared with A directly; raw observations are never rewritten. In Timing, **Show B** displays corresponding start/finish timestamps and elapsed-time comparisons for 30 seconds, without taking keyboard focus. An amber button and red message identify discrepancies or missing signals. Hiding the detail panel does not acknowledge or clear unresolved warnings.
 
 The initial operational warning thresholds are **1 ms at start** and **10 ms at finish**, adjustable in Settings. These are monitoring defaults, not a claim that FIS imposes those two race-impulse limits. A finish-cell pair can be triggered at slightly different instants. Missing B events receive a grace period (default 5 seconds; ALGE Results has a minimum of 10 seconds for polling/history delay). Comparison starts with new A observations after B connects, so connecting late does not report the whole earlier race as missing.
 
-To import a temporarily connected clock, choose the saved run and source role (**B**, **HandStart**, or **HandFinish**) and disable live B monitoring. Receive the device's output and disconnect after the saved-packet status is complete. The report loads the saved evidence when opened for that competition. ALGE Results requires its network service; locally attached devices and saved evidence work offline. Request memory output on the device where required; the application does not claim a tested automatic memory-download command for every model.
+B evidence that was not captured live (for example a B clock connected only after the race, or separate hand clocks) is read from the run card with **Read B…**, **Hand start…** or **Hand finish…**, described below. No temporary device connection has to be configured in the report or in Settings.
 
-## Receipt and screen images
+## Read timing observations
+
+In **Times**, click **Read B…**, **Hand start…** or **Hand finish…** on the relevant run card. The **Read timing observations** dialog opens empty. Its **Input** selector chooses **Image / OCR** (the default) or **Timing device**. Both inputs use the same matching, review and acceptance: the dialog matches timestamps rather than bib numbers, and only for the first/last report samples. The grid identifies the sample and start/finish position, current value, proposed timestamp and difference from A. Resize columns or drag the table/side-panel divider for more room. B evidence may contain both channels; for hand start and hand finish the clicked button fixes the timing position.
+
+**Select all** selects every matched timestamp and leaves unmatched rows unselected. Existing different values show a replacement message and are initially unselected; selecting those rows explicitly authorizes replacement. Review selected matches and press **OK**. Acceptance uses the displayed A/B snapshot without rereading live timing packets. Report changes or conflicting report writes still reject acceptance. The operator identity and an automatic change reason remain in audit history without separate form fields. The reason states the evidence source, for example `Operator verified image import: …` or `Operator verified device import (MT1 · USB / serial, COM3): …`, so accepted values can be traced to a receipt/screen image or to a Timy, MT1, ALGE Results or replay-file read.
+
+Closing or cancelling discards everything read in the dialog: images, OCR text, device packets and proposals. Switching the input also discards the other input's unaccepted data. Reading and previewing write nothing to the series database; only accepted report values and their audit history are saved.
+
+### Image / OCR
 
 Only printed ALGE receipts and images of computer displays are in scope; handwriting recognition is not provided. OCR runs locally using the bundled Tesseract engine/model. No race image is sent to an online recognition service.
 
-1. In **Times**, click the B, hand-start or hand-finish button on the relevant run card. The receipt dialog opens first. Use **Open images**, drop image files into the dialog, or **Paste image**. Ctrl+V pastes an image; Ctrl+C also reads a copied image when focus is outside a text editor. Windows supports PNG and bitmap clipboard images without temporary files. B receipts may contain both channels. PNG, JPEG, BMP and TIFF files are supported, up to 20 MB per image, 100 MB and 50 images per dialog.
-2. The dialog reads images locally and shows detected text, original images and matches for only the first/last report samples. It matches timestamps rather than bib numbers. The grid identifies the sample and start/finish position, current value, proposed timestamp and difference from A. There is no separate preview step or device-label field. Resize columns or drag the table/image divider for more room.
-3. **Select all** selects every matched timestamp and leaves unmatched rows unselected. Existing different values show a replacement message and are initially unselected; selecting those rows explicitly authorizes replacement. Review selected matches and press **OK**. Acceptance uses the displayed A/B snapshot without rereading live timing packets. Report changes or conflicting report writes still reject acceptance. The operator identity and an automatic change reason remain in audit history without separate form fields.
-4. Closing or cancelling discards images, OCR text and proposals. None of them is written to the series database. Only accepted report values and audit history are saved. Failed recognition permits inspection in the dialog without archival. Keep original receipts separately when required.
+Use **Open images**, drop image files into the dialog, or **Paste image**. Ctrl+V pastes an image; Ctrl+C also reads a copied image when focus is outside a text editor. Windows supports PNG and bitmap clipboard images without temporary files. PNG, JPEG, BMP and TIFF files are supported, up to 20 MB per image, 100 MB and 50 images per dialog. The dialog shows the original images and the detected timestamps/review flags beside the matches. Failed recognition permits inspection in the dialog without archival. Keep original receipts separately when required.
 
 OCR uses synthetic regression fixtures. Conflicting row readings and potentially clipped fractions require manual review. Photographs with blur, folds or poor contrast may need manual entry in Times.
+
+### Timing device
+
+Choose the device source and only its connection fields are shown:
+
+- **Timy 2/3 · USB**: USB ID (blank selects the first connected Timy).
+- **MT1 · USB / serial**: COM port (with **Refresh**) and baud rate.
+- **MT1 · ALGE Results**: username, password with **Remember password**, **Fetch devices**, then the device (for B optionally a separate finish device) chosen from the account's device list or typed as an ID. The whole device date is read, and only triggers whose device time falls on that date are used. This source requires the ALGE Results network service; the other sources work offline.
+- **Replay file**: path to a raw ALGE ASCII file. The file is read once.
+
+Map channels: B uses a start and a finish channel; hand start and hand finish use one channel. **Device date** defaults to the report date. Device timestamps are device clock time, compared with A directly; original device timestamps are kept.
+
+Press **Connect / Read**, let the device send its timestamps (request memory output on the device where required), and press **Stop**. A replay file stops by itself. The received list shows each decoded line with its time at full device precision, mapped position, kind, original raw text and provenance (`device:<source>:<endpoint>:<observation>`). Matches are proposed when reading stops. The device is read in the dialog's memory only, off the user-interface thread and with a bounded packet limit; failures are shown in the dialog. Nothing is saved to the series file, the temporary device choice is not stored in Settings, and B Clock and primary timing role settings are not changed. A device endpoint that live A capture or live B Clock is currently using is refused with a message; live timing is never interrupted.
 
 ## Export and FIS test transmission
 

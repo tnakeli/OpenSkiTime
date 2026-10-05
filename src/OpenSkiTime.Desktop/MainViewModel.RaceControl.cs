@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,7 +23,6 @@ public sealed partial class MainViewModel
     public ObservableCollection<TimingGridRow> OnCourseRows { get; } = [];
     public ObservableCollection<TimingGridRow> FinishedTimingRows { get; } = [];
     public ObservableCollection<int> TimingCheckpoints { get; } = [];
-    [ObservableProperty] private string _timingIntermediateChannels = "";
     [ObservableProperty] private string _timingDeviceClock = "--:--:--";
     [ObservableProperty] private bool _startInputOn = true;
     [ObservableProperty] private bool _finishInputOn = true;
@@ -61,37 +59,6 @@ public sealed partial class MainViewModel
         { row.Clock.Marker = row.Bib == timing?.ArmedFinish ? "▶" : ""; }
         ExpectedFinishTime = OnCourseRows.FirstOrDefault(x => x.Bib == timing?.ArmedFinish)?.Clock.Time ?? "—";
     }
-
-    public void LoadTimingPreferences()
-    {
-        if (timingPreferencesStore?.Load() is not { } p) { return; }
-        if (TimingSources.Contains(p.Source)) { TimingSource = p.Source; }
-        TimingPort = p.Port; TimyDeviceId = p.UsbId; TimingBaud = p.Baud;
-        TimingStartChannel = p.StartChannel; TimingFinishChannel = p.FinishChannel;
-        TimingIntermediateChannels = p.IntermediateChannels; TimingFirmware = p.Firmware;
-    }
-
-    [RelayCommand] private async Task SaveTimingPreferencesAsync() => await GuardAsync(() =>
-    {
-        if (!CanChangeTimingDevice) { throw new DomainValidationException("Disconnect capture before changing settings."); }
-        new Application.CaptureOptions(TimingSource, "Settings", DateOnly.FromDateTime(DateTime.Today), TimingStartChannel, TimingFinishChannel,
-            StartDeviceId: IsAlgeResults ? Mt1StartDevice : null, FinishDeviceId: IsAlgeResults ? Mt1FinishDevice : null)
-            { BaudRate = TimingBaud, IntermediateChannels = ReadIntermediateChannels() }.Validate();
-        timingPreferencesStore?.Save(new(TimingSource, TimingPort, TimyDeviceId, TimingBaud,
-            TimingStartChannel, TimingFinishChannel, TimingIntermediateChannels, TimingFirmware));
-        SetStatus("Timing settings saved on this computer.");
-        return Task.CompletedTask;
-    });
-
-    private int[] ReadIntermediateChannels()
-    {
-        if (string.IsNullOrWhiteSpace(TimingIntermediateChannels)) { return []; }
-        var parts = TimingIntermediateChannels.Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Any(x => !int.TryParse(x, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
-        { throw new DomainValidationException("Enter intermediate channels separated by commas, for example 2,3."); }
-        return parts.Select(x => int.Parse(x, CultureInfo.InvariantCulture)).ToArray();
-    }
-
     [RelayCommand] private async Task ReturnToTimingAsync()
     {
         if (!HasTimingRun) { return; }
@@ -117,7 +84,8 @@ public sealed partial class MainViewModel
     private void ConfigureTimingCheckpoints()
     {
         TimingCheckpoints.Clear();
-        var count = Math.Min(ReadIntermediateChannels().Length,
+        // A race uses as many configured intermediate roles as its competition defines.
+        var count = Math.Min(TimingIntermediateRoles.Count,
             TimingCompetition?.Values.IntermediateCount ?? _timingList!.Plan.Competition.IntermediateCount);
         for (var i = 1; i <= count; i++) { TimingCheckpoints.Add(i); }
         _queueSnapshot = null;
@@ -140,7 +108,7 @@ public sealed partial class MainViewModel
                 && int.TryParse(position[13..], out var number) && number >= 1 && number <= TimingCheckpoints.Count => number + 1,
             _ => throw new DomainValidationException("Choose a configured timing position.")
         };
-        if (channel >= 2 && channel - 2 >= (timing.LastCaptureOptions?.IntermediateChannels.Length ?? 0))
+        if (channel >= 2 && !timing.ActiveCaptureOptions.Any(x => x.Channel(channel) is not null))
         { throw new DomainValidationException($"Configure the channel for intermediate {channel - 1} in Settings, then reconnect timing."); }
         await timing.ExpectAsync(channel, null, !timing.IsHeld(channel));
         RefreshTiming();

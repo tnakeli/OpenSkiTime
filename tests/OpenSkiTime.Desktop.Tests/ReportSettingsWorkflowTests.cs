@@ -129,7 +129,8 @@ public partial class DesktopWorkflowTests
             await vm.UploadApprovedFisArtifactTestAsync(new(Guid.NewGuid(), "FIN9991.timing.xml", Encoding.UTF8.GetBytes("<Synthetic />")));
             Assert.Equal(s_reportSettingsCalls, calls);
             tabs.SelectedIndex = 1; window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Connect backup"));
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Add B Clock") && x.IsEffectivelyVisible);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Connect backup"));
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<DataGrid>(), x => x.Name == "ReportEquipmentDefaultsGrid" && x.IsEffectivelyVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Save report defaults") && x.IsEffectivelyVisible);
             window.Close();
@@ -160,10 +161,11 @@ public partial class DesktopWorkflowTests
             cache.Save(new(DateTimeOffset.UnixEpoch, [device]));
             Assert.Throws<DomainValidationException>(() => cache.Save(new(DateTimeOffset.UnixEpoch, [device, device])));
             Assert.Equal(device, Assert.Single(new FisTimingDeviceCache(root).Load()!.Devices));
-            var auxiliary = new AuxiliaryPreferencesStore(root);
-            auxiliary.Save(new("MT1 · USB / serial", "COM9", "", 38400, 0, 1, "test", "", "", "",
-                AuxiliaryClockOffsetMinutes: 180));
-            Assert.Equal(180, new AuxiliaryPreferencesStore(root).Load()!.AuxiliaryClockOffsetMinutes);
+            var timing = new TimingPreferencesStore(root);
+            var backup = new TimingConnection(TimingSourceType.Mt1Serial) { Port = "COM9" };
+            timing.Save(new TimingRoleConfiguration([new(TimingRole.BackupStart, backup, 0), new(TimingRole.BackupFinish, backup, 1)])
+            { BackupWarnings = new(3, 12, 9) });
+            Assert.Equal(new BackupClockWarnings(3, 12, 9), new TimingPreferencesStore(root).Load()!.BackupWarnings);
         }
         finally { Directory.Delete(root, recursive: true); }
     }

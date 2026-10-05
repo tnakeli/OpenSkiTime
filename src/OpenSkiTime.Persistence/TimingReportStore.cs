@@ -148,7 +148,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingReportStore
         finally { _captureOwnership.Release(); }
     }
 
-    private HashSet<Guid> ActiveReportSessions() => _activeCaptureId is { } id ? [id] : [];
+    private HashSet<Guid> ActiveReportSessions() => [.. _activeCaptureIds];
 
     public async Task<IReadOnlyList<ApprovedTimingReport>> ReadApprovedTimingReportsAsync(Guid competitionId, CancellationToken ct = default)
     {
@@ -186,7 +186,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingReportStore
             {
                 var data = await ReadTimingAsync(list.Id, ct);
                 if ((data.List.Plan.Gender == Gender.Male ? "M" : "W") != draft.Header.Gender) { continue; }
-                if (data.Sessions.Count == 0 || data.Sessions.Any(x => (!x.CleanStop || x.StoppedAt is null) && x.Id != _activeCaptureId))
+                if (data.Sessions.Count == 0 || data.Sessions.Any(x => (!x.CleanStop || x.StoppedAt is null) && !_activeCaptureIds.Contains(x.Id)))
                 { throw new DomainValidationException("Resolve interrupted timing capture before approving the timing report."); }
                 if (data.Sessions.Any(x => x.Options.Simulation))
                 { throw new DomainValidationException("Simulation timing cannot be certified as an official timing report."); }
@@ -249,10 +249,8 @@ internal sealed partial class SqliteSeriesFileSession : ITimingReportStore
                     var competitor = snapshot.Results.Single(x => x.Bib == association.Bib);
                     var aKey = association.Channel == 0 ? competitor.StartKey : competitor.FinishKey;
                     var aObservation = snapshot.Observations.SingleOrDefault(x => x.Observation.Key == aKey)?.Observation;
-                    var normalized = aObservation is null || observed is null ? null
-                        : AuxiliaryClockComparison.Normalize(AuxiliaryClockComparison.UsesUtc(aObservation), [observed]).Observations.SingleOrDefault();
                     if (observed is null || (int)observed.Role != (int)association.Role || observed.Observation.Channel != association.Channel
-                        || normalized?.DeviceTicks != stamp.Ticks || observed.Observation.Precision != stamp.Precision)
+                        || aObservation is null || observed.Observation.DeviceTicks != stamp.Ticks || observed.Observation.Precision != stamp.Precision)
                     { throw new DomainValidationException("Report device timestamp does not match a saved source in this run and role."); }
                     if (auxiliary.Sessions.Single(x => x.Capture.Id == observed.Observation.SessionId).Capture.Options.Simulation)
                     { throw new DomainValidationException("Simulated backup evidence cannot be certified in a timing report."); }
