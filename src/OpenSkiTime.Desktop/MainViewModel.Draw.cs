@@ -377,7 +377,7 @@ public sealed partial class MainViewModel
             if (!CanExportDraw || DrawRevision is not { } revision) { return; }
             var path = await dialogs.ChooseStartListExportAsync($"{SafeFileName(DrawCompetition!.Values.ShortLabel)}-run{DrawRun}", false);
             if (path is null) { return; }
-            await File.WriteAllTextAsync(path, StartListExchange.ToTsv(revision));
+            await ExportFile.WriteTextAsync(path, StartListExchange.ToTsv(revision));
             SetStatus("Start list exported as TSV.");
         });
     }
@@ -391,7 +391,7 @@ public sealed partial class MainViewModel
             var path = await dialogs.ChooseStartListExportAsync($"{SafeFileName(DrawCompetition!.Values.ShortLabel)}-run{DrawRun}", true);
             if (path is null) { return; }
             var display = revision with { Plan = revision.Plan with { Competition = DrawCompetition.Values } };
-            await File.WriteAllTextAsync(path, StartListExchange.ToPrintHtml(display));
+            await ExportFile.WriteTextAsync(path, StartListExchange.ToPrintHtml(display));
             SetStatus($"Print-ready start list saved to {path}. Open it in a browser and print with Ctrl+P.");
         });
     }

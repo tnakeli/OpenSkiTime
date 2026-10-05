@@ -31,6 +31,9 @@ public sealed class TimingReportTests
         Assert.Empty(xml.Descendants("Photofinish")); Assert.Empty(xml.Descendants("Transponder"));
         Assert.Equal("FIN9991.xml", TimingReportXml.FileName(draft));
         Assert.Equal(bytes, TimingReportXml.Create(draft, "1.2.3"));
+        // Approved bytes are the same on every operating system: line feeds only, as in the result XML.
+        Assert.DoesNotContain((byte)'\r', bytes);
+        Assert.Contains((byte)'\n', bytes);
     }
 
     [Fact]

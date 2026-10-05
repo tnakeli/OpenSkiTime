@@ -296,7 +296,7 @@ public sealed partial class MainViewModel
             if (SelectedResultApproval is not { } approval) { return; }
             var path = await dialogs.ChooseResultXmlExportAsync(approval.XmlFileName);
             if (path is null) { return; }
-            await File.WriteAllBytesAsync(path, approval.Xml);
+            await ExportFile.WriteAsync(path, approval.Xml);
             SetStatus($"Approved XML revision {approval.Revision} exported to {path}.");
         });
     }

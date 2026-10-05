@@ -125,7 +125,8 @@ public static class TimingReportXml
 
         void Write()
         {
-            using var w = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = true });
+            // Fixed line endings, as in the result XML: the approved bytes must not depend on the operating system.
+            using var w = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = true, NewLineChars = "\n" });
             void E(string name, string value) => w.WriteElementString(name, value);
             void Optional(string name, string value) { if (!string.IsNullOrWhiteSpace(value)) { E(name, value); } }
             void Person(string element, TimingReportPerson p, string? function = null, bool timekeeper = false)
