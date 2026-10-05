@@ -20,7 +20,7 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public IReadOnlyList<int?> IntermediateRanks { get; init; } = [];
     public string PreviousRunRanked => WithRank(PreviousRunTime, PreviousRunRank);
     public IReadOnlyList<string> RankedIntermediates => Result.Splits
-        .Select((x, i) => WithRank(x.Time, IntermediateRanks.ElementAtOrDefault(i))).ToArray();
+        .Select((x, i) => WithRank(x.Time + ManualMark(x.Manual && x.Hundredths is not null), IntermediateRanks.ElementAtOrDefault(i))).ToArray();
     public string Category { get; init; } = "";
     public int? DisplayRank { get; init; }
     public bool IsLatestFinish { get; init; }

@@ -9,6 +9,7 @@ using OpenSkiTime.Desktop;
 using OpenSkiTime.Devices;
 using OpenSkiTime.Domain;
 using OpenSkiTime.Persistence;
+using OpenSkiTime.Timing;
 using Xunit;
 
 namespace OpenSkiTime.Tests;
@@ -143,5 +144,14 @@ public partial class DesktopWorkflowTests
             }
         }
         finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void RankedIntermediateKeepsTheManualMarkBeforeTheRank()
+    {
+        var result = new TimingResult(null!, TimingStatus.OnCourse, null, null, "start", null, "")
+        { Splits = [new(1, "manual:1", 2000, "") { Manual = true }, new(2, "device", 4000, "")] };
+        var row = new TimingGridRow(result, null, null) { IntermediateRanks = [2, 1] };
+        Assert.Equal(["0:20.00 m (2)", "0:40.00 (1)"], row.RankedIntermediates);
     }
 }
