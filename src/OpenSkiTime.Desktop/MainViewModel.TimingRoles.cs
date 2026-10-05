@@ -69,7 +69,7 @@ public sealed partial class MainViewModel
         RefreshAlgeAccounts();
         foreach (var name in new[] { nameof(TimingIntermediateRoles), nameof(HasTimingIntermediateRoles), nameof(HasBackupClockRoles),
             nameof(HasNoBackupClockRoles), nameof(UsesAlgeResultsAccount), nameof(IsTimingSimulator), nameof(TimingDeviceHelp),
-            nameof(ShowTimingSimulatorControls) }) { OnPropertyChanged(name); }
+            nameof(IsBackupTimingSimulator), nameof(ShowTimingSimulatorControls) }) { OnPropertyChanged(name); }
         UpdateSimulationClockTimer();
     }
 

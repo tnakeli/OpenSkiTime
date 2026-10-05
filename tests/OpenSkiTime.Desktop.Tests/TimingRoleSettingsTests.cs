@@ -28,14 +28,14 @@ public partial class DesktopWorkflowTests
     }
 
     [Fact]
-    public void TimingRoleSourceListsKeepAllPrimarySourcesAndExcludeSimulatorFromBClock()
+    public void TimingRoleSourceListsOfferEverySourceIncludingTheSimulatorForBClock()
     {
         string[] primary = ["Timy 2/3 · USB", "MT1 · USB / serial", "MT1 · ALGE Results", "Simulator", "Replay file"];
         Assert.Equal(primary, new TimingRoleEditor(TimingRole.Start).Sources);
         var start = new TimingRoleEditor(TimingRole.Start);
         Assert.Equal(primary, new TimingRoleEditor(TimingRole.Intermediate(1), start).Sources);
-        Assert.Equal(primary.Where(x => x != "Simulator"), new TimingRoleEditor(TimingRole.BackupStart).Sources);
-        Assert.Equal(primary.Where(x => x != "Simulator"), new TimingRoleEditor(TimingRole.BackupFinish).Sources);
+        Assert.Equal(primary, new TimingRoleEditor(TimingRole.BackupStart).Sources);
+        Assert.Equal(primary, new TimingRoleEditor(TimingRole.BackupFinish).Sources);
     }
 
     [AvaloniaFact]
@@ -68,7 +68,7 @@ public partial class DesktopWorkflowTests
                 vm.TimingIntermediateRoles[1].Channel = 4;
                 PressSettingsControl(window, VisibleButton(window, "Add B Clock"));
                 Assert.Equal(2, vm.BackupTimingRoles.Count);
-                Assert.DoesNotContain(TimingSourceTypes.SimulatorLabel, vm.BackupTimingRoles[0].Sources);
+                Assert.Contains(TimingSourceTypes.SimulatorLabel, vm.BackupTimingRoles[0].Sources); // training B; rejected beside real A on save
                 vm.BackupTimingRoles[0].UsbId = "SYNTHETIC-B";
                 vm.BackupStartWarningMilliseconds = 2; vm.BackupFinishWarningMilliseconds = 20; vm.BackupMissingGraceSeconds = 7;
                 window.UpdateLayout(); Dispatcher.UIThread.RunJobs();

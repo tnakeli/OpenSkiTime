@@ -158,9 +158,15 @@
   <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding ShowTimingSimulatorControls}">
    <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Name="SimulationTimeBox" Text="{Binding SimulationTime}" Width="155" ToolTip.Tip="Simulator device time. While live, impulses use the PC clock at the press; type a time to pause and use it." />
    <Button Name="SimulationClockToggle" Content="{Binding SimulationClockToggleText}" Command="{Binding ToggleSimulationClockCommand}" Classes="secondaryAction" ToolTip.Tip="Pause the PC clock to type a simulator time, or follow the PC clock live again." />
-   <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
-   <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />
-   <Button Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+   <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsTimingSimulator}">
+    <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+    <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />
+    <Button Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+   </StackPanel>
+   <StackPanel Name="SimulatorBackupButtons" Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsBackupTimingSimulator}">
+    <Button Content="Test B start" Command="{Binding SimulateBackupPulseCommand}" CommandParameter="start" IsEnabled="{Binding IsBackupClockActive}" Classes="secondaryAction" ToolTip.Tip="B Clock training impulse. B never changes A timing." />
+    <Button Content="Test B finish" Command="{Binding SimulateBackupPulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsBackupClockActive}" Classes="secondaryAction" ToolTip.Tip="B Clock training impulse. B never changes A timing." />
+   </StackPanel>
   </StackPanel>
   <!-- Drag preview overlay: never hit-testable, so it cannot steal or block a drop target. -->
   <Canvas Name="TimingDropPreviewLayer" Grid.RowSpan="5" IsHitTestVisible="False">

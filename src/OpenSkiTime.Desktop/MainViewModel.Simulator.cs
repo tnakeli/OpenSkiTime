@@ -1,12 +1,14 @@
 using System.Globalization;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
+using OpenSkiTime.Application;
+using OpenSkiTime.Devices;
 using OpenSkiTime.Domain;
 using OpenSkiTime.Timing;
 
 namespace OpenSkiTime.Desktop;
 
-// Training simulator clock of the Timing view.
+// Training simulator of the Timing view: the simulation clock and B Clock test impulses (A impulses: SimulatePulseAsync).
 // While the clock runs, a test impulse takes the PC's local time of day at the moment of the press, with full tick
 // precision; the text box only displays that clock (tenths, refreshed at 10 Hz). Pausing freezes the exact time in the
 // box, and typing a time pauses the clock, so the typed value is used and never overwritten by the running display.
@@ -16,6 +18,7 @@ public sealed partial class MainViewModel
     private DispatcherTimer? _simulationClockTimer;
     private string _simulationTime = "12:00:00.0000";
     private bool _isSimulationClockRunning = true;
+    private SimulatorTimingSource? _backupSimulator;
 
     // Operator input. A changed value pauses the running clock first.
     public string SimulationTime
@@ -41,7 +44,8 @@ public sealed partial class MainViewModel
     }
 
     public string SimulationClockToggleText => IsSimulationClockRunning ? "⏸ Pause" : "▶ Live";
-    public bool ShowTimingSimulatorControls => IsTimingSimulator;
+    public bool IsBackupTimingSimulator => BackupTimingRoles.Any(x => x.EffectiveSourceType == TimingSourceType.Simulator);
+    public bool ShowTimingSimulatorControls => IsTimingSimulator || IsBackupTimingSimulator;
 
     [RelayCommand]
     private void ToggleSimulationClock()
@@ -55,6 +59,31 @@ public sealed partial class MainViewModel
         var now = SimulationClockTicks();
         IsSimulationClockRunning = false;
         ShowSimulationTime(TimingTime.FormatTimeOfDay(now));
+    }
+
+    // B Clock test impulse on the live B simulator session. It feeds the auxiliary B capture only, never A timing.
+    [RelayCommand]
+    private async Task SimulateBackupPulseAsync(string channel)
+    {
+        await GuardAsync(async () =>
+        {
+            var state = workspace.Auxiliary?.State(AuxiliaryTimingRole.B);
+            var options = state is { IsActive: true, Live: true }
+                ? state.AllOptions.FirstOrDefault(x => x.Device == TimingSourceTypes.SimulatorLabel) : null;
+            if (_backupSimulator is null || options is null)
+            { throw new DomainValidationException("Connect timing with the B Clock simulator first. B connects with timing."); }
+            var ticks = SimulationTicks();
+            var position = channel switch
+            {
+                "start" => 0,
+                "finish" => 1,
+                _ => throw new DomainValidationException("Choose B Clock start or finish.")
+            };
+            // Pulses use the physical channel the live B simulator session maps to this role.
+            var physical = options.Channel(position)
+                ?? throw new DomainValidationException("This B Clock role is not assigned to the simulator in Settings.");
+            await _backupSimulator.PulseAsync(physical, ticks);
+        });
     }
 
     // The impulse time: the PC clock at the press while running, otherwise the typed device time.

@@ -160,12 +160,34 @@ public sealed class TimingRoleConfigurationTests
     {
         Assert.Equal(["Timy 2/3 · USB", "MT1 · USB / serial", "MT1 · ALGE Results", "Simulator", "Replay file"],
             TimingSourceTypes.Primary.Select(TimingSourceTypes.Label));
-        Assert.Equal(["Timy 2/3 · USB", "MT1 · USB / serial", "MT1 · ALGE Results", "Replay file"],
+        Assert.Equal(["Timy 2/3 · USB", "MT1 · USB / serial", "MT1 · ALGE Results", "Simulator", "Replay file"],
             TimingSourceTypes.Backup.Select(TimingSourceTypes.Label));
+        Assert.Equal(["Timy 2/3 · USB", "MT1 · USB / serial", "MT1 · ALGE Results", "Replay file"],
+            TimingSourceTypes.DeviceRead.Select(TimingSourceTypes.Label));
         foreach (var source in TimingSourceTypes.Primary) { Assert.Equal(source, TimingSourceTypes.Parse(TimingSourceTypes.Label(source))); }
-        var simulatorB = Example().With(new(TimingRole.BackupStart, new(TimingSourceType.Simulator), 0))
-            .With(new(TimingRole.BackupFinish, new(TimingSourceType.Simulator), 1));
-        Assert.Throws<DomainValidationException>(simulatorB.Validate);
+    }
+
+    [Fact]
+    public void BClockSimulatorIsATrainingSourceBesideTrainingPrimaryTimingOnly()
+    {
+        var simulator = new TimingConnection(TimingSourceType.Simulator);
+        // Real A timing with a simulated B Clock would mix training evidence into a race file.
+        var realA = Example().With(new(TimingRole.BackupStart, simulator, 0)).With(new(TimingRole.BackupFinish, simulator, 1));
+        Assert.Contains("training only", Assert.Throws<DomainValidationException>(realA.Validate).Message, StringComparison.Ordinal);
+
+        foreach (var primary in new[] { simulator, new TimingConnection(TimingSourceType.ReplayFile) { ReplayPath = "a.txt" } })
+        {
+            var training = new TimingRoleConfiguration([new(TimingRole.Start, primary, 0), new(TimingRole.Finish, primary, 1),
+                new(TimingRole.BackupStart, simulator, 3), new(TimingRole.BackupFinish, simulator, 4)]);
+            training.Validate();
+            var b = Assert.Single(training.BackupCapture(Date)).Options;
+            Assert.Equal(TimingSourceTypes.SimulatorLabel, b.Device);
+            Assert.True(b.Simulation);
+            Assert.Equal((3, 4), (b.Channel(0), b.Channel(1)));
+            AuxiliaryTimingValidation.Validate(AuxiliaryTimingRole.B, b);
+        }
+        // B Clock alone (primary not yet assigned) may be saved with the simulator.
+        new TimingRoleConfiguration([new(TimingRole.BackupStart, simulator, 0), new(TimingRole.BackupFinish, simulator, 1)]).Validate();
     }
 
     [Fact]
