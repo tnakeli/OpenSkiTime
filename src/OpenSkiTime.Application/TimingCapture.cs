@@ -573,13 +573,21 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
-    public async Task CorrectAsync(TimingDecision decision, string operatorName, string reason, CancellationToken ct = default)
+    public Task CorrectAsync(TimingDecision decision, string operatorName, string reason, CancellationToken ct = default)
+        => CorrectAsync(decision, operatorName, reason, null, ct);
+
+    // expectedBefore is the decision the operator saw. Input that arrived since then refuses the correction instead of
+    // silently applying it to whatever the value has become.
+    public async Task CorrectAsync(TimingDecision decision, string operatorName, string reason, TimingDecision? expectedBefore,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(decision);
         await _state.WaitAsync(ct);
         try
         {
             var before = TimingEngine.CurrentDecision(decision, _audit);
+            if (expectedBefore is not null && before != expectedBefore)
+            { throw new DomainValidationException("This timing changed after it was displayed. Check the current row and try again."); }
             await AppendDecisionAsync(decision, operatorName, reason);
             ReconcileCorrectedQueue(before, decision);
         }
@@ -595,29 +603,47 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     {
         ArgumentNullException.ThrowIfNull(bibs);
         await _state.WaitAsync(ct);
+        try { await CorrectStatusesLockedAsync(bibs, status, operatorName, reason, disqualification, ct); }
+        finally { _state.Release(); }
+    }
+
+    // Classifies the starter the operator saw as next, only while that bib is still the expected starter: a start
+    // impulse processed since the screen refreshed must not shift the classification to the following competitor.
+    public async Task ClassifyExpectedStarterAsync(int bib, TimingStatus status, string operatorName, string reason,
+        CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
         try
         {
-            if (_snapshot is null || bibs.Count == 0 || bibs.Distinct().Count() != bibs.Count)
-            { throw new DomainValidationException("Select one or more distinct starters in this run."); }
-            var changes = new List<TimingAuditChange>();
-            foreach (var bib in bibs)
-            {
-                var row = _snapshot.Results.SingleOrDefault(x => x.Bib == bib)
-                    ?? throw new DomainValidationException($"Bib {bib} is not in this run.");
-                var after = new TimingDecision(DecisionKind.Status, CompetitorId: row.CompetitorId, Status: status,
-                    Disqualification: status == TimingStatus.DSQ ? disqualification ?? row.Disqualification : disqualification);
-                TimingEngine.ValidateDecision(after, _snapshot);
-                var before = TimingEngine.CurrentDecision(after, _audit);
-                if (before != after) { changes.Add(new(before, after)); }
-            }
-            if (changes.Count == 0) { return; }
-            var saved = await store.AppendTimingAuditBatchAsync(_snapshot.ListId, _snapshot.AuditVersion,
-                changes, operatorName, reason, DateTimeOffset.UtcNow, ct: ct);
-            _audit.AddRange(saved);
-            Rebuild();
-            foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
+            if (ExpectedBib(0) != bib)
+            { throw new DomainValidationException($"Bib {bib} is no longer the next starter. Check the start queue and try again."); }
+            await CorrectStatusesLockedAsync([bib], status, operatorName, reason, null, ct);
         }
         finally { _state.Release(); }
+    }
+
+    private async Task CorrectStatusesLockedAsync(IReadOnlyList<int> bibs, TimingStatus? status,
+        string operatorName, string reason, DisqualificationDetails? disqualification, CancellationToken ct)
+    {
+        if (_snapshot is null || bibs.Count == 0 || bibs.Distinct().Count() != bibs.Count)
+        { throw new DomainValidationException("Select one or more distinct starters in this run."); }
+        var changes = new List<TimingAuditChange>();
+        foreach (var bib in bibs)
+        {
+            var row = _snapshot.Results.SingleOrDefault(x => x.Bib == bib)
+                ?? throw new DomainValidationException($"Bib {bib} is not in this run.");
+            var after = new TimingDecision(DecisionKind.Status, CompetitorId: row.CompetitorId, Status: status,
+                Disqualification: status == TimingStatus.DSQ ? disqualification ?? row.Disqualification : disqualification);
+            TimingEngine.ValidateDecision(after, _snapshot);
+            var before = TimingEngine.CurrentDecision(after, _audit);
+            if (before != after) { changes.Add(new(before, after)); }
+        }
+        if (changes.Count == 0) { return; }
+        var saved = await store.AppendTimingAuditBatchAsync(_snapshot.ListId, _snapshot.AuditVersion,
+            changes, operatorName, reason, DateTimeOffset.UtcNow, ct: ct);
+        _audit.AddRange(saved);
+        Rebuild();
+        foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
     }
 
     public async Task ReturnToStartAsync(int bib, string startKey, string operatorName, CancellationToken ct = default)

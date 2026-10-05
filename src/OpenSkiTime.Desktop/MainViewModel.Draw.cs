@@ -26,8 +26,10 @@ public sealed partial class ResultInputRow(StartListEntry entry) : ObservableObj
     [ObservableProperty] private string _status = "Finished";
     public RunFinish Read()
     {
-        if (!Enum.TryParse<FinishStatus>(Status, out var status) || !Enum.IsDefined(status))
-        { throw new DomainValidationException($"Check status for bib {Bib}."); }
+        // Names only: Enum.TryParse would also read "1" as DNS and silently change Run 2 eligibility.
+        var text = Status.Trim();
+        if (text.Length == 0 || !text.All(char.IsAsciiLetter) || !Enum.TryParse<FinishStatus>(text, ignoreCase: true, out var status))
+        { throw new DomainValidationException($"Check status for bib {Bib}: use Finished, DNS, DNF, DSQ or NPS."); }
         if (status != FinishStatus.Finished && !string.IsNullOrWhiteSpace(Time))
         { throw new DomainValidationException($"Remove the time for bib {Bib}, or set its status to Finished."); }
         return new(CompetitorId, status, status == FinishStatus.Finished ? RunResultInput.ParseTime(Time) : null);
@@ -102,8 +104,11 @@ public sealed partial class MainViewModel
     public bool IsLaterDrawRun => DrawRun > 1;
     public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && !DrawRunStarted && DrawRevision?.HasCapture != true
         && DrawEntryIssue.Length == 0 && (DrawRun == 1 || (DrawRun == 2 && _sourceRun is not null && (_sourceTiming is null || _sourceTiming.Complete)));
+    // A list that has been raced can always be exported. Before that, only changed Run 1 results block it: other audited
+    // Run 1 changes (an ignored stray impulse, a queue reorder) leave the starting order valid.
     public bool CanExportDraw => DrawRevision is not null && !IsDrawBusy && !HasUnsavedRunInput
-        && (_sourceTiming is null || (_sourceTiming.Complete && _sourceTimingVersion is not null && TimingReplay.InputVersionMatches(DrawRevision.SourceTimingVersion, _sourceTimingVersion)));
+        && (_sourceTiming is null || DrawRunStarted || DrawRevision.HasCapture
+            || (_sourceTiming.Complete && DrawRevision.Plan.SourceResults.SequenceEqual(_sourceTiming.ToRunFinishes())));
     public bool HasDrawSource => _sourceRun is not null;
     public bool CanEditDrawResults => HasDrawSource && !DrawRunStarted && !IsDrawBusy;
     public string DrawActionLabel => IsFirstDrawRun ? DrawRevision is null ? "Draw" : "Draw again" : "Create start list";
