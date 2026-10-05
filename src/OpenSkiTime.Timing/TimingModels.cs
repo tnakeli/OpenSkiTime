@@ -29,6 +29,9 @@ public sealed record DisqualificationDetails(int? Gate = null, string Reason = "
     {
         if (Gate is <= 0 or > 1000 || Reason is null || Judge is null || Reason.Length > 1000 || Judge.Length > 160)
         { throw new DomainValidationException("DSQ gate must be 1–1000; reason at most 1000 characters and judge at most 160."); }
+        // The reason is exported in result XML, which cannot carry most control characters (a pasted Word line break is U+000B).
+        if (!TextRules.IsPortable(Reason) || !TextRules.IsPortable(Judge))
+        { throw new DomainValidationException("The DSQ reason or judge contains a control character that cannot be exported (for example a pasted Word line break)."); }
     }
 }
 

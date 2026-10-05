@@ -183,6 +183,11 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private long _saved;
     private readonly int[] _expected = new int[22];
     private readonly bool[] _held = new bool[22];
+    // Newest device time per clock received before a live run change. Input at or before it belongs to the previous
+    // run (for example ALGE Results history read again after the change) and is never assigned automatically.
+    private readonly Dictionary<string, long> _previousRunInput = new(StringComparer.Ordinal);
+    private readonly object _stopGate = new();
+    private Task? _stopping;
     private bool _followOrder;
     public bool IsActive => _producer is not null;
     public string Connection
@@ -267,7 +272,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                         string.Empty, "Capture ended unexpectedly. Recover missing impulses from device memory/backup and review before continuing."));
                 }
             }
-            Array.Clear(_expected); Array.Clear(_held); _followOrder = false;
+            Array.Clear(_expected); Array.Clear(_held); _followOrder = false; _previousRunInput.Clear();
             Interlocked.Exchange(ref _saved, data.Packets.Count);
             Rebuild();
         }
@@ -394,7 +399,10 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     if (_observations.Count != before)
                     {
                         Rebuild();
-                        foreach (var observation in _observations.Skip(before).ToArray()) { await RetryDurableAsync(() => AutoAssignAsync(observation)); }
+                        // A recovered history page lists triggers newest first; a queue must receive them in device-time order.
+                        foreach (var observation in _observations.Skip(before).OrderBy(x => x.DeviceTicks ?? long.MaxValue)
+                            .ThenBy(x => x.Key, StringComparer.Ordinal).ToArray())
+                        { await AutoAssignDurableAsync(observation); }
                     }
                 }
                 finally { _state.Release(); }
@@ -412,10 +420,13 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     var next = (await store.SwitchCaptureGroupAsync(sessions.Select(x => x.Id).ToArray(), change.ListId,
                         sessions.Select(x => x.Options).ToArray(), sessions[0].Options.Operator, DateTimeOffset.UtcNow)).ToArray();
                     if (next.Length != sessions.Length) { throw new SeriesFileException("The timing store did not switch every device session."); }
+                    foreach (var o in _observations.Where(x => x.DeviceTicks is not null && x.ClockId.Length > 0))
+                    { _previousRunInput[o.ClockId] = Math.Max(_previousRunInput.GetValueOrDefault(o.ClockId, long.MinValue), o.DeviceTicks!.Value); }
                     _list = data.List; _observations.Clear(); _audit.Clear(); _sessions.Clear(); _decoders.Clear();
                     _observations.AddRange(restored.Observations.Select(x => x.Observation)); _audit.AddRange(data.Audit);
                     _sessions.AddRange(data.Sessions); _sessions.AddRange(next);
-                    Array.Clear(_expected); Array.Clear(_held);
+                    // A run change puts every position back on HOLD, before any further input is processed.
+                    Array.Clear(_expected); Array.Fill(_held, true);
                     sessions = next; Array.Clear(sequences);
                     Volatile.Write(ref _activeOptions, next.Select(x => x.Options).ToArray());
                     Interlocked.Exchange(ref _saved, data.Packets.Count);
@@ -487,6 +498,24 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         if (_list is not null) { Volatile.Write(ref _snapshot, TimingEngine.Replay(_list, _observations, _audit, 0, 1)); }
     }
 
+    // An uncertain commit (saved, then a storage error reported) makes the retry meet a newer durable audit. Reload it
+    // and re-evaluate instead of stopping capture; an automatic decision never ends the journal.
+    private async Task AutoAssignDurableAsync(TimingObservation observation) => await RetryDurableAsync(async () =>
+    {
+        try { await AutoAssignAsync(observation); }
+        catch (SeriesConflictException)
+        {
+            var durable = await store.ReadTimingAsync(_list!.Id);
+            _audit.Clear(); _audit.AddRange(durable.Audit); Rebuild();
+            var saved = _snapshot!.Observations.FirstOrDefault(x => x.Observation.Key == observation.Key);
+            if (saved is { State: "Assigned", Bib: { } bib } && observation.Channel is { } channel && channel < _expected.Length
+                && ExpectedBib(channel) == bib) { _expected[channel] = 0; }
+            AdvanceQueues();
+            await AutoAssignAsync(observation);
+        }
+        catch (DomainValidationException) { }
+    });
+
     private async Task AutoAssignAsync(TimingObservation observation)
     {
         var review = _snapshot!.Observations.FirstOrDefault(x => x.Observation.Key == observation.Key);
@@ -498,12 +527,33 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         {
             bib = observation.Channel is { } channel && channel < _expected.Length ? ExpectedBib(channel) : null;
             reason = _followOrder ? "Race queue: expected bib" : "Operator armed bib";
+            // A queue receives arrivals in order. An impulse older than one already used at this position arrived late
+            // (for example recovered from device history) and belongs to an earlier competitor: leave it for review.
+            if (ArrivedLate(observation)) { return; }
         }
         if (bib is null || !_snapshot.Results.Any(x => x.Bib == bib)) { return; }
+        // Bibs repeat across runs: input from before a live run change, and an intermediate or finish that is not after
+        // the competitor's own start, can never be this competitor's impulse.
+        if (FromPreviousRun(observation) || !AfterStart(observation, bib.Value)) { return; }
         var operatorName = _sessions.Single(x => x.Id == observation.SessionId).Options.Operator;
         await AppendDecisionAsync(new(DecisionKind.Assignment, observation.Key, Bib: bib), operatorName, reason);
         if (observation.Channel is { } consumed && ExpectedBib(consumed) == bib) { _expected[consumed] = 0; }
         AdvanceQueues();
+    }
+
+    private bool ArrivedLate(TimingObservation observation) => observation.DeviceTicks is { } ticks
+        && _snapshot!.Observations.Any(x => x.State == "Assigned" && x.Observation.Channel == observation.Channel
+            && x.Observation.ClockId == observation.ClockId && x.Observation.DeviceTicks >= ticks);
+
+    private bool FromPreviousRun(TimingObservation observation) => observation.DeviceTicks is { } ticks
+        && _previousRunInput.TryGetValue(observation.ClockId, out var newest) && ticks <= newest;
+
+    private bool AfterStart(TimingObservation observation, int bib)
+    {
+        if (observation.Channel is 0 or null || observation.DeviceTicks is not { } ticks) { return true; }
+        var startKey = _snapshot!.Results.FirstOrDefault(x => x.Bib == bib)?.StartKey;
+        var start = startKey is null ? null : _snapshot.Observations.FirstOrDefault(x => x.Observation.Key == startKey)?.Observation;
+        return start is null || start.ClockId != observation.ClockId || start.DeviceTicks < ticks;
     }
 
     public async Task ArmAsync(int? startBib, int? finishBib, CancellationToken ct = default)
@@ -820,7 +870,17 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         }
     }
 
-    public async Task StopAsync()
+    // Disconnect and window close can overlap; concurrent callers share the stop that is already running.
+    public Task StopAsync()
+    {
+        lock (_stopGate)
+        {
+            if (_stopping is { IsCompleted: false } running) { return running; }
+            return _stopping = StopCoreAsync();
+        }
+    }
+
+    private async Task StopCoreAsync()
     {
         if (_producer is null) { return; }
         _readCancellation!.Cancel();

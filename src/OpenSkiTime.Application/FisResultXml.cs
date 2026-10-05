@@ -79,9 +79,17 @@ public static class FisResultXml
         { throw new DomainValidationException("Penalty and classified results do not match."); }
 
         using var stream = new MemoryStream();
-        using (var writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = true,
-            CloseOutput = false, NewLineChars = "\n" }))
+        // Text that bypassed validation (older files, pasted control characters) must not crash the application:
+        // XmlWriter rejects characters that XML cannot carry with ArgumentException.
+        try { Write(); }
+        catch (ArgumentException ex) when (ex is not ArgumentNullException)
+        { throw new DomainValidationException(XmlTextError); }
+        return stream.ToArray();
+
+        void Write()
         {
+            using var writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = true,
+                CloseOutput = false, NewLineChars = "\n" });
             writer.WriteStartDocument(); writer.WriteStartElement("Fisresults");
             writer.WriteStartElement("Raceheader"); writer.WriteAttributeString("Sector", "AL");
             writer.WriteAttributeString("Gender", gender);
@@ -175,8 +183,10 @@ public static class FisResultXml
             }
             writer.WriteEndElement(); writer.WriteEndElement(); writer.WriteEndElement(); writer.WriteEndDocument();
         }
-        return stream.ToArray();
     }
+
+    internal const string XmlTextError = "A name, reason or other text contains a control character that cannot be written to "
+        + "FIS XML (for example a pasted Word line break). Correct the text and try again.";
 
     private static void E(XmlWriter w, string name, string value) => w.WriteElementString(name, value);
     private static void WriteWeather(XmlWriter writer, RaceWeather weather, string? place, decimal? temperature, bool includeConditions)

@@ -74,8 +74,10 @@ public static class FisPenalty
         { throw new DomainValidationException("At least five started and five classified racers with complete times are needed for this penalty calculation."); }
         var winner = classified[0].TotalHundredths!.Value;
         if (classified.Any(x => x.TotalHundredths < winner)) { throw new DomainValidationException("Check the final result times."); }
+        // P = (Tx / To - 1) × F, evaluated as (Tx - To) × F / To. One exact division keeps a midpoint such as 5.625 exact,
+        // so it rounds half up; dividing Tx / To first rounds the quotient and can leave 5.62499… below the midpoint.
         var racePoints = classified.ToDictionary(x => x.Bib,
-            x => decimal.Round(((decimal)x.TotalHundredths!.Value / winner - 1m) * f, 2, MidpointRounding.AwayFromZero));
+            x => decimal.Round((decimal)((x.TotalHundredths!.Value - winner) * f) / winner, 2, MidpointRounding.AwayFromZero));
         var topTen = classified.Where(x => x.Rank <= 10).ToArray();
         if (topTen.Length < 5) { throw new DomainValidationException("The first ten classified results are incomplete."); }
         decimal Used(PenaltyCompetitor row) => Math.Min(row.ListedPoints ?? max, max);

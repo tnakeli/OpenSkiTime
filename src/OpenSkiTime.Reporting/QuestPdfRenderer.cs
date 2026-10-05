@@ -214,7 +214,7 @@ internal static class OfficialResultsDocument
         {
             ReportComponents.Heading(column, GenderLabels.Format(final.Race.FirstList.Plan.Gender));
             ReportComponents.Table(column.Item(), ["Rank", "Bib", "Code", "Name", "Year", "Nation", "Run 1", "Run 2", "Total", "Status", "Race pts"],
-                final.Race.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.Entry.Position).Select(x => new[]
+                final.Race.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.StatusRun).ThenBy(x => x.Entry.Position).Select(x => new[]
                 { ReportComponents.Number(x.Rank), ReportComponents.Number(x.Entry.Bib), x.Entry.Entrant.Athlete.FederationCode ?? "",
                     x.Entry.Entrant.Athlete.Surname + " " + x.Entry.Entrant.Athlete.FirstName, ReportComponents.Number(x.Entry.Entrant.Athlete.BirthYear),
                     x.Entry.Entrant.Athlete.Nation ?? "", TimingTime.Format(x.Run1Hundredths), TimingTime.Format(x.Run2Hundredths),

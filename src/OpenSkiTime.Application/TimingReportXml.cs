@@ -117,8 +117,15 @@ public static class TimingReportXml
         if (errors.Count > 0) { throw new DomainValidationException(string.Join("\n", errors)); }
         if (string.IsNullOrWhiteSpace(softwareVersion)) { throw new DomainValidationException("Results software version is required."); }
         using var stream = new MemoryStream();
-        using (var w = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = true }))
+        // Text that bypassed validation must not crash the application: XmlWriter rejects control characters.
+        try { Write(); }
+        catch (ArgumentException ex) when (ex is not ArgumentNullException)
+        { throw new DomainValidationException(FisResultXml.XmlTextError); }
+        return stream.ToArray();
+
+        void Write()
         {
+            using var w = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = true });
             void E(string name, string value) => w.WriteElementString(name, value);
             void Optional(string name, string value) { if (!string.IsNullOrWhiteSpace(value)) { E(name, value); } }
             void Person(string element, TimingReportPerson p, string? function = null, bool timekeeper = false)
@@ -177,7 +184,6 @@ public static class TimingReportXml
             }
             E("Delayedstartdoor", "no"); E("CertifyFIS", "yes"); w.WriteEndElement(); w.WriteEndElement(); w.WriteEndElement(); w.WriteEndDocument();
         }
-        return stream.ToArray();
     }
     public static string FormatStamp(TimingReportStamp stamp)
     {

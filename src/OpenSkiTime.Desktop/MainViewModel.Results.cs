@@ -151,7 +151,8 @@ public sealed partial class MainViewModel
             PopulateResultRows();
             var unresolved = firstTiming.Unresolved + (secondTiming?.Unresolved ?? 0);
             ResultsState = $"{_resultRace.Rows.Count(x => x.Status == TimingStatus.Finished)} classified · {_resultRace.Rows.Count(x => x.Status != TimingStatus.Finished)} not classified. Review penalty and race information with the TD."
-                + (unresolved > 0 ? $" {unresolved} extra timestamp(s) remain unassigned or need review in Timing; original input is preserved." : "");
+                + (unresolved > 0 ? $" {unresolved} extra timestamp(s) remain unassigned or need review in Timing; original input is preserved." : "")
+                + (_resultRace.Run1TimesChangedAfterRun2Order is { Count: > 0 } changed ? $" Run 1 time changed after the Run 2 order was saved (Bib {string.Join(", ", changed)}): results use the corrected time and the saved Run 2 order stands. Review with the TD before approval." : "");
             try
             {
                 var tables = pointsSource.PenaltyRules;
@@ -186,7 +187,7 @@ public sealed partial class MainViewModel
     {
         ResultRows.Clear();
         if (_resultRace is null) { return; }
-        foreach (var row in _resultRace.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.Entry.Position))
+        foreach (var row in _resultRace.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.StatusRun).ThenBy(x => x.Entry.Position))
         {
             var athlete = row.Entry.Entrant.Athlete;
             ResultRows.Add(new(row.Rank?.ToString(CultureInfo.InvariantCulture) ?? "—", row.Entry.Bib,
