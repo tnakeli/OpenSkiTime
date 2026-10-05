@@ -33,10 +33,17 @@ public sealed record CompetitorValues(
             throw new DomainValidationException("Nation must be a three-letter code.");
         }
 
+        var club = Optional(Club, 160);
+        // Names reach result XML and reports, which cannot carry most control characters (a pasted Word line break is U+000B).
+        if (!new[] { surname, firstName, code, club }.All(TextRules.IsPortable))
+        {
+            throw new DomainValidationException("Code, names and club contain a control character that cannot be exported (for example a pasted Word line break).");
+        }
+
         return this with
         {
             Surname = surname, FirstName = firstName, Nation = nation,
-            FederationCode = code, Club = Optional(Club, 160),
+            FederationCode = code, Club = club,
         };
     }
 

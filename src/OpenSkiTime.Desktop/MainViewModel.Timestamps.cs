@@ -12,7 +12,9 @@ public sealed partial class MainViewModel
     public ObservableCollection<TimingTimestampRow> TimestampRows { get; } = [];
     [ObservableProperty] private bool _isTimingDragging;
     [ObservableProperty] private string _timingDropHint = "Drag a competitor to At start or a timestamp.";
-    partial void OnIsTimingDraggingChanged(bool value) { if (!value) { RefreshTimestamps(); } }
+    // A drag defers timestamp rows; rebuild them through RefreshTiming, which marks the change as a refresh so the
+    // grids' resulting selection changes are not taken as the operator choosing another competitor.
+    partial void OnIsTimingDraggingChanged(bool value) { if (!value) { RefreshTiming(); } }
 
     private void RefreshTimestamps()
     {

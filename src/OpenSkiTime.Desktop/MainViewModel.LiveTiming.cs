@@ -151,7 +151,7 @@ public sealed partial class MainViewModel
         var c = race.Values;
         var state = new LiveSnapshot(++_liveVersion, new(c.Name, c.Calendar?.Location ?? _current?.Values.Location ?? "", DisciplineCode(c.Discipline),
             c.Date, c.RaceType == RaceType.Fis, c.FisCode ?? "", activeList.Plan.Gender == Gender.Female ? "L" : "M", c.Calendar?.Category ?? "FIS", c.IntermediateCount, c.CourseName ?? ""),
-            LiveSnapshotMapper.Competitors(selected), activeList.Plan.RunNumber, runs.ToArray(), DateTimeOffset.UtcNow);
+            LiveSnapshotMapper.Competitors(selected), activeList.Plan.RunNumber, LiveSnapshotMapper.WithTotals(runs), DateTimeOffset.UtcNow);
         state.Validate(); _liveSnapshot = state; _liveLists = selected; _liveObservedTiming = current;
         _liveCompetitionId = race.Id; _livePanel?.Offer(race.Id, state);
     }
@@ -192,7 +192,7 @@ public sealed partial class MainViewModel
             var run = LiveSnapshotMapper.MapRun(list, current, TimeZoneInfo.FindSystemTimeZoneById(LiveTimeZone), DateTimeOffset.UtcNow);
             _liveSnapshot = _liveSnapshot with { Version = ++_liveVersion, CurrentRun = TimingRun,
                 Competitors = LiveSnapshotMapper.Competitors(_liveLists),
-                Runs = _liveSnapshot.Runs.Where(x => x.Number != run.Number).Append(run).OrderBy(x => x.Number).ToArray(), UpdatedAt = DateTimeOffset.UtcNow };
+                Runs = LiveSnapshotMapper.WithTotals(_liveSnapshot.Runs.Where(x => x.Number != run.Number).Append(run)), UpdatedAt = DateTimeOffset.UtcNow };
             _liveSnapshot.Validate(); _liveObservedTiming = current;
             _livePanel.Offer(_liveCompetitionId!.Value, _liveSnapshot);
         }

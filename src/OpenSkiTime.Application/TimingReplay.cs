@@ -14,16 +14,14 @@ public static class TimingReplay
         var observations = new List<TimingObservation>();
         foreach (var unit in Units(data.Sessions, data.Packets))
         {
-            var decoders = new Dictionary<string, ITimingDecoder>(StringComparer.Ordinal);
+            var decoders = new StreamDecoders();
             foreach (var session in unit.Sessions) { session.Options.Validate(); }
             foreach (var (session, packet) in unit.Packets)
             {
-                var key = $"{session.Id:N}:{packet.Protocol}:{packet.Source}:{packet.Stream}";
-                if (!decoders.TryGetValue(key, out var decoder))
-                { decoder = factory.Create(session, packet.Protocol, packet.Source, packet.Stream); decoders[key] = decoder; }
+                var decoder = decoders.For(factory, session, packet, observations);
                 observations.AddRange(Decode(decoder, packet));
             }
-            foreach (var decoder in decoders.Values) { observations.AddRange(decoder.Complete()); }
+            observations.AddRange(decoders.Complete());
             foreach (var session in unit.Sessions.Where(x => !x.CleanStop && activeSessionIds?.Contains(x.Id) != true))
             {
                 observations.Add(new($"{session.Id:N}:interrupted", session.Id, 0, session.Options.Endpoint,

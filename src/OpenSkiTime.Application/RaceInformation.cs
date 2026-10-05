@@ -71,6 +71,13 @@ public sealed record RaceInformation(string Category, IReadOnlyList<RaceOfficial
             if (person.FirstName.Length > 160 || person.LastName.Length > 160)
             { throw new DomainValidationException("Names may contain at most 160 characters."); }
         }
+        // Result XML cannot carry most control characters, and pasted text can contain them (a Word line break is U+000B).
+        var texts = Jury.Select(x => x.Person).Concat(Runs.Select(x => x.CourseSetter))
+            .Concat(Runs.SelectMany(x => x.Forerunners ?? []).Select(x => x.Person))
+            .SelectMany(x => new[] { x.FirstName, x.LastName, x.Nation, x.Number }).Append(Category)
+            .Concat(Runs.SelectMany(x => new[] { x.Course, x.Homologation, x.StartTime, x.Weather?.Conditions, x.Weather?.Snow }));
+        if (!texts.All(TextRules.IsPortable))
+        { throw new DomainValidationException("Race information contains a control character that cannot be exported (for example a pasted Word line break)."); }
         foreach (var run in Runs)
         {
             if (run.Course.Length > 160 || run.Homologation.Length > 50

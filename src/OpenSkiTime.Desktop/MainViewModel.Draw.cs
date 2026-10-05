@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.Application;
@@ -9,7 +10,11 @@ namespace OpenSkiTime.Desktop;
 
 public sealed record DrawDestination(CompetitionDetails Competition, int Run);
 public sealed record DrawMenuCompetition(CompetitionDetails Competition, IReadOnlyList<int> Runs);
-public sealed record DrawStartListRow(StartListEntry Entry, string RunOneTime);
+public sealed record DrawStartListRow(StartListEntry Entry, string RunOneTime, bool SharesPoints = false)
+{
+    // Competitors with identical FIS points; the draw decides their order. Bold shows each complete group.
+    public FontWeight Weight => SharesPoints ? FontWeight.Bold : FontWeight.Normal;
+}
 
 public sealed partial class ResultInputRow(StartListEntry entry) : ObservableObject
 {
@@ -21,8 +26,10 @@ public sealed partial class ResultInputRow(StartListEntry entry) : ObservableObj
     [ObservableProperty] private string _status = "Finished";
     public RunFinish Read()
     {
-        if (!Enum.TryParse<FinishStatus>(Status, out var status) || !Enum.IsDefined(status))
-        { throw new DomainValidationException($"Check status for bib {Bib}."); }
+        // Names only: Enum.TryParse would also read "1" as DNS and silently change Run 2 eligibility.
+        var text = Status.Trim();
+        if (text.Length == 0 || !text.All(char.IsAsciiLetter) || !Enum.TryParse<FinishStatus>(text, ignoreCase: true, out var status))
+        { throw new DomainValidationException($"Check status for bib {Bib}: use Finished, DNS, DNF, DSQ or NPS."); }
         if (status != FinishStatus.Finished && !string.IsNullOrWhiteSpace(Time))
         { throw new DomainValidationException($"Remove the time for bib {Bib}, or set its status to Finished."); }
         return new(CompetitorId, status, status == FinishStatus.Finished ? RunResultInput.ParseTime(Time) : null);
@@ -46,6 +53,8 @@ public sealed partial class MainViewModel
     private string? _sourceTimingVersion;
     public bool HasCapturedRunInput => _sourceTiming is not null;
     public bool IsDrawFis => DrawCompetition?.Values.RaceType == RaceType.Fis;
+    // Local races are also drawn by FIS points; show them whenever the list has any, so equal-points emphasis is explained.
+    public bool ShowDrawPoints => IsDrawFis || DrawEntries.Any(x => x.Entrant.Points is not null);
     public bool CanPasteDrawResults => CanEditDrawResults && !HasCapturedRunInput;
     public string RunInputHelp => HasCapturedRunInput
         ? "Results come from Timing. Resolve observations and classify every starter there; then choose the reversal and create the start list."
@@ -95,8 +104,11 @@ public sealed partial class MainViewModel
     public bool IsLaterDrawRun => DrawRun > 1;
     public bool CanPrepareDraw => DrawCompetition is not null && !IsDrawBusy && !DrawRunStarted && DrawRevision?.HasCapture != true
         && DrawEntryIssue.Length == 0 && (DrawRun == 1 || (DrawRun == 2 && _sourceRun is not null && (_sourceTiming is null || _sourceTiming.Complete)));
+    // A list that has been raced can always be exported. Before that, only changed Run 1 results block it: other audited
+    // Run 1 changes (an ignored stray impulse, a queue reorder) leave the starting order valid.
     public bool CanExportDraw => DrawRevision is not null && !IsDrawBusy && !HasUnsavedRunInput
-        && (_sourceTiming is null || (_sourceTiming.Complete && _sourceTimingVersion is not null && TimingReplay.InputVersionMatches(DrawRevision.SourceTimingVersion, _sourceTimingVersion)));
+        && (_sourceTiming is null || DrawRunStarted || DrawRevision.HasCapture
+            || (_sourceTiming.Complete && DrawRevision.Plan.SourceResults.SequenceEqual(_sourceTiming.ToRunFinishes())));
     public bool HasDrawSource => _sourceRun is not null;
     public bool CanEditDrawResults => HasDrawSource && !DrawRunStarted && !IsDrawBusy;
     public string DrawActionLabel => IsFirstDrawRun ? DrawRevision is null ? "Draw" : "Draw again" : "Create start list";
@@ -248,14 +260,17 @@ public sealed partial class MainViewModel
         if (DrawRevision is { } revision)
         {
             var sourceTimes = revision.Plan.SourceResults.ToDictionary(x => x.CompetitorId, x => x.Hundredths);
+            // Points decide the Run 1 draw only; Run 2 follows Run 1 results.
+            var equalPoints = revision.Plan.RunNumber == 1 ? FisStartOrder.EqualPointsCompetitors(revision.Plan.Entries) : new HashSet<Guid>();
             foreach (var entry in revision.Plan.Entries)
             {
                 DrawEntries.Add(entry);
                 DrawStartListRows.Add(new(entry, revision.Plan.RunNumber == 1 ? ""
-                    : RunResultInput.FormatTime(sourceTimes[entry.Entrant.CompetitorId])));
+                    : RunResultInput.FormatTime(sourceTimes[entry.Entrant.CompetitorId]), equalPoints.Contains(entry.Entrant.CompetitorId)));
             }
             DrawState = DrawRunStarted ? "Run started" : "Start list ready";
-            DrawListInfo = $"{revision.Plan.Entries.Count} starters" + (IsDrawFis ? $" · FIS list {revision.Plan.PointsList.Code}" : "");
+            DrawListInfo = $"{revision.Plan.Entries.Count} starters" + (IsDrawFis ? $" · FIS list {revision.Plan.PointsList.Code}" : "")
+                + (equalPoints.Count > 0 ? " · Bold: equal FIS points, order decided by the draw" : "");
             DrawHelp = DrawRunStarted ? "Run started. Starting order is locked; select the next run from Start lists."
                 : revision.HasCapture ? "Timing capture has begun. The start list is locked; the run starts with the first assigned start impulse."
                 : "Start list saved. The run starts automatically with the first assigned start impulse.";
@@ -289,7 +304,7 @@ public sealed partial class MainViewModel
 
     private void NotifyDraw()
     {
-        OnPropertyChanged(nameof(IsDrawFis));
+        OnPropertyChanged(nameof(IsDrawFis)); OnPropertyChanged(nameof(ShowDrawPoints));
         OnPropertyChanged(nameof(IsFirstDrawRun)); OnPropertyChanged(nameof(IsLaterDrawRun));
         OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(DrawActionLabel));
         OnPropertyChanged(nameof(CanExportDraw)); OnPropertyChanged(nameof(HasDrawSource));
@@ -362,7 +377,7 @@ public sealed partial class MainViewModel
             if (!CanExportDraw || DrawRevision is not { } revision) { return; }
             var path = await dialogs.ChooseStartListExportAsync($"{SafeFileName(DrawCompetition!.Values.ShortLabel)}-run{DrawRun}", false);
             if (path is null) { return; }
-            await File.WriteAllTextAsync(path, StartListExchange.ToTsv(revision));
+            await ExportFile.WriteTextAsync(path, StartListExchange.ToTsv(revision));
             SetStatus("Start list exported as TSV.");
         });
     }
@@ -376,7 +391,7 @@ public sealed partial class MainViewModel
             var path = await dialogs.ChooseStartListExportAsync($"{SafeFileName(DrawCompetition!.Values.ShortLabel)}-run{DrawRun}", true);
             if (path is null) { return; }
             var display = revision with { Plan = revision.Plan with { Competition = DrawCompetition.Values } };
-            await File.WriteAllTextAsync(path, StartListExchange.ToPrintHtml(display));
+            await ExportFile.WriteTextAsync(path, StartListExchange.ToPrintHtml(display));
             SetStatus($"Print-ready start list saved to {path}. Open it in a browser and print with Ctrl+P.");
         });
     }

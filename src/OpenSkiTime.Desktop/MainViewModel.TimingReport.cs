@@ -367,7 +367,7 @@ public sealed partial class MainViewModel
             if (SelectedReportApproval is not { } approval) { throw new DomainValidationException("Create an approved report XML first."); }
             var path = await dialogs.ChooseResultXmlExportAsync(Path.GetFileNameWithoutExtension(approval.XmlFileName) + "-timing-report.xml");
             if (path is null) { return; }
-            await File.WriteAllBytesAsync(path, approval.Xml);
+            await ExportFile.WriteAsync(path, approval.Xml);
             ReportStatus = "Exported the exact approved timing report XML.";
         });
     }

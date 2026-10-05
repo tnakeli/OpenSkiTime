@@ -214,7 +214,7 @@ internal static class OfficialResultsDocument
         {
             ReportComponents.Heading(column, GenderLabels.Format(final.Race.FirstList.Plan.Gender));
             ReportComponents.Table(column.Item(), ["Rank", "Bib", "Code", "Name", "Year", "Nation", "Run 1", "Run 2", "Total", "Status", "Race pts"],
-                final.Race.Rows.OrderBy(x => x.Rank is null).ThenBy(x => x.Rank).ThenBy(x => x.Entry.Position).Select(x => new[]
+                final.Race.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.StatusRun).ThenBy(x => x.Entry.Position).Select(x => new[]
                 { ReportComponents.Number(x.Rank), ReportComponents.Number(x.Entry.Bib), x.Entry.Entrant.Athlete.FederationCode ?? "",
                     x.Entry.Entrant.Athlete.Surname + " " + x.Entry.Entrant.Athlete.FirstName, ReportComponents.Number(x.Entry.Entrant.Athlete.BirthYear),
                     x.Entry.Entrant.Athlete.Nation ?? "", TimingTime.Format(x.Run1Hundredths), TimingTime.Format(x.Run2Hundredths),
@@ -239,7 +239,7 @@ internal static class PenaltyCalculationDocument
             ReportComponents.Heading(column, GenderLabels.Format(final.Race.FirstList.Plan.Gender) + " | FIS list " + final.Race.FirstList.Plan.PointsList.Code);
             ReportComponents.Heading(column, "Top ten classified");
             ReportComponents.Table(column.Item(), ["Rank", "Bib", "Name", "Listed points", "Race points", "Selected for A / C"],
-                final.Race.Rows.Where(x => x.Rank <= 10).OrderBy(x => x.Rank).ThenBy(x => x.Entry.Bib).Select(x => new[]
+                final.Race.Rows.Where(x => x.Rank <= 10).OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).Select(x => new[]
                 { ReportComponents.Number(x.Rank), ReportComponents.Number(x.Entry.Bib), x.Entry.Entrant.Athlete.Surname + " " + x.Entry.Entrant.Athlete.FirstName,
                     ReportComponents.Number(x.Entry.Entrant.Points), ReportComponents.Number(penalty.RacePoints.GetValueOrDefault(x.Entry.Bib)),
                     penalty.BestClassified.Any(p => p.Competitor.Bib == x.Entry.Bib) ? "Yes" : "" }));

@@ -14,6 +14,10 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
     // Replaced atomically under _captureOwnership; device writer threads read it without locking.
     private volatile ImmutableHashSet<Guid> _activeCaptureIds = [];
     private readonly SemaphoreSlim _captureOwnership = new(1, 1);
+    // A run change keeps its pre-allocated next sessions until the caller has them. A retry after an uncertain commit
+    // (saved, then a failure reported) returns that exact boundary instead of stranding the capture.
+    private sealed record CaptureSwitch(Guid ListId, Guid[] Next, DateTimeOffset At);
+    private readonly Dictionary<string, CaptureSwitch> _captureSwitches = new(StringComparer.Ordinal);
 
     // One process owns the file lease, while A and independent auxiliary sessions own their own lifetimes.
     // FileShare.None: on Unix .NET maps only None to an exclusive flock (anything else is a shared lock that
@@ -96,7 +100,6 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
         IReadOnlyList<CaptureOptions> options, string operatorName, DateTimeOffset at, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(previousSessionIds);
-        foreach (var id in previousSessionIds) { RequireCaptureOwner(id); }
         return BeginCaptureCoreAsync(listId, options, operatorName, at, previousSessionIds, ct);
     }
 
@@ -113,11 +116,26 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
         if (string.IsNullOrWhiteSpace(operatorName)) { throw new DomainValidationException("An operator identity is required."); }
         var options = requested.Select(x => x with { Operator = operatorName.Trim() }).ToArray();
         await _captureOwnership.WaitAsync(ct);
+        var switchKey = string.Join(",", previousSessionIds.Order());
+        var newAttempt = false;
         try
         {
             if (previousSessionIds.Count == 0 && _activeCaptureIds.Count != 0)
             { throw new SeriesFileException("Disconnect the active A source before connecting another."); }
-            foreach (var previousOwner in previousSessionIds) { RequireCaptureOwner(previousOwner); }
+            CaptureSwitch? attempt = null;
+            if (previousSessionIds.Count > 0 && !_captureSwitches.TryGetValue(switchKey, out attempt))
+            {
+                foreach (var previousOwner in previousSessionIds) { RequireCaptureOwner(previousOwner); }
+                attempt = new(listId, options.Select(_ => Guid.NewGuid()).ToArray(), at);
+                _captureSwitches.Add(switchKey, attempt); newAttempt = true;
+            }
+            else if (attempt is not null)
+            {
+                if (attempt.ListId != listId || attempt.Next.Length != options.Length)
+                { throw new DomainValidationException("Resolve the pending run change before choosing another run."); }
+                if (!previousSessionIds.All(_activeCaptureIds.Contains) && !attempt.Next.All(_activeCaptureIds.Contains))
+                { throw new SeriesFileException("Only the active capture owner can change the run of these device sessions."); }
+            }
             EnsureCaptureLease();
             var captures = await TimingWriteAsync(async db =>
             {
@@ -126,25 +144,49 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 if (await db.StartLists.AnyAsync(x => x.RunId == listRow.RunId && x.Revision > listRow.Revision, ct))
                 { throw new DomainValidationException("A newer starting order exists. Select the latest start list."); }
                 var list = await ReadListAsync(db, listRow, ct);
+                if (attempt is not null && previousSessionIds.Count > 0)
+                {
+                    var previousRows = await db.Captures.Where(x => previousSessionIds.Contains(x.Id)).ToArrayAsync(ct);
+                    if (previousRows.Length == previousSessionIds.Count && previousRows.All(x => x.CleanStop))
+                    {
+                        // The run change committed before its result reached the caller: return that exact boundary.
+                        var committed = await db.Captures.Where(x => attempt.Next.Contains(x.Id)).ToArrayAsync(ct);
+                        if (committed.Length != attempt.Next.Length || committed.Any(x => x.ListId != listId || x.CleanStop))
+                        { throw new SeriesFileException("The previous run ended without the expected next sessions. Preserve the series for review."); }
+                        return attempt.Next.Select(id => ToCapture(committed.Single(x => x.Id == id))).ToArray();
+                    }
+                }
                 var old = await db.Captures.Where(x => x.ListId == listId).ToArrayAsync(ct);
                 if (old.Any(x => ToCapture(x).Options.Simulation != options[0].Simulation))
                 { throw new DomainValidationException("Simulation/replay and real timing cannot be mixed in one run. Use a separate test event file."); }
-                if (listRow.StartedAt is null)
+                // Validate a list before its first capture only. Once capture has begun the list can no longer be redrawn,
+                // so refusing a reconnect (for example after a later Run 1 correction) would strand the run; the start
+                // list view still reports a changed source.
+                if (listRow.StartedAt is null && old.Length == 0)
                 {
                     await ValidateStartPlanAsync(db, list.Plan, ct);
                     await ValidateTimingSourceAsync(db, listRow, list.Plan, ct);
                 }
+                var startedAt = attempt?.At ?? at;
                 foreach (var previousId in previousSessionIds)
                 {
                     var previous = await db.Captures.SingleAsync(x => x.Id == previousId, ct);
-                    previous.StoppedAt = at; previous.CleanStop = true;
+                    previous.StoppedAt = startedAt; previous.CleanStop = true;
                 }
-                var rows = options.Select(x => new CaptureRow { Id = Guid.NewGuid(), ListId = listId, OptionsJson = JsonSerializer.Serialize(x), StartedAt = at }).ToArray();
+                var rows = options.Select((x, i) => new CaptureRow { Id = attempt?.Next[i] ?? Guid.NewGuid(), ListId = listId,
+                    OptionsJson = JsonSerializer.Serialize(x), StartedAt = startedAt }).ToArray();
                 db.Captures.AddRange(rows);
                 return rows.Select(ToCapture).ToArray();
             }, ct);
             _activeCaptureIds = _activeCaptureIds.Except(previousSessionIds).Union(captures.Select(x => x.Id));
             return captures;
+        }
+        catch (DomainValidationException)
+        {
+            // Nothing was committed: a corrected request may choose another run.
+            if (newAttempt) { _captureSwitches.Remove(switchKey); }
+            ReleaseCaptureLeaseIfIdle();
+            throw;
         }
         catch
         {

@@ -151,7 +151,8 @@ public sealed partial class MainViewModel
             PopulateResultRows();
             var unresolved = firstTiming.Unresolved + (secondTiming?.Unresolved ?? 0);
             ResultsState = $"{_resultRace.Rows.Count(x => x.Status == TimingStatus.Finished)} classified · {_resultRace.Rows.Count(x => x.Status != TimingStatus.Finished)} not classified. Review penalty and race information with the TD."
-                + (unresolved > 0 ? $" {unresolved} extra timestamp(s) remain unassigned or need review in Timing; original input is preserved." : "");
+                + (unresolved > 0 ? $" {unresolved} extra timestamp(s) remain unassigned or need review in Timing; original input is preserved." : "")
+                + (_resultRace.Run1TimesChangedAfterRun2Order is { Count: > 0 } changed ? $" Run 1 time changed after the Run 2 order was saved (Bib {string.Join(", ", changed)}): results use the corrected time and the saved Run 2 order stands. Review with the TD before approval." : "");
             try
             {
                 var tables = pointsSource.PenaltyRules;
@@ -186,7 +187,7 @@ public sealed partial class MainViewModel
     {
         ResultRows.Clear();
         if (_resultRace is null) { return; }
-        foreach (var row in _resultRace.Rows.OrderBy(x => x.Rank is null).ThenBy(x => x.Rank).ThenBy(x => x.Entry.Position))
+        foreach (var row in _resultRace.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.StatusRun).ThenBy(x => x.Entry.Position))
         {
             var athlete = row.Entry.Entrant.Athlete;
             ResultRows.Add(new(row.Rank?.ToString(CultureInfo.InvariantCulture) ?? "—", row.Entry.Bib,
@@ -218,7 +219,7 @@ public sealed partial class MainViewModel
         foreach (var item in penalty.BestClassified) { ResultBestClassified.Add(PenaltyRow(item)); }
         foreach (var item in penalty.BestStarted) { ResultBestStarted.Add(PenaltyRow(item)); }
         ResultTopTen.Clear();
-        foreach (var row in _resultRace!.PenaltyCompetitors.Where(x => x.Status == TimingStatus.Finished && x.Rank <= 10).OrderBy(x => x.Rank).ThenBy(x => x.Bib))
+        foreach (var row in _resultRace!.PenaltyCompetitors.Where(x => x.Status == TimingStatus.Finished && x.Rank <= 10).OrderByOfficialResult(x => x.Rank, x => x.Bib))
         {
             var selected = penalty.BestClassified.FirstOrDefault(x => x.Competitor.Bib == row.Bib);
             var item = new PenaltySelection(row, selected?.UsedPoints ?? 0, penalty.RacePoints[row.Bib], selected?.SubstitutedMaximum ?? false);
@@ -295,7 +296,7 @@ public sealed partial class MainViewModel
             if (SelectedResultApproval is not { } approval) { return; }
             var path = await dialogs.ChooseResultXmlExportAsync(approval.XmlFileName);
             if (path is null) { return; }
-            await File.WriteAllBytesAsync(path, approval.Xml);
+            await ExportFile.WriteAsync(path, approval.Xml);
             SetStatus($"Approved XML revision {approval.Revision} exported to {path}.");
         });
     }

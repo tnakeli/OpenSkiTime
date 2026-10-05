@@ -15,6 +15,8 @@ internal sealed partial class SqliteSeriesFileSession
         {
             throw new DomainValidationException("There are no pending competitor changes.");
         }
+        // Registration changes wait for timing capture to drain, as every single-row desk change does.
+        using var idleLease = AcquireIdleWriteLease();
         await _write.WaitAsync(ct);
         try
         {

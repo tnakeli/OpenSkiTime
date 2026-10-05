@@ -89,6 +89,10 @@ public sealed class LiveTimingTests
             Assert.True(Assert.Single(old.Sessions).CleanStop);
             Assert.Equal(TimingReplay.InputVersion(recorded), TimingReplay.InputVersion(old));
             Assert.EndsWith("12:01:01.0000\r", string.Concat(old.Packets.OrderBy(x => x.Sequence).Select(x => Encoding.ASCII.GetString(x.Bytes))), StringComparison.Ordinal);
+            // Changing runs puts every position on HOLD; the operator resumes them for Run 2.
+            Assert.True(timing.IsHeld(0) && timing.IsHeld(1));
+            await timing.ExpectAsync(0, null);
+            await timing.ExpectAsync(1, null);
             await source.Send(" *0001 C0 13:00:00.0000\r *0001 C1 13:01:02.3499\r");
             await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Complete);
             Assert.Equal(6234, timing.Snapshot!.Results[0].Hundredths);

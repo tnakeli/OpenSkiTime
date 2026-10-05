@@ -450,6 +450,8 @@ public sealed partial class MainViewModel
         {
             if (SelectedTimingRow is not { } row || workspace.Timing is not { } timing)
             { throw new DomainValidationException("Select a competitor in this run."); }
+            if (SelectedTimingBibs.Count > 1)
+            { throw new DomainValidationException("The classification editor changes one competitor. Select a single competitor, or use the DNS/DNF/DSQ/NPS actions for several."); }
             TimingStatus? status = TimingClassification == "Clear" ? null
                 : TimingClassifications.Contains(TimingClassification) ? Enum.Parse<TimingStatus>(TimingClassification)
                 : throw new DomainValidationException("Choose DSQ, DNF, DNS, NPS or Clear.");
@@ -543,6 +545,7 @@ public sealed partial class MainViewModel
         RefreshRaceQueues();
         var snapshot = timing?.Snapshot;
         if (snapshot is null || ReferenceEquals(snapshot, _shownTiming)) { return; }
+        var newlyShownRun = _shownTiming?.ListId != snapshot.ListId;
         _shownTiming = snapshot;
         var selectedBib = SelectedTimingRow?.Bib;
         var selectedObservation = SelectedTimingObservation?.Key;
@@ -551,7 +554,9 @@ public sealed partial class MainViewModel
             .Select(row => new TimingGridRow(row.Result, row.Total, row.Rank)).ToArray());
         var editingTime = CorrectedTimeText;
         var editingBib = ObservationBibText;
-        SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == selectedBib) ?? TimingRows.FirstOrDefault();
+        // Keep the operator's competitor. Only a newly shown run selects its first row; a background refresh never
+        // invents a selection that a keyboard shortcut would then act on.
+        SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == selectedBib) ?? (newlyShownRun ? TimingRows.FirstOrDefault() : null);
         if (SelectedTimingRow?.Bib == selectedBib) { CorrectedTimeText = editingTime; ObservationBibText = editingBib; }
         TimingObservations.Clear();
         foreach (var observation in snapshot.Observations.Where(x => ShowAllTimingObservations || x.State is "Unassigned" or "Review").Reverse().Take(500))

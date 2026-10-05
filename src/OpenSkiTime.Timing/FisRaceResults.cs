@@ -1,3 +1,4 @@
+using System.Globalization;
 using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Timing;
@@ -12,6 +13,9 @@ public sealed record FisResultRow(StartListEntry Entry, TimingStatus Status, int
 public sealed record FisRaceResult(StartListRevision FirstList, StartListRevision? SecondList,
     IReadOnlyList<FisResultRow> Rows)
 {
+    // Run 1 finishers whose time an audited correction changed after the Run 2 order was saved. Run 2 has been timed,
+    // so that order stands; final results use the corrected times and the TD reviews these bibs before approval.
+    public IReadOnlyList<int> Run1TimesChangedAfterRun2Order { get; init; } = [];
     public IReadOnlyList<PenaltyCompetitor> PenaltyCompetitors => Rows.Select(x =>
         new PenaltyCompetitor(x.Entry, x.Started, x.Status, x.TotalHundredths, x.Rank)).ToArray();
 }
@@ -26,13 +30,14 @@ public static class FisRaceResults
         if (first.Plan.RunNumber != 1 || firstTiming.ListId != first.Id)
         { throw new DomainValidationException("Choose the saved Run 1 timing for this start list."); }
         EnsureClassified(firstTiming, 1);
+        IReadOnlyList<int> corrected = [];
         if (first.Plan.Competition.RunCount == 2)
         {
             if (second is null || secondTiming is null || second.Plan.RunNumber != 2
                 || second.Plan.SourceListId != first.Id || secondTiming.ListId != second.Id)
             { throw new DomainValidationException("Choose the saved Run 2 timing for this Run 1 start list."); }
             EnsureClassified(secondTiming, 2);
-            if (!SourceResultsMatch(second.Plan.SourceResults, firstTiming))
+            if (!SourceResultsMatch(second.Plan.SourceResults, firstTiming, second.SourceTimingVersion, out corrected))
             { throw new DomainValidationException("Run 1 results changed after the Run 2 start list was created."); }
         }
         else if (first.Plan.Competition.RunCount != 1 || second is not null || secondTiming is not null)
@@ -61,24 +66,49 @@ public static class FisRaceResults
                 : new FisResultRow(entry, later.Status, 2, firstRow.Hundredths, null, null, null)
                     { Disqualification = later.Disqualification };
         }).ToArray();
-        var totals = interim.Where(x => x.TotalHundredths is not null).Select(x => x.TotalHundredths!.Value).ToArray();
-        return new(first, second, interim.Select(x => x with { Rank = x.TotalHundredths is { } total
-            ? totals.Count(y => y < total) + 1 : null }).ToArray());
+        var totals = interim.Select(x => x.TotalHundredths).ToArray();
+        return new(first, second, interim.Select(x => x with { Rank = ResultOrder.Rank(x.TotalHundredths, totals) }).ToArray())
+        { Run1TimesChangedAfterRun2Order = corrected };
     }
 
-    private static bool SourceResultsMatch(IReadOnlyList<RunFinish> source, TimingSnapshot current)
+    private static bool SourceResultsMatch(IReadOnlyList<RunFinish> source, TimingSnapshot current, string? sourceVersion,
+        out IReadOnlyList<int> corrected)
     {
+        corrected = [];
         var finishes = current.ToRunFinishes();
         if (source.SequenceEqual(finishes)) { return true; }
         if (source.Count != finishes.Count || source.Select(x => x.CompetitorId).Distinct().Count() != source.Count)
         { return false; }
-        // An official post-run classification does not rewrite the saved starting order.
-        // Changed finisher times or newly eligible starters still require review/redrawing.
-        return source.All(saved => finishes.SingleOrDefault(x => x.CompetitorId == saved.CompetitorId) is { } now
-            && (saved == now || (saved.Status == FinishStatus.Finished
+        // Results are assembled only after Run 2 is complete, when its saved order can no longer be recreated. A finisher
+        // time changed by audited corrections after the order was saved (the Run 1 audit grew past the version recorded
+        // with the order) updates the final result and the order stands. Unexplained changes and newly eligible starters
+        // still block.
+        var auditedAfterOrder = AuditVersion(sourceVersion) is { } recorded && current.AuditVersion > recorded;
+        var changed = new List<int>();
+        foreach (var saved in source)
+        {
+            if (finishes.SingleOrDefault(x => x.CompetitorId == saved.CompetitorId) is not { } now) { return false; }
+            if (saved == now) { continue; }
+            // An official post-run classification does not rewrite the saved starting order.
+            if (saved.Status == FinishStatus.Finished
                 && now.Status is FinishStatus.DNF or FinishStatus.DSQ or FinishStatus.DNS or FinishStatus.NPS
                 && current.Audit.LastOrDefault(x => x.After.Kind == DecisionKind.Status
-                    && x.After.CompetitorId == now.CompetitorId)?.After.Status?.ToString() == now.Status.ToString())));
+                    && x.After.CompetitorId == now.CompetitorId)?.After.Status?.ToString() == now.Status.ToString()) { continue; }
+            if (saved.Status == FinishStatus.Finished && now.Status == FinishStatus.Finished && auditedAfterOrder)
+            { changed.Add(current.Results.Single(x => x.CompetitorId == now.CompetitorId).Bib); continue; }
+            return false;
+        }
+        corrected = changed.Order().ToArray();
+        return true;
+    }
+
+    // Later-run orders record "results/v2:audit=<last Run 1 audit id>"; older lists end with the same suffix.
+    private static long? AuditVersion(string? version)
+    {
+        const string marker = "audit=";
+        var index = version?.LastIndexOf(marker, StringComparison.Ordinal) ?? -1;
+        return index >= 0 && long.TryParse(version![(index + marker.Length)..], NumberStyles.None, CultureInfo.InvariantCulture,
+            out var value) ? value : null;
     }
 
     private static void EnsureClassified(TimingSnapshot timing, int run)

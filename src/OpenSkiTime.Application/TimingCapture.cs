@@ -162,7 +162,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private readonly SemaphoreSlim _state = new(1, 1);
     private readonly List<TimingObservation> _observations = [];
     private readonly List<TimingAudit> _audit = [];
-    private readonly Dictionary<string, ITimingDecoder> _decoders = new(StringComparer.Ordinal);
+    private readonly StreamDecoders _decoders = new();
     private readonly List<CaptureSession> _sessions = [];
     private StartListRevision? _list;
     private TimingSnapshot? _snapshot;
@@ -183,6 +183,11 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private long _saved;
     private readonly int[] _expected = new int[22];
     private readonly bool[] _held = new bool[22];
+    // Newest device time per clock received before a live run change. Input at or before it belongs to the previous
+    // run (for example ALGE Results history read again after the change) and is never assigned automatically.
+    private readonly Dictionary<string, long> _previousRunInput = new(StringComparer.Ordinal);
+    private readonly object _stopGate = new();
+    private Task? _stopping;
     private bool _followOrder;
     public bool IsActive => _producer is not null;
     public string Connection
@@ -267,7 +272,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                         string.Empty, "Capture ended unexpectedly. Recover missing impulses from device memory/backup and review before continuing."));
                 }
             }
-            Array.Clear(_expected); Array.Clear(_held); _followOrder = false;
+            Array.Clear(_expected); Array.Clear(_held); _followOrder = false; _previousRunInput.Clear();
             Interlocked.Exchange(ref _saved, data.Packets.Count);
             Rebuild();
         }
@@ -394,13 +399,16 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     if (_observations.Count != before)
                     {
                         Rebuild();
-                        foreach (var observation in _observations.Skip(before).ToArray()) { await RetryDurableAsync(() => AutoAssignAsync(observation)); }
+                        // A recovered history page lists triggers newest first; a queue must receive them in device-time order.
+                        foreach (var observation in _observations.Skip(before).OrderBy(x => x.DeviceTicks ?? long.MaxValue)
+                            .ThenBy(x => x.Key, StringComparer.Ordinal).ToArray())
+                        { await AutoAssignDurableAsync(observation); }
                     }
                 }
                 finally { _state.Release(); }
             }
             // Finish a fragmented device line in its original run before moving the routing boundary.
-            if (change is not null && !_decoders.Values.Any(x => x.HasPendingInput))
+            if (change is not null && !_decoders.HasPendingInput)
             {
                 await _state.WaitAsync();
                 try
@@ -409,13 +417,21 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     { throw new DomainValidationException("Competitors are still on course. Finish or classify them before switching the active timing run."); }
                     var data = await store.ReadTimingAsync(change.ListId);
                     var restored = TimingReplay.Restore(data, decoders);
-                    var next = (await store.SwitchCaptureGroupAsync(sessions.Select(x => x.Id).ToArray(), change.ListId,
-                        sessions.Select(x => x.Options).ToArray(), sessions[0].Options.Operator, DateTimeOffset.UtcNow)).ToArray();
+                    // A storage failure is retried like any durable write; the store returns a boundary that already committed.
+                    var previousIds = sessions.Select(x => x.Id).ToArray();
+                    var previousOptions = sessions.Select(x => x.Options).ToArray();
+                    IReadOnlyList<CaptureSession> switched = [];
+                    await RetryDurableAsync(async () => switched = await store.SwitchCaptureGroupAsync(previousIds, change.ListId,
+                        previousOptions, previousOptions[0].Operator, DateTimeOffset.UtcNow));
+                    var next = switched.ToArray();
                     if (next.Length != sessions.Length) { throw new SeriesFileException("The timing store did not switch every device session."); }
+                    foreach (var o in _observations.Where(x => x.DeviceTicks is not null && x.ClockId.Length > 0))
+                    { _previousRunInput[o.ClockId] = Math.Max(_previousRunInput.GetValueOrDefault(o.ClockId, long.MinValue), o.DeviceTicks!.Value); }
                     _list = data.List; _observations.Clear(); _audit.Clear(); _sessions.Clear(); _decoders.Clear();
                     _observations.AddRange(restored.Observations.Select(x => x.Observation)); _audit.AddRange(data.Audit);
                     _sessions.AddRange(data.Sessions); _sessions.AddRange(next);
-                    Array.Clear(_expected); Array.Clear(_held);
+                    // A run change puts every position back on HOLD, before any further input is processed.
+                    Array.Clear(_expected); Array.Fill(_held, true);
                     sessions = next; Array.Clear(sequences);
                     Volatile.Write(ref _activeOptions, next.Select(x => x.Options).ToArray());
                     Interlocked.Exchange(ref _saved, data.Packets.Count);
@@ -457,9 +473,9 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void Decode(CaptureSession session, RawTimingPacket packet, bool live = false)
     {
-        var key = $"{session.Id:N}:{packet.Protocol}:{packet.Source}:{packet.Stream}";
-        if (!_decoders.TryGetValue(key, out var decoder))
-        { decoder = decoders.Create(session, packet.Protocol, packet.Source, packet.Stream); _decoders.Add(key, decoder); }
+        var superseded = new List<TimingObservation>();
+        var decoder = _decoders.For(decoders, session, packet, superseded);
+        _observations.AddRange(superseded);
         var decoded = TimingReplay.Decode(decoder, packet, includeInformation: live);
         if (live)
         {
@@ -476,16 +492,30 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         _observations.AddRange(decoded.Where(x => x.Kind != ObservationKind.Information));
     }
 
-    private void FinishDecoders()
-    {
-        foreach (var decoder in _decoders.Values) { _observations.AddRange(decoder.Complete()); }
-        _decoders.Clear();
-    }
+    private void FinishDecoders() => _observations.AddRange(_decoders.Complete());
 
     private void Rebuild()
     {
         if (_list is not null) { Volatile.Write(ref _snapshot, TimingEngine.Replay(_list, _observations, _audit, 0, 1)); }
     }
+
+    // An uncertain commit (saved, then a storage error reported) makes the retry meet a newer durable audit. Reload it
+    // and re-evaluate instead of stopping capture; an automatic decision never ends the journal.
+    private async Task AutoAssignDurableAsync(TimingObservation observation) => await RetryDurableAsync(async () =>
+    {
+        try { await AutoAssignAsync(observation); }
+        catch (SeriesConflictException)
+        {
+            var durable = await store.ReadTimingAsync(_list!.Id);
+            _audit.Clear(); _audit.AddRange(durable.Audit); Rebuild();
+            var saved = _snapshot!.Observations.FirstOrDefault(x => x.Observation.Key == observation.Key);
+            if (saved is { State: "Assigned", Bib: { } bib } && observation.Channel is { } channel && channel < _expected.Length
+                && ExpectedBib(channel) == bib) { _expected[channel] = 0; }
+            AdvanceQueues();
+            await AutoAssignAsync(observation);
+        }
+        catch (DomainValidationException) { }
+    });
 
     private async Task AutoAssignAsync(TimingObservation observation)
     {
@@ -498,12 +528,33 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         {
             bib = observation.Channel is { } channel && channel < _expected.Length ? ExpectedBib(channel) : null;
             reason = _followOrder ? "Race queue: expected bib" : "Operator armed bib";
+            // A queue receives arrivals in order. An impulse older than one already used at this position arrived late
+            // (for example recovered from device history) and belongs to an earlier competitor: leave it for review.
+            if (ArrivedLate(observation)) { return; }
         }
         if (bib is null || !_snapshot.Results.Any(x => x.Bib == bib)) { return; }
+        // Bibs repeat across runs: input from before a live run change, and an intermediate or finish that is not after
+        // the competitor's own start, can never be this competitor's impulse.
+        if (FromPreviousRun(observation) || !AfterStart(observation, bib.Value)) { return; }
         var operatorName = _sessions.Single(x => x.Id == observation.SessionId).Options.Operator;
         await AppendDecisionAsync(new(DecisionKind.Assignment, observation.Key, Bib: bib), operatorName, reason);
         if (observation.Channel is { } consumed && ExpectedBib(consumed) == bib) { _expected[consumed] = 0; }
         AdvanceQueues();
+    }
+
+    private bool ArrivedLate(TimingObservation observation) => observation.DeviceTicks is { } ticks
+        && _snapshot!.Observations.Any(x => x.State == "Assigned" && x.Observation.Channel == observation.Channel
+            && x.Observation.ClockId == observation.ClockId && x.Observation.DeviceTicks >= ticks);
+
+    private bool FromPreviousRun(TimingObservation observation) => observation.DeviceTicks is { } ticks
+        && _previousRunInput.TryGetValue(observation.ClockId, out var newest) && ticks <= newest;
+
+    private bool AfterStart(TimingObservation observation, int bib)
+    {
+        if (observation.Channel is 0 or null || observation.DeviceTicks is not { } ticks) { return true; }
+        var startKey = _snapshot!.Results.FirstOrDefault(x => x.Bib == bib)?.StartKey;
+        var start = startKey is null ? null : _snapshot.Observations.FirstOrDefault(x => x.Observation.Key == startKey)?.Observation;
+        return start is null || start.ClockId != observation.ClockId || start.DeviceTicks < ticks;
     }
 
     public async Task ArmAsync(int? startBib, int? finishBib, CancellationToken ct = default)
@@ -518,13 +569,21 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
-    public async Task CorrectAsync(TimingDecision decision, string operatorName, string reason, CancellationToken ct = default)
+    public Task CorrectAsync(TimingDecision decision, string operatorName, string reason, CancellationToken ct = default)
+        => CorrectAsync(decision, operatorName, reason, null, ct);
+
+    // expectedBefore is the decision the operator saw. Input that arrived since then refuses the correction instead of
+    // silently applying it to whatever the value has become.
+    public async Task CorrectAsync(TimingDecision decision, string operatorName, string reason, TimingDecision? expectedBefore,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(decision);
         await _state.WaitAsync(ct);
         try
         {
             var before = TimingEngine.CurrentDecision(decision, _audit);
+            if (expectedBefore is not null && before != expectedBefore)
+            { throw new DomainValidationException("This timing changed after it was displayed. Check the current row and try again."); }
             await AppendDecisionAsync(decision, operatorName, reason);
             ReconcileCorrectedQueue(before, decision);
         }
@@ -540,29 +599,47 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     {
         ArgumentNullException.ThrowIfNull(bibs);
         await _state.WaitAsync(ct);
+        try { await CorrectStatusesLockedAsync(bibs, status, operatorName, reason, disqualification, ct); }
+        finally { _state.Release(); }
+    }
+
+    // Classifies the starter the operator saw as next, only while that bib is still the expected starter: a start
+    // impulse processed since the screen refreshed must not shift the classification to the following competitor.
+    public async Task ClassifyExpectedStarterAsync(int bib, TimingStatus status, string operatorName, string reason,
+        CancellationToken ct = default)
+    {
+        await _state.WaitAsync(ct);
         try
         {
-            if (_snapshot is null || bibs.Count == 0 || bibs.Distinct().Count() != bibs.Count)
-            { throw new DomainValidationException("Select one or more distinct starters in this run."); }
-            var changes = new List<TimingAuditChange>();
-            foreach (var bib in bibs)
-            {
-                var row = _snapshot.Results.SingleOrDefault(x => x.Bib == bib)
-                    ?? throw new DomainValidationException($"Bib {bib} is not in this run.");
-                var after = new TimingDecision(DecisionKind.Status, CompetitorId: row.CompetitorId, Status: status,
-                    Disqualification: status == TimingStatus.DSQ ? disqualification ?? row.Disqualification : disqualification);
-                TimingEngine.ValidateDecision(after, _snapshot);
-                var before = TimingEngine.CurrentDecision(after, _audit);
-                if (before != after) { changes.Add(new(before, after)); }
-            }
-            if (changes.Count == 0) { return; }
-            var saved = await store.AppendTimingAuditBatchAsync(_snapshot.ListId, _snapshot.AuditVersion,
-                changes, operatorName, reason, DateTimeOffset.UtcNow, ct: ct);
-            _audit.AddRange(saved);
-            Rebuild();
-            foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
+            if (ExpectedBib(0) != bib)
+            { throw new DomainValidationException($"Bib {bib} is no longer the next starter. Check the start queue and try again."); }
+            await CorrectStatusesLockedAsync([bib], status, operatorName, reason, null, ct);
         }
         finally { _state.Release(); }
+    }
+
+    private async Task CorrectStatusesLockedAsync(IReadOnlyList<int> bibs, TimingStatus? status,
+        string operatorName, string reason, DisqualificationDetails? disqualification, CancellationToken ct)
+    {
+        if (_snapshot is null || bibs.Count == 0 || bibs.Distinct().Count() != bibs.Count)
+        { throw new DomainValidationException("Select one or more distinct starters in this run."); }
+        var changes = new List<TimingAuditChange>();
+        foreach (var bib in bibs)
+        {
+            var row = _snapshot.Results.SingleOrDefault(x => x.Bib == bib)
+                ?? throw new DomainValidationException($"Bib {bib} is not in this run.");
+            var after = new TimingDecision(DecisionKind.Status, CompetitorId: row.CompetitorId, Status: status,
+                Disqualification: status == TimingStatus.DSQ ? disqualification ?? row.Disqualification : disqualification);
+            TimingEngine.ValidateDecision(after, _snapshot);
+            var before = TimingEngine.CurrentDecision(after, _audit);
+            if (before != after) { changes.Add(new(before, after)); }
+        }
+        if (changes.Count == 0) { return; }
+        var saved = await store.AppendTimingAuditBatchAsync(_snapshot.ListId, _snapshot.AuditVersion,
+            changes, operatorName, reason, DateTimeOffset.UtcNow, ct: ct);
+        _audit.AddRange(saved);
+        Rebuild();
+        foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
     }
 
     public async Task ReturnToStartAsync(int bib, string startKey, string operatorName, CancellationToken ct = default)
@@ -820,7 +897,17 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         }
     }
 
-    public async Task StopAsync()
+    // Disconnect and window close can overlap; concurrent callers share the stop that is already running.
+    public Task StopAsync()
+    {
+        lock (_stopGate)
+        {
+            if (_stopping is { IsCompleted: false } running) { return running; }
+            return _stopping = StopCoreAsync();
+        }
+    }
+
+    private async Task StopCoreAsync()
     {
         if (_producer is null) { return; }
         _readCancellation!.Cancel();

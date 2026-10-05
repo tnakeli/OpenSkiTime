@@ -35,6 +35,24 @@ public static class LiveSnapshotMapper
         return new(list.Plan.RunNumber, list.CreatedAt,
             snapshot.StartOrder.Count > 0 ? snapshot.StartOrder.ToArray() : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray(), results);
     }
+    // From Run 2 on, each finisher's combined time over all runs so far, ranked like the timing view's Run 2 ranking
+    // (equal totals share a rank) with the gap to the best total. A racer without a finished time in every earlier run
+    // has no total. Recalculated from the published run results, so a correction in any run updates later totals.
+    public static LiveRun[] WithTotals(IEnumerable<LiveRun> runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        var done = new List<LiveRun>();
+        foreach (var run in runs.OrderBy(x => x.Number))
+        {
+            var totals = run.Results.ToDictionary(r => r.Bib, r => done.Count > 0 && r.Status == LiveStatus.Finished
+                && done.All(e => e.Results.Any(p => p.Bib == r.Bib && p.Status == LiveStatus.Finished))
+                    ? r.Hundredths + done.Sum(e => e.Results.First(p => p.Bib == r.Bib).Hundredths!.Value) : null);
+            var best = totals.Values.Min();
+            done.Add(run with { Results = run.Results.Select(r => r with { TotalHundredths = totals[r.Bib],
+                TotalRank = ResultOrder.Rank(totals[r.Bib], totals.Values), TotalDifference = totals[r.Bib] - best }).ToArray() });
+        }
+        return done.ToArray();
+    }
     public static LiveCompetitor[] Competitors(IEnumerable<StartListRevision> lists)
     {
         ArgumentNullException.ThrowIfNull(lists);

@@ -43,9 +43,12 @@ public sealed partial class MainViewModel
     public bool CanReturnToStart => RaceFlow.CanReturnToStart(SelectedTimingRow?.Result);
     private ObservationReview? LastFinishObservation => workspace.Timing?.Snapshot?.Observations.LastOrDefault(x =>
         x.Observation.Channel == 1 && x.State is "Assigned" or "Unassigned");
-    public bool CanIgnoreLastFinish => LastFinishObservation is not null;
-    public bool HasUnassignedFinish => LastFinishObservation?.Bib is null && CanIgnoreLastFinish;
-    public string LastFinishLabel => LastFinishObservation is { } finish
+    // Keyboard actions act on what the screen shows. Input processed since the last refresh must not redirect them.
+    private ObservationReview? _displayedLastFinish;
+    private int? _displayedNextStart;
+    public bool CanIgnoreLastFinish => _displayedLastFinish is not null;
+    public bool HasUnassignedFinish => _displayedLastFinish?.Bib is null && CanIgnoreLastFinish;
+    public string LastFinishLabel => _displayedLastFinish is { } finish
         ? finish.Bib is { } bib ? $"Last finish · Bib {bib} · {workspace.Timing?.Snapshot?.Results.FirstOrDefault(x => x.Bib == bib)?.Time}"
             : "Finish received · choose a competitor" : "No finish received";
 
@@ -123,7 +126,11 @@ public sealed partial class MainViewModel
         var timing = workspace.Timing;
         var snapshot = timing?.Snapshot;
         if (timing is null || snapshot is null || !HasTimingRun)
-        { OnCourseRows.Clear(); FinishedTimingRows.Clear(); AtStartRows.Clear(); RunningRows.Clear(); RankingRows.Clear(); _queueSnapshot = null; return; }
+        {
+            OnCourseRows.Clear(); FinishedTimingRows.Clear(); AtStartRows.Clear(); RunningRows.Clear(); RankingRows.Clear(); _queueSnapshot = null;
+            _displayedLastFinish = null; _displayedNextStart = null;
+            return;
+        }
         if (!ReferenceEquals(snapshot, _queueSnapshot) || _queueArmedStart != timing.ArmedStart || _queueArmedFinish != timing.ArmedFinish)
         {
             _queueSnapshot = snapshot;
@@ -157,14 +164,15 @@ public sealed partial class MainViewModel
             if (HasTimingCategories && RankingView.GroupDescriptions.Count == 0)
             { RankingView.GroupDescriptions.Add(new DataGridPathGroupDescription(nameof(TimingGridRow.Category))); }
             else if (!HasTimingCategories && RankingView.GroupDescriptions.Count > 0) { RankingView.GroupDescriptions.Clear(); }
+            // Ex aequo competitors share a rank and are listed with the higher bib first (ICR 617.3.3), as in official results.
             RankingRows.UpdateRows(() => SyncTimingRows(RankingRows, ranked.OrderBy(x => categoryOrder.GetValueOrDefault(x.Category, int.MaxValue))
-                .ThenBy(x => x.Category, StringComparer.Ordinal).ThenBy(x => RankedTime(x) ?? long.MaxValue).ThenBy(x => x.Position)
-                .Select(x => x with { DisplayRank = RankedTime(x) is { } time
-                    ? ranked.Count(y => y.Category == x.Category && RankedTime(y) is { } other && other < time) + 1 : null }).ToArray()));
+                .ThenBy(x => x.Category, StringComparer.Ordinal).ThenByOfficialResult(RankedTime, x => x.Bib).ThenBy(x => x.Position)
+                .Select(x => x with { DisplayRank = ResultOrder.Rank(RankedTime(x), ranked.Where(y => y.Category == x.Category).Select(RankedTime)) }).ToArray()));
             RaceQueueVersion++;
             OnPropertyChanged(nameof(RaceQueueVersion));
             OnCourseLabel = $"ON COURSE · {onCourse.Length}";
             FinishListLabel = $"FINISHED · {FinishedTimingRows.Count}";
+            _displayedLastFinish = LastFinishObservation;
             OnPropertyChanged(nameof(LastFinishLabel));
             OnPropertyChanged(nameof(CanIgnoreLastFinish));
             OnPropertyChanged(nameof(HasUnassignedFinish));
@@ -172,6 +180,7 @@ public sealed partial class MainViewModel
         string Expected(int channel, string empty) => timing!.IsHeld(channel) ? "HOLD · impulses kept unassigned"
             : snapshot.Results.FirstOrDefault(x => x.Bib == timing.ExpectedBib(channel)) is { } row ? $"{row.Bib} · {row.Name}" : empty;
         NextStartLabel = Expected(0, "No starter selected");
+        _displayedNextStart = timing.IsHeld(0) ? null : timing.ExpectedBib(0);
         ExpectedFinishLabel = Expected(1, "No competitor expected");
         StartHoldLabel = timing!.IsHeld(0) ? "Resume start" : "Hold start";
         FinishHoldLabel = timing.IsHeld(1) ? "Resume finish" : "Hold finish";
@@ -204,8 +213,14 @@ public sealed partial class MainViewModel
 
     [RelayCommand] private async Task NextStartDnsAsync()
     {
-        if (workspace.Timing?.ArmedStart is not { } bib) { return; }
-        await GuardAsync(() => ApplyTimingStatusAsync([bib], "DNS"));
+        if (_displayedNextStart is not { } bib || workspace.Timing is not { } timing) { return; }
+        await GuardAsync(async () =>
+        {
+            await timing.ClassifyExpectedStarterAsync(bib, TimingStatus.DNS, TimingOperator,
+                string.IsNullOrWhiteSpace(TimingReason) ? "Operator marked DNS" : TimingReason);
+            RefreshTiming();
+            SetStatus($"Bib {bib}: DNS saved with correction history.");
+        });
     }
 
     [RelayCommand(CanExecute = nameof(CanReturnToStart))]
@@ -221,10 +236,10 @@ public sealed partial class MainViewModel
     [RelayCommand] private async Task IgnoreLastFinishAsync() => await GuardAsync(async () =>
     {
         if (workspace.Timing is not { } timing) { return; }
-        var last = LastFinishObservation;
+        var last = _displayedLastFinish;
         if (last is null) { return; }
         await timing.CorrectAsync(new(DecisionKind.Assignment, last.Observation.Key, Ignored: true), TimingOperator,
-            "False finish impulse — no competitor crossed the finish");
+            "False finish impulse — no competitor crossed the finish", new TimingDecision(DecisionKind.Assignment, last.Observation.Key, Bib: last.Bib));
         RefreshTiming();
         SetStatus(last.Bib is { } bib ? $"False finish removed from Bib {bib}. Original pulse retained; competitor returns to the course queue."
             : "Unassigned false finish ignored. Original pulse retained; existing competitor results unchanged.");
@@ -240,8 +255,8 @@ public sealed partial class MainViewModel
     [RelayCommand] private void CorrectLastFinish()
     {
         ShowTimingCorrection = true; ShowAllTimingObservations = true;
-        SelectedTimingObservation = TimingObservations.FirstOrDefault(x => x.Key == LastFinishObservation?.Observation.Key);
-        if (LastFinishObservation?.Bib is { } bib) { SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == bib); }
+        SelectedTimingObservation = TimingObservations.FirstOrDefault(x => x.Key == _displayedLastFinish?.Observation.Key);
+        if (_displayedLastFinish?.Bib is { } bib) { SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == bib); }
     }
 
     [RelayCommand] private void CloseTimingCorrection() => ShowTimingCorrection = false;

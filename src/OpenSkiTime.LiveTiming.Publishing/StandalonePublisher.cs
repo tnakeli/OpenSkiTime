@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace OpenSkiTime.LiveTiming.Publishing;
 
@@ -48,7 +49,14 @@ public sealed class StandalonePublisher : IDisposable
                     : "The live timing server rejected the publisher key. Check the key in Settings → Live timing.");
             }
             Ensure(response);
-            Session = await response.Content.ReadFromJsonAsync<LiveSession>(LiveJson.Options, ct) ?? throw new IOException("Missing session credential.");
+            LiveSession? created;
+            // A captive portal or proxy can answer 200 with a page instead of a session: retry like any network failure.
+            try { created = await response.Content.ReadFromJsonAsync<LiveSession>(LiveJson.Options, ct); }
+            catch (JsonException) { throw new IOException("Invalid session response."); }
+            if (created is null || created.SessionId == Guid.Empty || string.IsNullOrWhiteSpace(created.PublisherToken)
+                || created.PublisherToken.Any(char.IsControl))
+            { throw new IOException("Missing session credential."); }
+            Session = created;
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Session.PublisherToken);
             refresh = true;
         }
@@ -58,7 +66,9 @@ public sealed class StandalonePublisher : IDisposable
             || snapshot.Runs.Any(r => _sent.Runs.FirstOrDefault(p => p.Number == r.Number)?.Results.Any(p => !r.Results.Any(x => x.Bib == p.Bib)) == true)
             || !_sent.Competitors.SequenceEqual(snapshot.Competitors) || _sent.Runs.Length != snapshot.Runs.Length
             || snapshot.Runs.Any(r => !_sent.Runs.Any(p => p.Number == r.Number && p.StartOrder.SequenceEqual(r.StartOrder)));
-        if (refresh || structureChanged || changes.Length == 0)
+        // One changed row is an event. Several (a new leader moves every rank and gap) replace the state at once: viewers
+        // never see a half-applied ranking, and one request replaces a request and a broadcast per row.
+        if (refresh || structureChanged || changes.Length != 1)
         {
             using var response = await _http.PutAsJsonAsync($"api/sessions/{Session.SessionId}/state", snapshot, LiveJson.Options, ct);
             _log($"Full snapshot publish HTTP {(int)response.StatusCode}, version {snapshot.Version}");
