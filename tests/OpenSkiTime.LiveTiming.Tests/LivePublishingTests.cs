@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using OpenSkiTime.LiveTiming.Client;
 using OpenSkiTime.LiveTiming.Harness;
 using OpenSkiTime.LiveTiming.Publishing;
 using Xunit;
@@ -134,6 +135,79 @@ public sealed class LivePublishingTests
         Assert.Null(publisher.Session);
     }
 
+    [Fact]
+    public async Task StandaloneWaitsForAColdStartOnlyUntilTheServerAnswers()
+    {
+        var requests = new ConcurrentQueue<string>();
+        var delays = new ConcurrentDictionary<string, TimeSpan> { ["session"] = TimeSpan.FromSeconds(3) };
+        await using var server = await StartFakeServer(requests, Session, delays);
+        using var publisher = new StandalonePublisher(server.Endpoint, requestTimeout: TimeSpan.FromSeconds(1), wakeTimeout: TimeSpan.FromSeconds(30));
+        var state = SyntheticRace.Create(3);
+        // A sleeping server answers the first request late; the wake timeout covers it although it exceeds the request timeout.
+        Assert.True(publisher.Waking);
+        await publisher.PublishAsync(state, false, CancellationToken.None);
+        Assert.False(publisher.Waking);
+        Assert.Equal(["session", "state"], requests.ToArray());
+        // Once awake, a stalled request fails after the short timeout as a retryable network failure.
+        delays["state"] = TimeSpan.FromSeconds(3);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        await Assert.ThrowsAsync<IOException>(() => publisher.PublishAsync(state with { Version = 2 }, true, CancellationToken.None));
+        Assert.InRange(clock.Elapsed, TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(2.5));
+        // After a failure the server may have scaled to zero again: the next request waits for it to wake.
+        Assert.True(publisher.Waking);
+        await publisher.PublishAsync(state with { Version = 3 }, true, CancellationToken.None);
+        Assert.False(publisher.Waking);
+        // A gateway answering while no replica runs is not an awake server.
+        delays.Clear(); requests.Clear();
+        await using var gateway = await StartFakeServer(requests, () => Results.StatusCode(503));
+        using var waking = new StandalonePublisher(gateway.Endpoint, requestTimeout: TimeSpan.FromSeconds(1), wakeTimeout: TimeSpan.FromSeconds(30));
+        await Assert.ThrowsAsync<HttpRequestException>(() => waking.PublishAsync(state, false, CancellationToken.None));
+        Assert.True(waking.Waking);
+        // Without a wake timeout (the managed Local server) every request keeps the short timeout.
+        Assert.False(new StandalonePublisher(server.Endpoint).Waking);
+    }
+
+    [Fact]
+    public async Task CloudWorkerReportsAWakingServerAndPublishesAfterAColdStart()
+    {
+        var requests = new ConcurrentQueue<string>();
+        // Longer than the former five-second limit that reported a cold start as a failure.
+        var delays = new ConcurrentDictionary<string, TimeSpan> { ["session"] = TimeSpan.FromSeconds(8) };
+        await using var server = await StartFakeServer(requests, Session, delays);
+        await using var publisher = new PublisherProcess();
+        publisher.Offer(SyntheticRace.Create(3));
+        var observed = new ConcurrentQueue<PublisherHealth>();
+        using var watching = new CancellationTokenSource();
+        var watcher = Task.Run(async () => { while (!watching.IsCancellationRequested) { observed.Enqueue(publisher.Health); await Task.Delay(20); } });
+        await publisher.StartAsync(ProcessFixture.Artifact("Worker"), new PublisherOptions(PublisherKind.Cloud, server.Endpoint), ProcessFixture.Host);
+        await ProcessFixture.Until(() => publisher.Health.State == PublisherState.Running, 60);
+        await watching.CancelAsync(); await watcher;
+        Assert.Contains(observed, h => h.Notice?.Contains("Waking", StringComparison.Ordinal) == true && h.Error is null);
+        Assert.DoesNotContain(observed, h => h.Error is not null || h.State is PublisherState.Reconnecting or PublisherState.Error);
+        Assert.Null(publisher.Health.Notice);
+        Assert.Equal(["session", "state"], requests.Take(2).ToArray());
+    }
+
+    [Fact]
+    public async Task StoppingACloudWorkerDoesNotWaitForAWakingServer()
+    {
+        var requests = new ConcurrentQueue<string>();
+        var delays = new ConcurrentDictionary<string, TimeSpan> { ["session"] = TimeSpan.FromSeconds(90) };
+        await using var server = await StartFakeServer(requests, Session, delays);
+        await using var publisher = new PublisherProcess();
+        publisher.Offer(SyntheticRace.Create(3));
+        await publisher.StartAsync(ProcessFixture.Artifact("Worker"), new PublisherOptions(PublisherKind.Cloud, server.Endpoint), ProcessFixture.Host);
+        await ProcessFixture.Until(() => publisher.Health.Notice is not null && requests.Contains("session"));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        await publisher.CommandAsync("stop");
+        await ProcessFixture.Until(() => publisher.Health.State == PublisherState.Stopped, 10);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10));
+        Assert.Null(publisher.Health.Notice);
+        Assert.Null(publisher.Health.Error);
+    }
+
+    private static IResult Session() => Results.Ok(new LiveSession(Guid.NewGuid(), "synthetic-token",
+        DateTimeOffset.UtcNow.AddDays(1), "http://127.0.0.1/r/synthetic"));
     private static LiveSnapshot RunOne(LiveSnapshot state, params (int Bib, long Time)[] finishes)
     {
         foreach (var (bib, time) in finishes)
@@ -158,16 +232,19 @@ public sealed class LivePublishingTests
     }
     private static (string Time, string Diff, string Rank) Values(XElement finish)
         => (finish.Element("time")!.Value, finish.Element("diff")!.Value, finish.Element("rank")!.Value);
-    private static async Task<FakeServer> StartFakeServer(ConcurrentQueue<string> requests, Func<IResult> session)
+    // Delays, keyed by request kind, model a server that answers late, such as one waking from scale-to-zero.
+    private static async Task<FakeServer> StartFakeServer(ConcurrentQueue<string> requests, Func<IResult> session,
+        ConcurrentDictionary<string, TimeSpan>? delays = null)
     {
+        async Task Delay(string kind, HttpContext context) { if (delays?.TryGetValue(kind, out var delay) == true) { await Task.Delay(delay, context.RequestAborted); } }
         var port = ProcessFixture.Port();
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(o => o.Listen(IPAddress.Loopback, port));
         var app = builder.Build();
-        app.MapPost("/api/sessions", () => { requests.Enqueue("session"); return session(); });
-        app.MapPut("/api/sessions/{id:guid}/state", () => { requests.Enqueue("state"); return Results.Ok(); });
-        app.MapPost("/api/sessions/{id:guid}/events", () => { requests.Enqueue("event"); return Results.Ok(); });
+        app.MapPost("/api/sessions", async (HttpContext context) => { requests.Enqueue("session"); await Delay("session", context); return session(); });
+        app.MapPut("/api/sessions/{id:guid}/state", async (HttpContext context) => { requests.Enqueue("state"); await Delay("state", context); return Results.Ok(); });
+        app.MapPost("/api/sessions/{id:guid}/events", async (HttpContext context) => { requests.Enqueue("event"); await Delay("event", context); return Results.Ok(); });
         app.MapGet("/warmup", () => Results.Ok());
         await app.StartAsync();
         // The first request JIT-compiles the server pipeline; do it here, outside the publisher's 5 s request timeout.

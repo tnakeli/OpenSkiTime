@@ -19,7 +19,7 @@ namespace OpenSkiTime.Tests;
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
-    public async Task SharedCourseCheckboxUpdatesAllRacesAndResetsAfterSaveAndSelectionChange()
+    public async Task SharedCourseCheckboxNamesDisciplineSharesAndResetsAfterSaveAndSelectionChange()
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-shared-course-ui-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -40,6 +40,11 @@ public partial class DesktopWorkflowTests
             var tdCheckbox = window.FindControl<CheckBox>("SaveTdToAllRacesCheckBox")!;
             Assert.False(tdCheckbox.IsChecked);
             Assert.True(tdCheckbox.Bounds.X > checkbox.Bounds.X);
+            Assert.Equal("Save Course & Homologation to all Slalom races", checkbox.Content);
+            vm.CompetitionDiscipline = Discipline.GiantSlalom;
+            Assert.Equal("Save Course & Homologation to all Giant Slalom races", checkbox.Content);
+            vm.CompetitionDiscipline = Discipline.Slalom;
+            Assert.Equal("Save TD to all races", tdCheckbox.Content);
             Assert.False(checkbox.IsChecked); checkbox.IsChecked = true;
             Assert.True(vm.SaveCourseToAllRaces);
             vm.SelectedCompetition = vm.Competitions[1]; Assert.False(vm.SaveCourseToAllRaces);
@@ -55,7 +60,7 @@ public partial class DesktopWorkflowTests
             await vm.SaveCompetitionCommand.ExecuteAsync(null);
             Assert.False(vm.IsError); Assert.False(vm.SaveCourseToAllRaces); Assert.False(checkbox.IsChecked);
             Assert.False(vm.SaveTdToAllRaces); Assert.False(tdCheckbox.IsChecked);
-            Assert.Contains("all races", vm.StatusMessage);
+            Assert.Contains("all Slalom races", vm.StatusMessage); Assert.Contains("TD saved to all races", vm.StatusMessage);
             Assert.All((await workspace.ReadAsync()).Competitions, x =>
             {
                 Assert.Equal("Shared slope", x.Values.CourseName); Assert.Equal("123/10/26", x.Values.HomologationNumber);

@@ -13,7 +13,7 @@ OpenSkiTime is a desktop race-office application for alpine skiing. It brings re
 ## Race-office workflow
 
 1. **Event series:** create or open a series file, set its dates and organizer, and make a backup or transfer copy. The Open file menu also lists recent series. Optionally import a reviewed event and its competitions from the FIS calendar.
-2. **Competitions:** set race names, dates, disciplines, runs, course details and technical delegates. Filter and sort the competition grid. Shared course details and TD information can be saved to all races in the series.
+2. **Competitions:** set race names, dates, disciplines, runs, course details and technical delegates. Filter and sort the competition grid. Course details can be shared with all races of the same discipline and TD information with all races in the series.
 3. **Competitors:** edit a dense, keyboard-friendly grid, paste rows from Excel, assign participation per competition, review highlighted changes and save them together. Save and apply category rules. An optional alpine FIS points-list download supports searching and updating athletes by code; the list can then be used offline.
 4. **Start lists:** choose a competition and run, draw the first-run bib order, then export TSV or open a printable view. Prepare Run 2 from classified Run 1 results, with first-run times visible alongside its starters.
 5. **Timing:** use **At start**, **Running**, **Timestamps** and **Ranking** to follow the race. Reorder starters, assign impulses, see elapsed times and splits, and classify competitors. Original device input and correction history remain in the event file.
@@ -32,7 +32,7 @@ One portable file holds the series, competitions, raw timing input, corrections 
 
 Select a race to edit its identity, schedule, FIS category, course and technical delegate. **Use FIS rules** distinguishes FIS races from local competitions. Optional **Get competition data** and **Browse FIS homologations** help fill race and course details.
 
-**Save Course & Homologation to all races** and **Save TD to all races** share the selected information across the series in one save. Per-run course overrides in Results remain independent.
+**Save Course & Homologation to all Giant Slalom races** (named after the edited race's discipline) shares course details with the series' other races of that discipline. **Save TD to all races** shares TD information with every race in the series. Both apply in one save. Per-run course overrides in Results remain independent.
 
 ![Competition grid and editor with fictional women's and men's slalom races](docs/screenshots/02-competitions.png)
 

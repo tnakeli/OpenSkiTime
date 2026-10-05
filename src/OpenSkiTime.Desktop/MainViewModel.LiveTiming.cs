@@ -122,7 +122,9 @@ public sealed partial class MainViewModel
         catch (Exception) { LiveTimingError = "Live timing control failed. Reopen the panel and check the selected run, time zone and installed components. Timing capture continues."; }
         finally { _liveControlGate.Release(); }
     }
-    private async Task BuildLiveSnapshotAsync()
+    // The latest projection offered to the control panel; tests read it to check what live timing publishes.
+    internal LiveSnapshot? PublishedLiveSnapshot => _liveSnapshot;
+    internal async Task BuildLiveSnapshotAsync()
     {
         var race = TimingCompetition ?? throw new LiveValidationException("Choose a timing competition.");
         var activeList = _timingList ?? throw new LiveValidationException("Choose a saved timing run.");

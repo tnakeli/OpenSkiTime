@@ -34,6 +34,7 @@ public sealed partial class TimingView : UserControl
         AddHandler(KeyDownEvent, OnTimingKey, RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, CaptureContextSelection, RoutingStrategies.Tunnel, handledEventsToo: true);
         ConfigureDragging();
+        ConfigureManualTimestamps();
     }
 
     private void BindViewModel(MainViewModel? vm)
@@ -48,6 +49,7 @@ public sealed partial class TimingView : UserControl
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.HasTimingIntermediates)) { ConfigureColumns(); }
+        if (e.PropertyName == nameof(MainViewModel.TimingRun)) { ConfigureRankingColumns(); }
         if (e.PropertyName == nameof(MainViewModel.TimingChannelStates)) { UpdateChannelVisibility(); }
         if (e.PropertyName == nameof(MainViewModel.RaceQueueVersion))
         { Dispatcher.UIThread.Post(ScrollToNext, DispatcherPriority.Background); }
@@ -96,6 +98,7 @@ public sealed partial class TimingView : UserControl
 
     private void ConfigureColumns()
     {
+        ConfigureRankingColumns();
         var count = _viewModel?.TimingCheckpoints.Count ?? 0;
         if (count == _splitCount) { UpdateChannelVisibility(); return; }
         _splitCount = count;
@@ -143,8 +146,14 @@ public sealed partial class TimingView : UserControl
                 CellTemplate = new FuncDataTemplate<TimingTimestampRow>((row, _) =>
                 {
                     var cell = row?.Cells.ElementAtOrDefault(index);
-                    var border = new Border { Tag = cell, Padding = new(6,0), Child = new TextBlock
-                    { Text = cell?.Time ?? "—", FontFamily = new("Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center } };
+                    var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+                    content.Children.Add(new TextBlock
+                    { Text = cell?.Time ?? "—", FontFamily = new("Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
+                    if (cell?.IsManual == true)
+                    { content.Children.Add(new TextBlock { Text = "m", FontSize = 9, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Classes = { "manualTimestampMark" } }); }
+                    // The timestampCell style's transparent background makes empty cells hit-testable for manual entry.
+                    var border = new Border { Tag = cell, Padding = new(6,0), Child = content };
+                    SetTimestampChannel(border, TimestampChannel(index));
                     border.Classes.Add("timestampCell");
                     if (cell is not null) { DragDrop.SetAllowDrop(border, true); }
                     if (cell is not null) { ToolTip.SetTip(border, cell.Hint); }

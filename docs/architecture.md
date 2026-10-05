@@ -311,7 +311,7 @@ erDiagram
 | `StartListEntries` | PK `(ListId, Position)`; list FK. Bib and athlete snapshot JSON; unique bib and competitor ID within a list. |
 | `TimingCaptures` | PK `Id`; list FK. Primary capture options and start/stop/clean-stop metadata. |
 | `RawTimingPackets` | PK `(SessionId, Sequence)`; primary capture FK. Original bytes, receive time and protocol/source/stream identity. Append-only. |
-| `TimingAudit` | Generated integer PK `Id`; list FK. Operator/reason/time, before/after decision JSON with source references and optional reversal ID. Append-only. |
+| `TimingAudit` | Generated integer PK `Id`; list FK. Operator/reason/time, before/after decision JSON with source references and optional reversal ID. Append-only. `ManualTime` decisions (enum value 4, appended) also carry operator-entered timestamps for missing impulses; their `Timestamp` field is omitted from JSON when null, so every other decision serializes exactly as before. |
 | `AuxiliaryCaptures` | PK `Id`; list FK. Separate B/HandStart/HandFinish role, live flag, options and lifecycle metadata. |
 | `AuxiliaryRawPackets` | PK `(SessionId, Sequence)`; auxiliary capture FK. Original backup/hand input, receive time and source identity. Append-only. |
 | `RaceInformation` | PK `(CompetitionId, Revision)`; competition FK. Race-information JSON and save time. Append-only revisions. |

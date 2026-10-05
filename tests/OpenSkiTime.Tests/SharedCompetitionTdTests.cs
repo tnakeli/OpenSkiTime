@@ -34,8 +34,10 @@ public sealed class SharedCompetitionTdTests
             Assert.Equal(created.Revision + 1, saved.Revision);
             Assert.All(saved.Competitions, x => Assert.Equal(td, x.Values.Calendar!.TechnicalDelegate));
             var updated = saved.Competitions.Single(x => x.Values.ShortLabel == other.ShortLabel).Values;
-            Assert.Equal(other with { CourseName = shareCourse ? "New slope" : other.CourseName,
-                Calendar = other.Calendar! with { TechnicalDelegate = td } }, updated);
+            // TD sharing spans every race; course sharing never reaches the giant slalom race.
+            Assert.Equal(other with { Calendar = other.Calendar! with { TechnicalDelegate = td } }, updated);
+            Assert.Equal(shareCourse ? "New slope" : local.CourseName,
+                saved.Competitions.Single(x => x.Values.ShortLabel == local.ShortLabel).Values.CourseName);
             Assert.Equal(RaceType.Club, saved.Competitions.Single(x => x.Values.ShortLabel == local.ShortLabel).Values.RaceType);
             await workspace.CloseAsync(); var reopened = await workspace.OpenAsync(path);
             Assert.Equal(saved.Competitions, reopened.Competitions);

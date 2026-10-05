@@ -10,7 +10,7 @@ public sealed class SharedCompetitionCourseTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SharedCourseSaveIsAtomicAndPortableForExistingAndNewRaces(bool createNew)
+    public async Task SharedCourseSaveIsAtomicPortableAndLimitedToSameDisciplineRaces(bool createNew)
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-shared-course-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -22,18 +22,23 @@ public sealed class SharedCompetitionCourseTests
                 CourseName: "Original slope", HomologationNumber: "123/10/26", Calendar: new(2027, "Test place", "FIN", "NJR", "W", null));
             var other = first with { Name = "Other race", ShortLabel = "GS1 M", FisCode = "0035", Discipline = Discipline.GiantSlalom,
                 Calendar = first.Calendar! with { Gender = "M", Category = "NC" } };
-            var created = await workspace.CreateAsync(path, new("Test", "Test place", "Club", date, date, "FIN", "2026/27"), [first, other]);
+            var sibling = first with { Name = "Sibling slalom", ShortLabel = "SL1 M", FisCode = "0037", CourseName = "Sibling slope",
+                HomologationNumber = "345/10/26", Calendar = first.Calendar! with { Gender = "M" } };
+            var created = await workspace.CreateAsync(path, new("Test", "Test place", "Club", date, date, "FIN", "2026/27"), [first, other, sibling]);
             var target = created.Competitions.Single(x => x.Values.ShortLabel == first.ShortLabel);
             var otherId = created.Competitions.Single(x => x.Values.ShortLabel == other.ShortLabel).Id;
+            var siblingId = created.Competitions.Single(x => x.Values.ShortLabel == sibling.ShortLabel).Id;
             var values = first with { Name = "Edited race", ShortLabel = createNew ? "SL2 W" : first.ShortLabel, FisCode = createNew ? "0036" : first.FisCode,
                 CourseName = "Shared slope", HomologationNumber = "234/10/26", StartAltitudeMeters = 500,
                 FinishAltitudeMeters = 300, VerticalDropMeters = 200, CourseLengthMeters = 640 };
             var saved = await workspace.SaveCompetitionAsync(createNew ? null : target.Id, values, created.Revision, true);
             Assert.Equal(created.Revision + 1, saved.Revision);
-            Assert.Equal(createNew ? 3 : 2, saved.Competitions.Count);
-            Assert.Equal(other with { CourseName = values.CourseName, HomologationNumber = values.HomologationNumber,
+            Assert.Equal(createNew ? 4 : 3, saved.Competitions.Count);
+            Assert.Equal(sibling with { CourseName = values.CourseName, HomologationNumber = values.HomologationNumber,
                 StartAltitudeMeters = 500, FinishAltitudeMeters = 300, VerticalDropMeters = 200, CourseLengthMeters = 640 },
-                saved.Competitions.Single(x => x.Id == otherId).Values);
+                saved.Competitions.Single(x => x.Id == siblingId).Values);
+            // A race of another discipline keeps its own course and homologation.
+            Assert.Equal(other, saved.Competitions.Single(x => x.Id == otherId).Values);
             await workspace.CloseAsync(); var reopened = await workspace.OpenAsync(path);
             Assert.Equal(saved.Competitions, reopened.Competitions);
 
@@ -50,9 +55,10 @@ public sealed class SharedCompetitionCourseTests
             var empty = values with { ShortLabel = first.ShortLabel, CourseName = null, HomologationNumber = null,
                 StartAltitudeMeters = null, FinishAltitudeMeters = null, VerticalDropMeters = null, CourseLengthMeters = null };
             var local = await workspace.SaveCompetitionAsync(target.Id, empty, saved.Revision);
-            Assert.Equal("Shared slope", local.Competitions.Single(x => x.Id == otherId).Values.CourseName);
+            Assert.Equal("Shared slope", local.Competitions.Single(x => x.Id == siblingId).Values.CourseName);
             var cleared = await workspace.SaveCompetitionAsync(target.Id, empty, local.Revision, true);
-            Assert.All(cleared.Competitions, race =>
+            Assert.Equal(other, cleared.Competitions.Single(x => x.Id == otherId).Values);
+            Assert.All(cleared.Competitions.Where(x => x.Values.Discipline == Discipline.Slalom), race =>
             {
                 Assert.Null(race.Values.CourseName); Assert.Null(race.Values.HomologationNumber);
                 Assert.Null(race.Values.StartAltitudeMeters); Assert.Null(race.Values.FinishAltitudeMeters);

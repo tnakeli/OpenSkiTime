@@ -741,6 +741,45 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
+    // A timestamp that never arrived from the device, typed by the operator as a time of day. The entry is one audited
+    // ManualTime decision (operator, reason, time and the device impulse whose clock it uses), committed before it is
+    // shown; it starts unassigned and is assigned like any other timestamp. Works with or without a connected device.
+    public async Task<string> AddManualTimestampAsync(Guid listId, int channel, string timeOfDay, string operatorName,
+        string reason, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(timeOfDay);
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot?.ListId != listId || _list is null) { throw new DomainValidationException("The active run changed. Choose the timing position again."); }
+            if (channel is not (0 or 1) && (channel < 2 || channel >= 2 + _list.Plan.Competition.IntermediateCount))
+            { throw new DomainValidationException("Choose start, finish or an intermediate timing position of this run."); }
+            if (!TimingTime.TryTimeOfDay(timeOfDay.Trim(), out var timeOfDayTicks, out var precision) || precision < 2)
+            { throw new DomainValidationException("Enter the time of day as HH:mm:ss.ff with 2–7 decimals (for example 12:03:41.27)."); }
+            if (string.IsNullOrWhiteSpace(operatorName) || string.IsNullOrWhiteSpace(reason))
+            { throw new DomainValidationException("Enter an operator and a reason for the manual time."); }
+            var reference = _observations.LastOrDefault(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.ClockId.Length > 0);
+            var timestamp = reference is { DeviceTicks: { } referenceTicks }
+                ? new ManualTimestamp(channel, PlaceOnClock(referenceTicks, timeOfDayTicks), precision, reference.ClockId, reference.Key)
+                : new ManualTimestamp(channel, _list.Plan.Competition.Date.ToDateTime(TimeOnly.MinValue).Ticks + timeOfDayTicks,
+                    precision, $"manual:{listId:N}");
+            var key = ManualTimestamp.KeyPrefix + Guid.NewGuid().ToString("N");
+            await AppendDecisionAsync(new(DecisionKind.ManualTime, key, Timestamp: timestamp), operatorName.Trim(), reason.Trim());
+            return key;
+        }
+        finally { _state.Release(); }
+    }
+
+    // The typed time of day on the reference impulse's device clock: the nearest day, so a time just across midnight
+    // from the reference lands on the neighbouring day instead of almost 24 hours away.
+    private static long PlaceOnClock(long referenceTicks, long timeOfDayTicks)
+    {
+        var placed = referenceTicks - referenceTicks % TimeSpan.TicksPerDay + timeOfDayTicks;
+        if (placed - referenceTicks > TimeSpan.TicksPerDay / 2) { placed -= TimeSpan.TicksPerDay; }
+        else if (referenceTicks - placed > TimeSpan.TicksPerDay / 2) { placed += TimeSpan.TicksPerDay; }
+        return placed;
+    }
+
     private async Task AppendDecisionAsync(TimingDecision decision, string operatorName, string reason, long? reversesId = null)
     {
         if (_snapshot is null) { throw new DomainValidationException("Choose a run first."); }
