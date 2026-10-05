@@ -33,6 +33,10 @@ for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide
     if (fragment) assert((await readFile(target, 'utf8')).includes(`id="${fragment}"`), `Missing cross-page anchor ${value}`);
   }
 }
+const guide = await readFile(path.join(root, 'guide', 'index.html'), 'utf8');
+const guideSteps = [...guide.match(/<nav class="guide-nav"[^>]*>([\s\S]*?)<\/nav>/)[1].matchAll(/<a href="#[^"]+">(\d\d) (\S+) /g)];
+assert(guideSteps.length > 0, 'Missing numbered guide navigation steps.');
+for (const [, step, separator] of guideSteps) assert.equal(separator, '\u00B7', `Guide step ${step} must use the middle dot separator.`);
 const security = await readFile(path.join(root, '.well-known', 'security.txt'), 'utf8');
 assert.match(security, /^Contact: https:\/\/github\.com\/tnakeli\/OpenSkiTime\/security\/advisories\/new$/m);
 assert.match(security, /^Canonical: https:\/\/openskiti\.me\/\.well-known\/security\.txt$/m);
