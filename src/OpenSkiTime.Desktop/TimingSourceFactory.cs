@@ -27,7 +27,7 @@ internal static class TimingSourceFactory
                 if (password.Length == 0) { throw new DomainValidationException($"Enter the ALGE Results password for {username}."); }
                 return new AlgeResultsSource(http, username, password, options);
             case TimingSourceType.Simulator:
-                return simulator?.Invoke() ?? throw new DomainValidationException("The simulator is available for primary training capture only.");
+                return simulator?.Invoke() ?? throw new DomainValidationException("The simulator is available for live training capture only (primary timing or B Clock).");
             case TimingSourceType.ReplayFile:
                 if (!File.Exists(connection.ReplayPath)) { throw new DomainValidationException("Enter the path to an existing raw ALGE ASCII file."); }
                 return new ReplayFileTimingSource(connection.ReplayPath);

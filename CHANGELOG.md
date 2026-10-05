@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.0-preview.2] - 2026-10-05
+
+Second preview for rehearsals and evaluation. This version uses live protocol 1 and keeps `.ost` compatibility: series files from 0.1.0-preview.1 open unchanged. Do not open a series that contains manual timestamps with 0.1.0-preview.1, which does not understand them.
+
+### Added
+
+- **Manual timestamps:** if an impulse never arrives, double-click a START, INTERM or FINISH cell in the Timestamps view (or press F2) to enter the time of day by hand. The new row is marked as manually entered, the entry is recorded with operator and reason, and an assigned manual time is shown with a small "m". A result that uses a manual time asks for verification against backup timing.
+- **Ranking:** the time column is named after the current run (Run 1, Run 2), each intermediate has its own column with the rank at that intermediate, and from Run 2 on the previous run's time is shown with its rank in parentheses. Equal times share a rank.
+- **Simulator:** the simulation time follows the PC clock, so Start, Finish and intermediates can be pressed directly. Pause the clock to type a time of your own.
+- **Simulator as B Clock:** for training, the simulator can be chosen as the B Clock source when primary timing is the simulator or a replay file. Test B start and Test B finish create backup impulses that are kept apart from A timing.
+
+### Changed
+
+- **Save Course & Homologation** now shares the course only with races of the same discipline, and the checkbox names the discipline (for example "all Giant Slalom races"). Saving the TD to all races is unchanged.
+- **Cloud live timing** waits up to two minutes for a hosted server that is waking from idle and shows "Waking the live timing server" meanwhile, instead of failing. Stop takes effect immediately.
+
+### Fixed
+
+- Live timing no longer stops updating with "Live timing state could not update" when the number of intermediates is changed while live timing is running.
+- Toolbar buttons (Open file, the competition picker) keep readable light text when hovered, pressed or open.
+
 ## [0.1.0-preview.1] - 2026-10-04
 
 First public preview of the Windows application, for rehearsals and evaluation. Do not rely on it alone for an official race without independent backup timing.
@@ -31,5 +52,6 @@ First public preview of the Windows application, for rehearsals and evaluation. 
 - Local category draws, special Cup, youth, snow-seed and three-run formats are not supported. Automatic backup-time substitution and production FIS submission are pending.
 - ALGE native USB needs the vendor driver and SDK, installed separately.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.1.0-preview.1...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.1.0-preview.2...HEAD
+[0.1.0-preview.2]: https://github.com/tnakeli/OpenSkiTime/compare/v0.1.0-preview.1...v0.1.0-preview.2
 [0.1.0-preview.1]: https://github.com/tnakeli/OpenSkiTime/releases/tag/v0.1.0-preview.1

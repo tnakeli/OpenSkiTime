@@ -90,7 +90,7 @@ public sealed class TimingPreferencesStore(string? directory = null)
                 BackupWarnings = new(Math.Clamp(auxiliary.BackupStartWarningMilliseconds, 1, 10000),
                     Math.Clamp(auxiliary.BackupFinishWarningMilliseconds, 1, 10000), Math.Clamp(auxiliary.BackupMissingGraceSeconds, 1, 300))
             };
-            if (TimingSourceTypes.Parse(auxiliary.Source) is { } backupSource && TimingSourceTypes.Backup.Contains(backupSource))
+            if (TimingSourceTypes.Parse(auxiliary.Source) is { } backupSource && TimingSourceTypes.DeviceRead.Contains(backupSource))
             {
                 // The former connection served both live B and temporary B/hand imports. Its role was never saved, so
                 // it is proposed as B Clock and flagged for the operator to confirm rather than silently trusted.

@@ -68,7 +68,9 @@ public sealed partial class MainViewModel
     {
         RefreshAlgeAccounts();
         foreach (var name in new[] { nameof(TimingIntermediateRoles), nameof(HasTimingIntermediateRoles), nameof(HasBackupClockRoles),
-            nameof(HasNoBackupClockRoles), nameof(UsesAlgeResultsAccount), nameof(IsTimingSimulator), nameof(TimingDeviceHelp) }) { OnPropertyChanged(name); }
+            nameof(HasNoBackupClockRoles), nameof(UsesAlgeResultsAccount), nameof(IsTimingSimulator), nameof(TimingDeviceHelp),
+            nameof(IsBackupTimingSimulator), nameof(ShowTimingSimulatorControls) }) { OnPropertyChanged(name); }
+        UpdateSimulationClockTimer();
     }
 
     // One account row per distinct ALGE Results username used by any role. Typed passwords survive role edits.

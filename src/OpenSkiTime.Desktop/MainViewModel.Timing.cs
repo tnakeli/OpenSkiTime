@@ -14,11 +14,22 @@ namespace OpenSkiTime.Desktop;
 public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalRank)
 {
     public string PreviousRunTime { get; init; } = "";
+    public long? PreviousRunHundredths { get; init; }
+    // Rank in the previous run and at each intermediate of this run, within the row's ranking group.
+    public int? PreviousRunRank { get; init; }
+    public IReadOnlyList<int?> IntermediateRanks { get; init; } = [];
+    public string PreviousRunRanked => WithRank(PreviousRunTime, PreviousRunRank);
+    public IReadOnlyList<string> RankedIntermediates => Result.Splits
+        .Select((x, i) => WithRank(x.Time + ManualMark(x.Manual && x.Hundredths is not null), IntermediateRanks.ElementAtOrDefault(i))).ToArray();
     public string Category { get; init; } = "";
     public int? DisplayRank { get; init; }
     public bool IsLatestFinish { get; init; }
     public string FinishMarker => IsLatestFinish ? "◆" : "";
-    public IReadOnlyList<string> Intermediates => Result.Splits.Select(x => x.Time).ToArray();
+    public IReadOnlyList<string> Intermediates => Result.Splits.Select(x => x.Time + ManualMark(x.Manual && x.Hundredths is not null)).ToArray();
+    // A small "m" marks a time that uses an operator-entered timestamp.
+    public static string ManualMark(bool manual) => manual ? " m" : "";
+    public string ClockManualMark => ManualMark(Result.Status == TimingStatus.OnCourse && Result.StartManual
+        || Result.Status == TimingStatus.Finished && (Result.StartManual || Result.FinishManual));
     public RunningTimeDisplay Clock { get; } = new();
     public int Position => Result.Entry.Position;
     public int Bib => Result.Bib;
@@ -26,13 +37,15 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public string Name => Result.Name;
     public string Status => Result.Status switch { TimingStatus.OnCourse => "On course", TimingStatus.Review => "No time", _ => Result.Status.ToString() };
     public string Time => Result.Time;
-    public string DisplayTime => Result.Status == TimingStatus.Finished ? Time : Status;
+    public string DisplayTime => Result.Status == TimingStatus.Finished ? Time + ClockManualMark : Status;
     public string TotalTime => TimingTime.Format(Total);
     public int? Rank => Result.Rank;
     public string Detail => Result.Detail;
     public string Label => $"{Bib} · {Name}";
-    public string SplitTimes => string.Join("  ·  ", Result.Splits.Where(x => x.ObservationKey is not null).Select(x => $"I{x.Number} {x.Time}"));
+    public string SplitTimes => string.Join("  ·  ", Result.Splits.Where(x => x.ObservationKey is not null).Select(x => $"I{x.Number} {x.Time}{ManualMark(x.Manual && x.Hundredths is not null)}"));
     public bool HasSplits => Result.Splits.Any(x => x.ObservationKey is not null);
+    private static string WithRank(string time, int? rank) =>
+        rank is { } value ? string.Create(CultureInfo.InvariantCulture, $"{time} ({value})") : time;
 }
 
 public sealed class RunningTimeDisplay : INotifyPropertyChanged
@@ -112,7 +125,6 @@ public sealed partial class MainViewModel
         TimingDsqReason = row?.Result.Disqualification?.Reason ?? "";
         TimingDsqJudge = row?.Result.Disqualification?.Judge ?? "";
     }
-    [ObservableProperty] private string _simulationTime = "12:00:00.0000";
     [ObservableProperty] private TimingGridRow? _selectedTimingRow;
     public IReadOnlyList<int> SelectedTimingBibs { get; private set; } = [];
     public void SelectTimingBibs(IReadOnlyList<int> bibs, int? activeBib)
@@ -386,7 +398,7 @@ public sealed partial class MainViewModel
             var options = workspace.Timing?.ActiveCaptureOptions.FirstOrDefault(x => x.Device == TimingSourceTypes.SimulatorLabel);
             if (_simulator is null || !IsTimingConnected || options is null)
             { throw new DomainValidationException("Connect the simulator first."); }
-            if (!TimingTime.TryTimeOfDay(SimulationTime, out var ticks, out _)) { throw new DomainValidationException("Enter simulator time as HH:mm:ss with 1–7 decimal places (for example 12:00:00.1234567)."); }
+            var ticks = SimulationTicks();
             int position;
             if (channel == "start") { position = 0; }
             else if (channel == "finish") { position = 1; }
@@ -589,6 +601,8 @@ public sealed partial class MainViewModel
                 dsq.Reason.Length > 0 ? " · " + dsq.Reason : "",
                 dsq.Judge.Length > 0 ? " · Judge " + dsq.Judge : "") : ""),
         DecisionKind.StartOrder => value.StartOrder ?? "Draw order",
+        DecisionKind.ManualTime => value.Timestamp is { } entry
+            ? $"Manual {TimingPositionLabel(entry.Channel)} {TimingTime.FormatTimeOfDay(entry.DeviceTicks)}" : "No manual time",
         _ => value.Hundredths is null ? "Use recorded times" : TimingTime.Format(value.Hundredths)
     };
 
@@ -601,6 +615,7 @@ public sealed partial class MainViewModel
             if (i == target.Count) { target.Add(rows[i]); }
             else if (target[i].Total != rows[i].Total || target[i].TotalRank != rows[i].TotalRank
                 || target[i].Category != rows[i].Category || target[i].DisplayRank != rows[i].DisplayRank || target[i].IsLatestFinish != rows[i].IsLatestFinish
+                || target[i].PreviousRunRank != rows[i].PreviousRunRank || !target[i].IntermediateRanks.SequenceEqual(rows[i].IntermediateRanks)
                 || !target[i].Result.Splits.SequenceEqual(rows[i].Result.Splits)
                 || target[i].Result != (rows[i].Result with { Splits = target[i].Result.Splits }))
             { target[i] = rows[i]; }
@@ -622,5 +637,5 @@ public sealed partial class MainViewModel
         IsTimingConnected = false; RefreshRaceQueues(); NotifyTiming();
     }
 
-    private void DisposeTimingUi() { ResetBackupMonitor(); DisposeLiveTiming(); _timingTimer?.Stop(); _timingHttp.Dispose(); }
+    private void DisposeTimingUi() { ResetBackupMonitor(); DisposeLiveTiming(); _timingTimer?.Stop(); _simulationClockTimer?.Stop(); _timingHttp.Dispose(); }
 }

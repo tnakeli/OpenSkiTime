@@ -91,7 +91,8 @@
      <TextBlock Text="TIMESTAMPS · TIME OF DAY" Classes="raceHeading" />
     </Grid>
     <DataGrid Grid.Row="1" Name="TimestampsGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding TimestampRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor"
-     AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="26" GridLinesVisibility="All">
+     AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="26" GridLinesVisibility="All"
+     ToolTip.Tip="Drop a competitor on a timestamp to assign it. Double-click a START, INTERM or FINISH cell (or F2) to enter a missing time manually; m marks a manual time.">
      <DataGrid.Columns>
       <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="54" />
       <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="160" />
@@ -114,7 +115,8 @@
       <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="130" />
       <DataGridTextColumn Header="NAT" Binding="{Binding Result.Entry.Entrant.Athlete.Nation}" Width="55" />
       <DataGridTextColumn Header="CLUB" Binding="{Binding Result.Entry.Entrant.Athlete.Club}" Width="*" MinWidth="100" />
-      <DataGridTextColumn Header="TIME / STATE" Binding="{Binding DisplayTime}" Width="100" />
+      <DataGridTextColumn Header="RUN 1" Binding="{Binding PreviousRunRanked}" Width="96" IsVisible="{Binding ShowTimingTotal}" Tag="previousRun" />
+      <DataGridTextColumn Header="RUN 1" Binding="{Binding DisplayTime}" Width="90" Tag="runTime" />
       <DataGridTextColumn Header="TOTAL" Binding="{Binding TotalTime}" Width="90" IsVisible="{Binding ShowTimingTotal}" />
      </DataGrid.Columns>
     </DataGrid>
@@ -152,14 +154,34 @@
      </Grid>
     </StackPanel>
    </Border>
+   <Border Name="ManualTimestampEditor" IsVisible="{Binding ShowManualTimestampEditor}" Classes="racePane" Padding="8">
+    <Border.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SaveManualTimestampCommand}" /><KeyBinding Gesture="Escape" Command="{Binding CancelManualTimestampCommand}" /></Border.KeyBindings>
+    <StackPanel Spacing="4">
+     <Grid ColumnDefinitions="90,8,170,8,*,8,Auto,6,Auto">
+      <StackPanel><TextBlock Text="MANUAL TIME" Classes="eyebrow" /><TextBlock Name="ManualTimestampPositionText" Text="{Binding ManualTimestampPosition}" FontWeight="SemiBold" Margin="0,6,0,0" /></StackPanel>
+      <StackPanel Grid.Column="2"><TextBlock Text="TIME OF DAY HH:MM:SS.FF" Classes="eyebrow" /><TextBox Name="ManualTimestampTime" Text="{Binding ManualTimestampText}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" /></StackPanel>
+      <StackPanel Grid.Column="4"><TextBlock Text="REASON" Classes="eyebrow" /><TextBox Name="ManualTimestampReasonText" Text="{Binding ManualTimestampReason}" /></StackPanel>
+      <Button Grid.Column="6" Name="SaveManualTimestamp" Content="Add timestamp" Command="{Binding SaveManualTimestampCommand}" VerticalAlignment="Bottom" ToolTip.Tip="Enter · saved with operator, reason and time in the correction history" />
+      <Button Grid.Column="8" Content="Cancel" Command="{Binding CancelManualTimestampCommand}" Classes="secondaryAction" VerticalAlignment="Bottom" ToolTip.Tip="Esc" />
+     </Grid>
+     <TextBlock Text="{Binding ManualTimestampError}" IsVisible="{Binding HasManualTimestampError}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
+    </StackPanel>
+   </Border>
    <TextBlock Text="{Binding SelectedTimingProblem}" IsVisible="{Binding HasSelectedTimingProblem}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
    <TextBlock Text="Unassigned finish · drag a competitor onto its finish timestamp." IsVisible="{Binding HasUnassignedFinish}" Foreground="{DynamicResource WarningBrush}" />
   </StackPanel>
-  <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsTimingSimulator}">
-   <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Text="{Binding SimulationTime}" Width="155" />
-   <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
-   <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />
-   <Button Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+  <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding ShowTimingSimulatorControls}">
+   <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Name="SimulationTimeBox" Text="{Binding SimulationTime}" Width="155" ToolTip.Tip="Simulator device time. While live, impulses use the PC clock at the press; type a time to pause and use it." />
+   <Button Name="SimulationClockToggle" Content="{Binding SimulationClockToggleText}" Command="{Binding ToggleSimulationClockCommand}" Classes="secondaryAction" ToolTip.Tip="Pause the PC clock to type a simulator time, or follow the PC clock live again." />
+   <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsTimingSimulator}">
+    <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+    <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />
+    <Button Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
+   </StackPanel>
+   <StackPanel Name="SimulatorBackupButtons" Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsBackupTimingSimulator}">
+    <Button Content="Test B start" Command="{Binding SimulateBackupPulseCommand}" CommandParameter="start" IsEnabled="{Binding IsBackupClockActive}" Classes="secondaryAction" ToolTip.Tip="B Clock training impulse. B never changes A timing." />
+    <Button Content="Test B finish" Command="{Binding SimulateBackupPulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsBackupClockActive}" Classes="secondaryAction" ToolTip.Tip="B Clock training impulse. B never changes A timing." />
+   </StackPanel>
   </StackPanel>
   <!-- Drag preview overlay: never hit-testable, so it cannot steal or block a drop target. -->
   <Canvas Name="TimingDropPreviewLayer" Grid.RowSpan="5" IsHitTestVisible="False">

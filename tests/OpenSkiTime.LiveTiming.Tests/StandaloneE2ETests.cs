@@ -158,6 +158,7 @@ public sealed class StandaloneE2ETests
         Assert.Contains("OpenSkiTime",await http.GetStringAsync($"r/{session.SessionId}"));
         Assert.Contains("WebSocket",await http.GetStringAsync("live.js"));
         Assert.Contains("liveResultOrder",await http.GetStringAsync("live-order.js"));
+        Assert.Contains("liveSplitValues",await http.GetStringAsync("live-columns.js"));
         using (var health=JsonDocument.Parse(await http.GetStringAsync("health")))
         {
             using var server=System.Diagnostics.Process.GetProcessById(health.RootElement.GetProperty("processId").GetInt32());

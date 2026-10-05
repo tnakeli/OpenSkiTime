@@ -14,6 +14,8 @@ using var reader = new StreamReader(pipe, leaveOpen: true);
 await using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
 var commands = Channel.CreateBounded<WorkerInput>(new BoundedChannelOptions(16) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true, SingleWriter = true });
 LiveSnapshot? latest = null;
+// Cancels the network attempt in progress when a control command arrives, so Stop or Delete never waits out a cold-start wait.
+CancellationTokenSource? attempt = null;
 var input = Task.Run(async () =>
 {
     try
@@ -23,7 +25,11 @@ var input = Task.Run(async () =>
             if (line.Length > 2 * 1024 * 1024) { throw new IOException("Oversized worker input."); }
             var value = JsonSerializer.Deserialize<WorkerInput>(line, LiveJson.Options) ?? throw new IOException("Missing worker input.");
             if (value.Snapshot is not null) { value.Snapshot.Validate(); Volatile.Write(ref latest, value.Snapshot); }
-            if (value.Command != "state") { await commands.Writer.WriteAsync(value, lifetime.Token); }
+            if (value.Command != "state")
+            {
+                await commands.Writer.WriteAsync(value, lifetime.Token);
+                try { Volatile.Read(ref attempt)?.Cancel(); } catch (ObjectDisposedException) { /* The attempt already ended. */ }
+            }
         }
     }
     finally { lifetime.Cancel(); commands.Writer.TryComplete(); }
@@ -36,6 +42,7 @@ var health = new PublisherHealth(PublisherState.Stopped);
 var running = false; var refresh = true; LiveSnapshot? published = null;
 var nextAttempt = DateTimeOffset.MinValue; var nextHealth = DateTimeOffset.MinValue; var retries = 0;
 var log = new ProtocolLog();
+const string WakingNotice = "Waking the live timing server. A cold start can take up to two minutes; timing capture continues.";
 log.Write("Publisher process started");
 var localSigningKey = "";
 var localPublisherKey = ""; // Private to this worker and its managed loopback server unless the caller supplies one.
@@ -62,7 +69,11 @@ try
                                 localServer = StartLocalServer(options, localSigningKey, localPublisherKey);
                                 standalone = new(options.Endpoint, options.ResumeSession, log.Write, localPublisherKey);
                             }
-                            else if (options.Kind == PublisherKind.Cloud) { standalone = new(options.Endpoint, options.ResumeSession, log.Write, options.PublisherKey); }
+                            else if (options.Kind == PublisherKind.Cloud)
+                            {
+                                standalone = new(options.Endpoint, options.ResumeSession, log.Write, options.PublisherKey,
+                                    StandalonePublisher.CloudRequestTimeout, StandalonePublisher.CloudWakeTimeout);
+                            }
                             else
                             {
                                 IFisLiveTimingTransport transport = options.Kind == PublisherKind.FisTcp
@@ -100,37 +111,50 @@ try
             var now = DateTimeOffset.UtcNow;
             if (running && now >= nextAttempt)
             {
-                if (options?.Kind == PublisherKind.Local && localServer?.HasExited == true)
+                using var current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+                Volatile.Write(ref attempt, current);
+                try
                 {
-                    health = health with { State = PublisherState.Reconnecting, Error = "Local server exited; restarting and restoring snapshot." }; await SendHealth();
-                    localServer.Dispose(); localServer = StartLocalServer(options, localSigningKey, localPublisherKey); refresh = true;
-                }
-                var state = Volatile.Read(ref latest);
-                if (state is not null && (refresh || !ReferenceEquals(state, published)))
-                {
-                    var sending = state with { Paused = false };
-                    if (standalone is not null) { await standalone.PublishAsync(sending, refresh, lifetime.Token); }
-                    if (fis is not null) { await fis.PublishAsync(sending, refresh, lifetime.Token); }
-                    published = state; refresh = false; retries = 0;
-                    health = health with { State = PublisherState.Running, Error = null, LastConnected = now,
-                        LastSuccessfulPublish = DateTimeOffset.UtcNow, LastEvent = state.UpdatedAt,
-                        PublicUrl = standalone?.Session?.PublicUrl, ExpiresAt = standalone?.Session?.ExpiresAt };
-                    log.Write("Authoritative state published"); nextHealth = now.AddSeconds(5); await SendHealth();
-                }
-                else if (now >= nextHealth && published is not null)
-                {
-                    if (standalone is not null && await standalone.HealthAsync(lifetime.Token))
-                    { health = health with { State = PublisherState.Running, Error = null, LastConnected = now }; }
-                    else if (standalone is not null)
+                    if (options?.Kind == PublisherKind.Local && localServer?.HasExited == true)
                     {
-                        // Server restarted and lost its RAM state: restore every run on the next pass, without error backoff.
-                        refresh = true; nextAttempt = now; log.Write("Server is missing session state; republishing full snapshot");
+                        health = health with { State = PublisherState.Reconnecting, Error = "Local server exited; restarting and restoring snapshot." }; await SendHealth();
+                        localServer.Dispose(); localServer = StartLocalServer(options, localSigningKey, localPublisherKey); refresh = true;
                     }
-                    // FIS recommends keepalive after 5–10 minutes of inactivity (v53 p75).
-                    if (fis is not null && now - health.LastSuccessfulPublish >= TimeSpan.FromMinutes(5))
-                    { await fis.KeepAliveAsync(lifetime.Token); health = health with { State = PublisherState.Running, Error = null, LastSuccessfulPublish = now, LastConnected = now }; }
-                    nextHealth = now.AddSeconds(5); await SendHealth();
+                    var state = Volatile.Read(ref latest);
+                    if (standalone?.Waking == true && health.Notice is null && state is not null)
+                    {
+                        // Reported as progress rather than an error; a failure after the wake timeout reports the error again.
+                        health = health with { Notice = WakingNotice, Error = null }; log.Write(WakingNotice); await SendHealth();
+                    }
+                    if (state is not null && (refresh || !ReferenceEquals(state, published)))
+                    {
+                        var sending = state with { Paused = false };
+                        if (standalone is not null) { await standalone.PublishAsync(sending, refresh, current.Token); }
+                        if (fis is not null) { await fis.PublishAsync(sending, refresh, current.Token); }
+                        published = state; refresh = false; retries = 0;
+                        health = health with { State = PublisherState.Running, Error = null, Notice = null, LastConnected = now,
+                            LastSuccessfulPublish = DateTimeOffset.UtcNow, LastEvent = state.UpdatedAt,
+                            PublicUrl = standalone?.Session?.PublicUrl, ExpiresAt = standalone?.Session?.ExpiresAt };
+                        log.Write("Authoritative state published"); nextHealth = now.AddSeconds(5); await SendHealth();
+                    }
+                    else if (now >= nextHealth && published is not null)
+                    {
+                        if (standalone is not null && await standalone.HealthAsync(current.Token))
+                        { health = health with { State = PublisherState.Running, Error = null, Notice = null, LastConnected = now }; }
+                        else if (standalone is not null)
+                        {
+                            // Server restarted and lost its RAM state: restore every run on the next pass, without error backoff.
+                            refresh = true; nextAttempt = now; log.Write("Server is missing session state; republishing full snapshot");
+                        }
+                        // FIS recommends keepalive after 5–10 minutes of inactivity (v53 p75).
+                        if (fis is not null && now - health.LastSuccessfulPublish >= TimeSpan.FromMinutes(5))
+                        { await fis.KeepAliveAsync(current.Token); health = health with { State = PublisherState.Running, Error = null, LastSuccessfulPublish = now, LastConnected = now }; }
+                        nextHealth = now.AddSeconds(5); await SendHealth();
+                    }
                 }
+                catch (OperationCanceledException) when (current.IsCancellationRequested && !lifetime.IsCancellationRequested)
+                { refresh = true; fis?.Disconnect(); } // A control command interrupted this attempt; it runs on the next pass.
+                finally { Volatile.Write(ref attempt, null); }
             }
         }
         catch (Exception ex) when (ex is IOException or HttpRequestException or OperationCanceledException or LiveValidationException or InvalidOperationException or System.Net.Sockets.SocketException)
@@ -138,7 +162,7 @@ try
             if (lifetime.IsCancellationRequested) { break; }
             // Never expose raw exception messages: an endpoint/server response could echo a credential.
             var permanent = ex is LiveValidationException || (ex is HttpRequestException request && request.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.BadRequest);
-            health = health with { State = running && !permanent ? PublisherState.Reconnecting : PublisherState.Error,
+            health = health with { State = running && !permanent ? PublisherState.Reconnecting : PublisherState.Error, Notice = null,
                 // LiveValidationException text is authored by OpenSkiTime, never echoed from a server response.
                 Error = ex is LiveValidationException validation ? validation.Message
                     : permanent ? "Configuration or authentication rejected. Check settings and restart." : "Publish/health failed. Check endpoint and network; retrying." };
@@ -160,7 +184,8 @@ finally
 }
 return 0;
 
-Task SendHealth() => writer.WriteLineAsync(JsonSerializer.Serialize(new WorkerOutput(health, standalone is null ? options?.ResumeSession : standalone.Session), LiveJson.Options));
+// A waking notice belongs to a running attempt; a stopped publisher never reports one.
+Task SendHealth() => writer.WriteLineAsync(JsonSerializer.Serialize(new WorkerOutput(running ? health : health with { Notice = null }, standalone is null ? options?.ResumeSession : standalone.Session), LiveJson.Options));
 static Process StartLocalServer(PublisherOptions options, string signingKey, string publisherKey)
 {
     var endpoint = new Uri(options.Endpoint);

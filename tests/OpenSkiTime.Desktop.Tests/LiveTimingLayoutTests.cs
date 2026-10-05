@@ -46,6 +46,22 @@ public sealed class LiveTimingLayoutTests
         }
         finally { window.Close(); }
     }
+    [AvaloniaFact]
+    public async Task AWakingCloudServerIsShownAsProgressAndAnErrorTakesPrecedence()
+    {
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        using var vm = new MainViewModel(workspace, new AvaloniaFileDialogs(new Window()));
+        await using var session = new LiveControlSession();
+        var panel = new PanelViewModel(session);
+        var waking = new PublisherHealth(PublisherState.Starting, "https://live.example.test") { Notice = "Waking the live timing server." };
+        vm.LiveChannels[1].Update(new(PublisherKind.Cloud, waking, 101)); panel.Channels[1].Update(new(PublisherKind.Cloud, waking, 101));
+        Assert.Contains("Waking the live timing server.", vm.LiveChannels[1].StatusToolTip, StringComparison.Ordinal);
+        Assert.Equal("Waking the live timing server.", panel.Channels[1].Detail);
+        var failed = waking with { State = PublisherState.Reconnecting, Error = "Publish/health failed." };
+        vm.LiveChannels[1].Update(new(PublisherKind.Cloud, failed, 101)); panel.Channels[1].Update(new(PublisherKind.Cloud, failed, 101));
+        Assert.DoesNotContain("Waking", vm.LiveChannels[1].Detail, StringComparison.Ordinal);
+        Assert.Equal("Publish/health failed.", panel.Channels[1].Detail);
+    }
     [AvaloniaTheory]
     [InlineData(760, 560)]
     [InlineData(940, 790)]

@@ -31,7 +31,7 @@ public sealed partial class LiveTimingChannel(MainViewModel owner, string label,
         Expiration = _health.ExpiresAt is { } expires ? "Expires " + expires.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) : "";
         var last = _health.LastSuccessfulPublish ?? _health.LastConnected;
         Detail = _health.Endpoint + (last is { } at ? "\nLast OK " + at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "")
-            + (_health.Error is { } error ? "\n" + error : "");
+            + ((_health.Error ?? _health.Notice) is { } message ? "\n" + message : "");
         OnPropertyChanged(nameof(StatusToolTip)); OnPropertyChanged(nameof(WorkerProcessId));
     }
     [RelayCommand] private Task StartAsync() => owner.StartLiveChannelAsync(this);

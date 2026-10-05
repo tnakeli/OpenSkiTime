@@ -2,10 +2,13 @@
 (() => {
   const id = location.pathname.split('/')[2];
   const get = name => document.getElementById(name);
-  let state, selectedRun, socket, retry, attempt = 0, waiting = false, stale = false, watchPending = false;
+  let state, selectedRun, followedRun, socket, retry, attempt = 0, waiting = false, stale = false, watchPending = false;
   // The server pings every 15 s; longer silence means a dead or half-open connection (e.g. replaced revision).
   const serverTimeout = 35000, pingInterval = 15000;
   const time = value => value == null ? '—' : `${Math.floor(value / 6000)}:${String(Math.floor(value / 100) % 60).padStart(2, '0')}.${String(value % 100).padStart(2, '0')}`;
+  // The viewer's choice of intermediate or sector times is remembered in this browser only; storage may be unavailable.
+  const splitModeKey = 'openskitime.live.splitMode';
+  let splitMode = (() => { try { return localStorage.getItem(splitModeKey) === 'sector' ? 'sector' : 'intermediate'; } catch { return 'intermediate'; } })();
   const gender = value => ({M:'Men', L:'Women', W:'Women', A:'Mixed'})[value] || '';
   async function list() {
     try {
@@ -29,27 +32,36 @@
     if (!next) { get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('updated').textContent = ''; return; }
     get('name').textContent = next.competition.name;
     get('metadata').textContent = `${next.competition.place} · ${next.competition.discipline} · ${next.competition.date}`;
-    if (!next.runs.some(r => r.number === selectedRun)) selectedRun = next.currentRun;
+    // A viewer may look at another run; when the race moves on to a new current run, every viewer follows it.
+    if (next.currentRun !== followedRun || !next.runs.some(r => r.number === selectedRun)) { selectedRun = followedRun = next.currentRun; }
     next.runs.forEach(r => { const b = document.createElement('button'); b.textContent = `Run ${r.number}`; b.setAttribute('aria-pressed', r.number === selectedRun); b.onclick = () => { selectedRun = r.number; render(state); }; get('runs').append(b); });
     const run = next.runs.find(r => r.number === selectedRun);
     const onCourse = next.runs.find(r => r.number === next.currentRun).results.filter(r => r.status === 'OnCourse').map(r => { const c = next.competitors.find(c => c.bib === r.bib); return `${r.bib} ${c.lastName} ${c.firstName}`; });
     get('course').textContent = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained' : `On course · ${onCourse.join(' / ') || '—'}`;
     get('updated').textContent = `Run ${selectedRun} · Last live update ${new Date(next.updatedAt).toLocaleString()}`;
-    // Show the intermediates column only when this run has at least one intermediate time.
-    const intermediates = run.results.some(r => (r.intermediates || []).length > 0);
-    get('intermediates').hidden = !intermediates;
-    // From Run 2 on, standings use the combined time of all runs. A publisher without totals keeps the run standings.
-    const totals = run.number > 1 && run.results.some(r => r.totalHundredths != null);
-    get('total').hidden = !totals;
+    // Split columns appear only when this run has at least one intermediate time; the viewer picks intermediate or sector times.
+    const splits = liveSplitCount(run.results);
+    get('splitMode').hidden = splits === 0;
+    get('splitMode').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === splitMode));
+    // From Run 2 on, each earlier run's time and the combined time have their own columns, and standings use the combined
+    // time. A publisher without totals keeps the run standings.
+    const earlier = next.runs.filter(r => r.number < run.number).map(r => r.number).sort((a, b) => a - b);
+    const later = run.number > 1, totals = later && run.results.some(r => r.totalHundredths != null);
     const rank = r => totals ? r.totalRank : r.rank, gap = r => totals ? r.totalDifference : r.difference;
+    const fixed = ['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status'];
+    get('head').replaceChildren(...[...fixed, ...earlier.map(n => `Run ${n}`), ...liveSplitHeaders(splits, splitMode),
+      later ? `Run ${run.number}` : 'Finish', ...(later ? ['Total'] : []), 'Difference'].map((value, i) => {
+      const th = document.createElement('th'); th.textContent = value; if (i >= fixed.length) th.className = 'num'; return th;
+    }));
+    // An earlier run shows its time, or its status when the racer did not finish it.
+    const earlierRun = x => !x ? '—' : x.status === 'Finished' ? time(x.hundredths) : ['Ready', 'OnCourse'].includes(x.status) ? '—' : x.status;
     const rows = liveResultOrder(run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'}), run.startOrder, rank);
     rows.forEach(r => {
       const c = next.competitors.find(c => c.bib === r.bib), tr = document.createElement('tr'); tr.dataset.bib = r.bib; tr.className = r.status.toLowerCase();
       [rank(r) || '—', r.bib, `${c.lastName} ${c.firstName}`, [c.nation,c.club].filter(Boolean).join(' / '), r.status,
-        intermediates ? (r.intermediates || []).map(i => `I${i.number} ${time(i.hundredths)}`).join(' · ') || '—' : null, time(r.hundredths),
-        totals ? time(r.totalHundredths) : null, gap(r) == null ? '—' : '+' + time(gap(r))]
-        .filter(value => value !== null)
-        .forEach(value => { const td = document.createElement('td'); td.textContent = value; tr.append(td); });
+        ...liveEarlierRuns(next, run.number, r.bib).map(x => earlierRun(x.result)), ...liveSplitValues(r, splits, splitMode).map(time),
+        time(r.hundredths), ...(later ? [time(r.totalHundredths)] : []), gap(r) == null ? '—' : '+' + time(gap(r))]
+        .forEach((value, i) => { const td = document.createElement('td'); td.textContent = value; if (i >= fixed.length) td.className = 'num'; tr.append(td); });
       get('results').append(tr);
     });
   }
@@ -97,5 +109,10 @@
   }
   // A returning network reconnects at once instead of waiting out the backoff.
   addEventListener('online', () => { if (id && waiting) { attempt = 0; connect(); } });
+  get('splitMode').querySelectorAll('button').forEach(b => b.onclick = () => {
+    splitMode = b.dataset.mode;
+    try { localStorage.setItem(splitModeKey, splitMode); } catch { /* Not remembered; the choice still applies now. */ }
+    if (state) render(state);
+  });
   if (id) { get('race').hidden = false; connect(); } else { get('list').hidden = false; list(); }
 })();

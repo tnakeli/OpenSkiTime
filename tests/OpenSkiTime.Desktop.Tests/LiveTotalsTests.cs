@@ -1,5 +1,12 @@
+using System.Globalization;
+using Avalonia.Headless.XUnit;
+using OpenSkiTime.Application;
 using OpenSkiTime.Desktop;
+using OpenSkiTime.Devices;
+using OpenSkiTime.Domain;
 using OpenSkiTime.LiveTiming;
+using OpenSkiTime.Persistence;
+using OpenSkiTime.Timing;
 using Xunit;
 
 namespace OpenSkiTime.Tests;
@@ -35,6 +42,69 @@ public sealed class LiveTotalsTests
                 .Select(x => (x.Bib, x.TotalHundredths!.Value, x.TotalRank!.Value, x.TotalDifference!.Value)));
     }
 
+    // What the desktop publishes while Run 2 is timed: every Run 1 result next to Run 2, with combined times for finishers.
+    [AvaloniaFact]
+    public async Task RunTwoLiveStateCarriesEveryRunOneResultAndTheCombinedTimes()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-live-totals-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var date = new DateOnly(2026, 10, 5);
+            var path = Path.Combine(folder, "race.ost");
+            var values = new CompetitionValues("Synthetic slalom", "SL1", date, Discipline.Slalom, RaceType.Club, 2, 0);
+            CompetitionDetails competition; StartListRevision first;
+            await using (var setup = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory()))
+            {
+                var series = await setup.CreateAsync(path, new("Synthetic", "Test", "Club", date, date, "FIN", "2026/27"));
+                series = await setup.SaveCompetitionAsync(null, values, series.Revision);
+                competition = series.Competitions[0];
+                var revision = series.Revision; var entrants = new List<DrawEntrant>();
+                for (var i = 1; i <= 3; i++)
+                {
+                    var athlete = new CompetitorValues("TOTAL" + i, "Racer", 2010, (960000 + i).ToString(CultureInfo.InvariantCulture), "FIN", "Club", Gender.Female);
+                    var saved = await setup.SaveDeskRowAsync(null, athlete, competition.Id, true, null, revision);
+                    revision = saved.Revision; entrants.Add(new(saved.Value.Id, athlete, i * 10m));
+                }
+                var plan = FisStartOrder.FirstRun(competition.Id, values, Gender.Female, entrants, new("1327", date, date), new(), "live-totals-seed");
+                first = (await setup.SaveStartListAsync(new(plan, revision, "Test", "Draw", DateTimeOffset.UnixEpoch))).Revisions[0];
+                first = (await setup.MarkRunStartedAsync(first.Id, (await setup.ReadAsync()).Revision, "Test", DateTimeOffset.UnixEpoch)).Revisions[0];
+                var timing = setup.Timing!;
+                await timing.SelectRunAsync(first.Id);
+                await timing.StartAsync(new SimulatorTimingSource(), new("Test", "Synthetic", date, Simulation: true), "Test");
+                await timing.StopAsync();
+                foreach (var entry in first.Plan.Entries)
+                { await timing.CorrectAsync(new(DecisionKind.Time, CompetitorId: entry.Entrant.CompetitorId, Hundredths: 5000 + entry.Bib * 10), "Test", "Synthetic Run 1 time"); }
+                await setup.SaveStartListAsync(new(FisStartOrder.SecondRun(first, timing.Snapshot!.ToRunFinishes()), (await setup.ReadAsync()).Revision,
+                    "Test", "Run 2", DateTimeOffset.UnixEpoch, TimingReplay.InputVersion(await setup.ReadTimingAsync(first.Id))));
+            }
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            using var vm = new MainViewModel(workspace, new Dialogs(path),
+                fisStore: new FisLocalStore(folder), recentSeriesStore: new RecentSeriesStore(folder));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.Competitions.Single(x => x.Id == competition.Id), 2));
+            Assert.False(vm.IsError, vm.StatusMessage);
+            var runTwo = workspace.Timing!;
+            await runTwo.StartAsync(new SimulatorTimingSource(), new("Test", "Synthetic", date, Simulation: true), "Test");
+            await runTwo.StopAsync();
+            var finisher = first.Plan.Entries.Single(x => x.Bib == runTwo.Snapshot!.StartOrder[0]);
+            await runTwo.CorrectAsync(new(DecisionKind.Time, CompetitorId: finisher.Entrant.CompetitorId, Hundredths: 4900), "Test", "Synthetic Run 2 time");
+            vm.LiveTimeZone = "UTC";
+            await vm.BuildLiveSnapshotAsync();
+            var state = vm.PublishedLiveSnapshot!;
+            state.Validate();
+            Assert.Equal(2, state.CurrentRun);
+            Assert.Equal([1, 2], state.Runs.Select(x => x.Number));
+            // Every Run 1 time stays in the published state for the Run 2 view.
+            Assert.Equal(first.Plan.Entries.Select(x => (x.Bib, (long?)(5000 + x.Bib * 10))).OrderBy(x => x.Bib),
+                state.Runs[0].Results.Where(x => x.Status == LiveStatus.Finished).Select(x => (x.Bib, x.Hundredths)).OrderBy(x => x.Bib));
+            var total = state.Runs[1].Results.Single(x => x.Bib == finisher.Bib);
+            Assert.Equal((4900L + 5000 + finisher.Bib * 10, 1, 0L), (total.TotalHundredths!.Value, total.TotalRank!.Value, total.TotalDifference!.Value));
+            Assert.All(state.Runs[1].Results.Where(x => x.Bib != finisher.Bib), x => Assert.Null(x.TotalHundredths));
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     [Fact]
     public void ContractRejectsInconsistentTotals()
     {
@@ -51,6 +121,16 @@ public sealed class LiveTotalsTests
         { Assert.Throws<LiveValidationException>(() => LiveSnapshot.ValidateResult(invalid, 0)); }
     }
 
+    private sealed class Dialogs(string path) : IFileDialogs
+    {
+        public Task<string?> ChooseNewAsync(string suggestedName) => Task.FromResult<string?>(path);
+        public Task<string?> ChooseOpenAsync() => Task.FromResult<string?>(path);
+        public Task<string?> ChooseBackupAsync(string suggestedName) => Task.FromResult<string?>(path + ".backup");
+        public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(false);
+        public Task<bool> ConfirmDiscardChangesAsync(int changeCount) => Task.FromResult(false);
+        public Task<string?> ChooseStartListExportAsync(string suggestedName, bool print) => Task.FromResult<string?>(null);
+        public Task<string?> ChooseResultXmlExportAsync(string suggestedName) => Task.FromResult<string?>(null);
+    }
     private static LiveRun Run(int number, params (int Bib, LiveStatus Status, long? Time)[] rows)
     {
         var best = rows.Where(x => x.Status == LiveStatus.Finished).Select(x => x.Time).Min();

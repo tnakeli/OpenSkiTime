@@ -8,6 +8,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-05
+
+Live protocol: 1
+
+### Added
+
+- Viewers can switch between intermediate times (from the start) and sector times (between consecutive timing points, the last sector ending at the finish), each in its own column. The choice is remembered in the browser.
+- From Run 2 on, the race view shows each earlier run's time next to the current run and always shows the total.
+
+### Changed
+
+- Viewers follow the race to the new current run when it changes; a run picked by the viewer stays selected only until the race moves on.
+
 ## [0.1.3] - 2026-10-04
 
 Live protocol: 1
@@ -40,7 +53,8 @@ Live protocol: 1 (implicit)
 
 - First hosted deployment: public race list, responsive race view, publisher keys for session creation and `security.txt`.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.1.3...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.2.0...HEAD
+[0.2.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.1.3...live-v0.2.0
 [0.1.3]: https://github.com/tnakeli/OpenSkiTime/releases/tag/live-v0.1.3
 [0.1.2]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.1.1...live-v0.1.2
 [0.1.1]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.1.0...live-v0.1.1

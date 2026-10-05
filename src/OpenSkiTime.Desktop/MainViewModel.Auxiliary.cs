@@ -76,7 +76,7 @@ public sealed partial class MainViewModel
             var inputs = new List<TimingSourceInput>();
             foreach (var device in devices)
             {
-                var created = TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword);
+                var created = TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, () => _backupSimulator = new());
                 sources.Add(created); inputs.Add(new(created, device.Options));
             }
             if (generation != _backupClockGeneration) { return; }

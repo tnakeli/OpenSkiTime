@@ -59,12 +59,13 @@ public static class TimingSourceTypes
         _ => null
     };
 
-    // Primary capture keeps its training simulator. B Clock and device reads use real/replayed device input only.
+    // Primary capture and the live B Clock both offer the training simulator. Device reads (timing report) read
+    // recorded device input only, so they never list the simulator.
     public static IReadOnlyList<TimingSourceType> Primary { get; } =
         [TimingSourceType.TimyUsb, TimingSourceType.Mt1Serial, TimingSourceType.AlgeResults, TimingSourceType.Simulator, TimingSourceType.ReplayFile];
-    public static IReadOnlyList<TimingSourceType> Backup { get; } =
+    public static IReadOnlyList<TimingSourceType> Backup => Primary;
+    public static IReadOnlyList<TimingSourceType> DeviceRead { get; } =
         [TimingSourceType.TimyUsb, TimingSourceType.Mt1Serial, TimingSourceType.AlgeResults, TimingSourceType.ReplayFile];
-    public static IReadOnlyList<TimingSourceType> DeviceRead => Backup;
 
     public static bool SupportsIntermediates(TimingSourceType source) => source != TimingSourceType.AlgeResults;
 }
@@ -176,7 +177,7 @@ public sealed record TimingRoleConfiguration(IReadOnlyList<TimingSourceAssignmen
             if (assignment.Channel is < 0 or > 8) { throw new DomainValidationException($"{assignment.Role}: choose channel C0–C8."); }
             assignment.Connection.Validate(assignment.Role.Label);
             if (assignment.Role.IsBackup && !TimingSourceTypes.Backup.Contains(assignment.Connection.Source))
-            { throw new DomainValidationException($"{assignment.Role}: the simulator cannot be a B Clock."); }
+            { throw new DomainValidationException($"{assignment.Role}: choose a supported B Clock source."); }
         }
         var indexes = Intermediates.Select(x => x.Role.Index).ToArray();
         if (!indexes.SequenceEqual(Enumerable.Range(1, indexes.Length)))
@@ -293,6 +294,10 @@ public sealed record TimingRoleConfiguration(IReadOnlyList<TimingSourceAssignmen
     {
         var primary = Assignments.Where(x => x.Role.IsPrimary).Select(x => x.Connection).ToArray();
         var backup = Assignments.Where(x => x.Role.IsBackup).Select(x => x.Connection).ToArray();
+        // Simulated B evidence belongs to training runs only; it must never sit beside real A timing in a race file.
+        if (backup.Any(x => x.Source == TimingSourceType.Simulator)
+            && primary.Any(x => x.Source is not (TimingSourceType.Simulator or TimingSourceType.ReplayFile)))
+        { throw new DomainValidationException("The B Clock simulator is for training only. Use it with a Simulator or Replay file primary timing in a test event file."); }
         foreach (var a in primary)
         {
             foreach (var b in backup)
