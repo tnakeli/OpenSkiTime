@@ -159,7 +159,9 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty] private string _competitionName = string.Empty;
     [ObservableProperty] private string _competitionShortLabel = string.Empty;
     [ObservableProperty] private string _competitionDateText = TodayText();
-    [ObservableProperty] private Discipline _competitionDiscipline = Discipline.Slalom;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveCourseToAllRacesLabel))]
+    private Discipline _competitionDiscipline = Discipline.Slalom;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsCompetitionFis))]
     [NotifyPropertyChangedFor(nameof(HasCompetitionHomologations))]
@@ -170,6 +172,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty] private string _competitionCourseName = string.Empty;
     [ObservableProperty] private bool _saveCourseToAllRaces;
     [ObservableProperty] private bool _saveTdToAllRaces;
+    public string SaveCourseToAllRacesLabel => $"Save Course & Homologation to all {CompetitionDiscipline.DisplayName()} races";
     [ObservableProperty] private string _competitionCourseLength = string.Empty;
     [ObservableProperty] private string _competitionStartAltitude = string.Empty;
     [ObservableProperty] private string _competitionFinishAltitude = string.Empty;
@@ -434,8 +437,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             SaveTdToAllRaces = false;
             SetStatus((shareCourse, shareTd) switch
             {
-                (true, true) => "Competition saved. Course, homologation and TD saved to all races.",
-                (true, false) => "Competition saved. Course and homologation saved to all races.",
+                (true, true) => $"Competition saved. Course and homologation saved to all {values.Discipline.DisplayName()} races; TD saved to all races.",
+                (true, false) => $"Competition saved. Course and homologation saved to all {values.Discipline.DisplayName()} races.",
                 (false, true) => "Competition saved. TD saved to all races.",
                 _ => "Competition saved."
             });

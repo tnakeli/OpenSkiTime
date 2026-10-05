@@ -340,9 +340,9 @@
                     </Grid>
                   </StackPanel>
                 <WrapPanel>
-                  <CheckBox Name="SaveCourseToAllRacesCheckBox" Content="Save Course &amp; Homologation to all races" Margin="0,0,20,0"
+                  <CheckBox Name="SaveCourseToAllRacesCheckBox" Content="{Binding SaveCourseToAllRacesLabel}" Margin="0,0,20,0"
                           IsChecked="{Binding SaveCourseToAllRaces}"
-                          ToolTip.Tip="Also replace course name, homologation, start/finish altitudes, vertical drop and course length in every race in this series, including blank values." />
+                          ToolTip.Tip="Also replace course name, homologation, start/finish altitudes, vertical drop and course length in every race of the same discipline in this series, including blank values." />
                   <CheckBox Name="SaveTdToAllRacesCheckBox" Content="Save TD to all races" IsChecked="{Binding SaveTdToAllRaces}"
                             ToolTip.Tip="Also replace TD surname, first name, nation and number in every race in this series, including blank values." />
                 </WrapPanel>

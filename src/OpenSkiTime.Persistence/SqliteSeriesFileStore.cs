@@ -284,11 +284,11 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
         => SaveCompetitionAsync(id, values, expectedRevision, false, ct);
 
     public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
-        bool saveCourseToAllRaces, CancellationToken ct = default)
-        => SaveCompetitionAsync(id, values, expectedRevision, saveCourseToAllRaces, false, ct);
+        bool saveCourseToSameDisciplineRaces, CancellationToken ct = default)
+        => SaveCompetitionAsync(id, values, expectedRevision, saveCourseToSameDisciplineRaces, false, ct);
 
     public Task<SeriesDetails> SaveCompetitionAsync(Guid? id, CompetitionValues values, long expectedRevision,
-        bool saveCourseToAllRaces, bool saveTdToAllRaces, CancellationToken ct = default)
+        bool saveCourseToSameDisciplineRaces, bool saveTdToAllRaces, CancellationToken ct = default)
         => WriteAsync(async db =>
         {
             var validated = values.Validated();
@@ -307,12 +307,15 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
             }
 
             var shared = new List<(CompetitionRow Row, CompetitionValues Values)>();
-            if (saveCourseToAllRaces || saveTdToAllRaces)
+            if (saveCourseToSameDisciplineRaces || saveTdToAllRaces)
             {
                 foreach (var other in await db.Competitions.Where(x => x.SeriesId == series.Id && x.Id != row.Id).ToListAsync(ct))
                 {
                     var updated = Values(other);
-                    if (saveCourseToAllRaces) { updated = updated with
+                    // Course and homologation describe one discipline's slope; share them only within that discipline.
+                    var shareCourse = saveCourseToSameDisciplineRaces && updated.Discipline == validated.Discipline;
+                    if (!shareCourse && !saveTdToAllRaces) { continue; }
+                    if (shareCourse) { updated = updated with
                     {
                         CourseName = validated.CourseName,
                         HomologationNumber = validated.HomologationNumber,

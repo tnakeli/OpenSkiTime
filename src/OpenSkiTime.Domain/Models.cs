@@ -1,6 +1,15 @@
 namespace OpenSkiTime.Domain;
 
 public enum Discipline { Slalom, GiantSlalom, SuperG, Downhill, AlpineCombined, Other }
+public static class DisciplineNames
+{
+    /// <summary>Human-readable discipline name, matching the timing report form wording.</summary>
+    public static string DisplayName(this Discipline discipline) => discipline switch
+    {
+        Discipline.Slalom => "Slalom", Discipline.GiantSlalom => "Giant Slalom", Discipline.SuperG => "Super G",
+        Discipline.Downhill => "Downhill", Discipline.AlpineCombined => "Alpine Combined", _ => "Other"
+    };
+}
 public enum RaceType { Club = 0, Fis = 2 }
 
 public sealed record CompetitionTechnicalDelegateInfo(string LastName, string FirstName, string Nation,
