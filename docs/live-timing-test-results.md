@@ -24,7 +24,7 @@ Windows, .NET SDK 10.0.401 / .NET 10, independent server/worker processes, Avalo
 | Domain/application/device/persistence regression tests | 141 passed; zero failures/skips. |
 | Desktop workflow/layout tests | 32 passed; zero failures/skips. Includes live Local/Cloud controls and authoritative timing capture during a cloud worker crash. |
 | Live timing process/protocol E2E tests | 6 passed; zero failures/skips. Real TCP sockets, real HTTPS test endpoint, real server processes, named pipes and SignalR WebSocket. |
-| Chromium browser E2E | Passed at a 390-pixel phone viewport. External origins blocked; local assets, live start/intermediate/finish/DNS/DNF/DSQ, pause/resume, silent (half-open) socket detection, server restart/self-reconnect with last results retained until full resync, deletion, no page refreshes or browser errors. |
+| Chromium browser E2E | Passed at a 390-pixel phone viewport. External origins blocked; local assets, live start/intermediate/finish/DNS/DNF/DSQ, intermediate/sector time columns with the choice kept across a reload, Run 2 with Run 1, Run 2 and Total columns and viewers following the new current run, no sideways page scroll, pause/resume, silent (half-open) socket detection, server restart/self-reconnect with last results retained until full resync, deletion, no page refreshes or browser errors. |
 | Synthetic harness build | Passed, zero warnings/errors. |
 | Desktop publish | Passed; packaged worker, server and `wwwroot/live.js` verified. |
 | Linux container image | .NET SDK `PublishContainer` produced an image archive from `mcr.microsoft.com/dotnet/aspnet:10.0`. No Docker daemon was available to execute it. |

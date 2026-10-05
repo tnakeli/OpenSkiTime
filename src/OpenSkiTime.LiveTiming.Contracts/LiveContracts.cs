@@ -82,7 +82,11 @@ public sealed record LiveSessionSummary(Guid SessionId, string Name, string Plac
     string Gender, string Category, bool IsFis, string Codex, DateTimeOffset UpdatedAt, bool Paused);
 public sealed record PublisherHealth(PublisherState State, string Endpoint = "", DateTimeOffset? LastConnected = null,
     DateTimeOffset? LastSuccessfulPublish = null, DateTimeOffset? LastEvent = null, string? Error = null,
-    string? PublicUrl = null, DateTimeOffset? ExpiresAt = null);
+    string? PublicUrl = null, DateTimeOffset? ExpiresAt = null)
+{
+    /// <summary>Progress that is not an error, such as waiting for a cloud server to wake from scale-to-zero.</summary>
+    public string? Notice { get; init; }
+}
 public sealed record PublisherOptions(PublisherKind Kind, string Endpoint, string FisPassword = "", int TcpPort = 1550,
     string? LocalServerAssembly = null, LiveSession? ResumeSession = null, string? LocalSigningKey = null, string? PublisherKey = null);
 public sealed record WorkerInput(string Command, PublisherOptions? Options = null, LiveSnapshot? Snapshot = null);

@@ -91,7 +91,8 @@ def main():
             expect(page.locator('#name')).to_have_text('Synthetic browser race')
             expect(page.locator('#results tr')).to_have_count(6)
             # No intermediate times yet: the column is removed rather than filled with dashes.
-            expect(page.locator('#intermediates')).to_be_hidden()
+            expect(page.locator('#splitMode')).to_be_hidden()
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Finish', 'Difference'])
             expect(page.locator('tr[data-bib="1"] td')).to_have_count(7)
             navigations = []
             page.on('framenavigated', lambda frame: navigations.append(frame.url))
@@ -108,9 +109,55 @@ def main():
                 expect(page.locator(f'tr[data-bib="{bib}"] td').nth(4)).to_have_text(status)
             expect(page.locator('tr[data-bib="1"] td').nth(5)).to_contain_text('0:21.34')
             expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('1:00.12')
+            # The viewer switches between cumulative intermediate times and sector times, each in its own column; the last
+            # sector ends at the finish. The choice is remembered by this browser across a reload.
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Intermediate 1', 'Finish', 'Difference'])
+            expect(page.locator('#splitMode button[data-mode="intermediate"]')).to_have_attribute('aria-pressed', 'true')
+            page.locator('#splitMode button[data-mode="sector"]').click()
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Sector 1', 'Sector 2', 'Finish', 'Difference'])
+            expect(page.locator('tr[data-bib="1"] td')).to_have_text(['1', '1', 'TEST1 Synthetic', 'FIN / Test Club', 'Finished', '0:21.34', '0:38.78', '1:00.12', '+0:00.00'])
+            page.reload()
+            expect(page.locator('#connection')).to_have_text('Live')
+            expect(page.locator('#splitMode button[data-mode="sector"]')).to_have_attribute('aria-pressed', 'true')
+            expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('0:38.78')
+            page.locator('#splitMode button[data-mode="intermediate"]').click()
+            expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('1:00.12')
+            navigations.clear()
+            # In Run 2 every racer shows the Run 1 result and, once finished, the combined time that orders the standings.
+            second = json.loads(json.dumps(state))
+            first_run = second['runs'][0]
+            first_run['results'][4].update(status='Finished', hundredths=6100, rank=2, difference=88)
+            second['currentRun'] = 2
+            second['runs'].append({'number': 2, 'listCreatedAt': '2026-10-02T11:00:00Z', 'startOrder': [5, 1], 'results': [
+                {'bib': 5, 'status': 'Finished', 'hundredths': 5900, 'rank': 1, 'difference': 0, 'at': '2026-10-02T11:01:00Z',
+                 'totalHundredths': 12000, 'totalRank': 1, 'totalDifference': 0},
+                {'bib': 1, 'status': 'OnCourse', 'hundredths': None, 'rank': None, 'difference': None, 'at': '2026-10-02T11:02:00Z'}]})
+            request('PUT', f'/api/sessions/{sid}/state', second, token)
+            expect(page.locator('#runs button[aria-pressed="true"]')).to_have_text('Run 2')
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Run 1', 'Run 2', 'Total', 'Difference'])
+            expect(page.locator('#results tr')).to_have_count(2)
+            expect(page.locator('tr[data-bib="5"] td')).to_have_text(['1', '5', 'TEST5 Synthetic', 'FIN / Test Club', 'Finished', '1:01.00', '0:59.00', '2:00.00', '+0:00.00'])
+            expect(page.locator('tr[data-bib="1"] td')).to_have_text(['—', '1', 'TEST1 Synthetic', 'FIN / Test Club', 'OnCourse', '1:00.12', '—', '—', '—'])
+            page.locator('#runs button', has_text='Run 1').click()
+            expect(page.locator('#head th').nth(5)).to_have_text('Intermediate 1')
+            # A run the viewer chose stays selected through updates while the current run is unchanged.
+            second['runs'][1]['results'][1]['intermediates'] = [{'number': 1, 'hundredths': 2050, 'at': '2026-10-02T11:02:20.500Z'}]
+            request('PUT', f'/api/sessions/{sid}/state', second, token)
+            expect(page.locator('#updated')).to_contain_text('Run 1')
+            expect(page.locator('#runs button[aria-pressed="true"]')).to_have_text('Run 1')
+            page.locator('#runs button', has_text='Run 2').click()
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Run 1', 'Intermediate 1', 'Run 2', 'Total', 'Difference'])
+            expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('0:20.50')
+            # The wider table scrolls inside its own container; the phone-width page never scrolls sideways.
+            assert page.evaluate('document.documentElement.scrollWidth') <= 390
+            page.locator('#runs button', has_text='Run 1').click()
+            request('PUT', f'/api/sessions/{sid}/state', state, token)
+            expect(page.locator('#runs button')).to_have_count(1)
+            expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('1:00.12')
             # Missing keep-alive pings reveal the silent socket; the viewer replaces it without a page reload.
             silent['on'] = True
-            expect(page.locator('#connection')).to_have_text('Reconnecting', timeout=50000)
+            # 'Reconnecting' shows for under a second before 'Connecting'; leaving 'Live' is the detection itself.
+            expect(page.locator('#connection')).not_to_have_text('Live', timeout=50000)
             silent['on'] = False
             expect(page.locator('#connection')).to_have_text('Live', timeout=20000)
             expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('1:00.12')
@@ -137,7 +184,7 @@ def main():
             assert not navigations, f'Updates caused page navigation: {navigations}'
             assert not failures, f'Browser errors: {failures}'
             browser.close()
-        print('PASS: offline responsive Chromium, live start/intermediate/finish/DNS/DNF/DSQ, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
+        print('PASS: offline responsive Chromium, live start/intermediate/finish/DNS/DNF/DSQ, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
     finally:
         if process and process.poll() is None:
             process.kill()
