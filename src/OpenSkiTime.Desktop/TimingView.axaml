@@ -155,8 +155,9 @@
    <TextBlock Text="{Binding SelectedTimingProblem}" IsVisible="{Binding HasSelectedTimingProblem}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
    <TextBlock Text="Unassigned finish · drag a competitor onto its finish timestamp." IsVisible="{Binding HasUnassignedFinish}" Foreground="{DynamicResource WarningBrush}" />
   </StackPanel>
-  <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsTimingSimulator}">
-   <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Text="{Binding SimulationTime}" Width="155" />
+  <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding ShowTimingSimulatorControls}">
+   <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" /><TextBox Name="SimulationTimeBox" Text="{Binding SimulationTime}" Width="155" ToolTip.Tip="Simulator device time. While live, impulses use the PC clock at the press; type a time to pause and use it." />
+   <Button Name="SimulationClockToggle" Content="{Binding SimulationClockToggleText}" Command="{Binding ToggleSimulationClockCommand}" Classes="secondaryAction" ToolTip.Tip="Pause the PC clock to type a simulator time, or follow the PC clock live again." />
    <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />
    <StackPanel Name="SimulatorIntermediateButtons" Orientation="Horizontal" Spacing="6" />
    <Button Content="Test finish" Command="{Binding SimulatePulseCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />

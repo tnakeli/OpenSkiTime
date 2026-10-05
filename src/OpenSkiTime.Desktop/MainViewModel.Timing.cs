@@ -112,7 +112,6 @@ public sealed partial class MainViewModel
         TimingDsqReason = row?.Result.Disqualification?.Reason ?? "";
         TimingDsqJudge = row?.Result.Disqualification?.Judge ?? "";
     }
-    [ObservableProperty] private string _simulationTime = "12:00:00.0000";
     [ObservableProperty] private TimingGridRow? _selectedTimingRow;
     public IReadOnlyList<int> SelectedTimingBibs { get; private set; } = [];
     public void SelectTimingBibs(IReadOnlyList<int> bibs, int? activeBib)
@@ -386,7 +385,7 @@ public sealed partial class MainViewModel
             var options = workspace.Timing?.ActiveCaptureOptions.FirstOrDefault(x => x.Device == TimingSourceTypes.SimulatorLabel);
             if (_simulator is null || !IsTimingConnected || options is null)
             { throw new DomainValidationException("Connect the simulator first."); }
-            if (!TimingTime.TryTimeOfDay(SimulationTime, out var ticks, out _)) { throw new DomainValidationException("Enter simulator time as HH:mm:ss with 1–7 decimal places (for example 12:00:00.1234567)."); }
+            var ticks = SimulationTicks();
             int position;
             if (channel == "start") { position = 0; }
             else if (channel == "finish") { position = 1; }
@@ -622,5 +621,5 @@ public sealed partial class MainViewModel
         IsTimingConnected = false; RefreshRaceQueues(); NotifyTiming();
     }
 
-    private void DisposeTimingUi() { ResetBackupMonitor(); DisposeLiveTiming(); _timingTimer?.Stop(); _timingHttp.Dispose(); }
+    private void DisposeTimingUi() { ResetBackupMonitor(); DisposeLiveTiming(); _timingTimer?.Stop(); _simulationClockTimer?.Stop(); _timingHttp.Dispose(); }
 }

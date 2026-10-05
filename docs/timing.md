@@ -73,7 +73,9 @@ All sources, including ALGE Results, report device clock time, and the devices' 
 
 ## Practice without hardware
 
-Use a separate test event file. Choose **Simulator** in Settings and save, then return to Timing and check the expected bib. Enter a device time such as `12:00:00.0000`, and press **Test start**. Check the expected finisher, enter `12:01:02.3456`, then **Test finish**. The result is `1:02.34`. **Test I1**, **Test I2**, etc. feed their respective configured intermediate channels. **Replay file** reads raw ALGE ASCII bytes through the same journal/decoder pipeline. Training/replay and real capture cannot be mixed in the same run.
+Use a separate test event file. Choose **Simulator** in Settings and save, then return to Timing and check the expected bib.
+
+The simulator time box follows the PC clock live by default (local time of day, shown in tenths). Press **Test start**, **Test I1**… or **Test finish** and the impulse takes the PC clock at the moment of the press with full 100 ns tick precision; the displayed tenths are only a readout. **⏸ Pause** freezes the exact current time in the box (seven decimals), and typing in the box also pauses the clock, so a typed time is never overwritten. In pause, every test impulse uses the typed device time: enter `12:00:00.0000` and press **Test start**, check the expected finisher, enter `12:01:02.3456`, then **Test finish**. The result is `1:02.34`. **▶ Live** follows the PC clock again. The PC clock is supplied to the view model as a `TimeProvider`, so tests drive it deterministically; the 10 Hz display refresh runs only while the clock is live, a simulator role is configured and the Timing view is shown. **Test I1**, **Test I2**, etc. feed their respective configured intermediate channels. **Replay file** reads raw ALGE ASCII bytes through the same journal/decoder pipeline. Training/replay and real capture cannot be mixed in the same run.
 
 ## Protocol and rule references
 

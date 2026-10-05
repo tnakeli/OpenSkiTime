@@ -310,7 +310,7 @@ public partial class DesktopWorkflowTests
         await WaitTimingAsync(vm, () => vm.TimingRows.Single(x => x.Bib == bib).Status == "On course");
     }
 
-    private static async Task<(SeriesWorkspace Workspace, MainViewModel Vm)> CreateTimingRunAsync(string root)
+    private static async Task<(SeriesWorkspace Workspace, MainViewModel Vm)> CreateTimingRunAsync(string root, TimeProvider? timeProvider = null)
     {
         var file = Path.Combine(root, "Synthetic-BClock.ost");
         var cache = new FisLocalStore(root);
@@ -327,7 +327,7 @@ public partial class DesktopWorkflowTests
                 competition.Id, true, null, revision)).Revision;
         }
         var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
-            fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
+            fisStore: cache, recentSeriesStore: new RecentSeriesStore(root), timeProvider: timeProvider);
         await vm.OpenSeriesCommand.ExecuteAsync(null);
         await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
         await vm.PrepareDrawCommand.ExecuteAsync(null);

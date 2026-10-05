@@ -14,7 +14,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     RecentSeriesStore? recentSeriesStore = null, TimingPreferencesStore? timingPreferencesStore = null,
     HttpClient? informationHttp = null, TimingReportDefaultsStore? reportDefaultsStore = null,
     FisTimingDeviceCache? timingDeviceCache = null, HttpClient? submissionHttp = null,
-    Reporting.ReportGenerationService? pdfGenerator = null, Reporting.IPdfOpener? pdfOpener = null) : ObservableObject, IDisposable
+    Reporting.ReportGenerationService? pdfGenerator = null, Reporting.IPdfOpener? pdfOpener = null,
+    TimeProvider? timeProvider = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private readonly RecentSeriesStore _recentSeriesStore = recentSeriesStore ?? new();
