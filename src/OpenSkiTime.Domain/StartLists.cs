@@ -105,6 +105,16 @@ public static class FisStartOrder
                 Group = i < count ? "Reversed group" : "Result order" }).ToArray() };
     }
 
+    // Entrants sharing identical FIS points with at least one other entrant; the draw decides their order (ICR 621.3).
+    // Outside the first group each such group is drawn among itself; at or inside it they are drawn with the whole
+    // first group. Entrants without points form the separate no-points group; missing points are not an equal value.
+    public static IReadOnlySet<Guid> EqualPointsCompetitors(IEnumerable<StartListEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        return entries.Where(x => x.Entrant.Points is not null).GroupBy(x => x.Entrant.Points!.Value)
+            .Where(x => x.Count() > 1).SelectMany(x => x).Select(x => x.Entrant.CompetitorId).ToHashSet();
+    }
+
     public static void ValidateProfile(CompetitionValues competition)
     {
         ArgumentNullException.ThrowIfNull(competition);

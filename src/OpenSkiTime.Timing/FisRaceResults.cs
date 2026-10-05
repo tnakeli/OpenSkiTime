@@ -61,9 +61,8 @@ public static class FisRaceResults
                 : new FisResultRow(entry, later.Status, 2, firstRow.Hundredths, null, null, null)
                     { Disqualification = later.Disqualification };
         }).ToArray();
-        var totals = interim.Where(x => x.TotalHundredths is not null).Select(x => x.TotalHundredths!.Value).ToArray();
-        return new(first, second, interim.Select(x => x with { Rank = x.TotalHundredths is { } total
-            ? totals.Count(y => y < total) + 1 : null }).ToArray());
+        var totals = interim.Select(x => x.TotalHundredths).ToArray();
+        return new(first, second, interim.Select(x => x with { Rank = ResultOrder.Rank(x.TotalHundredths, totals) }).ToArray());
     }
 
     private static bool SourceResultsMatch(IReadOnlyList<RunFinish> source, TimingSnapshot current)

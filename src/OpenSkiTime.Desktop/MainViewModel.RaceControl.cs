@@ -157,10 +157,10 @@ public sealed partial class MainViewModel
             if (HasTimingCategories && RankingView.GroupDescriptions.Count == 0)
             { RankingView.GroupDescriptions.Add(new DataGridPathGroupDescription(nameof(TimingGridRow.Category))); }
             else if (!HasTimingCategories && RankingView.GroupDescriptions.Count > 0) { RankingView.GroupDescriptions.Clear(); }
+            // Ex aequo competitors share a rank and are listed with the higher bib first (ICR 617.3.3), as in official results.
             RankingRows.UpdateRows(() => SyncTimingRows(RankingRows, ranked.OrderBy(x => categoryOrder.GetValueOrDefault(x.Category, int.MaxValue))
-                .ThenBy(x => x.Category, StringComparer.Ordinal).ThenBy(x => RankedTime(x) ?? long.MaxValue).ThenBy(x => x.Position)
-                .Select(x => x with { DisplayRank = RankedTime(x) is { } time
-                    ? ranked.Count(y => y.Category == x.Category && RankedTime(y) is { } other && other < time) + 1 : null }).ToArray()));
+                .ThenBy(x => x.Category, StringComparer.Ordinal).ThenByOfficialResult(RankedTime, x => x.Bib).ThenBy(x => x.Position)
+                .Select(x => x with { DisplayRank = ResultOrder.Rank(RankedTime(x), ranked.Where(y => y.Category == x.Category).Select(RankedTime)) }).ToArray()));
             RaceQueueVersion++;
             OnPropertyChanged(nameof(RaceQueueVersion));
             OnCourseLabel = $"ON COURSE · {onCourse.Length}";

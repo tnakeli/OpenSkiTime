@@ -87,15 +87,13 @@ public static class TimingEngine
             rows.Add(new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
             { Splits = splits, Disqualification = status == TimingStatus.DSQ ? classification?.Disqualification : null });
         }
-        var ranked = rows.Where(x => x.Status == TimingStatus.Finished).OrderBy(x => x.Hundredths).ThenBy(x => x.Bib).ToArray();
-        var ranks = ranked.Select((x, i) => (x.CompetitorId, Rank: Array.FindIndex(ranked, r => r.Hundredths == x.Hundredths) + 1))
-            .ToDictionary(x => x.CompetitorId, x => x.Rank);
+        var finishedTimes = rows.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
         var badSplits = rows.SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
             .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
         var startOrder = decisions.TryGetValue("q", out var queue) && queue.StartOrder is { } savedOrder
             ? ParseStartOrder(savedOrder) : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
         return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
-            rows.Select(x => x with { Rank = ranks.TryGetValue(x.CompetitorId, out var rank) ? rank : null }).ToArray(),
+            rows.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
             reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray())
         { StartOrder = startOrder };
     }
@@ -260,7 +258,6 @@ public static class TimingEngine
                 ? row.Hundredths + (earlier?.Hundredths ?? 0) : null;
             return (Result: row, Total: total);
         }).ToArray();
-        return totals.Select(x => (x.Result, x.Total, x.Total is { } value
-            ? (int?)(totals.Count(y => y.Total is { } t && t < value) + 1) : null)).ToArray();
+        return totals.Select(x => (x.Result, x.Total, ResultOrder.Rank(x.Total, totals.Select(y => y.Total)))).ToArray();
     }
 }

@@ -22,7 +22,9 @@ For Run 1, the software uses competitors entered in the race and their disciplin
 
 For example, outside the first group, a competitor with 20 points starts before one with 40 points. This follows from points ordering. If two competitors have equal points, their relative order is drawn.
 
-Run 2 uses classified Run 1 results and the selected reversal of 15 or 30 competitors. Ties at the reversal boundary are included together. Equal times are ordered using bib numbers in the sequence defined by the code. **Run 2 does not use a new random draw.**
+Run 2 uses classified Run 1 results and the selected reversal of 15 or 30 competitors. Competitors with equal Run 1 times are ex aequo. The reversed group contains every classified competitor whose Run 1 rank is within the reversal, so all competitors tied at the boundary rank are included together and the group can exceed 15 or 30. The reversed group starts in reverse result-list order: among tied competitors the lowest bib starts first, as ICR 621.11.2 requires for competitors ranked 30th. The remaining competitors follow the Run 1 result list, which lists tied competitors with the higher bib first (ICR 617.3.3). Non-finishers are not counted. **Run 2 does not use a new random draw.**
+
+In the Run 1 start list, competitors who share identical FIS points with at least one other competitor are shown in **bold**, so the complete group is visible. Their relative order is decided by the draw: outside the first group each bold group is drawn among itself; equal points at or inside the first group are drawn with the whole first group. Competitors without points form the separate no-points group and are not bold. The points column is also shown for local races, which are drawn by the same points.
 
 ## Where the randomness comes from
 
@@ -71,7 +73,7 @@ This describes the algorithm's probability model. It does not claim a proven, pe
 
 ## How the implementation has been checked
 
-The project's `StartListTests` check reproducibility independent of input order, points ties at the first-group boundary, the group without points, unique bibs, and replay after saving and reopening a file. Before saving a plan, the persistence layer recalculates it and rejects an order that does not match its recorded rules, seed and inputs.
+The project's `StartListTests` and `TieHandlingTests` check reproducibility independent of input order, points ties at and around the first-group boundary (including large and complete tie groups), the group without points, unique bibs, Run 2 reversal boundaries with tied times and non-finisher gaps, randomized invariants with seeded large tie groups, and replay after saving and reopening a file. Before saving a plan, the persistence layer recalculates it and rejects an order that does not match its recorded rules, seed and inputs.
 
 A [runnable verification example](examples/draw-audit/Program.cs) was also created for this explanation. It compares the production algorithm against a separately written double draw. It checks that changing input order, names, clubs and nations leaves the verification order unchanged when identifiers, points and seed remain the same.
 

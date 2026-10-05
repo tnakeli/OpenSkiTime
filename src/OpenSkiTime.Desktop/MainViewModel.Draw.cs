@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.Application;
@@ -9,7 +10,11 @@ namespace OpenSkiTime.Desktop;
 
 public sealed record DrawDestination(CompetitionDetails Competition, int Run);
 public sealed record DrawMenuCompetition(CompetitionDetails Competition, IReadOnlyList<int> Runs);
-public sealed record DrawStartListRow(StartListEntry Entry, string RunOneTime);
+public sealed record DrawStartListRow(StartListEntry Entry, string RunOneTime, bool SharesPoints = false)
+{
+    // Competitors with identical FIS points; the draw decides their order. Bold shows each complete group.
+    public FontWeight Weight => SharesPoints ? FontWeight.Bold : FontWeight.Normal;
+}
 
 public sealed partial class ResultInputRow(StartListEntry entry) : ObservableObject
 {
@@ -46,6 +51,8 @@ public sealed partial class MainViewModel
     private string? _sourceTimingVersion;
     public bool HasCapturedRunInput => _sourceTiming is not null;
     public bool IsDrawFis => DrawCompetition?.Values.RaceType == RaceType.Fis;
+    // Local races are also drawn by FIS points; show them whenever the list has any, so equal-points emphasis is explained.
+    public bool ShowDrawPoints => IsDrawFis || DrawEntries.Any(x => x.Entrant.Points is not null);
     public bool CanPasteDrawResults => CanEditDrawResults && !HasCapturedRunInput;
     public string RunInputHelp => HasCapturedRunInput
         ? "Results come from Timing. Resolve observations and classify every starter there; then choose the reversal and create the start list."
@@ -248,14 +255,17 @@ public sealed partial class MainViewModel
         if (DrawRevision is { } revision)
         {
             var sourceTimes = revision.Plan.SourceResults.ToDictionary(x => x.CompetitorId, x => x.Hundredths);
+            // Points decide the Run 1 draw only; Run 2 follows Run 1 results.
+            var equalPoints = revision.Plan.RunNumber == 1 ? FisStartOrder.EqualPointsCompetitors(revision.Plan.Entries) : new HashSet<Guid>();
             foreach (var entry in revision.Plan.Entries)
             {
                 DrawEntries.Add(entry);
                 DrawStartListRows.Add(new(entry, revision.Plan.RunNumber == 1 ? ""
-                    : RunResultInput.FormatTime(sourceTimes[entry.Entrant.CompetitorId])));
+                    : RunResultInput.FormatTime(sourceTimes[entry.Entrant.CompetitorId]), equalPoints.Contains(entry.Entrant.CompetitorId)));
             }
             DrawState = DrawRunStarted ? "Run started" : "Start list ready";
-            DrawListInfo = $"{revision.Plan.Entries.Count} starters" + (IsDrawFis ? $" · FIS list {revision.Plan.PointsList.Code}" : "");
+            DrawListInfo = $"{revision.Plan.Entries.Count} starters" + (IsDrawFis ? $" · FIS list {revision.Plan.PointsList.Code}" : "")
+                + (equalPoints.Count > 0 ? " · Bold: equal FIS points, order decided by the draw" : "");
             DrawHelp = DrawRunStarted ? "Run started. Starting order is locked; select the next run from Start lists."
                 : revision.HasCapture ? "Timing capture has begun. The start list is locked; the run starts with the first assigned start impulse."
                 : "Start list saved. The run starts automatically with the first assigned start impulse.";
@@ -289,7 +299,7 @@ public sealed partial class MainViewModel
 
     private void NotifyDraw()
     {
-        OnPropertyChanged(nameof(IsDrawFis));
+        OnPropertyChanged(nameof(IsDrawFis)); OnPropertyChanged(nameof(ShowDrawPoints));
         OnPropertyChanged(nameof(IsFirstDrawRun)); OnPropertyChanged(nameof(IsLaterDrawRun));
         OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(DrawActionLabel));
         OnPropertyChanged(nameof(CanExportDraw)); OnPropertyChanged(nameof(HasDrawSource));

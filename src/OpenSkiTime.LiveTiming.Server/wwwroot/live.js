@@ -38,8 +38,7 @@
     // Show the intermediates column only when this run has at least one intermediate time.
     const intermediates = run.results.some(r => (r.intermediates || []).length > 0);
     get('intermediates').hidden = !intermediates;
-    const rows = run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'});
-    rows.sort((a,b) => (a.rank || 99999) - (b.rank || 99999) || run.startOrder.indexOf(a.bib)-run.startOrder.indexOf(b.bib));
+    const rows = liveResultOrder(run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'}), run.startOrder);
     rows.forEach(r => {
       const c = next.competitors.find(c => c.bib === r.bib), tr = document.createElement('tr'); tr.dataset.bib = r.bib; tr.className = r.status.toLowerCase();
       [r.rank || '—', r.bib, `${c.lastName} ${c.firstName}`, [c.nation,c.club].filter(Boolean).join(' / '), r.status,

@@ -142,7 +142,7 @@ public static class FisResultXml
             E(writer, "Softwarename", "OpenSkiTime"); writer.WriteEndElement();
             writer.WriteStartElement("AL_classified");
             var winner = race.Rows.Where(x => x.TotalHundredths is not null).Min(x => x.TotalHundredths)!.Value;
-            foreach (var row in race.Rows.Where(x => x.Status == TimingStatus.Finished).OrderBy(x => x.Rank).ThenByDescending(x => x.Entry.Bib))
+            foreach (var row in race.Rows.Where(x => x.Status == TimingStatus.Finished).OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib))
             {
                 writer.WriteStartElement("AL_ranked"); writer.WriteAttributeString("Status", "QLF");
                 E(writer, "Rank", row.Rank!.Value.ToString(CultureInfo.InvariantCulture));
