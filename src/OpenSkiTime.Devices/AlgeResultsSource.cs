@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -35,6 +36,9 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
     private readonly Dictionary<string, int> _refused = new(StringComparer.Ordinal);
     private Action<string>? _status;
     private string _baseStatus = "";
+    // One notice per interruption, not one per reconnect attempt.
+    private bool _pollFailureReported;
+    private DateTimeOffset _nextPollHistory = DateTimeOffset.MinValue;
 
     public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
     {
@@ -66,7 +70,7 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
                 }
                 // Subscribed first, then reconciled: a trigger between the history read and the push cannot be missed.
                 await ReconcileAsync(receive, forceHistory: true, ct);
-                wasConnected = true; reconnectDelay = _timings.FirstReconnectDelay;
+                wasConnected = true; reconnectDelay = _timings.FirstReconnectDelay; _pollFailureReported = false;
                 _baseStatus = "Connected · ALGE Results realtime push · REST check every "
                     + (_timings.ReconcileInterval.TotalMinutes >= 1
                         ? _timings.ReconcileInterval.TotalMinutes.ToString("0", CultureInfo.InvariantCulture) + " min"
@@ -106,13 +110,17 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         ct.ThrowIfCancellationRequested();
     }
 
+    // A response body that breaks off mid-read is an HttpIOException, or an IOException over a socket error: a network
+    // failure like any other, never the end of capture.
     private static bool IsTransient(Exception ex, CancellationToken ct) => ex is AlgeRealtimeException or WebSocketException
-        or HttpRequestException or JsonException || (ex is OperationCanceledException && !ct.IsCancellationRequested);
+        or HttpRequestException or HttpIOException or JsonException or IOException { InnerException: SocketException }
+        || (ex is OperationCanceledException && !ct.IsCancellationRequested);
 
     private async Task ListenAsync(IAlgeRealtimeConnection connection, Func<TransportPacket, ValueTask> receive, CancellationToken ct)
     {
         var lastServer = DateTimeOffset.UtcNow; var lastHeartbeat = lastServer;
         var nextReconcile = lastServer + _timings.ReconcileInterval;
+        var limited = false;
         var wait = TimeSpan.FromTicks(Math.Min(TimeSpan.TicksPerSecond, _timings.HeartbeatInterval.Ticks));
         while (!ct.IsCancellationRequested)
         {
@@ -131,8 +139,19 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
             {
                 // Count check per endpoint every few minutes; history only on change, plus a full check every second round
                 // (about ten minutes) for server-side edits. Push delivers triggers; this only catches a lost push message.
-                await ReconcileAsync(receive, forceHistory: ++_reconciles % 2 == 0, ct);
-                nextReconcile = DateTimeOffset.UtcNow + _timings.ReconcileInterval;
+                // A rate-limited or failed check is retried later and never drops the working push connection.
+                try
+                {
+                    await ReconcileAsync(receive, forceHistory: ++_reconciles % 2 == 0, ct);
+                    nextReconcile = DateTimeOffset.UtcNow + _timings.ReconcileInterval;
+                    if (limited) { limited = false; _status?.Invoke(_baseStatus + RefusedSummary); }
+                }
+                catch (AlgeQuotaException)
+                {
+                    limited = true; nextReconcile = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(90);
+                    _status?.Invoke(_baseStatus + " · ALGE Results rate limit: history check postponed 90 s, push continues");
+                }
+                catch (Exception ex) when (IsTransient(ex, ct)) { nextReconcile = DateTimeOffset.UtcNow + _timings.ReconcileInterval; }
             }
         }
     }
@@ -144,11 +163,16 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         string? device = null; string? change = null;
         try
         {
+            // Read only what has the expected shape: any other JSON value is still journalled unchanged and decoded as
+            // invalid input, instead of ending capture before it was saved.
             using var json = JsonDocument.Parse(body);
             var root = json.RootElement;
-            change = root.TryGetProperty("type", out var type) ? type.GetString() : null;
-            var dto = root.TryGetProperty("dto", out var inner) ? inner : root;
-            device = dto.TryGetProperty("deviceId", out var id) ? id.GetString() : null;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                change = root.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String ? type.GetString() : null;
+                var dto = root.TryGetProperty("dto", out var inner) && inner.ValueKind == JsonValueKind.Object ? inner : root;
+                device = dto.TryGetProperty("deviceId", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
+            }
         }
         catch (JsonException) { /* malformed input is still journalled for review */ }
         await receive(new("alge-results/v1", device ?? "ALGE Results", "push", body));
@@ -162,22 +186,29 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
     // REST safety net while push is unavailable: keeps capture flowing until the next reconnect attempt.
     private async Task PollAsync(Func<TransportPacket, ValueTask> receive, DateTimeOffset until, CancellationToken ct)
     {
-        var reported = false;
         while (DateTimeOffset.UtcNow < until)
         {
             // Sign-in happens only in the outer loop, with backoff: repeated logins count heavily against the API quota.
             if (_token is null) { await Task.Delay(_timings.PollInterval, ct); continue; }
-            try { await ReconcileAsync(receive, forceHistory: false, ct); reported = false; }
+            try
+            {
+                // Polling is then the only trigger path. A full history read at the regular check interval also finds
+                // triggers a device uploaded late with older timestamps, outside the recent window a changed count reads.
+                var full = DateTimeOffset.UtcNow >= _nextPollHistory;
+                await ReconcileAsync(receive, forceHistory: full, ct);
+                if (full) { _nextPollHistory = DateTimeOffset.UtcNow + _timings.ReconcileInterval; }
+                _pollFailureReported = false;
+            }
             catch (AlgeAuthenticationException)
             { _token = null; throw new IOException("ALGE Results sign-in expired or was rejected. Check the account/password and reconnect."); }
             catch (AlgeQuotaException)
             { await Task.Delay(TimeSpan.FromSeconds(90), ct); }
-            catch (Exception ex) when (ex is HttpRequestException or JsonException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+            catch (Exception ex) when (IsTransient(ex, ct))
             {
-                if (!reported)
+                if (!_pollFailureReported)
                 {
                     await receive(new("transport-status", "ALGE Results", "cloud", Encoding.UTF8.GetBytes("Network interruption. Check recovered observations before finalizing this run.")));
-                    reported = true;
+                    _pollFailureReported = true;
                 }
             }
             await Task.Delay(_timings.PollInterval, ct);
@@ -228,7 +259,7 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         var filter = "timestampFrom_ms=" + _from.ToString(CultureInfo.InvariantCulture);
         var countBytes = await GetAsync(prefix + "/count?" + filter, ct);
         using var countDoc = JsonDocument.Parse(countBytes);
-        var count = countDoc.RootElement.GetProperty("data")[0].GetProperty("value").GetInt64();
+        var count = Shape(() => countDoc.RootElement.GetProperty("data")[0].GetProperty("value").GetInt64());
         var known = _counts.TryGetValue(prefix, out var old);
         if (known && count < old)
         { await receive(new("transport-status", endpoint.Device!, "cloud", Encoding.UTF8.GetBytes("ALGE Results history count decreased. Review server/device changes; local raw records were retained."))); }
@@ -244,7 +275,7 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
             var query = string.Create(CultureInfo.InvariantCulture, $"{prefix}?{filter}&timestampTo_ms={until}&limit=200&offset={offset}");
             var bytes = await GetAsync(query, ct, page => receive(new("alge-results/v1", endpoint.Device!, "cloud", page)));
             using var data = JsonDocument.Parse(bytes);
-            var length = data.RootElement.GetProperty("data").GetArrayLength();
+            var length = Shape(() => data.RootElement.GetProperty("data").GetArrayLength());
             if (length < 200) { break; }
             offset += length;
             if (offset > 100000) { throw new IOException("MT1 history is too large. Choose a later receive-from time."); }
@@ -260,8 +291,8 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         response.EnsureSuccessStatusCode();
         using var body = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync(ct));
         CheckStatus(body.RootElement);
-        var user = body.RootElement.GetProperty("data")[0];
-        if (!user.GetProperty("roles").EnumerateArray().Any(x => x.GetString() == "TIMING_POINT_ACCOUNT"))
+        if (!Shape(() => body.RootElement.GetProperty("data")[0].GetProperty("roles").EnumerateArray()
+                .Any(x => x.ValueKind == JsonValueKind.String && x.GetString() == "TIMING_POINT_ACCOUNT")))
         { throw new IOException("Enable Timekeeper in your ALGE Results account before connecting."); }
         if (!response.Headers.TryGetValues("authorization", out var values) || string.IsNullOrWhiteSpace(values.FirstOrDefault()))
         { throw new AlgeAuthenticationException(); }
@@ -351,9 +382,18 @@ public sealed class AlgeResultsSource(HttpClient client, string username, string
         return bytes;
     }
 
+    // An unexpected response shape (a proxy's error body, a changed API) is retried like a damaged response instead of
+    // ending capture.
+    private static T Shape<T>(Func<T> read)
+    {
+        try { return read(); }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or FormatException)
+        { throw new JsonException("Unexpected ALGE Results response.", ex); }
+    }
+
     private static void CheckStatus(JsonElement root)
     {
-        var code = root.GetProperty("status").GetInt32();
+        var code = Shape(() => root.GetProperty("status").GetInt32());
         if (code == -9000) { throw new AlgeQuotaException(); }
         if (code == -1007) { throw new AlgeAuthenticationException(); }
         if (code != 0) { throw new AlgeStatusException(code); }

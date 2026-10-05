@@ -110,6 +110,9 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
     private TimingObservation Parse(string line, bool oversized)
     {
         if (oversized) { return Make(ObservationKind.Invalid, "Oversized device line; original bytes retained."); }
+        // Framing bytes and line noise (NUL, STX/ETX, XON/XOFF) are not device text. They are left out for reading only:
+        // the journal keeps the original bytes and the observation key still points at them.
+        if (line.Any(c => char.IsControl(c) && c != '\t')) { line = new string(line.Where(c => !char.IsControl(c) || c == '\t').ToArray()); }
         var text = line.Trim();
         if (TimingTime.TryTimeOfDay(text, out var heartbeat, out _))
         {
@@ -129,9 +132,12 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
         var flag = match.Groups["flag"].Value;
         var channel = int.Parse(match.Groups["channel"].Value, CultureInfo.InvariantCulture);
         var number = int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture);
-        var clockOk = AdvanceClock(tod);
-        var ticks = session.Options.DeviceDate.ToDateTime(TimeOnly.MinValue).Ticks + _currentClock;
         var kind = flag is "c" or "C" or "d" or "D" or "i" or "n" ? ObservationKind.DeviceCorrection : ObservationKind.Impulse;
+        // A correction line repeats an earlier impulse, often minutes old. It is placed on the device clock but never
+        // advances the clock or starts a new clock epoch: that would separate every later finish from its start.
+        var clockOk = true;
+        if (kind == ObservationKind.DeviceCorrection) { _currentClock = Placed(tod); } else { clockOk = AdvanceClock(tod); }
+        var ticks = session.Options.DeviceDate.ToDateTime(TimeOnly.MinValue).Ticks + _currentClock;
         if (!clockOk) { kind = ObservationKind.Invalid; }
         var explicitBib = (flag == "*" || match.Groups["star"].Success) && number > 0 ? (int?)number : null;
         var normalizedChannel = session.Options.Position(channel) ?? channel + 100;
@@ -144,28 +150,31 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
         };
     }
 
-    // A synchronized multi-device capture shares one time-of-day basis; a clock reset still starts a new epoch.
-    // Otherwise each session/stream keeps its own clock context, as before.
-    private string ClockId() => session.Options.ClockGroup is { } group
-        ? $"sync:{group}:{_clockEpoch}" : $"{session.Id:N}:{source}:{stream}:{_clockEpoch}";
+    // A synchronized multi-device capture shares one time-of-day basis. A clock reset starts a new epoch that belongs to
+    // this device alone: the group's devices are no longer known to agree, and another device's independent reset must
+    // not share it. Otherwise each session/stream keeps its own clock context, as before.
+    private string ClockId() => session.Options.ClockGroup is { } group && _clockEpoch == 0
+        ? $"sync:{group}:0" : $"{session.Id:N}:{source}:{stream}:{_clockEpoch}";
+
+    // The time of day on the running clock, across midnight in either direction.
+    private long Placed(long tod)
+    {
+        if (_latestClock is not { } last) { return tod; }
+        var day = last / TimeSpan.TicksPerDay;
+        var lastTod = last % TimeSpan.TicksPerDay;
+        var placed = tod + day * TimeSpan.TicksPerDay;
+        if (lastTod >= TimeSpan.FromHours(18).Ticks && tod < TimeSpan.FromHours(6).Ticks) { placed += TimeSpan.TicksPerDay; }
+        else if (day > 0 && lastTod < TimeSpan.FromHours(6).Ticks && tod >= TimeSpan.FromHours(18).Ticks)
+        { placed -= TimeSpan.TicksPerDay; } // late packet from just before midnight
+        return placed;
+    }
 
     private bool AdvanceClock(long tod)
     {
-        _currentClock = tod;
-        if (_latestClock is { } last)
-        {
-            var day = last / TimeSpan.TicksPerDay;
-            var lastTod = last % TimeSpan.TicksPerDay;
-            _currentClock += day * TimeSpan.TicksPerDay;
-            if (lastTod >= TimeSpan.FromHours(18).Ticks && tod < TimeSpan.FromHours(6).Ticks)
-            { _currentClock += TimeSpan.TicksPerDay; }
-            else if (day > 0 && lastTod < TimeSpan.FromHours(6).Ticks && tod >= TimeSpan.FromHours(18).Ticks)
-            { _currentClock -= TimeSpan.TicksPerDay; } // late packet from just before midnight
-            if (last - _currentClock > TimeSpan.FromMinutes(5).Ticks)
-            { _clockEpoch++; _latestClock = _currentClock; return false; }
-            _latestClock = Math.Max(last, _currentClock);
-        }
-        else { _latestClock = _currentClock; }
+        _currentClock = Placed(tod);
+        if (_latestClock is { } last && last - _currentClock > TimeSpan.FromMinutes(5).Ticks)
+        { _clockEpoch++; _latestClock = _currentClock; return false; }
+        _latestClock = Math.Max(_latestClock ?? _currentClock, _currentClock);
         return true;
     }
 
@@ -205,7 +214,14 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
 
     private TimingObservation Parse(JsonElement trigger, RawTimingPacket packet, int index)
     {
-        if (trigger.TryGetProperty("dto", out var dto)) { trigger = dto; }
+        // A push message wraps the trigger: its own type says whether the trigger was added, changed or deleted.
+        string? change = null;
+        if (trigger.TryGetProperty("dto", out var dto))
+        {
+            change = trigger.TryGetProperty("type", out var changeType) && changeType.ValueKind == JsonValueKind.String ? changeType.GetString() : null;
+            trigger = dto;
+        }
+        var deleted = change == "ENTITY_DELETE";
         var device = trigger.GetProperty("deviceId").GetString() ?? "";
         var stamp = trigger.GetProperty("timestamp").GetInt64();
         var channelText = trigger.GetProperty("timingChannel").GetString() ?? "";
@@ -217,19 +233,21 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         var valid = trigger.TryGetProperty("valid", out var v) && v.ValueKind == JsonValueKind.True;
         var blocked = trigger.TryGetProperty("blocked", out var b) && b.ValueKind == JsonValueKind.True;
         var falling = trigger.TryGetProperty("fallingEdge", out var f) && f.ValueKind == JsonValueKind.True;
-        var kind = type == "ClearTrigger" ? ObservationKind.DeviceCorrection
+        // A deleted trigger is a device correction for review, never the impulse again: with the same fingerprint it would
+        // only be a silent duplicate of the original.
+        var kind = deleted || type == "ClearTrigger" ? ObservationKind.DeviceCorrection
             : type == "StartNumberTrigger" && valid && !blocked && falling ? ObservationKind.Impulse : ObservationKind.Invalid;
         // Push delivers every channel of a subscribed device. A channel no role uses is kept as raw input and shown in the
         // Settings signal monitor, but does not enter race timing.
         var position = session.Options.Position(channel, device);
-        if (position is null && session.Options.Routes is not null && kind == ObservationKind.Impulse) { kind = ObservationKind.Information; }
+        if (position is null && session.Options.Routes is not null && (kind == ObservationKind.Impulse || deleted)) { kind = ObservationKind.Information; }
         int? bib = null;
         if (trigger.TryGetProperty("startNumber", out var number) && number.ValueKind == JsonValueKind.Object
             && number.TryGetProperty("type", out var numberType) && numberType.GetString() == "MANUAL"
             && number.TryGetProperty("startNumber", out var numeric) && numeric.TryGetInt32(out var n) && n > 0) { bib = n; }
         // Semantic fingerprint: JSON whitespace/property order cannot create a second impulse.
         // A changed bib/validity/type remains a separate reviewable observation, never a silent overwrite.
-        var fingerprint = $"{device}:{stamp}:{channel}:{type}:{valid}:{blocked}:{falling}:{bib}";
+        var fingerprint = $"{device}:{stamp}:{channel}:{type}:{valid}:{blocked}:{falling}:{bib}" + (deleted ? ":deleted" : "");
         // Timing uses the time of day only, like Timy and MT1 serial: the device clock time set in ALGE Results (stored
         // instant plus the device's own time offset) placed on the capture's device date. Races are never held at night.
         // The raw JSON keeps both original values; the calendar date is kept only for reading a race day's device memory.
@@ -238,7 +256,8 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
         var clockId = session.Options.ClockGroup is { } group ? $"sync:{group}:0" : "alge-results";
         return new($"{session.Id:N}:{packet.Sequence}:json:{index}", session.Id, packet.Sequence, device,
             "mt1:" + fingerprint, kind, position ?? channel + 10,
-            local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}")
+            local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}"
+                + (deleted ? " · deleted on ALGE Results; review the assignment of the original trigger" : ""))
             { PhysicalChannel = channel, CalendarDate = DateOnly.FromDateTime(clockTime) };
     }
 
