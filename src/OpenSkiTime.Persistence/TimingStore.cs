@@ -272,13 +272,18 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 TimingEngine.ValidateDecisionShape(after);
                 if (after.Kind == DecisionKind.Assignment)
                 {
-                    var parts = after.ObservationKey!.Split(':');
-                    if (!Guid.TryParseExact(parts[0], "N", out var captureId)
-                        || !await db.Captures.AnyAsync(x => x.Id == captureId && x.ListId == listId, ct)
-                        || (parts[1] != "interrupted" && (!long.TryParse(parts[1], out var seq)
-                            || !await db.RawPackets.AnyAsync(x => x.SessionId == captureId && x.Sequence == seq, ct))))
-                    { throw new DomainValidationException("The observation must reference original data in this run."); }
+                    // A manual time is original operator input recorded by an earlier ManualTime decision in this run
+                    // (or earlier in this batch); every other observation is device input in this run's raw journal.
+                    var exists = ManualTimestamp.IsKey(after.ObservationKey)
+                        ? TimingEngine.CurrentDecision(new(DecisionKind.ManualTime, after.ObservationKey), changes).Timestamp is not null
+                        : await ReferencesRunInputAsync(db, listId, after.ObservationKey!, ct);
+                    if (!exists) { throw new DomainValidationException("The observation must reference original data in this run."); }
                     if (after.Bib is { } bib && !entries.Any(x => x.Bib == bib)) { throw new DomainValidationException("Unknown bib."); }
+                }
+                else if (after.Kind == DecisionKind.ManualTime)
+                {
+                    if (after.Timestamp?.ReferenceKey is { } reference && !await ReferencesRunInputAsync(db, listId, reference, ct))
+                    { throw new DomainValidationException("The manual time must reference device input in this run."); }
                 }
                 else if (after.Kind == DecisionKind.StartOrder)
                 {
@@ -292,6 +297,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                     BeforeJson = JsonSerializer.Serialize(before), AfterJson = JsonSerializer.Serialize(after), ReversesId = reversesId };
                 db.TimingAudit.Add(result);
                 results.Add(result);
+                changes = [.. changes, new(0, listId, at, operatorName.Trim(), reason.Trim(), before, after, reversesId)];
             }
             if (startsRun && list.StartedAt is null)
             {
@@ -303,6 +309,15 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
             return results;
         }, ct);
         return rows.Select(ToAudit).ToArray();
+    }
+
+    private static async Task<bool> ReferencesRunInputAsync(SeriesDbContext db, Guid listId, string key, CancellationToken ct)
+    {
+        var parts = key.Split(':');
+        return parts.Length >= 2 && Guid.TryParseExact(parts[0], "N", out var captureId)
+            && await db.Captures.AnyAsync(x => x.Id == captureId && x.ListId == listId, ct)
+            && (parts[1] == "interrupted" || (long.TryParse(parts[1], out var seq)
+                && await db.RawPackets.AnyAsync(x => x.SessionId == captureId && x.Sequence == seq, ct)));
     }
 
     private void RequireCaptureOwner(Guid sessionId)
