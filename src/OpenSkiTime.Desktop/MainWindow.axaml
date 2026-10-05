@@ -30,6 +30,28 @@
   </Window.Styles>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <Border Grid.Row="0" Background="{DynamicResource NavyBrush}" Padding="22,11">
+      <!-- Fluent's hover/pressed/open states use light-theme brushes in the control templates, which turn the text
+           dark on the navy bar. Keep every button state on the bar light-on-navy. -->
+      <Border.Resources>
+        <SolidColorBrush x:Key="ButtonBackgroundPointerOver">#285365</SolidColorBrush>
+        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver">#5C8592</SolidColorBrush>
+        <SolidColorBrush x:Key="ButtonForegroundPointerOver">White</SolidColorBrush>
+        <SolidColorBrush x:Key="ButtonBackgroundPressed">#0C2530</SolidColorBrush>
+        <SolidColorBrush x:Key="ButtonBorderBrushPressed">#5C8592</SolidColorBrush>
+        <SolidColorBrush x:Key="ButtonForegroundPressed">White</SolidColorBrush>
+        <SolidColorBrush x:Key="ButtonBackgroundDisabled">#16384A</SolidColorBrush>
+        <SolidColorBrush x:Key="ButtonBorderBrushDisabled">#2F5363</SolidColorBrush>
+        <SolidColorBrush x:Key="ButtonForegroundDisabled">#7F9CA6</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonBackgroundPointerOver">#285365</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonBorderBrushPointerOver">#5C8592</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonForegroundPointerOver">White</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonBackgroundPressed">#0C2530</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonBorderBrushPressed">#5C8592</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonForegroundPressed">White</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonBackgroundDisabled">#16384A</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonBorderBrushDisabled">#2F5363</SolidColorBrush>
+        <SolidColorBrush x:Key="SplitButtonForegroundDisabled">#7F9CA6</SolidColorBrush>
+      </Border.Resources>
       <Grid ColumnDefinitions="Auto,Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <Border Width="30" Height="30" Background="{DynamicResource AccentBrush}" CornerRadius="4">
