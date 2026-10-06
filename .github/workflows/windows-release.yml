@@ -49,6 +49,12 @@ jobs:
           $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
           if (!(Test-Path -LiteralPath $compiler)) { throw 'Pinned Windows runner must provide Inno Setup 6.' }
           ./scripts/Package-Windows.ps1 -Version $env:RELEASE_VERSION -Iscc $compiler
+      - name: Verify package checksums with sha256sum
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bash scripts/verify-checksums.sh artifacts/windows "OpenSkiTime-$RELEASE_VERSION-win-x64-setup.exe" "OpenSkiTime-$RELEASE_VERSION-win-x64.zip"
       - name: Test packaged child processes without an installed .NET runtime
         shell: pwsh
         run: ./scripts/Test-WindowsPackage.ps1 -PackageDirectory artifacts/windows/app
@@ -80,6 +86,8 @@ jobs:
           cp artifacts/security/windows/* artifacts/windows/
           cd artifacts/windows
           sha256sum sbom.cdx.json cve.json cve-gate.txt provenance.txt >> SHA256SUMS.txt
+          cd "$GITHUB_WORKSPACE"
+          bash scripts/verify-checksums.sh artifacts/windows sbom.cdx.json cve.json cve-gate.txt provenance.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-reviewed-release
@@ -104,6 +112,11 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+      - name: Verify release checksums before publication
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          bash source/scripts/verify-checksums.sh release "OpenSkiTime-${RELEASE_TAG#v}-win-x64-setup.exe" "OpenSkiTime-${RELEASE_TAG#v}-win-x64.zip" sbom.cdx.json cve.json cve-gate.txt provenance.txt
       - name: Publish immutable release files
         env:
           GH_TOKEN: ${{ github.token }}

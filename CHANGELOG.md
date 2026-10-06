@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- **Release checksums:** `SHA256SUMS.txt` uses LF line endings throughout, so `sha256sum -c` verifies it directly. The release notes give a PowerShell command for checking downloads on Windows.
+
 ## [0.1.0-preview.2] - 2026-10-05
 
 Second preview for rehearsals and evaluation. This version uses live protocol 1 and keeps `.ost` compatibility: series files from 0.1.0-preview.1 open unchanged. Do not open a series that contains manual timestamps with 0.1.0-preview.1, which does not understand them.

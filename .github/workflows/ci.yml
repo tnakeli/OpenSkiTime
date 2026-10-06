@@ -74,6 +74,11 @@ jobs:
           if (!(Test-Path -LiteralPath $compiler)) { throw 'Windows runner must provide Inno Setup 6.' }
           ./scripts/Package-Windows.ps1 -Version $version -Iscc $compiler
           ./scripts/Test-WindowsInstaller.ps1 -Installer "artifacts/windows/OpenSkiTime-$version-win-x64-setup.exe"
+      - name: Verify package checksums with sha256sum
+        shell: bash
+        run: |
+          version="0.0.0-preview.$GITHUB_RUN_NUMBER"
+          bash scripts/verify-checksums.sh artifacts/windows "OpenSkiTime-$version-win-x64-setup.exe" "OpenSkiTime-$version-win-x64.zip"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-review-package
