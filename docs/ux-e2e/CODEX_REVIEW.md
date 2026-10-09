@@ -112,3 +112,14 @@ All accepted (demonstration tooling only; no application defect was reported).
 | PDF false success | The step parses the summary and requires generated > 0 and 0 failed. |
 
 Additional privacy measures found while verifying the final video: the operator field (default: Windows account name) is set to "Race office" in the demonstration, the window title bar (local path) is replaced by a neutral bar, and the status line is hidden in the results and PDF chapters (it shows the export path).
+
+## Review 5 — after the review-4 fixes (commit `aa45870`)
+
+`codex review --base master` (session `01a122ac-880c-7171-8a54-4f935b425e33`):
+
+> The new tooling can delete non-owned files and prematurely stop privacy redaction on a dialog failure.
+>
+> - [P1] Verify ownership before deleting existing execution folders — `tests/OpenSkiTime.Tests/FullRace/FullRaceScenarioTests.cs:51-53`. With `OPENSKITIME_FULL_RACE_REPORT` pointing to an existing directory containing `execution-1`/`execution-2`, those folders are deleted recursively without checking ownership.
+> - [P2] Keep redaction active until the file dialog actually closes — `tests/OpenSkiTime.Desktop.E2E/RaceOffice.cs:396-397`. A failed open dialog ends redaction while the dialog remains visible.
+
+Resolution (both accepted): the report option now writes into a new timestamped subfolder and deletes nothing; redaction of open and save dialogs ends only after the dialog is confirmed closed, otherwise it stays active to the end of the recording. Re-verified: full-race tests 4/4 twice from the command line (report: identical canonical output, no discrepancies), E2E project builds.

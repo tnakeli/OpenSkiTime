@@ -8,7 +8,6 @@ public sealed class FullRaceScenarioTests
 {
     private static readonly int[] s_run1Counts = [100, 95, 2, 3, 1];
     private static readonly int[] s_run2Counts = [94, 91, 2, 1];
-    private static readonly string[] s_executions = ["execution-1", "execution-2"];
 
     [Fact]
     public void GeneratorIsDeterministicAndContainsTheDesignedEdgeCases()
@@ -38,19 +37,18 @@ public sealed class FullRaceScenarioTests
     }
 
     // The complete synthetic race. Set OPENSKITIME_FULL_RACE_REPORT to a directory to keep the evidence report and the
-    // .ost files; otherwise everything is written to a temporary directory and removed.
+    // .ost files in a new, timestamped subfolder (nothing existing is touched); otherwise everything is written to a
+    // temporary directory and removed.
     [Fact]
     public async Task HundredAthleteTwoRunSlalomMatchesIndependentExpectationsAndIsReproducible()
     {
         var reportDirectory = Environment.GetEnvironmentVariable("OPENSKITIME_FULL_RACE_REPORT");
-        var root = reportDirectory is { Length: > 0 } ? Path.GetFullPath(reportDirectory)
+        var root = reportDirectory is { Length: > 0 }
+            ? Path.Combine(Path.GetFullPath(reportDirectory), "full-race-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N")[..6])
             : Path.Combine(Path.GetTempPath(), "openskitime-full-race", Guid.NewGuid().ToString("N"));
         var keep = reportDirectory is { Length: > 0 };
         try
         {
-            // A kept report directory is reused: only the scenario's own execution folders are replaced.
-            foreach (var execution in s_executions.Select(x => Path.Combine(root, x)).Where(Directory.Exists))
-            { DeleteTree(execution); }
             var first = await new FullRaceScenario(new SyntheticRace(), Path.Combine(root, "execution-1")).RunAsync();
             var second = await new FullRaceScenario(new SyntheticRace(), Path.Combine(root, "execution-2")).RunAsync();
             if (keep) { await File.WriteAllTextAsync(Path.Combine(root, "full-race-report.md"), Report(first, second)); }

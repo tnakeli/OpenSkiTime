@@ -97,7 +97,12 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
             }
             app.WaitUntil(() => app.Window.ModalWindows.Length == 0, "file dialog closed");
         }
-        finally { File.Delete(marker); FileDialog?.Invoke(default, false); }
+        finally
+        {
+            File.Delete(marker);
+            // Redaction ends only after the dialog is confirmed closed; on failure it stays active to the end of recording.
+            if (app.Window.ModalWindows.Length == 0) { FileDialog?.Invoke(default, false); }
+        }
     }
 
     public void CreateCompetition()
@@ -393,8 +398,9 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
             ?? dialog.FindFirstDescendant(app.By.ByAutomationId("1148")));
         app.SetText(name, path);
         app.Press(VirtualKeyShort.RETURN);
-        try { app.WaitUntil(() => app.Window.ModalWindows.Length == 0, "open dialog closed"); }
-        finally { FileDialog?.Invoke(default, false); }
+        app.WaitUntil(() => app.Window.ModalWindows.Length == 0, "open dialog closed");
+        // Redaction ends only after the dialog is confirmed closed; on failure it stays active to the end of recording.
+        FileDialog?.Invoke(default, false);
         Pause(500);
     }
 
