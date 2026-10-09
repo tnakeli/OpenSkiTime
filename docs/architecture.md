@@ -332,7 +332,7 @@ Relational columns support identity, ownership, ordering and constraints. JSON p
 
 ### Data outside the series
 
-Preferences, recent-file history, local category presets and downloaded FIS caches are separate local files, generally under `%LOCALAPPDATA%/OpenSkiTime`. Relevant athlete/rule context is captured in race/start-list snapshots. Publishing credentials use Windows Credential Manager and are not portable series content. Original receipts are retained separately by the operator when needed; generated PDFs are separate artifacts. Credentials, downloaded FIS lists and personal race data do not belong in Git or committed fixtures.
+Preferences, recent-file history, local category presets and downloaded FIS caches are separate local files, generally under `%LOCALAPPDATA%/OpenSkiTime`. Setting the `OPENSKITIME_LOCAL_DATA` environment variable redirects these desktop files to another directory; automated tests and demonstrations use it so they never read or overwrite an operator's own FIS cache or preferences. Live worker logs and the Timy SDK folder keep their fixed locations. Relevant athlete/rule context is captured in race/start-list snapshots. Publishing credentials use Windows Credential Manager and are not portable series content. Original receipts are retained separately by the operator when needed; generated PDFs are separate artifacts. Credentials, downloaded FIS lists and personal race data do not belong in Git or committed fixtures.
 
 ## 4. Azure and GitHub architecture
 

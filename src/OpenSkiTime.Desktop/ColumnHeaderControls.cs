@@ -3,13 +3,38 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 using Avalonia.Threading;
 
 namespace OpenSkiTime.Desktop;
 
 internal sealed class ColumnHeaderControls
 {
+    private const double HeaderFontSize = 11;
+    // Icons (2 × 14) plus the Fluent column header padding on both sides.
+    private const double ChromeWidth = 28 + 16;
+
     public Grid Content { get; }
+
+    // Keeps a column readable when the grid is narrower than its columns: a fixed-width column keeps its declared
+    // width and every column keeps room for its header; the grid scrolls horizontally instead of squeezing values.
+    public static void ReserveWidth(DataGridColumn column, string label)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        var declared = column.Width.IsAbsolute ? column.Width.Value : 0;
+        column.MinWidth = Math.Max(column.MinWidth, Math.Max(declared, RequiredWidth(label)));
+    }
+
+    // Minimum column width that shows the longest word of the label on one line next to the sort and filter icons.
+    public static double RequiredWidth(string label)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        var widest = label.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => new TextLayout(word, Typeface.Default, HeaderFontSize, null).Width)
+            .DefaultIfEmpty(0).Max();
+        return Math.Ceiling(widest + ChromeWidth);
+    }
+
     private readonly Action _refresh;
     public void Refresh() => _refresh();
 
@@ -18,8 +43,10 @@ internal sealed class ColumnHeaderControls
         Func<bool>? canChange = null)
     {
         Content = new Grid { ColumnDefinitions = ColumnDefinitions.Parse("*,14,14") };
-        var title = new TextBlock { Text = label, FontSize = 11, LineHeight = 14,
-            TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        // Long labels may wrap between words, never inside one: a narrow column used to stack "RK" or "BIB" one
+        // letter per line. Columns reserve RequiredWidth so the longest word and both icons stay visible.
+        var title = new TextBlock { Text = label, FontSize = HeaderFontSize, LineHeight = 14,
+            TextWrapping = TextWrapping.WrapWithOverflow, VerticalAlignment = VerticalAlignment.Center };
         Content.Children.Add(title);
         Button Icon(string name, int position)
         {
@@ -68,8 +95,8 @@ internal sealed class ColumnHeaderControls
                 else if (args.Key == Key.Escape) { args.Handled = true; menu.Hide(); filter.Focus(); }
             };
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            var apply = new Button { Name = prefix + "FilterApply", Content = "Apply" };
-            var cancel = new Button { Name = prefix + "FilterCancel", Content = "Cancel" };
+            var apply = new Button { Name = prefix + "FilterApply", Content = "Apply", Classes = { "primaryAction" } };
+            var cancel = new Button { Name = prefix + "FilterCancel", Content = "Cancel", Classes = { "secondaryAction" } };
             apply.Click += (_, args) => { args.Handled = true; Submit(); };
             cancel.Click += (_, args) => { args.Handled = true; menu.Hide(); filter.Focus(); };
             actions.Children.Add(apply); actions.Children.Add(cancel); panel.Children.Add(actions);

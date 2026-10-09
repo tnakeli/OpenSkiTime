@@ -15,13 +15,17 @@ Resume from here without the conversation history. Plan: [PLAN.md](PLAN.md).
 | Phase 0: plan, branch, tooling, baseline | This file, [PLAN.md](PLAN.md) |
 | Phase 1: deterministic synthetic race + application-boundary E2E | `tests/OpenSkiTime.Tests/FullRace/` — `SyntheticRace` (generator), `ExpectedResults` (independent rules), `FullRaceScenario` (driver), `FullRaceScenarioTests`, `RaceExceptionTests`. Both full executions match all expectations with zero discrepancies and identical canonical output. See [TEST_REPORT.md](TEST_REPORT.md). |
 
+| Codex review 1 (milestone 1) | [CODEX_REVIEW.md](CODEX_REVIEW.md): no findings |
+| Local-data isolation | `LocalDataDirectory` + `OPENSKITIME_LOCAL_DATA`; `LocalDataDirectoryTests`; documented in `docs/architecture.md` |
+| Phase 2: UI audit | `ViewCoverageScreenshots` (opt-in) renders 21 views at 1280×800 and 1920×1080 from the full race; [UI_AUDIT.md](UI_AUDIT.md) |
+| Phase 3: UX implementation | Shared accent, compact tabs, action-button classes, column-header width reservation, visible pane splitters, timing pane rebalance, invariant FIS points, start-list heading, PDF nav state. `UxConsistencyTests` guards the conventions on all main views. Full suite: 564 passed. |
+
 ## In progress / next
 
-1. Codex review of milestone 1.
-2. Local-data override for real-window automation (`OPENSKITIME_LOCAL_DATA`) so automation never touches the operator's real FIS cache, recent files or preferences.
-3. Headless view-coverage screenshots (1280×800, 1920×1080) → UI audit.
-4. UX improvements with regression tests.
-5. FlaUI real-window suite; Playwright Live Timing full-race script; demo video.
+1. Codex review 2 (UX milestone).
+2. FlaUI real-window suite (`tests/OpenSkiTime.Desktop.E2E`, opt-in).
+3. Playwright Live Timing full-race script.
+4. Demo video (FlaUI driver + ffmpeg).
 
 ## How to rerun the evidence
 

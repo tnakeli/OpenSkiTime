@@ -33,7 +33,7 @@ public partial class MainWindow
             if (split > 0 && text[(split + 1)..].Contains('.')) { text = text[..split] + "\n" + text[(split + 1)..]; }
         }
         var root = new Grid { ColumnDefinitions = ColumnDefinitions.Parse("*,14,14") };
-        var title = new TextBlock { Text = text, FontSize = 11, LineHeight = 14, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock { Text = text, FontSize = 11, LineHeight = 14, TextWrapping = TextWrapping.WrapWithOverflow, VerticalAlignment = VerticalAlignment.Center };
         if (key.StartsWith("entry:", StringComparison.Ordinal) && Guid.TryParse(key[6..], out var competitionId)
             && _gridViewModel?.Competitions.FirstOrDefault(x => x.Id == competitionId) is { } competition)
         { ToolTip.SetTip(title, $"{competition.Values.ShortLabel} · {competition.Values.Name}"); }
@@ -88,8 +88,8 @@ public partial class MainWindow
                 else if (e.Key == Key.Escape) { e.Handled = true; menu.Hide(); filter.Focus(); }
             };
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            var apply = new Button { Content = "Apply", Name = "CompetitorFilterApply" };
-            var cancel = new Button { Content = "Cancel", Name = "CompetitorFilterCancel" };
+            var apply = new Button { Content = "Apply", Name = "CompetitorFilterApply", Classes = { "primaryAction" } };
+            var cancel = new Button { Content = "Cancel", Name = "CompetitorFilterCancel", Classes = { "secondaryAction" } };
             apply.Click += (_, e) => { e.Handled = true; Submit(); };
             cancel.Click += (_, e) => { e.Handled = true; menu.Hide(); filter.Focus(); };
             actions.Children.Add(apply); actions.Children.Add(cancel); panel.Children.Add(actions);

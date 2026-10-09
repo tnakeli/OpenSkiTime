@@ -28,6 +28,7 @@ public partial class MainWindow
         {
             if (CalendarColumnFor(column.SortMemberPath) is not { } key) { continue; }
             var label = column.Header?.ToString() ?? "";
+            ColumnHeaderControls.ReserveWidth(column, label);
             column.HeaderTemplate = new FuncDataTemplate<string>((_, _) =>
             {
                 var header = new ColumnHeaderControls("Calendar", key.ToString(), label,

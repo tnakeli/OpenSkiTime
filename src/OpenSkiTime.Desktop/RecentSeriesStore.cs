@@ -5,8 +5,7 @@ namespace OpenSkiTime.Desktop;
 public sealed class RecentSeriesStore(string? localDataDirectory = null)
 {
     private const int MaxEntries = 10;
-    private readonly string _path = Path.Combine(localDataDirectory ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime"),
+    private readonly string _path = Path.Combine(localDataDirectory ?? LocalDataDirectory.Path,
         "recent-series.json");
     private static readonly StringComparer s_pathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;

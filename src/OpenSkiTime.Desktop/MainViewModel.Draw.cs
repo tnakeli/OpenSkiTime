@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Security.Cryptography;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -14,6 +15,8 @@ public sealed record DrawStartListRow(StartListEntry Entry, string RunOneTime, b
 {
     // Competitors with identical FIS points; the draw decides their order. Bold shows each complete group.
     public FontWeight Weight => SharesPoints ? FontWeight.Bold : FontWeight.Normal;
+    // FIS points use the FIS list notation (decimal point) everywhere, independent of the Windows number format.
+    public string Points => Entry.Entrant.Points?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty;
 }
 
 public sealed partial class ResultInputRow(StartListEntry entry) : ObservableObject
@@ -271,7 +274,7 @@ public sealed partial class MainViewModel
             DrawState = DrawRunStarted ? "Run started" : "Start list ready";
             DrawListInfo = $"{revision.Plan.Entries.Count} starters" + (IsDrawFis ? $" · FIS list {revision.Plan.PointsList.Code}" : "")
                 + (equalPoints.Count > 0 ? " · Bold: equal FIS points, order decided by the draw" : "");
-            DrawHelp = DrawRunStarted ? "Run started. Starting order is locked; select the next run from Start lists."
+            DrawHelp = DrawRunStarted ? "Starting order is locked; select the next run from Start lists."
                 : revision.HasCapture ? "Timing capture has begun. The start list is locked; the run starts with the first assigned start impulse."
                 : "Start list saved. The run starts automatically with the first assigned start impulse.";
             var reference = revision.Plan.RunNumber == 1 ? revision.Plan.Entries : _sourceRun?.Plan.Entries ?? revision.Plan.Entries;

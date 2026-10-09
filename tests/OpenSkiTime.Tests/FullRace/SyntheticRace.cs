@@ -60,7 +60,8 @@ internal sealed class SyntheticRace
 
     public CompetitionValues Competition { get; } = new("Synthetic Women's Slalom", ShortLabel, RaceDate, Discipline.Slalom,
         RaceType.Fis, 2, 1, "9123", CourseName: "Synthetic Fell Slalom", StartAltitudeMeters: 520, FinishAltitudeMeters: 380,
-        VerticalDropMeters: 140, HomologationNumber: "99999/12/26");
+        VerticalDropMeters: 140, HomologationNumber: "99999/12/26",
+        Calendar: new(2027, "Synthetic Fell", "FIN", "FIS", "W", new("SYNTHDELEGATE", "Tanja", "SWE", "9001")), CourseLengthMeters: 560);
 
     public IReadOnlyList<SyntheticAthlete> Athletes { get; }
     public IReadOnlyDictionary<string, SyntheticRun> Run1 { get; }

@@ -9,6 +9,9 @@
     <ProjectReference Include="../../src/OpenSkiTime.Desktop/OpenSkiTime.Desktop.csproj" />
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.csproj" />
     <Compile Include="../OpenSkiTime.LiveTiming.Tests/ProcessFixture.cs" Link="LiveTimingProcessFixture.cs" />
+    <Compile Include="../OpenSkiTime.Tests/FullRace/SyntheticRace.cs" Link="FullRace/SyntheticRace.cs" />
+    <Compile Include="../OpenSkiTime.Tests/FullRace/ExpectedResults.cs" Link="FullRace/ExpectedResults.cs" />
+    <Compile Include="../OpenSkiTime.Tests/FullRace/FullRaceScenario.cs" Link="FullRace/FullRaceScenario.cs" />
   </ItemGroup>
   <Import Project="../../LiveTimingArtifacts.targets" />
 </Project>

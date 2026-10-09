@@ -48,7 +48,14 @@
     <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
    </Border>
   </StackPanel>
-  <Grid Grid.Row="2" RowDefinitions="1.85*,6,0.95*,6,1.2*" ColumnDefinitions="0.9*,8,2*">
+  <!-- The start and running queues keep priority during a run (they stay readable at 980×680); the ranking gets the
+       remaining share before the timestamps. Visible grips let the operator rebalance, for example after the run. -->
+  <Grid Grid.Row="2" Name="TimingPanes" ColumnDefinitions="0.9*,8,2*">
+   <Grid.RowDefinitions>
+    <RowDefinition Height="1.85*" MinHeight="96" /><RowDefinition Height="6" />
+    <RowDefinition Height="0.75*" MinHeight="48" /><RowDefinition Height="6" />
+    <RowDefinition Height="1.4*" MinHeight="80" />
+   </Grid.RowDefinitions>
    <Border Name="StartDropTarget" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
     <Grid Background="{DynamicResource SubtleSurfaceBrush}">
      <TextBlock Text="AT START" Classes="raceHeading" />
@@ -85,7 +92,7 @@
      </DataGrid.Columns>
     </DataGrid>
    </Grid></Border>
-   <GridSplitter Grid.Row="1" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
+   <GridSplitter Grid.Row="1" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Classes="paneSplitter" ToolTip.Tip="Drag to resize the panes" />
    <Border Grid.Row="2" Grid.ColumnSpan="3" Classes="racePane"><Grid RowDefinitions="Auto,*">
     <Grid Background="{DynamicResource SubtleSurfaceBrush}">
      <TextBlock Text="TIMESTAMPS · TIME OF DAY" Classes="raceHeading" />
@@ -99,7 +106,7 @@
      </DataGrid.Columns>
     </DataGrid>
    </Grid></Border>
-   <GridSplitter Grid.Row="3" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Background="Transparent" />
+   <GridSplitter Grid.Row="3" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Classes="paneSplitter" ToolTip.Tip="Drag to resize the panes" />
    <Border Grid.Row="4" Grid.ColumnSpan="3" Classes="racePane"><Grid RowDefinitions="Auto,*">
     <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource SubtleSurfaceBrush}">
      <TextBlock Text="RANKING" Classes="raceHeading" />
@@ -137,7 +144,7 @@
   <StackPanel Grid.Row="3" Spacing="3" Margin="0,5,0,0">
    <Grid ColumnDefinitions="*,Auto">
     <TextBlock Text="{Binding SelectedTimingIdentity}" Classes="supportingText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-    <ToggleButton Grid.Column="1" Content="Edit classification" IsChecked="{Binding ShowTimingClassificationEditor}" />
+    <ToggleButton Grid.Column="1" Name="EditClassificationToggle" Content="Edit classification" Classes="secondaryAction" MinHeight="22" Padding="10,1" FontSize="11" IsChecked="{Binding ShowTimingClassificationEditor}" />
    </Grid>
    <Border IsVisible="{Binding ShowTimingClassificationEditor}" Classes="racePane" Padding="8">
     <StackPanel Spacing="6">
@@ -150,7 +157,7 @@
      <Grid ColumnDefinitions="180,8,*,8,Auto">
       <StackPanel><TextBlock Text="OPERATOR" Classes="eyebrow" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
       <StackPanel Grid.Column="2"><TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="eyebrow" /><TextBox Text="{Binding TimingReason}" Watermark="Default classification note is recorded when empty" /></StackPanel>
-      <Button Grid.Column="4" Name="SaveTimingClassification" Content="Save classification" Command="{Binding SaveTimingClassificationCommand}" VerticalAlignment="Bottom" />
+      <Button Grid.Column="4" Name="SaveTimingClassification" Content="Save classification" Classes="primaryAction" Command="{Binding SaveTimingClassificationCommand}" VerticalAlignment="Bottom" />
      </Grid>
     </StackPanel>
    </Border>
@@ -161,7 +168,7 @@
       <StackPanel><TextBlock Text="MANUAL TIME" Classes="eyebrow" /><TextBlock Name="ManualTimestampPositionText" Text="{Binding ManualTimestampPosition}" FontWeight="SemiBold" Margin="0,6,0,0" /></StackPanel>
       <StackPanel Grid.Column="2"><TextBlock Text="TIME OF DAY HH:MM:SS.FF" Classes="eyebrow" /><TextBox Name="ManualTimestampTime" Text="{Binding ManualTimestampText}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" /></StackPanel>
       <StackPanel Grid.Column="4"><TextBlock Text="REASON" Classes="eyebrow" /><TextBox Name="ManualTimestampReasonText" Text="{Binding ManualTimestampReason}" /></StackPanel>
-      <Button Grid.Column="6" Name="SaveManualTimestamp" Content="Add timestamp" Command="{Binding SaveManualTimestampCommand}" VerticalAlignment="Bottom" ToolTip.Tip="Enter · saved with operator, reason and time in the correction history" />
+      <Button Grid.Column="6" Name="SaveManualTimestamp" Content="Add timestamp" Classes="primaryAction" Command="{Binding SaveManualTimestampCommand}" VerticalAlignment="Bottom" ToolTip.Tip="Enter · saved with operator, reason and time in the correction history" />
       <Button Grid.Column="8" Content="Cancel" Command="{Binding CancelManualTimestampCommand}" Classes="secondaryAction" VerticalAlignment="Bottom" ToolTip.Tip="Esc" />
      </Grid>
      <TextBlock Text="{Binding ManualTimestampError}" IsVisible="{Binding HasManualTimestampError}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />

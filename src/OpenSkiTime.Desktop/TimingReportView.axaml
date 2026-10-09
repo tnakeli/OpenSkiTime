@@ -19,7 +19,7 @@
      <StackPanel Spacing="12" Margin="4,8">
       <Border Classes="subtleSurface" Padding="10"><StackPanel Spacing="6">
        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ReportEquipmentSummary}" TextWrapping="Wrap"/>
-        <Button Grid.Column="1" Content="Edit in Settings" Command="{Binding ShowTimingReportSettingsCommand}" IsEnabled="{Binding !IsReportBusy}"/></Grid>
+        <Button Grid.Column="1" Content="Edit in Settings" Classes="secondaryAction" Command="{Binding ShowTimingReportSettingsCommand}" IsEnabled="{Binding !IsReportBusy}"/></Grid>
        <TextBlock Text="{Binding ReportSoftware}" Classes="supportingText"/>
       </StackPanel></Border>
       <ItemsControl ItemsSource="{Binding ReportRuns}"><ItemsControl.ItemTemplate><DataTemplate>
@@ -28,7 +28,7 @@
       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
       <TextBlock Text="Replacement times needing explanation" FontWeight="SemiBold"/>
       <TextBlock Text="If any times came from another source, add one row for each replacement." Classes="supportingText"/>
-      <Grid ColumnDefinitions="85,85,*,260,80" Margin="0,0,0,4"><TextBlock Text="RUN"/><TextBlock Grid.Column="1" Text="BIB"/><TextBlock Grid.Column="2" Text="REASON"/><TextBlock Grid.Column="3" Text="Data source for replacement of system A time" TextWrapping="Wrap"/></Grid>
+      <Grid ColumnDefinitions="85,85,*,260,80" Margin="0,0,0,4"><TextBlock Text="RUN" Classes="fieldLabel"/><TextBlock Grid.Column="1" Text="BIB" Classes="fieldLabel"/><TextBlock Grid.Column="2" Text="REASON" Classes="fieldLabel"/><TextBlock Grid.Column="3" Text="SOURCE OF THE REPLACEMENT TIME" Classes="fieldLabel" ToolTip.Tip="Data source for replacement of system A time" TextWrapping="Wrap"/></Grid>
       <ItemsControl Name="ReportReplacementRows" ItemsSource="{Binding ReportMissed}"><ItemsControl.ItemTemplate><DataTemplate>
        <Grid ColumnDefinitions="85,85,*,260,80" Margin="0,2">
         <ComboBox ItemsSource="{Binding Runs}" SelectedItem="{Binding Run}" Margin="0,0,6,0"/>
@@ -38,18 +38,18 @@
          <TextBox Grid.Column="1" Text="{Binding Reason}" Watermark="Reason / details"/>
         </Grid>
         <ComboBox Grid.Column="3" ItemsSource="{Binding Sources}" SelectedItem="{Binding TimeFrom}" Margin="0,0,6,0"/>
-        <Button Grid.Column="4" Content="Remove" Click="RemoveReplacement_Click"/>
+        <Button Grid.Column="4" Content="Remove" Classes="dangerAction" Click="RemoveReplacement_Click"/>
        </Grid>
       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-      <Button Content="Add replacement" Command="{Binding AddReportReplacementCommand}" IsEnabled="{Binding CanAddReportReplacement}" HorizontalAlignment="Left"/>
+      <Button Content="Add replacement" Classes="secondaryAction" Command="{Binding AddReportReplacementCommand}" IsEnabled="{Binding CanAddReportReplacement}" HorizontalAlignment="Left"/>
       <CheckBox Content="I reviewed the report and verified the timestamps against the original timing records." IsChecked="{Binding ReportReviewed}"/>
       <CheckBox Content="We certify that the timing and calculations adhered to the FIS rules." IsChecked="{Binding ReportCertified}"/>
       <TextBlock Text="{Binding ReportValidation}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap"/>
       <WrapPanel><Button Name="ApproveTimingReportButton" Content="Create approved XML" Command="{Binding ApproveTimingReportCommand}" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction" Margin="0,0,6,4"/>
-       <Button Content="Export approved XML" Command="{Binding ExportTimingReportCommand}" Margin="0,0,6,4"/>
-       <Button Name="SendTimingReportTestButton" Content="Send XML · test mode" Command="{Binding SendTimingReportTestCommand}" IsEnabled="{Binding !IsReportBusy}" Margin="0,0,6,4"/>
-       <Button Content="Check FIS status" Command="{Binding CheckTimingReportSubmissionCommand}" IsEnabled="{Binding !IsReportBusy}" Margin="0,0,6,4"/>
-       <Button Content="Stop FIS check" Command="{Binding StopTimingReportStatusCheckCommand}" IsEnabled="{Binding IsReportBusy}" Margin="0,0,6,4"/>
+       <Button Content="Export approved XML" Classes="secondaryAction" Command="{Binding ExportTimingReportCommand}" Margin="0,0,6,4"/>
+       <Button Name="SendTimingReportTestButton" Content="Send XML · test mode" Classes="secondaryAction" Command="{Binding SendTimingReportTestCommand}" IsEnabled="{Binding !IsReportBusy}" Margin="0,0,6,4"/>
+       <Button Content="Check FIS status" Classes="secondaryAction" Command="{Binding CheckTimingReportSubmissionCommand}" IsEnabled="{Binding !IsReportBusy}" Margin="0,0,6,4"/>
+       <Button Content="Stop FIS check" Classes="secondaryAction" Command="{Binding StopTimingReportStatusCheckCommand}" IsEnabled="{Binding IsReportBusy}" Margin="0,0,6,4"/>
       </WrapPanel>
       <ComboBox ItemsSource="{Binding ReportApprovals}" SelectedItem="{Binding SelectedReportApproval}"><ComboBox.ItemTemplate><DataTemplate>
        <TextBlock><Run Text="{Binding Revision, StringFormat='XML revision {0}'}"/><Run Text="  "/><Run Text="{Binding ApprovedAt}"/></TextBlock>
@@ -57,7 +57,7 @@
       <TextBlock Text="{Binding ReportSubmissionStatus}" TextWrapping="Wrap" Classes="supportingText"/>
       <Expander Header="Report history"><StackPanel Spacing="6"><ComboBox ItemsSource="{Binding ReportHistory}" SelectedItem="{Binding SelectedReportHistory}"><ComboBox.ItemTemplate><DataTemplate>
        <TextBlock><Run Text="{Binding Revision, StringFormat='Revision {0}'}"/><Run Text="  "/><Run Text="{Binding Operator}"/><Run Text=" · "/><Run Text="{Binding Reason}"/></TextBlock>
-      </DataTemplate></ComboBox.ItemTemplate></ComboBox><Button Content="Restore selected as a new revision" Command="{Binding RestoreReportRevisionCommand}" HorizontalAlignment="Left"/></StackPanel></Expander>
+      </DataTemplate></ComboBox.ItemTemplate></ComboBox><Button Content="Restore selected as a new revision" Classes="secondaryAction" Command="{Binding RestoreReportRevisionCommand}" HorizontalAlignment="Left"/></StackPanel></Expander>
      </StackPanel>
     </ScrollViewer>
    </TabItem>
@@ -87,7 +87,7 @@
          <Grid ColumnDefinitions="115,135,135,135" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
           <TextBlock Grid.Column="1" Text="System A"/><TextBlock Grid.Column="2" Text="System B"/><TextBlock Grid.Column="3" Text="Hand"/><TextBlock Grid.Row="1" Text="First / bib"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding First.Bib}"/><TextBlock Grid.Row="2" Text="Start" VerticalAlignment="Center"/><TextBox Margin="1,2" Grid.Row="2" Grid.Column="1" IsReadOnly="True" Text="{Binding First.AStart, Mode=OneWay}"/><TextBox Margin="1,2" Grid.Row="2" Grid.Column="2" Text="{Binding First.BStart}"/><TextBox Margin="1,2" Grid.Row="2" Grid.Column="3" Text="{Binding First.HandStart}"/><TextBlock Grid.Row="3" Text="Finish" VerticalAlignment="Center"/><TextBox Margin="1,2" Grid.Row="3" Grid.Column="1" IsReadOnly="True" Text="{Binding First.AFinish, Mode=OneWay}"/><TextBox Margin="1,2" Grid.Row="3" Grid.Column="2" Text="{Binding First.BFinish}"/><TextBox Margin="1,2" Grid.Row="3" Grid.Column="3" Text="{Binding First.HandFinish}"/><TextBlock Grid.Row="4" Text="Net A"/><TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding First.Net}"/><TextBlock Grid.Row="5" Text="Last / bib"/><TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Last.Bib}"/><TextBlock Grid.Row="6" Text="Start" VerticalAlignment="Center"/><TextBox Margin="1,2" Grid.Row="6" Grid.Column="1" IsReadOnly="True" Text="{Binding Last.AStart, Mode=OneWay}"/><TextBox Margin="1,2" Grid.Row="6" Grid.Column="2" Text="{Binding Last.BStart}"/><TextBox Margin="1,2" Grid.Row="6" Grid.Column="3" Text="{Binding Last.HandStart}"/><TextBlock Grid.Row="7" Text="Finish" VerticalAlignment="Center"/><TextBox Margin="1,2" Grid.Row="7" Grid.Column="1" IsReadOnly="True" Text="{Binding Last.AFinish, Mode=OneWay}"/><TextBox Margin="1,2" Grid.Row="7" Grid.Column="2" Text="{Binding Last.BFinish}"/><TextBox Margin="1,2" Grid.Row="7" Grid.Column="3" Text="{Binding Last.HandFinish}"/><TextBlock Grid.Row="8" Text="Net A"/><TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding Last.Net}"/>         </Grid>
          <TextBlock Text="{Binding Best}"><ToolTip.Tip><TextBlock Text="{Binding BestExplanation}" MaxWidth="430" TextWrapping="Wrap"/></ToolTip.Tip></TextBlock>
-         <WrapPanel HorizontalAlignment="Right"><Button Content="Read B…" Tag="B" CommandParameter="{Binding Run}" Click="ChooseImages_Click" Margin="0,0,6,0"/><Button Content="Hand start…" Tag="HandStart" CommandParameter="{Binding Run}" Click="ChooseImages_Click" Margin="0,0,6,0"/><Button Content="Hand finish…" Tag="HandFinish" CommandParameter="{Binding Run}" Click="ChooseImages_Click"/></WrapPanel>
+         <WrapPanel HorizontalAlignment="Right"><Button Content="Read B…" Classes="secondaryAction" Tag="B" CommandParameter="{Binding Run}" Click="ChooseImages_Click" Margin="0,0,6,0"/><Button Content="Hand start…" Classes="secondaryAction" Tag="HandStart" CommandParameter="{Binding Run}" Click="ChooseImages_Click" Margin="0,0,6,0"/><Button Content="Hand finish…" Classes="secondaryAction" Tag="HandFinish" CommandParameter="{Binding Run}" Click="ChooseImages_Click"/></WrapPanel>
         </StackPanel></Border>
        </DataTemplate></ItemsControl.ItemTemplate>
       </ItemsControl>

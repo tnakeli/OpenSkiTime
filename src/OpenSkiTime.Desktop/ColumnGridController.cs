@@ -33,6 +33,7 @@ internal sealed class ColumnGridController<T> where T : class
             var key = string.IsNullOrEmpty(column.SortMemberPath) ? binding.Path : column.SortMemberPath;
             if (string.IsNullOrEmpty(key)) { continue; }
             column.SortMemberPath = key;
+            ColumnHeaderControls.ReserveWidth(column, label);
             // The template reads the header it is given, so a column may rename itself (such as the current run).
             column.HeaderTemplate = new FuncDataTemplate<string>((text, _) =>
             {

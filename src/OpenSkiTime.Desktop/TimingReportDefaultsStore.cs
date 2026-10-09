@@ -7,8 +7,7 @@ namespace OpenSkiTime.Desktop;
 /// <summary>Reusable user preferences; each event stores its own independent report snapshot.</summary>
 public sealed class TimingReportDefaultsStore(string? directory = null)
 {
-    private readonly string _path = Path.Combine(directory ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime"), "timing-report-defaults.json");
+    private readonly string _path = Path.Combine(directory ?? LocalDataDirectory.Path, "timing-report-defaults.json");
 
     public TimingReportDefaults Load() => File.Exists(_path)
         ? Normalize(JsonSerializer.Deserialize<TimingReportDefaults>(File.ReadAllText(_path))

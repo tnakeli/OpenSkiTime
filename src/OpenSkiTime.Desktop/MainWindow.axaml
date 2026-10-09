@@ -90,7 +90,7 @@
         <Button Name="TimingMenuButton" Content="5  Timing  ▾" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
         <Button Name="ResultsMenuButton" Content="6  Results  ▾" Click="ResultsMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsResultsSection}" />
         <Button Name="TimingReportMenuButton" Content="7  Timing report  ▾" Click="TimingReportMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingReportSection}" />
-        <Button Name="PdfFactoryButton" Content="8  PDF Factory  ▾" Click="PdfFactoryMenu_Click" Classes="sectionNav" Classes.active="{Binding IsPdfFactorySection}" />
+        <Button Name="PdfFactoryButton" Content="8  PDF Factory  ▾" Click="PdfFactoryMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsPdfFactorySection}" />
       </WrapPanel>
     </Border>
     <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsFormSection}">
@@ -117,8 +117,8 @@
                 <StackPanel Orientation="Horizontal" Spacing="8" IsEnabled="{Binding !IsSeriesCalendarBusy}">
                   <TextBlock Text="FIS SEASON" Classes="fieldLabel" VerticalAlignment="Center" />
                   <TextBox Width="90" Text="{Binding SeriesCalendarSeason}" />
-                  <Button Content="Load calendar" Command="{Binding BrowseSeriesCalendarCommand}" />
-                  <Button Content="Clear filters" Command="{Binding ClearCalendarFiltersCommand}" />
+                  <Button Content="Load calendar" Classes="secondaryAction" Command="{Binding BrowseSeriesCalendarCommand}" />
+                  <Button Content="Clear filters" Classes="secondaryAction" Command="{Binding ClearCalendarFiltersCommand}" />
                 </StackPanel>
                 <TextBlock Text="{Binding SeriesCalendarStatus}" Classes="supportingText" TextWrapping="Wrap" />
                 <TextBlock Text="Import the event and its supported races. Existing course settings and missing values are preserved." Classes="supportingText" TextWrapping="Wrap" />
