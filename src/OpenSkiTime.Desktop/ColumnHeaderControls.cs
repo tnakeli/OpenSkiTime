@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -18,12 +19,17 @@ internal sealed class ColumnHeaderControls
 
     // Keeps a column readable when the grid is narrower than its columns: a fixed-width column keeps its declared
     // width and every column keeps room for its header; the grid scrolls horizontally instead of squeezing values.
+    // The floor is computed once per column from its XAML declaration: reinstalling headers (for example when a run
+    // adds intermediate columns) must not turn a width the operator dragged into a new minimum.
     public static void ReserveWidth(DataGridColumn column, string label)
     {
         ArgumentNullException.ThrowIfNull(column);
-        var declared = column.Width.IsAbsolute ? column.Width.Value : 0;
-        column.MinWidth = Math.Max(column.MinWidth, Math.Max(declared, RequiredWidth(label)));
+        var declared = s_declaredFloors.GetValue(column, x =>
+            new StrongBox<double>(Math.Max(x.MinWidth, x.Width.IsAbsolute ? x.Width.Value : 0))).Value;
+        column.MinWidth = Math.Max(declared, RequiredWidth(label));
     }
+
+    private static readonly ConditionalWeakTable<DataGridColumn, StrongBox<double>> s_declaredFloors = new();
 
     // Minimum column width that shows the longest word of the label on one line next to the sort and filter icons.
     public static double RequiredWidth(string label)

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using OpenSkiTime.Application;
 using OpenSkiTime.Devices;
@@ -159,6 +160,7 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
 
         // Persistence: close, reopen and compare; backup, open the backup as a restored series.
         var before = Fingerprint(timing1, timing2);
+        var evidence = await EvidenceAsync(workspace, list1.Id, list2.Id);
         var backup = Path.Combine(root, "backup", "synthetic-full-race-backup.ost");
         Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
         await workspace.BackupAsync(backup);
@@ -178,6 +180,8 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
                 .SequenceEqual(result.Rows.Select(x => (x.Entry.Bib, x.Status, x.TotalHundredths, x.Rank))), "Results changed after reopen");
             Check((await workspace.ReadTimingAsync(list1.Id)).Packets.Count == evidence1.RawPackets
                 && (await workspace.ReadTimingAsync(list2.Id)).Packets.Count == evidence2.RawPackets, "Raw packets changed after reopen");
+            Check(await EvidenceAsync(workspace, list1.Id, list2.Id) == evidence,
+                $"Raw packet bytes, capture sessions or audit records differ after reopening {Path.GetFileName(path)}");
             await workspace.CloseAsync();
             Log($"Reopened {Path.GetFileName(path)}: timing, audit ({reopened1.Audit.Count}+{reopened2.Audit.Count}), raw packets, results and approved XML intact.");
         }
@@ -392,6 +396,25 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
             .All(x => x.Elements().Any(e => e.Name.LocalName == "Gate")), "XML DSQ rows are missing the gate");
         Check(ranked.Length + notRanked.Length == SyntheticRace.AthleteCount, $"XML does not account for all {SyntheticRace.AthleteCount} competitors");
         return (ranked.Length, notRanked.Length);
+    }
+
+    // Every stored timing record of both runs: capture sessions, each raw packet with its original bytes and receive
+    // time, and every audit record with operator, reason, time and before/after decisions.
+    private static async Task<string> EvidenceAsync(SeriesWorkspace workspace, params Guid[] lists)
+    {
+        var text = new StringBuilder();
+        foreach (var id in lists)
+        {
+            var data = await workspace.ReadTimingAsync(id);
+            text.AppendLine(JsonSerializer.Serialize(data.Sessions));
+            foreach (var packet in data.Packets)
+            {
+                text.AppendLine(CultureInfo.InvariantCulture,
+                    $"{packet.SessionId:N} {packet.Sequence} {packet.ReceivedAt:O} {packet.Protocol} {packet.Source} {packet.Stream} {Convert.ToHexString(packet.Bytes)}");
+            }
+            foreach (var audit in data.Audit) { text.AppendLine(JsonSerializer.Serialize(audit)); }
+        }
+        return text.ToString();
     }
 
     private static string Fingerprint(TimingSnapshot first, TimingSnapshot second) => string.Join("\n",

@@ -3,6 +3,11 @@ using Xunit;
 
 namespace OpenSkiTime.Tests;
 
+// Changing a process-wide environment variable must not overlap tests whose stores read the default directory.
+[CollectionDefinition(nameof(LocalDataDirectoryTests), DisableParallelization = true)]
+public sealed class LocalDataEnvironmentGroup;
+
+[Collection(nameof(LocalDataDirectoryTests))]
 public sealed class LocalDataDirectoryTests
 {
     [Fact]

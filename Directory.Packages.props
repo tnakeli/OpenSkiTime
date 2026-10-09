@@ -54,6 +54,9 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="$(XunitRunnerVersion)" />
     <PackageVersion Include="FluentAssertions"         Version="$(FluentAssertionsVersion)" />
     <PackageVersion Include="coverlet.collector"       Version="$(CoverletVersion)" />
+    <!-- Opt-in real-window desktop automation (tests/OpenSkiTime.Desktop.E2E) -->
+    <PackageVersion Include="FlaUI.Core"               Version="5.0.0" />
+    <PackageVersion Include="FlaUI.UIA3"               Version="5.0.0" />
   </ItemGroup>
 
 </Project>
