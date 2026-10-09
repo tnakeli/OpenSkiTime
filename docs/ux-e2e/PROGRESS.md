@@ -40,9 +40,9 @@ See the table in `DEVELOPMENT.md` ("Full-race, real-window and Live Timing end-t
 - Folders under `Documents` inherit the read-only directory attribute here; test cleanup clears it on its own folders.
 - Codex's Windows sandbox cannot start shell commands (`setup refresh had errors`); it reviews by reading files.
 
-## Status (2026-10-10)
+## Status (2026-10-10) — complete
 
-- Short demonstration video recorded and composed (2 min 31 s), with FIS calendar/homologation look-ups, letterhead PDFs, privacy blurring. See [TEST_REPORT.md](TEST_REPORT.md#demonstration-video).
-- Real-window E2E re-run after the review-3 fixes: passed, 0 mismatches (now including intermediate times).
-- Full suite: 566 passed.
-- Remaining: final Codex review of the last commit; pull request not opened (awaiting the user's decision).
+- Short demonstration video (2 min 31 s) with FIS calendar/homologation look-ups, letterhead PDFs and privacy redaction; see [TEST_REPORT.md](TEST_REPORT.md#demonstration-video).
+- Real-window E2E: passed, 0 mismatches (including intermediate times). Full-race scenario: run twice more from the command line, identical output.
+- Full suite: 566 passed. Codex reviews 1–6 recorded; the final review has no findings.
+- Pull request not opened (awaiting the user's decision).

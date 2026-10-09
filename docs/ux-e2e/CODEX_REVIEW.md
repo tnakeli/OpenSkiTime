@@ -123,3 +123,11 @@ Additional privacy measures found while verifying the final video: the operator 
 > - [P2] Keep redaction active until the file dialog actually closes — `tests/OpenSkiTime.Desktop.E2E/RaceOffice.cs:396-397`. A failed open dialog ends redaction while the dialog remains visible.
 
 Resolution (both accepted): the report option now writes into a new timestamped subfolder and deletes nothing; redaction of open and save dialogs ends only after the dialog is confirmed closed, otherwise it stays active to the end of the recording. Re-verified: full-race tests 4/4 twice from the command line (report: identical canonical output, no discrepancies), E2E project builds.
+
+## Review 6 — final (commit `4c643b7`)
+
+`codex review --base master` (session `01a122b0-5d7a-72f1-888d-230c52436a0e`):
+
+> No actionable correctness regressions were identified in the changes against the supplied merge base. The diff whitespace check passed; builds and tests were not rerun in this read-only environment.
+
+Final status: no open Critical, High or Medium findings. `dotnet test OpenSkiTime.slnx -c Release` → 566 passed, 0 failed.
