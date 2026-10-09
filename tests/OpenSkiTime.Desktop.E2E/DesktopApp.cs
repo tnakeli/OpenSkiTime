@@ -132,26 +132,29 @@ public sealed class DesktopApp : IDisposable
     }
 
     // True when this session receives input (the interactive desktop is shown). While a screen saver or lock screen
-    // owns the input desktop, Windows rejects synthetic mouse/keyboard input; the driver then uses UI Automation
-    // patterns (Invoke, Value, Toggle, SelectionItem), which act on the same controls without physical input.
+    // owns the input desktop, Windows rejects synthetic mouse/keyboard input.
     public static bool PhysicalInput { get; private set; }
 
     // Keeps the display awake for the duration of the run (a per-process power request, like presentation software)
-    // and ends a running non-secure screen saver, which any key press would end too. A secure (password) screen saver
-    // or a locked session is never touched: the run then continues through UI Automation patterns only.
+    // and ends this session's own non-secure screen saver, which any key press would end too. A locked session or a
+    // secure (password) screen saver is never touched: real-window tests then fail with a clear message, because the
+    // workflow needs physical keyboard input (file dialogs, clipboard paste).
     private static void PrepareInteractiveDesktop()
     {
         _ = SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001); // ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED
         var secure = Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Control Panel\Desktop", "ScreenSaverIsSecure", "0") as string;
         if (InputDesktopName() == "Screen-saver" && secure != "1")
         {
-            foreach (var saver in Process.GetProcesses().Where(x => x.ProcessName.EndsWith(".scr", StringComparison.OrdinalIgnoreCase)))
+            var session = Process.GetCurrentProcess().SessionId;
+            foreach (var saver in Process.GetProcesses().Where(x => x.SessionId == session && x.ProcessName.EndsWith(".scr", StringComparison.OrdinalIgnoreCase)))
             {
                 using (saver) { try { saver.Kill(); saver.WaitForExit(3000); } catch (InvalidOperationException) { } catch (System.ComponentModel.Win32Exception) { } }
             }
             for (var i = 0; i < 20 && InputDesktopName() != "Default"; i++) { Thread.Sleep(100); }
         }
-        PhysicalInput = InputDesktopName() == "Default" && Environment.GetEnvironmentVariable("OPENSKITIME_DESKTOP_E2E_PATTERNS") != "1";
+        PhysicalInput = InputDesktopName() == "Default";
+        if (!PhysicalInput)
+        { throw new InvalidOperationException("Real-window tests need an unlocked interactive desktop (the session is locked or a secure screen saver is active)."); }
     }
 
     // Moves the real mouse to the control and clicks it, so recordings show the operator's pointer.

@@ -1,5 +1,8 @@
 using Xunit;
 
+// Real-window tests share one mouse, keyboard, clipboard and desktop; they must never run concurrently.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace OpenSkiTime.Desktop.E2E;
 
 // Real-window tests need an interactive Windows desktop and take over mouse and keyboard; run them only on request.

@@ -21,7 +21,9 @@ public sealed class LiveFullRaceSnapshots
         if (string.IsNullOrWhiteSpace(output)) { return; }
         output = Path.GetFullPath(output);
         Directory.CreateDirectory(output);
-        foreach (var old in Directory.EnumerateFiles(output, "*.json")) { File.Delete(old); }
+        // Only this exporter's own files are replaced; anything else in the directory is left alone.
+        foreach (var old in Directory.EnumerateFiles(output, "snapshot-*.json").Append(Path.Combine(output, "expected.json")).Where(File.Exists))
+        { File.Delete(old); }
         var root = Path.Combine(Path.GetTempPath(), "openskitime-live-full-race", Guid.NewGuid().ToString("N"));
         var race = new SyntheticRace();
         var lists = new Dictionary<int, StartListRevision>();

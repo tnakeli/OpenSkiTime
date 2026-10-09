@@ -45,40 +45,42 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(500);
     }
 
-    // Drives the Windows common file dialog that Avalonia opens for Save/Open: navigate to the folder first, verify the
-    // dialog shows it, then enter the file name and save. If the dialog is not in the intended folder the dialog is
-    // cancelled, so automation can never write into the operator's own folders.
+    // Drives the Windows common file dialog that Avalonia opens for Save/Open. The target folder gets a uniquely named
+    // marker file; the dialog must list that marker after navigation before anything is saved, so the file can only be
+    // written into the intended folder. A request to replace an existing file is always declined: automation writes
+    // only new files and never overwrites anything.
     public void SaveFileDialog(string title, string path)
     {
-        var dialog = app.Retry(() => app.Window.ModalWindows.FirstOrDefault(x => x.Title == title)
-            ?? app.Automation.GetDesktop().FindFirstChild(app.By.ByName(title))?.AsWindow(), TimeSpan.FromSeconds(20));
-        AutomationElement NameBox() => app.Retry(() => dialog.FindFirstDescendant(app.By.ByAutomationId("1001").And(app.By.ByControlType(ControlType.Edit))));
         var folder = Path.GetDirectoryName(path)!;
-        app.SetText(NameBox(), folder);
-        app.Press(VirtualKeyShort.RETURN);
-        var leaf = Path.GetFileName(folder);
-        bool InFolder() => dialog.FindAllDescendants(app.By.ByControlType(ControlType.ToolBar))
-            .Any(x => x.Name.StartsWith("Address:", StringComparison.Ordinal) && x.Name.EndsWith(leaf, StringComparison.OrdinalIgnoreCase));
-        try { app.WaitUntil(InFolder, "file dialog in " + folder, TimeSpan.FromSeconds(10)); }
-        catch (TimeoutException)
+        Directory.CreateDirectory(folder);
+        var marker = Path.Combine(folder, $"openskitime-e2e-{Guid.NewGuid():N}.marker");
+        File.WriteAllText(marker, "Target folder marker for real-window automation.");
+        try
         {
-            dialog.FindFirstDescendant(app.By.ByAutomationId("2").And(app.By.ByControlType(ControlType.Button)))?.AsButton().Invoke();
-            throw;
+            var dialog = app.Retry(() => app.Window.ModalWindows.FirstOrDefault(x => x.Title == title), TimeSpan.FromSeconds(20));
+            void Cancel() => dialog.FindFirstDescendant(app.By.ByAutomationId("2").And(app.By.ByControlType(ControlType.Button)))?.AsButton().Invoke();
+            AutomationElement NameBox() => app.Retry(() => dialog.FindFirstDescendant(app.By.ByAutomationId("1001").And(app.By.ByControlType(ControlType.Edit))));
+            bool InFolder() => dialog.FindFirstDescendant(app.By.ByName(Path.GetFileName(marker))) is not null;
+            app.SetText(NameBox(), folder);
+            app.Press(VirtualKeyShort.RETURN);
+            try { app.WaitUntil(InFolder, "file dialog showing " + folder, TimeSpan.FromSeconds(10)); }
+            catch (TimeoutException) { Cancel(); throw; }
+            Pause(300);
+            app.SetText(NameBox(), Path.GetFileName(path));
+            Pause(300);
+            if (!InFolder()) { Cancel(); throw new InvalidOperationException("The file dialog left the target folder; cancelled."); }
+            DesktopApp.Invoke(app.Retry(() => dialog.FindFirstDescendant(app.By.ByAutomationId("1").And(app.By.ByControlType(ControlType.Button)))));
+            Thread.Sleep(500);
+            // A replace confirmation belongs to this dialog's process; decline it.
+            if (app.Window.ModalWindows.SelectMany(x => x.ModalWindows.Append(x)).FirstOrDefault(x => x.Title == "Confirm Save As") is { } confirm)
+            {
+                confirm.FindFirstDescendant(app.By.ByName("No"))?.AsButton().Invoke();
+                Cancel();
+                throw new InvalidOperationException("Refusing to overwrite an existing file: " + path);
+            }
+            app.WaitUntil(() => app.Window.ModalWindows.Length == 0, "file dialog closed");
         }
-        Pause(300);
-        app.SetText(NameBox(), Path.GetFileName(path));
-        Pause(300);
-        if (!InFolder())
-        {
-            dialog.FindFirstDescendant(app.By.ByAutomationId("2").And(app.By.ByControlType(ControlType.Button)))?.AsButton().Invoke();
-            throw new InvalidOperationException("The file dialog left the target folder; cancelled.");
-        }
-        var save = app.Retry(() => dialog.FindFirstDescendant(app.By.ByAutomationId("1").And(app.By.ByControlType(ControlType.Button))));
-        DesktopApp.Invoke(save);
-        Thread.Sleep(500);
-        if (app.Automation.GetDesktop().FindFirstDescendant(app.By.ByName("Confirm Save As")) is { } confirm)
-        { confirm.FindFirstDescendant(app.By.ByName("Yes"))?.AsButton().Invoke(); }
-        app.WaitUntil(() => app.Window.ModalWindows.Length == 0, "file dialog closed");
+        finally { File.Delete(marker); }
     }
 
     public void CreateCompetition()
@@ -354,6 +356,41 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(800);
     }
 
+    // Opens an existing series through the Windows open dialog (full path typed into the file name box).
+    public void OpenSeries(string path)
+    {
+        app.Click("Open file");
+        var dialog = app.Retry(() => app.Window.ModalWindows.FirstOrDefault(x => x.Title == "Open event series file"), TimeSpan.FromSeconds(20));
+        var name = app.Retry(() => dialog.FindFirstDescendant(app.By.ByAutomationId("1148"))?.FindFirstDescendant(app.By.ByControlType(ControlType.Edit))
+            ?? dialog.FindFirstDescendant(app.By.ByAutomationId("1148")));
+        app.SetText(name, path);
+        app.Press(VirtualKeyShort.RETURN);
+        app.WaitUntil(() => app.Window.Title.StartsWith(path, StringComparison.OrdinalIgnoreCase), "series opened", TimeSpan.FromSeconds(30));
+        Pause(800);
+    }
+
+    // The competition jury in Race information: the chief of race is required for the FIS XML.
+    public void EnterChiefOfRace(string firstName, string lastName, string nation)
+    {
+        var row = app.Retry(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.DataItem))
+            .FirstOrDefault(r => r.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(t => t.Name == "Chief of race")));
+        var cells = row.FindAllChildren(app.By.ByClassName("DataGridCell"));
+        var first = cells[1];
+        first.Focus();
+        var bounds = first.BoundingRectangle;
+        var point = new System.Drawing.Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
+        Mouse.Click(point);
+        Pause(200);
+        Mouse.DoubleClick(point);
+        Pause(400);
+        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
+        Keyboard.Type(firstName);
+        app.Press(VirtualKeyShort.TAB); Keyboard.Type(lastName);
+        app.Press(VirtualKeyShort.TAB); Keyboard.Type(nation);
+        app.Press(VirtualKeyShort.RETURN);
+        Pause(1200);
+    }
+
     // Race information needed for the FIS XML: gates, turning gates, start time and course setter of each run.
     public void CompleteRaceInformation()
     {
@@ -391,7 +428,9 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     {
         app.Click("8  PDF Factory  ▾");
         Pause(600);
-        if (app.Automation.GetDesktop().FindAllDescendants(app.By.ByControlType(ControlType.Menu)).Length > 0) { app.Press(VirtualKeyShort.ESCAPE); }
+        // The competition menu opens with the section; dismiss it, or the next click only closes the menu.
+        app.Press(VirtualKeyShort.ESCAPE);
+        Pause(400);
         app.Click("Generate All");
         app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Count(x => x.Name == "Generated") >= 5
             || !app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(x => x.Name == "Not generated"),

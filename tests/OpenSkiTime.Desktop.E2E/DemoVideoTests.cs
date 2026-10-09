@@ -64,7 +64,7 @@ public sealed class DemoVideoTests
             office.OpenRun("5  Timing  ▾", 1);
             office.ConnectSimulator();
             office.Pause(1500);
-            Begin("Run 1", "Each impulse is captured, saved and assigned in start order. DNS and DNF are one click on the selected racer.", 6);
+            Begin("Run 1", "Each impulse is captured, saved and assigned in start order. DNS and DNF are one click on the selected racer.", 8);
             office.Pace = 1;
             office.TimeRun(1, order1, FullRaceWindowTests.WindowPlan(race.Run1));
             office.Pace = 3;
@@ -76,7 +76,7 @@ public sealed class DemoVideoTests
             office.PrepareSecondRun();
             office.Pause(3000);
             var order2 = SeriesFileEvidence.StartOrder(file, 2);
-            Begin("Run 2", "The second run is timed the same way; the ranking switches to combined times.", 6);
+            Begin("Run 2", "The second run is timed the same way; the ranking switches to combined times.", 8);
             office.OpenRun("5  Timing  ▾", 2);
             office.EnsureConnected();
             office.Pace = 1;
@@ -89,9 +89,10 @@ public sealed class DemoVideoTests
             ShowLiveTiming();
             Begin("Results, reports and XML", "Results apply the FIS penalty; the TD approves the FIS XML, and PDF Factory produces the official lists.");
             office.OpenResults();
-            office.CompleteRaceInformation();
-            office.ApproveAndExportXml(Path.Combine(output, "exported"));
-            office.GeneratePdfs();
+            Attempt(output, "jury", () => office.EnterChiefOfRace("Pekka", "SYNTHCHIEF", "FIN"));
+            Attempt(output, "race-information", office.CompleteRaceInformation);
+            Attempt(output, "xml", () => office.ApproveAndExportXml(Path.Combine(output, "exported")));
+            Attempt(output, "pdf", office.GeneratePdfs);
             office.Pause(3000);
             Close();
         }
@@ -102,6 +103,57 @@ public sealed class DemoVideoTests
             File.WriteAllText(Path.Combine(output, "chapters.json"), JsonSerializer.Serialize(chapters.Select(x => new
             { start = x.Start, end = x.End, title = x.Title, caption = x.Caption, speed = x.Speed }), s_json));
         }
+    }
+
+    // The closing chapter on its own: the same running application opens the race file completed by the main recording
+    // and finishes the race office work. Opt-in: OPENSKITIME_DEMO_VIDEO=<dir> and OPENSKITIME_DEMO_RESULTS_FILE=<.ost>.
+    // Writes raw-results.mp4 and chapters-results.json, which compose.py uses in place of the last recorded chapter.
+    [DesktopE2EFact]
+    public void RecordResultsChapter()
+    {
+        var output = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_VIDEO");
+        var completed = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_RESULTS_FILE");
+        if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(completed)) { return; }
+        output = Path.GetFullPath(output);
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-demo-results", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var file = Path.Combine(root, "Synthetic Alpine Cup 2026.ost");
+        File.Copy(completed, file);
+        var race = new SyntheticRace();
+        using var app = DesktopApp.Launch(root, local => File.WriteAllBytes(Path.Combine(local, "fis-points-list.zip"), race.PointsListArchive()));
+        app.Maximize();
+        var office = new RaceOffice(app, race) { Pace = 3 };
+        office.OpenSeries(file);
+        var clock = Stopwatch.StartNew();
+        using var recorder = ScreenRecorder.Start(Path.Combine(output, "raw-results.mp4"));
+        clock.Restart();
+        try
+        {
+            office.OpenResults();
+            office.EnterChiefOfRace("Pekka", "SYNTHCHIEF", "FIN");
+            office.CompleteRaceInformation();
+            office.ApproveAndExportXml(Path.Combine(output, "exported-" + Guid.NewGuid().ToString("N")[..8]));
+            office.GeneratePdfs();
+            office.Pause(3000);
+        }
+        finally
+        {
+            recorder.Stop();
+            File.WriteAllText(Path.Combine(output, "chapters-results.json"), JsonSerializer.Serialize(new[]
+            {
+                new { start = 0.0, end = clock.Elapsed.TotalSeconds, title = "Results, reports and XML",
+                    caption = "Results apply the FIS penalty; the TD approves the FIS XML, and PDF Factory produces the official lists.",
+                    speed = 1, source = "raw-results.mp4" },
+            }, s_json));
+        }
+    }
+
+    // A failing closing step is recorded (and reported) instead of discarding the whole recording.
+    private static void Attempt(string output, string step, Action act)
+    {
+        try { act(); File.AppendAllText(Path.Combine(output, "steps.log"), step + ": ok" + Environment.NewLine); }
+        catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+        { File.AppendAllText(Path.Combine(output, "steps.log"), step + ": FAILED " + ex.Message + Environment.NewLine); }
     }
 
     // The Live Timing viewer in a visible Chromium window, fed with the race's live snapshots (desktop LiveSnapshotMapper)

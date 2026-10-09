@@ -107,8 +107,10 @@ public sealed class FullRaceWindowTests
             foreach (var row in expected)
             {
                 var r = actual.Results.Single(x => x.Bib == row.Bib);
-                if (r.Status.ToString() != row.Outcome.ToString() || r.Hundredths != row.Hundredths || (row.Outcome == RunOutcome.Finished && r.Rank != row.Rank))
-                { mismatches.Add($"Bib {row.Bib}: expected {row.Outcome} {row.Hundredths} rank {row.Rank}, actual {r.Status} {r.Hundredths} rank {r.Rank}"); }
+                var split = r.Splits.Count > 0 ? r.Splits[0].Hundredths : null;
+                if (r.Status.ToString() != row.Outcome.ToString() || r.Hundredths != row.Hundredths || (row.Outcome == RunOutcome.Finished && r.Rank != row.Rank)
+                    || (row.Outcome == RunOutcome.Finished && split != row.IntermediateHundredths))
+                { mismatches.Add($"Bib {row.Bib}: expected {row.Outcome} {row.Hundredths} split {row.IntermediateHundredths} rank {row.Rank}, actual {r.Status} {r.Hundredths} split {split} rank {r.Rank}"); }
             }
         }
         foreach (var row in expectedFinal)

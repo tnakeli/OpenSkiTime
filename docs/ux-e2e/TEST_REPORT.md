@@ -74,3 +74,39 @@ PASS: all live checkpoints verified in Chromium
 ```
 
 Per checkpoint: row count equals the run's start order; every row's status (Ready/OnCourse/Finished/DNS/DNF/DSQ) matches; every finisher's rank, intermediate time, run time (Run 1) or Run 1/Run 2/total (Run 2) matches the published values; the completed runs match the independent expectations (all 100 Run 1 rows and all 91 classified totals) and both deliberate ties in each run share a rank. A phone-sized viewport (390×844) loads the same final standings. No browser errors.
+
+## Real Windows desktop (FlaUI, interactive session)
+
+Command: `OPENSKITIME_DESKTOP_E2E=1 dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --filter "FullyQualifiedName~OperatorRunsTheFullRace"` (after `dotnet build src/OpenSkiTime.Desktop -c Release`).
+
+The test launches the built `OpenSkiTime.Desktop.exe` on the Windows desktop with `OPENSKITIME_LOCAL_DATA` pointing to a temporary folder (seeded only with the synthetic FIS list) and operates it with the real mouse and keyboard through UI Automation:
+
+1. Event series form → *Create series file* → Windows save dialog (navigated to the temporary folder and verified before saving).
+2. *Add competition*: name, FIS category, intermediates, codex, gender, TD, course and homologation → *Save competition*.
+3. Competitors: the 100-athlete TSV on the clipboard, Ctrl+V in the grid, *Save changes*.
+4. Start lists → Run 1 → *Draw*.
+5. Settings → Timing devices: simulator as start device, *Add intermediate*, *Connect*, *Back to timing*, switch START/I1/FINISH inputs on.
+6. Run 1: for every impulse the simulator device time is entered and *Test start* / *Test I1* / *Test finish* pressed; DNS on the next starter and DNF on the running racer through the quick status buttons (after checking the selected-racer line).
+7. Ranking filter by bib → *Edit classification* → DSQ, gate, reason, judge → *Save classification*.
+8. *Prepare Run 2* → *Create start list*; Timing Run 2, inputs on, all impulses, DNF, DSQ.
+9. Results opened; the results summary is read from the window.
+10. The application is closed and the saved `.ost` is opened with the application's persistence layer and compared against the independent expectations computed from the start lists the window actually drew.
+
+Last execution (`artifacts/ux-e2e/e2e/real-window-race.log`):
+
+```
+Real-window race 2026-10-09T17:52:04Z: input mode mouse/keyboard
+Run 1: 100 on list, 94 finished, 2 DNS, 3 DNF, 1 DSQ, 289 raw packets
+Run 2: 94 on list, 91 finished, 2 DNF, 1 DSQ, 280 raw packets
+Results view: 91 classified · 9 not classified. Review penalty and race information with the TD. 1 extra timestamp(s) remain unassigned or need review in Timing; original input is preserved.
+Final: 91 classified; mismatches: 0
+```
+
+Result: passed (4 min 16 s with impulses entered through the controls' UI Automation Value/Invoke patterns; ~10 min per run with typed keys and pointer clicks, as in the video). Real-window screenshots of every step are written to `artifacts/ux-e2e/e2e/steps/` (01-series-created … 12-results).
+
+Defects found in the automation while building it (not in the application) and how they were handled:
+
+- The first runs showed that a new connection, and every newly selected run, starts with all timing positions on HOLD; the operator must switch START/I1/FINISH on. The driver now does so for each run (and the video shows it).
+- A DNF was once applied to the racer who had just started instead of the one on course: the driver computed the row position just before the next start impulse reached the screen, and the new starter is inserted at the top of the Running list. The application kept its own selection correct (`SynchronizeSelection`); the click landed on the shifted row. The driver now waits until the Running list shows exactly the racers on course and verifies the selected-racer line before pressing a status. Recorded as usability finding UX-19.
+
+Open observation: while the application was still open, Results reported "1 extra timestamp(s) remain unassigned or need review"; after closing and reopening the file, replay shows no unassigned or review observations in either run and all results match. Not reproduced at the application boundary; recorded for follow-up.

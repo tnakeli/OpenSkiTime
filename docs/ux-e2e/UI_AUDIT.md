@@ -58,6 +58,8 @@ Severity: **High** = blocks reading or operating at a supported size; **Medium**
 | UX-15 | Receipt dialog | Disabled combo boxes use Fluent's grey fill | Low | Open |
 | UX-17 | All forms and grids (accessibility) | Real-window UI Automation shows form inputs without accessible names (labels are separate text elements) and DataGrid cells named after their type (`Avalonia.Controls.TextBlock`). Screen readers and automation cannot identify fields by name; the real-window driver locates inputs relative to their visible labels | Medium | Open (needs `AutomationProperties.LabeledBy`/`Name` across forms and a DataGrid cell peer; recorded for a dedicated accessibility pass) |
 | UX-18 | Browser Live Timing | After the last finisher the banner still reads `On course · —` | Low | Open |
+| UX-19 | Timing → Running | A new starter is inserted at the top of the Running list, so rows move under the pointer at the moment a start impulse arrives; a click intended for the racer on course can select the new starter. The selected-racer line below the grids shows who a quick status will apply to | Medium | Open (product decision on list order; mitigated by the identity line and the existing selection synchronisation) |
+| UX-20 | Timing | Every newly connected or newly selected run starts with all inputs on HOLD; the only hint is the small `HOLD · all positions` text in the banner | Low | Open |
 | UX-16 | Results | With no FIS category on the competition, Results reported "no unique penalty rules" | — | Not a defect: the category comes from the FIS calendar data; the synthetic competition now carries category, gender and TD like a real FIS race |
 
 ## Conventions (design system)

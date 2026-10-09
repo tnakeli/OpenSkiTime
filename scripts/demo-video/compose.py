@@ -38,6 +38,7 @@ def card(path, title, subtitle, seconds):
 
 
 def segment(raw, path, chapter, index, total):
+    raw = raw.parent / chapter.get('source', raw.name)
     start, end, speed = chapter['start'], chapter['end'], chapter.get('speed', 1)
     label = f"{index}/{total}  {chapter['title']}"
     caption = chapter['caption'] + (f'   ·   shown {speed}× faster' if speed > 1 else '')
@@ -63,6 +64,12 @@ def main():
         raise SystemExit('ffmpeg is required (winget install Gyan.FFmpeg).')
     recording = Path(args.recording)
     chapters = json.loads((recording / 'chapters.json').read_text(encoding='utf-8'))
+    # A separately recorded closing chapter replaces the main recording's chapter of the same title.
+    results = recording / 'chapters-results.json'
+    if results.exists():
+        replacement = json.loads(results.read_text(encoding='utf-8'))
+        titles = {c['title'] for c in replacement}
+        chapters = [c for c in chapters if c['title'] not in titles] + replacement
     work = recording / 'parts'
     work.mkdir(exist_ok=True)
     parts = [work / '00-intro.mp4']

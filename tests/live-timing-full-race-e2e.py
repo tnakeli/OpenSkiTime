@@ -110,7 +110,8 @@ def main():
                     rank = result.get('totalRank') if state['currentRun'] == 2 else result.get('rank')
                     expect(row.nth(0)).to_have_text(str(rank) if rank else '—')
                     splits = result.get('intermediates') or []
-                    if splits and 'Intermediate 1' in col:
+                    if splits:
+                        assert 'Intermediate 1' in col, f'{path.stem}: intermediate column missing ({head})'
                         expect(row.nth(col['Intermediate 1'])).to_contain_text(fmt(splits[0]['hundredths']))
                     if state['currentRun'] == 1:
                         expect(row.nth(col['Finish'])).to_have_text(fmt(result['hundredths']))
@@ -136,6 +137,8 @@ def main():
                         if item['status'] == 'Finished':
                             expect(row.nth(0)).to_have_text(str(item['rank']))
                             expect(row.nth(col['Finish'])).to_have_text(item['time'])
+                            if item.get('split'):
+                                expect(row.nth(col['Intermediate 1'])).to_contain_text(item['split'])
                     for a, b in expected['run1Ties']:
                         ra = page.locator(f'tr[data-bib="{a}"] td').nth(0).inner_text()
                         rb = page.locator(f'tr[data-bib="{b}"] td').nth(0).inner_text()
