@@ -14,7 +14,8 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="FlaUI.Core" />
     <PackageReference Include="FlaUI.UIA3" />
-    <ProjectReference Include="../../src/OpenSkiTime.Domain/OpenSkiTime.Domain.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.Devices/OpenSkiTime.Devices.csproj" />
     <Compile Include="../OpenSkiTime.Tests/FullRace/SyntheticRace.cs" Link="FullRace/SyntheticRace.cs" />
     <Compile Include="../OpenSkiTime.Tests/FullRace/ExpectedResults.cs" Link="FullRace/ExpectedResults.cs" />
   </ItemGroup>

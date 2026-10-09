@@ -56,6 +56,8 @@ Severity: **High** = blocks reading or operating at a supported size; **Medium**
 | UX-13 | Settings → Timing devices | Device date shown as `2026-12-12` while the rest of the UI uses `dd.MM.yyyy` | Low | Open (the field is parsed as ISO; changing it needs input-format review) |
 | UX-14 | Competitors | Horizontal scrollbar overlays the last visible row of the grid | Low | Open (Avalonia DataGrid overlay scrollbar behaviour) |
 | UX-15 | Receipt dialog | Disabled combo boxes use Fluent's grey fill | Low | Open |
+| UX-17 | All forms and grids (accessibility) | Real-window UI Automation shows form inputs without accessible names (labels are separate text elements) and DataGrid cells named after their type (`Avalonia.Controls.TextBlock`). Screen readers and automation cannot identify fields by name; the real-window driver locates inputs relative to their visible labels | Medium | Open (needs `AutomationProperties.LabeledBy`/`Name` across forms and a DataGrid cell peer; recorded for a dedicated accessibility pass) |
+| UX-18 | Browser Live Timing | After the last finisher the banner still reads `On course · —` | Low | Open |
 | UX-16 | Results | With no FIS category on the competition, Results reported "no unique penalty rules" | — | Not a defect: the category comes from the FIS calendar data; the synthetic competition now carries category, gender and TD like a real FIS race |
 
 ## Conventions (design system)

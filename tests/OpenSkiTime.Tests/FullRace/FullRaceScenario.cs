@@ -44,6 +44,10 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
     private readonly List<string> _log = [];
     private readonly List<string> _discrepancies = [];
 
+    // Optional observer for checkpoints during and after each run (for example live-timing snapshots). It receives the
+    // run number, the run's start list, the current timing snapshot and a checkpoint label; it must not change timing.
+    public Func<int, StartListRevision, TimingSnapshot, string, Task>? Observe { get; init; }
+
     public async Task<FullRaceOutcome> RunAsync()
     {
         Directory.CreateDirectory(root);
@@ -279,7 +283,13 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
                 }
             }
         }
-        foreach (var (_, _, act) in events.OrderBy(x => x.At).ThenBy(x => x.Order)) { await act(); }
+        var ordered = events.OrderBy(x => x.At).ThenBy(x => x.Order).ToArray();
+        for (var i = 0; i < ordered.Length; i++)
+        {
+            await ordered[i].Act();
+            if (Observe is not null && i + 1 is var done && done < ordered.Length && done % (ordered.Length / 4) == 0)
+            { await Observe(run, list, timing.Snapshot!, $"run{run}-{done * 100 / ordered.Length}pct"); }
+        }
 
         // Post-run classification and an operator mistake that is undone (audit appends a reversal).
         foreach (var entry in list.Plan.Entries.Where(x => plans[x.Entrant.Athlete.FederationCode!].Outcome == RunOutcome.DSQ))
@@ -296,6 +306,7 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
         }
         await timing.StopAsync();
         var snapshot = timing.Snapshot!;
+        if (Observe is not null) { await Observe(run, list, snapshot, $"run{run}-complete"); }
         var data = await workspace.ReadTimingAsync(list.Id);
         var discrepancies = new List<string>();
         if (!snapshot.Complete) { discrepancies.Add($"Run {run} is not complete"); }

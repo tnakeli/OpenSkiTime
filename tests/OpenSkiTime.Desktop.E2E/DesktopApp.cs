@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Capturing;
 using FlaUI.Core.Conditions;
@@ -16,14 +15,14 @@ namespace OpenSkiTime.Desktop.E2E;
 public sealed class DesktopApp : IDisposable
 {
     public const string EnableVariable = "OPENSKITIME_DESKTOP_E2E";
-    private readonly Application _application;
+    private readonly FlaUI.Core.Application _application;
     public UIA3Automation Automation { get; } = new();
     public string LocalData { get; }
     public string Root { get; }
     public Window Window { get; private set; }
     public ConditionFactory By => Automation.ConditionFactory;
 
-    private DesktopApp(Application application, Window window, string root, string localData)
+    private DesktopApp(FlaUI.Core.Application application, Window window, string root, string localData)
     {
         _application = application; Window = window; Root = root; LocalData = localData;
     }
@@ -56,7 +55,7 @@ public sealed class DesktopApp : IDisposable
         prepareLocalData?.Invoke(localData);
         var start = new ProcessStartInfo(Executable()) { UseShellExecute = false, WorkingDirectory = root };
         start.Environment["OPENSKITIME_LOCAL_DATA"] = localData;
-        var application = Application.Launch(start);
+        var application = FlaUI.Core.Application.Launch(start);
         var automation = new UIA3Automation();
         var window = Retry(() => application.GetMainWindow(automation, TimeSpan.FromSeconds(2)), TimeSpan.FromSeconds(60))
             ?? throw new TimeoutException("OpenSkiTime main window did not appear.");
@@ -65,6 +64,15 @@ public sealed class DesktopApp : IDisposable
         app.Window = app.Retry(() => application.GetMainWindow(app.Automation, TimeSpan.FromSeconds(2)));
         app.Place(width, height);
         return app;
+    }
+
+    // Maximized on the primary screen (the work area above the taskbar), as an operator runs the race office.
+    public void Maximize()
+    {
+        var handle = Window.Properties.NativeWindowHandle.Value;
+        ShowWindow(handle, 3); // SW_MAXIMIZE
+        SetForegroundWindow(handle);
+        Thread.Sleep(600);
     }
 
     // Normal (not maximized) window at the requested outer size in the top-left corner of the primary screen.

@@ -48,3 +48,29 @@ Expected-vs-actual: 100/100 final rows match; discrepancies: none. The per-athle
 
 - A device retransmitting an identical start line: the second observation is `Duplicate` of the first, raw input keeps all 3 packets, the result is unaffected and survives reopening.
 - A missing finish without hand time keeps the run incomplete and blocks `ToRunFinishes`; malformed manual time or a blank reason is rejected without an audit row; a valid hand time is audited (operator/reason) and produces the manual finish flag.
+
+## Live Timing in the browser (Playwright, Chromium)
+
+Commands (see `DEVELOPMENT.md`): export the snapshots with `ExportLiveSnapshotsOfTheFullRace`, then `python tests/live-timing-full-race-e2e.py --snapshots <dir> --screenshots <dir>`.
+
+The snapshots are built with the desktop's own `LiveSnapshotMapper` from the timing state of the full-race scenario at 25 %, 50 %, 75 % and the end of each run (10 checkpoints), published with `PUT /api/sessions/{id}/state` to a real local `OpenSkiTime.LiveTiming.Server` (loopback only, the browser is blocked from any other host) and checked in Chromium after each update.
+
+Result of the last execution:
+
+```
+snapshot-01-run1-24pct: run 1, 100 rows, 23 finished, 23 finished rows verified
+snapshot-02-run1-49pct: run 1, 100 rows, 46 finished, 46 finished rows verified
+snapshot-03-run1-74pct: run 1, 100 rows, 70 finished, 70 finished rows verified
+snapshot-04-run1-98pct: run 1, 100 rows, 93 finished, 93 finished rows verified
+snapshot-05-run1-complete: run 1, 100 rows, 94 finished, 94 finished rows verified
+  run 1 verified against 100 independent expectations; ties [[14, 25], [31, 30]] share ranks
+snapshot-06-run2-24pct: run 2, 94 rows, 23 finished, 23 finished rows verified
+snapshot-07-run2-49pct: run 2, 94 rows, 45 finished, 45 finished rows verified
+snapshot-08-run2-74pct: run 2, 94 rows, 67 finished, 67 finished rows verified
+snapshot-09-run2-99pct: run 2, 94 rows, 91 finished, 91 finished rows verified
+snapshot-10-run2-complete: run 2, 94 rows, 91 finished, 91 finished rows verified
+  final standings verified against 91 independent totals; combined ties [[5, 18], [21, 20]] share ranks
+PASS: all live checkpoints verified in Chromium
+```
+
+Per checkpoint: row count equals the run's start order; every row's status (Ready/OnCourse/Finished/DNS/DNF/DSQ) matches; every finisher's rank, intermediate time, run time (Run 1) or Run 1/Run 2/total (Run 2) matches the published values; the completed runs match the independent expectations (all 100 Run 1 rows and all 91 classified totals) and both deliberate ties in each run share a rank. A phone-sized viewport (390×844) loads the same final standings. No browser errors.
