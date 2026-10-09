@@ -12,7 +12,7 @@ namespace OpenSkiTime.Desktop.E2E;
 public sealed class DemoVideoTests
 {
     private static readonly JsonSerializerOptions s_json = new() { WriteIndented = true };
-    private sealed record Chapter(double Start, double End, string Title, string Caption, double Speed);
+    private sealed record Chapter(double Start, double End, string Title, string Caption, double Speed, bool MaskStatus);
 
     [DesktopE2EFact]
     public void RecordDemonstration()
@@ -27,32 +27,36 @@ public sealed class DemoVideoTests
         var file = Path.Combine(root, "Synthetic Alpine Cup 2026.ost");
         var chapters = new List<Chapter>();
         var clock = new Stopwatch();
-        (double Start, string Title, string Caption, double Speed)? open = null;
-        void Begin(string title, string caption, double speed = 1)
+        (double Start, string Title, string Caption, double Speed, bool MaskStatus)? open = null;
+        // maskStatus hides the application's status line, which can show local file paths (for example after an export).
+        void Begin(string title, string caption, double speed = 1, bool maskStatus = false)
         {
             var now = clock.Elapsed.TotalSeconds;
-            if (open is { } current) { chapters.Add(new(current.Start, now, current.Title, current.Caption, current.Speed)); }
-            open = (now, title, caption, speed);
+            if (open is { } current) { chapters.Add(new(current.Start, now, current.Title, current.Caption, current.Speed, current.MaskStatus)); }
+            open = (now, title, caption, speed, maskStatus);
         }
         void Close()
         {
-            if (open is { } current) { chapters.Add(new(current.Start, clock.Elapsed.TotalSeconds, current.Title, current.Caption, current.Speed)); }
+            if (open is { } current) { chapters.Add(new(current.Start, clock.Elapsed.TotalSeconds, current.Title, current.Caption, current.Speed, current.MaskStatus)); }
             open = null;
         }
 
         using var app = DesktopApp.Launch(root, local => File.WriteAllBytes(Path.Combine(local, "fis-points-list.zip"), race.PointsListArchive()));
         app.Maximize();
-        var office = new RaceOffice(app, race) { Pace = 2 };
+        var office = new RaceOffice(app, race) { Pace = 2, OperatorName = "Race office" };
         var redactions = new List<(double Start, double End, System.Drawing.Rectangle Area)>();
         (double Start, System.Drawing.Rectangle Area)? dialog = null;
+        // Times are measured from just before ffmpeg starts; the first captured frame follows shortly after, so marks
+        // are at most slightly late. Redactions get a generous margin on both sides to absorb that offset.
+        const double margin = 2.0;
         office.FileDialog = (area, shown) =>
         {
             var now = clock.Elapsed.TotalSeconds;
-            if (shown) { dialog ??= (Math.Max(0, now - 1.0), area); }
-            else if (dialog is { } open) { redactions.Add((open.Start, now + 0.5, open.Area)); dialog = null; }
+            if (shown) { dialog ??= (Math.Max(0, now - margin), area); }
+            else if (dialog is { } open) { redactions.Add((open.Start, now + margin, open.Area)); dialog = null; }
         };
-        using var recorder = ScreenRecorder.Start(Path.Combine(output, "raw.mp4"));
         clock.Start();
+        using var recorder = ScreenRecorder.Start(Path.Combine(output, "raw.mp4"));
         try
         {
             Begin("FIS calendar at hand", "Browse the official FIS calendar straight from the FIS API and start an event series from it.", 2);
@@ -88,13 +92,13 @@ public sealed class DemoVideoTests
             office.DisconnectTiming();
             Begin("Live Timing", "Spectators follow intermediates, run times, totals and ties live in any browser.", 2);
             ShowLiveTiming();
-            Begin("Results and FIS XML", "The FIS penalty is calculated for the TD; approval stores the exact FIS XML in the series file.", 4);
+            Begin("Results and FIS XML", "The FIS penalty is calculated for the TD; approval stores the exact FIS XML in the series file.", 4, maskStatus: true);
             office.OpenResults();
             office.ScrollPage(-12);
             Attempt(output, "jury", () => office.EnterChiefOfRace("Pekka", "SYNTHCHIEF", "FIN"));
             Attempt(output, "race-information", office.CompleteRaceInformation);
             Attempt(output, "xml", () => office.ApproveAndExportXml(Path.Combine(output, "exported-" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture))));
-            Begin("Branded PDF reports", "PDF Factory prints every list on the organizer's letterhead in one click.", 2.5);
+            Begin("Branded PDF reports", "PDF Factory prints every list on the organizer's letterhead in one click.", 2.5, maskStatus: true);
             Attempt(output, "pdf", () => office.GeneratePdfs(letterhead));
             office.Pause(1500);
             Close();
@@ -102,9 +106,11 @@ public sealed class DemoVideoTests
         finally
         {
             Close();
+            // A step that failed while a sensitive area was on screen leaves it open: blur it to the end.
+            if (dialog is { } unfinished) { redactions.Add((unfinished.Start, clock.Elapsed.TotalSeconds + 60, unfinished.Area)); }
             recorder.Stop();
             File.WriteAllText(Path.Combine(output, "chapters.json"), JsonSerializer.Serialize(chapters.Select(x => new
-            { start = x.Start, end = x.End, title = x.Title, caption = x.Caption, speed = x.Speed }), s_json));
+            { start = x.Start, end = x.End, title = x.Title, caption = x.Caption, speed = x.Speed, maskStatus = x.MaskStatus }), s_json));
             File.WriteAllText(Path.Combine(output, "series-file.txt"), file);
             // File dialogs show the user's own folders; compose.py blurs these areas (with a margin) for their duration.
             File.WriteAllText(Path.Combine(output, "redactions.json"), JsonSerializer.Serialize(redactions.Select(x => new

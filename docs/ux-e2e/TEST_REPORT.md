@@ -113,7 +113,7 @@ Observation (explained): Results reported "1 extra timestamp(s) remain unassigne
 
 ## Demonstration video
 
-`artifacts/ux-e2e/video/OpenSkiTime-demo.mp4` (generated, not committed): 1920×1080 H.264/AAC, 2 min 31 s (ffprobe 151.2 s), 13 chapters plus title, PDF showcase and closing cards.
+`artifacts/ux-e2e/video/OpenSkiTime-demo.mp4` (generated, not committed): 1920×1080 H.264/AAC, 2 min 31 s (ffprobe 150.6 s), 13 chapters plus title, PDF showcase and closing cards.
 
 Recorded from the real running application by `DemoVideoTests.RecordDemonstration` (FlaUI, ffmpeg gdigrab) and composed by `scripts/demo-video/compose.py`. Every step of the last recording succeeded (`steps.log`: fis-calendar, homologations, jury, race-information, xml, pdf all `ok`):
 
@@ -125,6 +125,6 @@ Recorded from the real running application by `DemoVideoTests.RecordDemonstratio
 6. Results with FIS penalty, jury and race information, TD approval, XML exported (`FIN9123.xml`).
 7. PDF Factory with an organizer letterhead (`scripts/demo-video/make-letterhead.py`, embedded as the PDF background with 40/24 mm margins): 13 reports generated; three generated pages are shown in the closing showcase (rendered with `scripts/demo-video/Render-PdfPage.ps1`).
 
-Privacy in the recording: Windows file dialogs (which first list the user's own Documents folder) and the FIS calendar's technical-delegate columns are blurred for the time they are on screen (`redactions.json`), and the window title bar (local temp path) is replaced by a neutral bar. FIS points-list download, which contains real athletes, is not shown. All race data is synthetic.
+Privacy in the recording: the operator field is set to a role name ("Race office") instead of the Windows account; Windows file dialogs (which first list the user's own Documents folder) and the FIS calendar's technical-delegate columns are blurred for the time they are on screen (`redactions.json`), the window title bar (local temp path) is replaced by a neutral bar, and the status line is hidden in the results and PDF chapters (export path). Redaction boundaries were checked frame by frame in the final video. FIS points-list download, which contains real athletes, is not shown. All race data is synthetic.
 
 PDF headers and footers: the organizer letterhead uses the existing PDF Factory background feature; no renderer change was needed for it. The review of the generated Official Results found jury functions printed as XML codes (`TechnicalDelegate:`, `ChiefRace:`); they now print their display names (shared `RaceInformation.JuryFunctionLabel`, asserted in `PdfFactoryTests`).

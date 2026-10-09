@@ -79,3 +79,36 @@ All findings concern test tooling (no application code); all were accepted.
 | Incomplete fallback | The pattern-only fallback was removed: without an unlocked interactive desktop the suite stops with a clear message. Documentation updated. |
 | Real-window splits | The verification now compares every finisher's saved intermediate time with the independent expectation. |
 | Live intermediate column | A missing `Intermediate 1` column fails the check, and the completed Run 1 intermediate times are compared with `expected.json`. |
+
+## Review 4 — short demonstration, FIS look-ups, letterhead PDFs, jury labels (commit `ab80de9`)
+
+### 4a — `codex review --base master` (session `01a12298-ca4c-74b2-8e37-88af122868a7`)
+
+> The demonstration tooling can expose information that its redaction mechanism is intended to hide, both during normal recording and on failures.
+>
+> - [P1] Synchronize redaction timestamps with the recording timeline — `DemoVideoTests.cs:54-55`. `ScreenRecorder.Start` waits 1.5 s before the chapter/redaction clock starts, so redactions end early.
+> - [P2] Finalize active redactions when recording fails — `DemoVideoTests.cs:109-111`. An interval still open when a step throws is never serialized.
+
+### 4b — focused prompt review (session `01a1229b-1f3b-7d63-8f1f-d7ce1657496f`)
+
+> The demo tooling has concrete privacy, file-cleanup, and false-success defects. No introduced timing, race-rule, tie-ranking, persistence, audit, jury-label, or external-submission regression was identified in the branch review.
+>
+> - [P1] **High:** Align redaction timestamps with the recording start — `DemoVideoTests.cs:54-55` (the recording exceeded the chapter clock by 1.568 s).
+> - [P1] **High:** Preserve active redactions when a recording fails — `DemoVideoTests.cs:109-111`.
+> - [P2] **Medium:** Restrict cleanup to composer-owned segments — `scripts/demo-video/compose.py:133-136`.
+> - [P2] **Medium:** Verify that the homologation lookup succeeded — `RaceOffice.cs:427-430`.
+> - [P2] **Medium:** Reject failed PDF generation instead of logging success — `RaceOffice.cs:540-542`.
+
+### Resolution
+
+All accepted (demonstration tooling only; no application defect was reported).
+
+| Finding | Resolution |
+|---|---|
+| Redaction timing | The clock now starts immediately before ffmpeg; every redaction gets a 2 s margin on both sides. The already recorded take was corrected by its measured offset (1.568 s) before composing, and a new take was recorded with the fix. Boundary frames of every redaction (start, just before the end, just after the end) were extracted from the final video and checked: blurred while visible, clean afterwards. |
+| Unfinished redaction | An interval still open when recording stops is blurred to the end of the recording. |
+| Composer cleanup | Each composition uses a fresh `compose-*` work folder; nothing existing is deleted or overwritten. |
+| Homologation false success | The step requires the application's success status (`N homologations cached · …`); otherwise it fails. |
+| PDF false success | The step parses the summary and requires generated > 0 and 0 failed. |
+
+Additional privacy measures found while verifying the final video: the operator field (default: Windows account name) is set to "Race office" in the demonstration, the window title bar (local path) is replaced by a neutral bar, and the status line is hidden in the results and PDF chapters (it shows the export path).

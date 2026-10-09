@@ -15,6 +15,9 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     public SyntheticRace Race => race;
     public int Pace { get; set; } = 1; // 1 = test speed; larger values slow pauses for a recording.
 
+    // Operator name entered in Timing devices (the default is the Windows account name); recordings use a role name.
+    public string? OperatorName { get; set; }
+
     public void Chapter(string title) => chapter?.Invoke(title);
 
     // Called with screen areas that must not appear in recordings while they are shown (true) and when they disappear
@@ -182,6 +185,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
             && source.FindFirstDescendant(app.By.ByName("Simulator")) is null)
         { Select(source, "Simulator"); }
         Pause(400);
+        if (OperatorName is { Length: > 0 } name) { app.SetText(FieldAfter("DEVICE DATE", "OPERATOR"), name); Pause(300); }
         for (var i = 1; i <= race.Competition.IntermediateCount && app.TryByName($"Intermediate {i}") is null; i++)
         { app.Click("Add intermediate"); Pause(400); }
         app.Click("Connect");
@@ -427,6 +431,9 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Thread.Sleep(1000);
         app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Button))
             .Any(x => x.Name == "Refresh homologations" && x.IsEnabled), "homologations refreshed", TimeSpan.FromSeconds(60));
+        // Only the success status names the cached catalogue; errors (no key, HTTP failure) leave another message.
+        if (!app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(x => x.Name.Contains(" homologations cached · ", StringComparison.Ordinal)))
+        { throw new InvalidOperationException("The FIS equipment homologation lookup did not succeed."); }
         Pause(1500);
     }
 
@@ -538,8 +545,14 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
             Pause(400);
         }
         app.Click("Generate All");
-        app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text))
-            .Any(x => x.Name.Contains("report(s) generated", StringComparison.Ordinal)), "PDFs generated", TimeSpan.FromSeconds(120));
+        string? summary = null;
+        app.WaitUntil(() => (summary = app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text))
+            .Select(x => x.Name).FirstOrDefault(x => x.Contains("report(s) generated", StringComparison.Ordinal))) is not null,
+            "PDFs generated", TimeSpan.FromSeconds(120));
+        // "13 report(s) generated; 0 unavailable skipped; 0 failed." — any failure or an empty run is an error.
+        var counts = System.Text.RegularExpressions.Regex.Match(summary!, @"^(\d+) report\(s\) generated; \d+ unavailable skipped; (\d+) failed");
+        if (!counts.Success || counts.Groups[1].Value == "0" || counts.Groups[2].Value != "0")
+        { throw new InvalidOperationException("PDF generation did not succeed: " + summary); }
         Pause(2000);
     }
 

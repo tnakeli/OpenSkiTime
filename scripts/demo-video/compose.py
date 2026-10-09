@@ -12,6 +12,7 @@ import argparse
 import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 FONT = 'C\\:/Windows/Fonts/segoeui.ttf'
@@ -70,6 +71,8 @@ def segment(raw, path, chapter, index, total, redactions=()):
         # the window title bar shows local file paths; replace it with a neutral bar
         f'drawbox=x=0:y=0:w=iw:h=24:color=0x0E2A35:t=fill',
         text('OpenSkiTime  ·  Synthetic Alpine Cup 2026', FONT, 15, '0xB8C9D1', 14, 4),
+        # the application's status line (just above the band) can show local paths after an export
+        *([f'drawbox=x=0:y=1008:w=iw:h=24:color=0xFFFFFF:t=fill'] if chapter.get('maskStatus') else []),
         # lower-third band: chapter number pill, title and caption
         f'drawbox=x=0:y=ih-{BAND}:w=iw:h={BAND}:color={NAVY}:t=fill',
         f'drawbox=x=0:y=ih-{BAND}:w=6:h={BAND}:color={TEAL}:t=fill',
@@ -130,10 +133,8 @@ def main():
     chapters = json.loads((recording / 'chapters.json').read_text(encoding='utf-8'))
     redactions_file = recording / 'redactions.json'
     redactions = json.loads(redactions_file.read_text(encoding='utf-8')) if redactions_file.exists() else []
-    work = recording / 'parts'
-    work.mkdir(exist_ok=True)
-    for old in work.glob('*.mp4'):
-        old.unlink()
+    # A fresh work folder per composition: nothing that already exists is deleted or overwritten.
+    work = Path(tempfile.mkdtemp(prefix='compose-', dir=recording))
     parts = [work / '00-intro.mp4']
     card(parts[0], [('OpenSkiTime', FONT_BOLD, 112, 'white', 370),
                     ('Alpine race timing for the race office', FONT_LIGHT, 44, '0xCFE3E6', 520),
