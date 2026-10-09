@@ -17,6 +17,16 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
 
     public void Chapter(string title) => chapter?.Invoke(title);
 
+    // Called with screen areas that must not appear in recordings while they are shown (true) and when they disappear
+    // (false): Windows file dialogs list the user's own folders, and the FIS calendar names real officials.
+    public Action<System.Drawing.Rectangle, bool>? FileDialog { get; set; }
+
+    private void TrackDialog(AutomationElement dialog)
+    {
+        var bounds = dialog.BoundingRectangle;
+        FileDialog?.Invoke(new System.Drawing.Rectangle(bounds.Left, bounds.Top, bounds.Width, bounds.Height), true);
+    }
+
     public void Pause(int milliseconds = 250) => Thread.Sleep(milliseconds * Pace);
 
     public void Navigate(string section)
@@ -51,16 +61,20 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // only new files and never overwrites anything.
     public void SaveFileDialog(string title, string path)
     {
+        path = Path.GetFullPath(path);
         var folder = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(folder);
-        var marker = Path.Combine(folder, $"openskitime-e2e-{Guid.NewGuid():N}.marker");
+        // The marker uses the target extension so the dialog's file-type filter lists it.
+        var marker = Path.Combine(folder, $"openskitime-e2e-marker-{Guid.NewGuid():N}{Path.GetExtension(path)}");
         File.WriteAllText(marker, "Target folder marker for real-window automation.");
         try
         {
             var dialog = app.Retry(() => app.Window.ModalWindows.FirstOrDefault(x => x.Title == title), TimeSpan.FromSeconds(20));
+            TrackDialog(dialog);
             void Cancel() => dialog.FindFirstDescendant(app.By.ByAutomationId("2").And(app.By.ByControlType(ControlType.Button)))?.AsButton().Invoke();
             AutomationElement NameBox() => app.Retry(() => dialog.FindFirstDescendant(app.By.ByAutomationId("1001").And(app.By.ByControlType(ControlType.Edit))));
-            bool InFolder() => dialog.FindFirstDescendant(app.By.ByName(Path.GetFileName(marker))) is not null;
+            // Explorer hides known extensions (for example .xml), so the marker is matched with or without it.
+            bool InFolder() => dialog.FindFirstDescendant(app.By.ByName(Path.GetFileName(marker)).Or(app.By.ByName(Path.GetFileNameWithoutExtension(marker)))) is not null;
             app.SetText(NameBox(), folder);
             app.Press(VirtualKeyShort.RETURN);
             try { app.WaitUntil(InFolder, "file dialog showing " + folder, TimeSpan.FromSeconds(10)); }
@@ -80,7 +94,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
             }
             app.WaitUntil(() => app.Window.ModalWindows.Length == 0, "file dialog closed");
         }
-        finally { File.Delete(marker); }
+        finally { File.Delete(marker); FileDialog?.Invoke(default, false); }
     }
 
     public void CreateCompetition()
@@ -360,34 +374,109 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     public void OpenSeries(string path)
     {
         app.Click("Open file");
-        var dialog = app.Retry(() => app.Window.ModalWindows.FirstOrDefault(x => x.Title == "Open event series file"), TimeSpan.FromSeconds(20));
+        OpenFileDialog("Open event series file", path);
+        app.WaitUntil(() => app.Window.Title.StartsWith(path, StringComparison.OrdinalIgnoreCase), "series opened", TimeSpan.FromSeconds(30));
+        Pause(800);
+    }
+
+    // Reads an existing file through the Windows open dialog; reading never modifies the chosen file.
+    public void OpenFileDialog(string title, string path)
+    {
+        path = Path.GetFullPath(path);
+        var dialog = app.Retry(() => app.Window.ModalWindows.FirstOrDefault(x => x.Title == title), TimeSpan.FromSeconds(20));
+        TrackDialog(dialog);
         var name = app.Retry(() => dialog.FindFirstDescendant(app.By.ByAutomationId("1148"))?.FindFirstDescendant(app.By.ByControlType(ControlType.Edit))
             ?? dialog.FindFirstDescendant(app.By.ByAutomationId("1148")));
         app.SetText(name, path);
         app.Press(VirtualKeyShort.RETURN);
-        app.WaitUntil(() => app.Window.Title.StartsWith(path, StringComparison.OrdinalIgnoreCase), "series opened", TimeSpan.FromSeconds(30));
-        Pause(800);
+        try { app.WaitUntil(() => app.Window.ModalWindows.Length == 0, "open dialog closed"); }
+        finally { FileDialog?.Invoke(default, false); }
+        Pause(500);
+    }
+
+    // Event series → Browse FIS calendar: the season calendar is loaded from the FIS API (needs the FIS API key in
+    // Settings); an event is selected to show its races, then the calendar is closed without importing anything.
+    public void BrowseFisCalendar()
+    {
+        Navigate("1  Event series");
+        app.Click("Browse FIS calendar");
+        var grid = app.ById("SeriesCalendarEventsGrid");
+        app.WaitUntil(() => grid.FindAllDescendants(app.By.ByControlType(ControlType.DataItem)).Length > 3, "FIS calendar loaded", TimeSpan.FromSeconds(90));
+        Pause(1500);
+        // The races list names real technical delegates; recordings blur those columns.
+        var races = app.ById("SeriesCalendarCompetitionsGrid");
+        var tdHeader = app.Retry(() => races.FindAllDescendants(app.By.ByName("TD SURNAME")).FirstOrDefault());
+        var area = races.BoundingRectangle;
+        FileDialog?.Invoke(new System.Drawing.Rectangle(tdHeader.BoundingRectangle.Left, area.Top, area.Right - tdHeader.BoundingRectangle.Left, area.Height), true);
+        var rows = grid.FindAllDescendants(app.By.ByControlType(ControlType.DataItem));
+        var row = rows[Math.Min(3, rows.Length - 1)];
+        var bounds = row.BoundingRectangle;
+        Mouse.Click(new System.Drawing.Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2));
+        Pause(2500);
+        app.Click("Close calendar");
+        FileDialog?.Invoke(default, false);
+        Pause(500);
+    }
+
+    // Settings → FIS: refresh the FIS equipment (timing device) homologations from the FIS API.
+    public void RefreshEquipmentHomologations()
+    {
+        Navigate("Settings");
+        SelectTab("FIS");
+        app.Click("Refresh homologations");
+        Thread.Sleep(1000);
+        app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Button))
+            .Any(x => x.Name == "Refresh homologations" && x.IsEnabled), "homologations refreshed", TimeSpan.FromSeconds(60));
+        Pause(1500);
+    }
+
+    // After the race the operator disconnects timing; registration and approvals are locked while capture runs.
+    public void DisconnectTiming()
+    {
+        Navigate("Settings");
+        SelectTab("Timing devices");
+        if (app.TryByName("Disconnect", ControlType.Button) is { IsEnabled: true } disconnect)
+        {
+            DesktopApp.Invoke(disconnect);
+            app.WaitUntil(() => app.TryByName("Connect", ControlType.Button) is { IsEnabled: true }, "timing disconnected", TimeSpan.FromSeconds(30));
+        }
+        Pause(500);
+    }
+
+    public void ScrollPage(int notches)
+    {
+        var bounds = app.Window.BoundingRectangle;
+        Mouse.MoveTo(new System.Drawing.Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2));
+        for (var i = 0; i < Math.Abs(notches); i++) { Mouse.Scroll(notches < 0 ? -1 : 1); Thread.Sleep(60 * Pace); }
+        Pause(600);
     }
 
     // The competition jury in Race information: the chief of race is required for the FIS XML.
     public void EnterChiefOfRace(string firstName, string lastName, string nation)
     {
-        var row = app.Retry(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.DataItem))
-            .FirstOrDefault(r => r.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(t => t.Name == "Chief of race")));
-        var cells = row.FindAllChildren(app.By.ByClassName("DataGridCell"));
-        var first = cells[1];
-        first.Focus();
-        var bounds = first.BoundingRectangle;
-        var point = new System.Drawing.Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
-        Mouse.Click(point);
-        Pause(200);
-        Mouse.DoubleClick(point);
-        Pause(400);
-        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
-        Keyboard.Type(firstName);
-        app.Press(VirtualKeyShort.TAB); Keyboard.Type(lastName);
-        app.Press(VirtualKeyShort.TAB); Keyboard.Type(nation);
-        app.Press(VirtualKeyShort.RETURN);
+        // Each cell is edited on its own: double-click starts editing, Enter commits. The row is looked up again for
+        // every cell because focusing a cell can scroll the Results page.
+        AutomationElement Cell(int column) => app.Retry(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.DataItem))
+            .FirstOrDefault(r => r.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(t => t.Name == "Chief of race"))
+            ?.FindAllChildren(app.By.ByClassName("DataGridCell")).ElementAtOrDefault(column));
+        foreach (var (column, value) in new[] { (1, firstName), (2, lastName), (3, nation) })
+        {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var cell = Cell(column);
+                cell.Focus();
+                Pause(300);
+                cell = Cell(column);
+                var bounds = cell.BoundingRectangle;
+                Mouse.DoubleClick(new System.Drawing.Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2));
+                Pause(300);
+                Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
+                Keyboard.Type(value);
+                app.Press(VirtualKeyShort.RETURN);
+                Pause(400);
+                if (Cell(column).FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(t => t.Name == value)) { break; }
+            }
+        }
         Pause(1200);
     }
 
@@ -424,17 +513,33 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(1500);
     }
 
-    public void GeneratePdfs()
+    // PDF Factory: optional organizer letterhead as background (margins leave room for its header and footer bands),
+    // then every available report in one click.
+    public void GeneratePdfs(string? letterhead = null)
     {
         app.Click("8  PDF Factory  ▾");
         Pause(600);
         // The competition menu opens with the section; dismiss it, or the next click only closes the menu.
         app.Press(VirtualKeyShort.ESCAPE);
         Pause(400);
+        if (!string.IsNullOrWhiteSpace(letterhead))
+        {
+            var settings = app.ByName("PDF settings");
+            DesktopApp.Invoke(settings);
+            Pause(600);
+            app.Click("Choose PDF background");
+            OpenFileDialog("Choose A4 PDF background", letterhead);
+            SetNumber(FieldAfter("A4 content margins (mm)", "Top"), 40);
+            SetNumber(FieldAfter("A4 content margins (mm)", "Bottom"), 24);
+            Pause(400);
+            app.Click("Save profile");
+            Pause(800);
+            DesktopApp.Invoke(app.ByName("PDF settings"));
+            Pause(400);
+        }
         app.Click("Generate All");
-        app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Count(x => x.Name == "Generated") >= 5
-            || !app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(x => x.Name == "Not generated"),
-            "PDFs generated", TimeSpan.FromSeconds(120));
+        app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text))
+            .Any(x => x.Name.Contains("report(s) generated", StringComparison.Ordinal)), "PDFs generated", TimeSpan.FromSeconds(120));
         Pause(2000);
     }
 

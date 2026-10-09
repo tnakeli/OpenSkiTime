@@ -1,17 +1,18 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using OpenSkiTime.Tests.FullRace;
 
 namespace OpenSkiTime.Desktop.E2E;
 
-// Records the demonstration video from the real running application: the same operator workflow as the real-window
-// test, at a watchable pace, captured with ffmpeg (gdigrab) while a chapter log is written for composition.
-// Opt-in: OPENSKITIME_DESKTOP_E2E=1 and OPENSKITIME_DEMO_VIDEO=<output directory>. Then run
-// scripts/demo-video/compose.py --recording <output directory> --output <file.mp4>.
+// Records the short demonstration video from the real running application, captured with ffmpeg (gdigrab) while a
+// chapter log (title, caption, playback speed) is written for scripts/demo-video/compose.py.
+// Opt-in: OPENSKITIME_DESKTOP_E2E=1, OPENSKITIME_DEMO_VIDEO=<output directory>, OPENSKITIME_DEMO_LIVE_SNAPSHOTS=<exported
+// live snapshots> and OPENSKITIME_DEMO_LETTERHEAD=<A4 background PDF> (scripts/demo-video/make-letterhead.py).
 public sealed class DemoVideoTests
 {
     private static readonly JsonSerializerOptions s_json = new() { WriteIndented = true };
-    private sealed record Chapter(double Start, double End, string Title, string Caption, int Speed);
+    private sealed record Chapter(double Start, double End, string Title, string Caption, double Speed);
 
     [DesktopE2EFact]
     public void RecordDemonstration()
@@ -20,13 +21,14 @@ public sealed class DemoVideoTests
         if (string.IsNullOrWhiteSpace(output)) { return; }
         output = Path.GetFullPath(output);
         Directory.CreateDirectory(output);
+        var letterhead = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_LETTERHEAD");
         var root = Path.Combine(Path.GetTempPath(), "openskitime-demo", Guid.NewGuid().ToString("N"));
         var race = new SyntheticRace();
         var file = Path.Combine(root, "Synthetic Alpine Cup 2026.ost");
         var chapters = new List<Chapter>();
         var clock = new Stopwatch();
-        (double Start, string Title, string Caption, int Speed)? open = null;
-        void Begin(string title, string caption, int speed = 1)
+        (double Start, string Title, string Caption, double Speed)? open = null;
+        void Begin(string title, string caption, double speed = 1)
         {
             var now = clock.Elapsed.TotalSeconds;
             if (open is { } current) { chapters.Add(new(current.Start, now, current.Title, current.Caption, current.Speed)); }
@@ -40,60 +42,61 @@ public sealed class DemoVideoTests
 
         using var app = DesktopApp.Launch(root, local => File.WriteAllBytes(Path.Combine(local, "fis-points-list.zip"), race.PointsListArchive()));
         app.Maximize();
-        var office = new RaceOffice(app, race) { Pace = 3 };
+        var office = new RaceOffice(app, race) { Pace = 2 };
+        var redactions = new List<(double Start, double End, System.Drawing.Rectangle Area)>();
+        (double Start, System.Drawing.Rectangle Area)? dialog = null;
+        office.FileDialog = (area, shown) =>
+        {
+            var now = clock.Elapsed.TotalSeconds;
+            if (shown) { dialog ??= (Math.Max(0, now - 1.0), area); }
+            else if (dialog is { } open) { redactions.Add((open.Start, now + 0.5, open.Area)); dialog = null; }
+        };
         using var recorder = ScreenRecorder.Start(Path.Combine(output, "raw.mp4"));
         clock.Start();
         try
         {
-            Begin("Introduction", "OpenSkiTime runs the race office: entries, draw, timing, results and reports, locally and offline.");
-            Thread.Sleep(6000);
-            Begin("Event series", "An event series is one portable .ost file. Enter the weekend's details and create the file.");
+            Begin("FIS calendar at hand", "Browse the official FIS calendar straight from the FIS API and start an event series from it.", 2);
+            Attempt(output, "fis-calendar", office.BrowseFisCalendar);
+            Begin("Event series", "One portable .ost file holds the whole weekend: entries, start lists, raw timing, corrections and results.", 3);
             office.CreateSeries(file);
-            office.Pause(1200);
-            Begin("Slalom competition", "Add a two-run women's FIS slalom with one intermediate, the TD and the homologated course.");
+            Begin("FIS slalom", "Two runs, one intermediate, TD and homologated course.", 5);
             office.CreateCompetition();
-            office.Pause(1500);
-            Begin("Importing 100 athletes", "Copy the entry list from Excel and paste it into Competitors; review the highlighted rows, then save.");
+            Begin("100 athletes from Excel", "Paste the entry list; every changed cell is highlighted for review before saving.", 2);
             office.ImportCompetitors();
-            office.Pause(1500);
-            Begin("First-run draw", "The FIS draw: the best 15 (16 with equal points) are drawn, the rest start in points order. Bold rows share points.");
+            Begin("Fair FIS draw", "Best 15 drawn (16 with equal points), then points order. Bold rows share FIS points.", 1.5);
             office.DrawFirstRun();
-            office.Pause(3000);
+            Begin("Homologated equipment and timing", "FIS equipment homologations come from the FIS API; the simulator stands in for start, intermediate and finish.", 4);
+            Attempt(output, "homologations", office.RefreshEquipmentHomologations);
             var order1 = SeriesFileEvidence.StartOrder(file, 1);
-            Begin("Connecting simulated timing", "Settings → Timing devices: the training simulator stands in for the start, intermediate and finish clocks.");
             office.OpenRun("5  Timing  ▾", 1);
             office.ConnectSimulator();
-            office.Pause(1500);
-            Begin("Run 1", "Each impulse is captured, saved and assigned in start order. DNS and DNF are one click on the selected racer.", 8);
-            office.Pace = 1;
+            Begin("Run 1 · 100 racers", "Impulses are saved before they are shown, assigned in start order and ranked live. DNS and DNF are one click.", 5);
+            office.FastImpulses = true;
             office.TimeRun(1, order1, FullRaceWindowTests.WindowPlan(race.Run1));
-            office.Pace = 3;
-            Begin("Corrections and classifications", "After the run the referee's DSQ is recorded with gate, reason and judge. Every change is kept in the audit history.");
+            Begin("Corrections with audit", "A referee DSQ with gate, reason and judge. Every change is kept in the audit history.", 3);
             var dsq1 = order1.Single(x => x.Code == race.Athletes[SyntheticRace.Run1Dsq].Code).Bib;
             office.Disqualify(dsq1, race.Run1[race.Athletes[SyntheticRace.Run1Dsq].Code]);
-            office.Pause(2000);
-            Begin("Second-run start list", "Run 2 comes from the Run 1 results: the best 30 start in reverse order; a tie at 30th adds the tied racer.");
+            Begin("Run 2 start order", "Best 30 reversed from Run 1; a tie at 30th brings the tied racer along. Bibs stay.", 2);
             office.PrepareSecondRun();
-            office.Pause(3000);
             var order2 = SeriesFileEvidence.StartOrder(file, 2);
-            Begin("Run 2", "The second run is timed the same way; the ranking switches to combined times.", 8);
             office.OpenRun("5  Timing  ▾", 2);
             office.EnsureConnected();
-            office.Pace = 1;
+            Begin("Run 2 · combined ranking", "The ranking switches to combined times; equal totals share a rank.", 5);
             office.TimeRun(2, order2, FullRaceWindowTests.WindowPlan(race.Run2));
-            office.Pace = 3;
             var dsq2 = order2.Single(x => x.Code == race.Athletes[SyntheticRace.Run2Dsq].Code).Bib;
             office.Disqualify(dsq2, race.Run2[race.Athletes[SyntheticRace.Run2Dsq].Code]);
-            office.Pause(2000);
-            Begin("Live Timing and final rankings", "Spectators follow the race in a browser: run times, intermediates, combined totals and shared ranks for ties.");
+            office.DisconnectTiming();
+            Begin("Live Timing", "Spectators follow intermediates, run times, totals and ties live in any browser.", 2);
             ShowLiveTiming();
-            Begin("Results, reports and XML", "Results apply the FIS penalty; the TD approves the FIS XML, and PDF Factory produces the official lists.");
+            Begin("Results and FIS XML", "The FIS penalty is calculated for the TD; approval stores the exact FIS XML in the series file.", 4);
             office.OpenResults();
+            office.ScrollPage(-12);
             Attempt(output, "jury", () => office.EnterChiefOfRace("Pekka", "SYNTHCHIEF", "FIN"));
             Attempt(output, "race-information", office.CompleteRaceInformation);
-            Attempt(output, "xml", () => office.ApproveAndExportXml(Path.Combine(output, "exported")));
-            Attempt(output, "pdf", office.GeneratePdfs);
-            office.Pause(3000);
+            Attempt(output, "xml", () => office.ApproveAndExportXml(Path.Combine(output, "exported-" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture))));
+            Begin("Branded PDF reports", "PDF Factory prints every list on the organizer's letterhead in one click.", 2.5);
+            Attempt(output, "pdf", () => office.GeneratePdfs(letterhead));
+            office.Pause(1500);
             Close();
         }
         finally
@@ -102,53 +105,14 @@ public sealed class DemoVideoTests
             recorder.Stop();
             File.WriteAllText(Path.Combine(output, "chapters.json"), JsonSerializer.Serialize(chapters.Select(x => new
             { start = x.Start, end = x.End, title = x.Title, caption = x.Caption, speed = x.Speed }), s_json));
+            File.WriteAllText(Path.Combine(output, "series-file.txt"), file);
+            // File dialogs show the user's own folders; compose.py blurs these areas (with a margin) for their duration.
+            File.WriteAllText(Path.Combine(output, "redactions.json"), JsonSerializer.Serialize(redactions.Select(x => new
+            { start = x.Start, end = x.End, x = x.Area.X, y = x.Area.Y, w = x.Area.Width, h = x.Area.Height }), s_json));
         }
     }
 
-    // The closing chapter on its own: the same running application opens the race file completed by the main recording
-    // and finishes the race office work. Opt-in: OPENSKITIME_DEMO_VIDEO=<dir> and OPENSKITIME_DEMO_RESULTS_FILE=<.ost>.
-    // Writes raw-results.mp4 and chapters-results.json, which compose.py uses in place of the last recorded chapter.
-    [DesktopE2EFact]
-    public void RecordResultsChapter()
-    {
-        var output = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_VIDEO");
-        var completed = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_RESULTS_FILE");
-        if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(completed)) { return; }
-        output = Path.GetFullPath(output);
-        var root = Path.Combine(Path.GetTempPath(), "openskitime-demo-results", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        var file = Path.Combine(root, "Synthetic Alpine Cup 2026.ost");
-        File.Copy(completed, file);
-        var race = new SyntheticRace();
-        using var app = DesktopApp.Launch(root, local => File.WriteAllBytes(Path.Combine(local, "fis-points-list.zip"), race.PointsListArchive()));
-        app.Maximize();
-        var office = new RaceOffice(app, race) { Pace = 3 };
-        office.OpenSeries(file);
-        var clock = Stopwatch.StartNew();
-        using var recorder = ScreenRecorder.Start(Path.Combine(output, "raw-results.mp4"));
-        clock.Restart();
-        try
-        {
-            office.OpenResults();
-            office.EnterChiefOfRace("Pekka", "SYNTHCHIEF", "FIN");
-            office.CompleteRaceInformation();
-            office.ApproveAndExportXml(Path.Combine(output, "exported-" + Guid.NewGuid().ToString("N")[..8]));
-            office.GeneratePdfs();
-            office.Pause(3000);
-        }
-        finally
-        {
-            recorder.Stop();
-            File.WriteAllText(Path.Combine(output, "chapters-results.json"), JsonSerializer.Serialize(new[]
-            {
-                new { start = 0.0, end = clock.Elapsed.TotalSeconds, title = "Results, reports and XML",
-                    caption = "Results apply the FIS penalty; the TD approves the FIS XML, and PDF Factory produces the official lists.",
-                    speed = 1, source = "raw-results.mp4" },
-            }, s_json));
-        }
-    }
-
-    // A failing closing step is recorded (and reported) instead of discarding the whole recording.
+    // A failing step is recorded (and reported) instead of discarding the whole recording.
     private static void Attempt(string output, string step, Action act)
     {
         try { act(); File.AppendAllText(Path.Combine(output, "steps.log"), step + ": ok" + Environment.NewLine); }
@@ -163,7 +127,7 @@ public sealed class DemoVideoTests
         var snapshots = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_LIVE_SNAPSHOTS");
         if (string.IsNullOrWhiteSpace(snapshots)) { throw new InvalidOperationException("Set OPENSKITIME_DEMO_LIVE_SNAPSHOTS to the exported live snapshots."); }
         var script = Path.Combine(DesktopApp.RepositoryRoot(), "tests", "live-timing-full-race-e2e.py");
-        using var browser = Process.Start(new ProcessStartInfo("python", $"\"{script}\" --snapshots \"{snapshots}\" --headed --hold 3")
+        using var browser = Process.Start(new ProcessStartInfo("python", $"\"{script}\" --snapshots \"{snapshots}\" --headed --hold 0.8")
         { UseShellExecute = false, WorkingDirectory = DesktopApp.RepositoryRoot() })!;
         if (!browser.WaitForExit(TimeSpan.FromMinutes(5)) || browser.ExitCode != 0)
         { throw new InvalidOperationException("The live-timing browser run failed."); }
@@ -195,5 +159,4 @@ public sealed class DemoVideoTests
 
         public void Dispose() { Stop(); _ffmpeg.Dispose(); }
     }
-
 }

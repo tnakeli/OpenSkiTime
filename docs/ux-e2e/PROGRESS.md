@@ -40,8 +40,9 @@ See the table in `DEVELOPMENT.md` ("Full-race, real-window and Live Timing end-t
 - Folders under `Documents` inherit the read-only directory attribute here; test cleanup clears it on its own folders.
 - Codex's Windows sandbox cannot start shell commands (`setup refresh had errors`); it reviews by reading files.
 
-## Status at usage-limit stop (2026-10-09 21:30)
+## Status (2026-10-10)
 
-- Video composed: `artifacts/ux-e2e/video/OpenSkiTime-demo.mp4` (1920×1080 H.264/AAC, 8 min 45 s, 12 chapters; ffprobe verified). Not committed (generated).
-- Known gap in the video: the closing chapter shows results and the penalty calculation, but the TD approval stops at "Enter person first name before approving FIS results" (the jury chief-of-race cell entry in `RaceOffice.EnterChiefOfRace` does not take effect yet), so the XML export and PDF generation are not shown. PDF generation itself works (12 reports in 1.3 s on the demo file, checked headless).
-- Not yet done: re-run of the E2E project after the review-3 fixes, final full test suite, final Codex review, pull request (not opened).
+- Short demonstration video recorded and composed (2 min 31 s), with FIS calendar/homologation look-ups, letterhead PDFs, privacy blurring. See [TEST_REPORT.md](TEST_REPORT.md#demonstration-video).
+- Real-window E2E re-run after the review-3 fixes: passed, 0 mismatches (now including intermediate times).
+- Full suite: 566 passed.
+- Remaining: final Codex review of the last commit; pull request not opened (awaiting the user's decision).

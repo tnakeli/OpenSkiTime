@@ -109,4 +109,22 @@ Defects found in the automation while building it (not in the application) and h
 - The first runs showed that a new connection, and every newly selected run, starts with all timing positions on HOLD; the operator must switch START/I1/FINISH on. The driver now does so for each run (and the video shows it).
 - A DNF was once applied to the racer who had just started instead of the one on course: the driver computed the row position just before the next start impulse reached the screen, and the new starter is inserted at the top of the Running list. The application kept its own selection correct (`SynchronizeSelection`); the click landed on the shifted row. The driver now waits until the Running list shows exactly the racers on course and verifies the selected-racer line before pressing a status. Recorded as usability finding UX-19.
 
-Open observation: while the application was still open, Results reported "1 extra timestamp(s) remain unassigned or need review"; after closing and reopening the file, replay shows no unassigned or review observations in either run and all results match. Not reproduced at the application boundary; recorded for follow-up.
+Observation (explained): Results reported "1 extra timestamp(s) remain unassigned or need review" only while timing capture was still connected. In the demonstration run, where the operator disconnects timing first, Results shows no extra timestamp, and after reopening the file replay shows none either; approval is blocked while capture is connected in any case. Low; left as is.
+
+## Demonstration video
+
+`artifacts/ux-e2e/video/OpenSkiTime-demo.mp4` (generated, not committed): 1920×1080 H.264/AAC, 2 min 31 s (ffprobe 151.2 s), 13 chapters plus title, PDF showcase and closing cards.
+
+Recorded from the real running application by `DemoVideoTests.RecordDemonstration` (FlaUI, ffmpeg gdigrab) and composed by `scripts/demo-video/compose.py`. Every step of the last recording succeeded (`steps.log`: fis-calendar, homologations, jury, race-information, xml, pdf all `ok`):
+
+1. FIS calendar loaded from the FIS API (892 alpine events for season 2027), an event and its races shown, nothing imported.
+2. Event series, FIS slalom, paste import of 100 athletes, FIS draw.
+3. FIS equipment homologations refreshed from the FIS API; simulator connected, inputs switched on.
+4. Run 1 and Run 2 with all impulses through the simulator controls, DNS/DNF quick status, DSQ with gate/reason/judge, Run 2 order.
+5. Live Timing in Chromium (real local live server, 10 checkpoints).
+6. Results with FIS penalty, jury and race information, TD approval, XML exported (`FIN9123.xml`).
+7. PDF Factory with an organizer letterhead (`scripts/demo-video/make-letterhead.py`, embedded as the PDF background with 40/24 mm margins): 13 reports generated; three generated pages are shown in the closing showcase (rendered with `scripts/demo-video/Render-PdfPage.ps1`).
+
+Privacy in the recording: Windows file dialogs (which first list the user's own Documents folder) and the FIS calendar's technical-delegate columns are blurred for the time they are on screen (`redactions.json`), and the window title bar (local temp path) is replaced by a neutral bar. FIS points-list download, which contains real athletes, is not shown. All race data is synthetic.
+
+PDF headers and footers: the organizer letterhead uses the existing PDF Factory background feature; no renderer change was needed for it. The review of the generated Official Results found jury functions printed as XML codes (`TechnicalDelegate:`, `ChiefRace:`); they now print their display names (shared `RaceInformation.JuryFunctionLabel`, asserted in `PdfFactoryTests`).

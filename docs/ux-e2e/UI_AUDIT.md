@@ -60,6 +60,7 @@ Severity: **High** = blocks reading or operating at a supported size; **Medium**
 | UX-18 | Browser Live Timing | After the last finisher the banner still reads `On course · —` | Low | Open |
 | UX-19 | Timing → Running | A new starter is inserted at the top of the Running list, so rows move under the pointer at the moment a start impulse arrives; a click intended for the racer on course can select the new starter. The selected-racer line below the grids shows who a quick status will apply to | Medium | Open (product decision on list order; mitigated by the identity line and the existing selection synchronisation) |
 | UX-20 | Timing | Every newly connected or newly selected run starts with all inputs on HOLD; the only hint is the small `HOLD · all positions` text in the banner | Low | Open |
+| UX-21 | Official Results PDF | Jury functions printed as FIS XML codes (`TechnicalDelegate:`, `ChiefRace:`) | Low | Fixed: display names shared with the desktop editor (`RaceInformation.JuryFunctionLabel`), test in `PdfFactoryTests` |
 | UX-16 | Results | With no FIS category on the competition, Results reported "no unique penalty rules" | — | Not a defect: the category comes from the FIS calendar data; the synthetic competition now carries category, gender and TD like a real FIS race |
 
 ## Conventions (design system)
