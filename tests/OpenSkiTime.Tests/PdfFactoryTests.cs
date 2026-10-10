@@ -286,7 +286,8 @@ public sealed class PdfFactoryTests
         firstReplay = await workspace.ReadTimingAsync(first.Id);
         var race = FisRaceResults.Assemble(first, TimingReplay.Restore(firstReplay, new AlgeDecoderFactory()), second, TimingReplay.Restore(secondReplay, new AlgeDecoderFactory()));
         var penalty = FisPenalty.Calculate(s_rules.Resolve("FIS", Discipline.Slalom, Gender.Male), race.PenaltyCompetitors);
-        var information = RaceInformation.Empty(Competition) with { Category = "FIS", Runs = [
+        var information = RaceInformation.Empty(Competition) with { Category = "FIS",
+            Jury = RaceInformation.Empty(Competition).Jury.Select(x => x.Function == "ChiefRace" ? x with { Person = new("Test", "CHIEF", "FIN") } : x).ToArray(), Runs = [
             RaceInformation.Empty(Competition).Runs[0] with { Gates = 42, TurningGates = 40, StartTime = "12:00", CourseSetter = new("Test", "Setter", "FIN") },
             RaceInformation.Empty(Competition).Runs[1] with { Gates = 42, TurningGates = 40, StartTime = "13:00", CourseSetter = new("Test", "Setter", "FIN") }] };
         var details = new FisXmlDetails("FIS", new("Test", "TD", "FIN"), new("Test", "Chief", "FIN"),
@@ -320,6 +321,18 @@ public sealed class PdfFactoryTests
         Assert.Equal(approval.AppliedPenalty, source.Finals[0].Approval!.AppliedPenalty);
         var official = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.OfficialResults);
         var officialBytes = await File.ReadAllBytesAsync(folder.PathFor(official.FileName));
+        using (var officialPdf = UglyToad.PdfPig.PdfDocument.Open(officialBytes))
+        {
+            // Jury functions print with their display names, not the FIS XML function codes.
+            var words = string.Join(" ", officialPdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));
+            Assert.Contains(information.Jury, x => x.Function == "ChiefRace" && x.Person.LastName.Length > 0);
+            foreach (var function in information.Jury.Where(x => x.Person.LastName.Length > 0).Select(x => x.Function))
+            {
+                Assert.Contains(RaceInformation.JuryFunctionLabel(function) + ":", words, StringComparison.Ordinal);
+                if (function.Contains("Delegate", StringComparison.Ordinal) || function.StartsWith("Chief", StringComparison.Ordinal))
+                { Assert.DoesNotContain(function + ":", words, StringComparison.Ordinal); }
+            }
+        }
         var editedInformation = information with { Runs = information.Runs.Select(x => x with { Gates = 43 }).ToArray() };
         await workspace.SaveRaceInformationAsync(competition.Id, editedInformation, (await workspace.ReadAsync()).Revision, s_at);
         var unapproved = await new PdfReportSourceBuilder(new AlgeDecoderFactory()).BuildAsync(workspace, competition.Id);

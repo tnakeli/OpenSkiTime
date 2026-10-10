@@ -14,8 +14,7 @@ public sealed class TimingPreferencesStore(string? directory = null)
 {
     private const int FormatVersion = 1;
     private static readonly JsonSerializerOptions s_json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
-    private readonly string _directory = directory ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime");
+    private readonly string _directory = directory ?? LocalDataDirectory.Path;
     private string RolePath => Path.Combine(_directory, "timing-roles.json");
     private string LegacyTimingPath => Path.Combine(_directory, "timing-settings.json");
     private string LegacyAuxiliaryPath => Path.Combine(_directory, "auxiliary-settings.json");

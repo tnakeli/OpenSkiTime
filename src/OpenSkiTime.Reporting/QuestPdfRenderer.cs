@@ -206,7 +206,7 @@ internal static class OfficialResultsDocument
         {
             column.Item().Text("Category: " + information.Category);
             foreach (var official in information.Jury.Where(x => x.Person.LastName.Length > 0))
-            { column.Item().Text(official.Function + ": " + official.Person.LastName + " " + official.Person.FirstName + " " + official.Person.Nation); }
+            { column.Item().Text(RaceInformation.JuryFunctionLabel(official.Function) + ": " + official.Person.LastName + " " + official.Person.FirstName + " " + official.Person.Nation); }
             foreach (var run in information.Runs)
             { column.Item().Text($"Run {run.Number} | {run.Course} | Gates {run.Gates} / Turns {run.TurningGates} | Start {run.StartTime} | Homologation {run.Homologation}"); }
         }

@@ -37,7 +37,11 @@
     next.runs.forEach(r => { const b = document.createElement('button'); b.textContent = `Run ${r.number}`; b.setAttribute('aria-pressed', r.number === selectedRun); b.onclick = () => { selectedRun = r.number; render(state); }; get('runs').append(b); });
     const run = next.runs.find(r => r.number === selectedRun);
     const onCourse = next.runs.find(r => r.number === next.currentRun).results.filter(r => r.status === 'OnCourse').map(r => { const c = next.competitors.find(c => c.bib === r.bib); return `${r.bib} ${c.lastName} ${c.firstName}`; });
-    get('course').textContent = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained' : `On course · ${onCourse.join(' / ') || '—'}`;
+    // Once every starter of the current run is finished or classified, the banner says so instead of an empty course.
+    const current = next.runs.find(r => r.number === next.currentRun);
+    const complete = current.startOrder.length > 0 && current.startOrder.every(bib => { const r = current.results.find(x => x.bib === bib); return r && !['Ready', 'OnCourse', 'Review'].includes(r.status); });
+    get('course').textContent = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained'
+      : onCourse.length ? `On course · ${onCourse.join(' / ')}` : complete ? `Run ${next.currentRun} complete` : 'On course · —';
     get('updated').textContent = `Run ${selectedRun} · Last live update ${new Date(next.updatedAt).toLocaleString()}`;
     // Split columns appear only when this run has at least one intermediate time; the viewer picks intermediate or sector times.
     const splits = liveSplitCount(run.results);

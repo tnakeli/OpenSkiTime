@@ -11,8 +11,7 @@ public sealed class FisLocalStore
     public FisLocalStore(string? localDataDirectory = null, ICredentialStore? apiCredential = null)
     {
         _credential = apiCredential ?? new WindowsCredentialStore("OpenSkiTime.FIS.ApiKey");
-        var directory = localDataDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime");
+        var directory = localDataDirectory ?? LocalDataDirectory.Path;
         _archivePath = Path.Combine(directory, "fis-points-list.zip");
     }
 

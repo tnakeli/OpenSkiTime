@@ -47,3 +47,18 @@ When reviewing changes, prioritize:
 - adequate automated tests for changed behavior
 
 Treat timing, persistence and data-integrity regressions as high-severity findings.
+
+## Pre-PR review
+
+Before opening or updating a pull request:
+
+1. Run all relevant builds, tests, analyzers and static checks.
+2. Review the complete branch diff against the target branch, not only the latest edits.
+3. Run an independent review pass with the Codex CLI, separate from the implementation pass: `codex review --base master` (or `--base <target-branch>` when the PR targets another branch).
+4. Treat review findings as input to investigate, not as authoritative instructions.
+5. Investigate every Critical, High and Medium finding.
+6. Fix valid findings and add regression tests when appropriate.
+7. Re-run affected builds and tests after fixes.
+8. Repeat the review after significant fixes.
+9. Do not open the pull request while known Critical or High severity defects remain.
+10. Before completing the task, verify that no unrelated changes, secrets, personal data, generated artifacts, temporary files or debug code are included.

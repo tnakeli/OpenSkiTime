@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Real-window automation of the built Windows desktop application. Opt-in: tests are skipped unless
+       OPENSKITIME_DESKTOP_E2E=1, and the project is not part of OpenSkiTime.slnx so headless/Linux CI is unaffected. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <!-- Automation helpers are instance-style for readable test scripts and receive non-null UIA elements. -->
+    <NoWarn>$(NoWarn);CA1062;CA1822</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="FlaUI.Core" />
+    <PackageReference Include="FlaUI.UIA3" />
+    <ProjectReference Include="../../src/OpenSkiTime.Persistence/OpenSkiTime.Persistence.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.Devices/OpenSkiTime.Devices.csproj" />
+    <Compile Include="../OpenSkiTime.Tests/FullRace/SyntheticRace.cs" Link="FullRace/SyntheticRace.cs" />
+    <Compile Include="../OpenSkiTime.Tests/FullRace/ExpectedResults.cs" Link="FullRace/ExpectedResults.cs" />
+  </ItemGroup>
+</Project>

@@ -11,7 +11,7 @@
       <StackPanel IsEnabled="False" Width="135" Margin="0,0,8,4"><TextBlock Text="SOURCE" Classes="eyebrow"/><ComboBox ItemsSource="{Binding ReportImageRoles}" SelectedItem="{Binding ReportImageRole}"/></StackPanel>
       <StackPanel IsEnabled="False" Width="100" Margin="0,0,8,4"><TextBlock Text="MATCH ± SECONDS" Classes="eyebrow"/><TextBox Text="{Binding ReportMatchTolerance}"/></StackPanel>
       <StackPanel Width="140" Margin="0,0,8,4" IsEnabled="{Binding CanEditReportDevice}"><TextBlock Text="INPUT" Classes="eyebrow"/><ComboBox Name="ReportInputModePicker" ItemsSource="{Binding ReportInputModes}" SelectedItem="{Binding ReportInputMode}" HorizontalAlignment="Stretch"/></StackPanel>
-      <Button Name="OpenReceiptImagesButton" Content="Open images…" Click="OpenImages_Click" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding IsReportImageInput}"/><Button Content="Paste image" Click="PasteImage_Click" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding IsReportImageInput}"/>
+      <Button Name="OpenReceiptImagesButton" Content="Open images…" Classes="secondaryAction" Click="OpenImages_Click" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding IsReportImageInput}"/><Button Content="Paste image" Classes="secondaryAction" Click="PasteImage_Click" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding IsReportImageInput}"/>
      </WrapPanel>
      <StackPanel Grid.Row="1" Margin="0,4,0,8" Spacing="2">
       <TextBlock Text="{Binding ReportImportStatus}" TextWrapping="Wrap" Classes="supportingText"/>
@@ -32,7 +32,7 @@
       <Grid Name="ReportImagePanel" Grid.Column="2" MinWidth="240" RowDefinitions="Auto,*,Auto,Auto" IsVisible="{Binding IsReportImageInput}">
        <Grid ColumnDefinitions="*,Auto">
         <ComboBox Name="ReportImagePicker" ItemsSource="{Binding ReportImages}" SelectedItem="{Binding SelectedReportImage}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding FileName}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-        <ToggleButton Grid.Column="1" Content="Original size" IsChecked="{Binding ReportImageOriginalSize}" Margin="6,0,0,0"/>
+        <ToggleButton Grid.Column="1" Content="Original size" Classes="secondaryAction" IsChecked="{Binding ReportImageOriginalSize}" Margin="6,0,0,0"/>
        </Grid>
        <ScrollViewer Name="ReportImageScroll" Grid.Row="1" HorizontalScrollBarVisibility="{Binding ReportImageHorizontalScrolling}"><Image Source="{Binding ReportImagePreview}" Width="{Binding ReportImageWidth}" Stretch="Uniform"/></ScrollViewer>
        <TextBlock Grid.Row="2" Text="{Binding SelectedReportImportRow.SourceText}" TextWrapping="Wrap" Classes="supportingText"/>
@@ -47,12 +47,12 @@
          <StackPanel Width="200" Margin="0,0,8,4"><TextBlock Text="DEVICE" Classes="eyebrow"/><ComboBox Name="ReportDeviceSourcePicker" ItemsSource="{Binding ReportDeviceSources}" SelectedItem="{Binding ReportDeviceSource}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Name="ReportDeviceUsbFields" Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceUsb}"><TextBlock Text="USB ID" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceUsbId}" Watermark="Blank = first Timy"/></StackPanel>
          <StackPanel Name="ReportDeviceSerialFields" Width="200" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceSerial}"><TextBlock Text="COM PORT" Classes="eyebrow"/>
-          <Grid ColumnDefinitions="*,Auto"><ComboBox Name="ReportDevicePortPicker" ItemsSource="{Binding ReportDevicePorts}" SelectedItem="{Binding ReportDevicePort}" HorizontalAlignment="Stretch"/><Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshReportDevicePortsCommand}" Margin="4,0,0,0"/></Grid></StackPanel>
+          <Grid ColumnDefinitions="*,Auto"><ComboBox Name="ReportDevicePortPicker" ItemsSource="{Binding ReportDevicePorts}" SelectedItem="{Binding ReportDevicePort}" HorizontalAlignment="Stretch"/><Button Grid.Column="1" Content="Refresh" Classes="secondaryAction" Command="{Binding RefreshReportDevicePortsCommand}" Margin="4,0,0,0"/></Grid></StackPanel>
          <StackPanel Width="110" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceSerial}"><TextBlock Text="BAUD" Classes="eyebrow"/><ComboBox ItemsSource="{Binding ReportDeviceBauds}" SelectedItem="{Binding ReportDeviceBaud}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="USERNAME" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceAlgeUsername}"/></StackPanel>
          <StackPanel Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="PASSWORD" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceAlgePassword}" PasswordChar="•" Watermark="Empty = saved"/></StackPanel>
          <CheckBox Content="Remember password" IsChecked="{Binding ReportDeviceRememberPassword}" IsVisible="{Binding IsReportDeviceAlge}" VerticalAlignment="Bottom" Margin="0,0,8,4"/>
-         <Button Content="Fetch devices" Command="{Binding FetchReportDeviceAlgeDevicesCommand}" IsEnabled="{Binding !IsReportDeviceAlgeFetching}" IsVisible="{Binding IsReportDeviceAlge}" VerticalAlignment="Bottom" Margin="0,0,8,4"/>
+         <Button Content="Fetch devices" Classes="secondaryAction" Command="{Binding FetchReportDeviceAlgeDevicesCommand}" IsEnabled="{Binding !IsReportDeviceAlgeFetching}" IsVisible="{Binding IsReportDeviceAlge}" VerticalAlignment="Bottom" Margin="0,0,8,4"/>
          <StackPanel Name="ReportDeviceAlgeFields" Width="200" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="DEVICE" Classes="eyebrow"/>
           <TextBox Text="{Binding ReportDeviceAlgeStartDevice}" IsVisible="{Binding !HasReportDeviceAlgeDevices}" Watermark="MT1 device ID"/>
           <ComboBox ItemsSource="{Binding ReportDeviceAlgeDevices}" SelectedItem="{Binding SelectedReportDeviceAlgeStart}" IsVisible="{Binding HasReportDeviceAlgeDevices}" PlaceholderText="Choose MT1 device" HorizontalAlignment="Stretch"/></StackPanel>
@@ -61,7 +61,7 @@
           <ComboBox ItemsSource="{Binding ReportDeviceAlgeDevices}" SelectedItem="{Binding SelectedReportDeviceAlgeFinish}" IsVisible="{Binding HasReportDeviceAlgeDevices}" PlaceholderText="Same device" HorizontalAlignment="Stretch"/></StackPanel>
          <TextBlock Text="{Binding ReportDeviceAlgeStatus}" IsVisible="{Binding IsReportDeviceAlge}" VerticalAlignment="Bottom" Margin="0,0,8,8" Classes="supportingText"/>
          <StackPanel Name="ReportDeviceReplayFields" Width="330" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceReplay}"><TextBlock Text="RAW ALGE ASCII FILE" Classes="eyebrow"/>
-          <Grid ColumnDefinitions="*,Auto"><TextBox Name="ReportDeviceReplayPathBox" Text="{Binding ReportDeviceReplayPath}"/><Button Grid.Column="1" Content="Browse…" Click="BrowseReplay_Click" Margin="4,0,0,0"/></Grid></StackPanel>
+          <Grid ColumnDefinitions="*,Auto"><TextBox Name="ReportDeviceReplayPathBox" Text="{Binding ReportDeviceReplayPath}"/><Button Grid.Column="1" Content="Browse…" Classes="secondaryAction" Click="BrowseReplay_Click" Margin="4,0,0,0"/></Grid></StackPanel>
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceB}"><TextBlock Text="START CH" Classes="eyebrow"/><ComboBox Name="ReportDeviceStartChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceStartChannel}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceB}"><TextBlock Text="FINISH CH" Classes="eyebrow"/><ComboBox Name="ReportDeviceFinishChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceFinishChannel}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceHand}"><TextBlock Text="CHANNEL" Classes="eyebrow"/><ComboBox Name="ReportDeviceHandChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceHandChannel}" HorizontalAlignment="Stretch"/></StackPanel>
@@ -69,8 +69,8 @@
         </WrapPanel>
        </ScrollViewer>
        <WrapPanel Grid.Row="1" Margin="0,4,0,4">
-        <Button Name="ReadReportDeviceButton" Content="Connect / Read" Command="{Binding ReadReportDeviceCommand}" IsEnabled="{Binding CanEditReportDevice}" Margin="0,0,8,0"/>
-        <Button Name="StopReportDeviceButton" Content="Stop" Command="{Binding StopReportDeviceCommand}" IsEnabled="{Binding IsReportDeviceReading}"/>
+        <Button Name="ReadReportDeviceButton" Content="Connect / Read" Classes="primaryAction" Command="{Binding ReadReportDeviceCommand}" IsEnabled="{Binding CanEditReportDevice}" Margin="0,0,8,0"/>
+        <Button Name="StopReportDeviceButton" Content="Stop" Classes="secondaryAction" Command="{Binding StopReportDeviceCommand}" IsEnabled="{Binding IsReportDeviceReading}"/>
        </WrapPanel>
        <TextBlock Grid.Row="2" Text="{Binding ReportDeviceStatus}" TextWrapping="Wrap" Classes="supportingText" Margin="0,0,0,4"/>
        <DataGrid Name="ReportDeviceGrid" Grid.Row="3" ItemsSource="{Binding ReportDeviceObservations}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserSortColumns="False" HorizontalScrollBarVisibility="Auto" Classes="raceGrid">
@@ -84,7 +84,7 @@
 
       <WrapPanel><CheckBox Name="SelectAllReceiptMatches" Content="Select all" IsChecked="{Binding AllReportMatchesSelected, Mode=OneWay}" Click="SelectAll_Click" Margin="0,0,14,0"/>
        <Button Name="AcceptReportImagesButton" Content="OK" Click="Accept_Click" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction"/>
-       <Button Content="Cancel" Click="Cancel_Click" Margin="8,0,0,0"/><Button Content="Cancel reading" Command="{Binding CancelReportImagesCommand}" Margin="8,0,0,0" IsVisible="{Binding IsReportBusy}"/>
+       <Button Content="Cancel" Click="Cancel_Click" Classes="secondaryAction" Margin="8,0,0,0"/><Button Content="Cancel reading" Classes="secondaryAction" Command="{Binding CancelReportImagesCommand}" Margin="8,0,0,0" IsVisible="{Binding IsReportBusy}"/>
      </WrapPanel>
      </StackPanel>
     </Grid>

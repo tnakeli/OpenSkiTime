@@ -5,8 +5,7 @@ namespace OpenSkiTime.Desktop;
 
 public sealed class CategoryRulePresetStore(string? localDataDirectory = null)
 {
-    private readonly string _path = Path.Combine(localDataDirectory ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime"),
+    private readonly string _path = Path.Combine(localDataDirectory ?? LocalDataDirectory.Path,
         "category-rules.json");
 
     public async Task SaveAsync(IReadOnlyList<CategoryRuleValues> rules)

@@ -7,8 +7,7 @@ public sealed record FisTimingDeviceCatalogue(DateTimeOffset RetrievedAt, FisTim
 
 public sealed class FisTimingDeviceCache(string? directory = null)
 {
-    private readonly string _path = Path.Combine(directory ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime"), "fis-timing-devices.json");
+    private readonly string _path = Path.Combine(directory ?? LocalDataDirectory.Path, "fis-timing-devices.json");
 
     public FisTimingDeviceCatalogue? Load()
     {

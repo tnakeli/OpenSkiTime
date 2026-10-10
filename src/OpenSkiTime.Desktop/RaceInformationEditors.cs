@@ -10,8 +10,7 @@ namespace OpenSkiTime.Desktop;
 public sealed partial class RacePersonEditor : ObservableObject
 {
     public string Function { get; }
-    public string Label => Function switch { "TechnicalDelegate" => "Technical delegate", "ChiefRace" => "Chief of race",
-        "ChiefCourse" => "Course chief", "StartReferee" => "Start referee", "FinishReferee" => "Finish referee", _ => Function };
+    public string Label => RaceInformation.JuryFunctionLabel(Function);
     [ObservableProperty] private string _firstName = "";
     [ObservableProperty] private string _lastName = "";
     [ObservableProperty] private string _nation = "";

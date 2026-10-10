@@ -25,6 +25,13 @@ public sealed record RaceInformation(string Category, IReadOnlyList<RaceOfficial
 {
     public static readonly string[] JuryFunctions = ["TechnicalDelegate", "ChiefRace", "Referee", "ChiefCourse", "StartReferee", "FinishReferee"];
 
+    // Display name of a jury function; the stored value stays the FIS XML function code.
+    public static string JuryFunctionLabel(string function) => function switch
+    {
+        "TechnicalDelegate" => "Technical delegate", "ChiefRace" => "Chief of race", "Referee" => "Referee",
+        "ChiefCourse" => "Course chief", "StartReferee" => "Start referee", "FinishReferee" => "Finish referee", _ => function,
+    };
+
     public static RaceInformation Empty(CompetitionValues competition)
     {
         ArgumentNullException.ThrowIfNull(competition);
