@@ -6,6 +6,8 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 const output = path.join(root, 'dist');
 const site = 'https://openskiti.me';
 const repo = 'https://github.com/tnakeli/OpenSkiTime';
+// The maintainer is named on every page and in the structured data so that the project's publisher can be identified.
+const maintainer = { name: 'Teemu Niemi', email: 'tniemi@gmail.com', github: 'https://github.com/tnakeli' };
 const image = `${site}/assets/overview.png`;
 // [source, route, language, full title, description]
 const pages = [
@@ -19,12 +21,12 @@ const pages = [
 ];
 const alternates = { en: '/', fi: '/fi/' };
 const text = {
-  en: { skip: 'Skip to content', home: 'OpenSkiTime home', nav: 'Main navigation', features: ['/#workflow', 'Features'], guide: 'Get started', download: 'Download', other: ['/fi/', 'fi', 'FI', 'Suomeksi'], tagline: 'Made for the people behind the race.', license: 'Open source · MIT license', privacy: 'Privacy', signing: 'Code signing', licenseLink: 'License', issue: 'Report an issue', vulnerability: 'Report a vulnerability', source: 'Source code' },
-  fi: { skip: 'Siirry sisältöön', home: 'OpenSkiTime etusivu', nav: 'Päävalikko', features: ['/fi/#ominaisuudet', 'Ominaisuudet'], guide: 'Opas', download: 'Lataa', other: ['/', 'en', 'EN', 'In English'], tagline: 'Tehty kilpailujen tekijöille.', license: 'Avoin lähdekoodi · MIT-lisenssi', privacy: 'Tietosuoja (en)', signing: 'Koodin allekirjoitus (en)', licenseLink: 'Lisenssi', issue: 'Ilmoita ongelmasta', vulnerability: 'Ilmoita haavoittuvuudesta', source: 'Lähdekoodi' }
+  en: { skip: 'Skip to content', home: 'OpenSkiTime home', nav: 'Main navigation', features: ['/#workflow', 'Features'], guide: 'Get started', download: 'Download', other: ['/fi/', 'fi', 'FI', 'Suomeksi'], tagline: 'Made for the people behind the race.', license: 'Open source · MIT license', maintainedBy: 'Maintained by', privacy: 'Privacy', signing: 'Code signing', licenseLink: 'License', issue: 'Report an issue', vulnerability: 'Report a vulnerability', source: 'Source code' },
+  fi: { skip: 'Siirry sisältöön', home: 'OpenSkiTime etusivu', nav: 'Päävalikko', features: ['/fi/#ominaisuudet', 'Ominaisuudet'], guide: 'Opas', download: 'Lataa', other: ['/', 'en', 'EN', 'In English'], tagline: 'Tehty kilpailujen tekijöille.', license: 'Avoin lähdekoodi · MIT-lisenssi', maintainedBy: 'Ylläpitäjä', privacy: 'Tietosuoja (en)', signing: 'Koodin allekirjoitus (en)', licenseLink: 'Lisenssi', issue: 'Ilmoita ongelmasta', vulnerability: 'Ilmoita haavoittuvuudesta', source: 'Lähdekoodi' }
 };
 const header = t => `<a class="skip" href="#main">${t.skip}</a>
 <header class="site-header"><div class="shell header-inner"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}" aria-label="${t.home}"><img src="/favicon.svg" width="34" height="34" alt="">OpenSkiTime<span class="brand-dot">.</span></a><nav aria-label="${t.nav}"><a href="${t.features[0]}">${t.features[1]}</a><a href="/guide/">${t.guide}</a><a href="${repo}">GitHub <span aria-hidden="true">↗</span></a><a href="${t.other[0]}" hreflang="${t.other[1]}" lang="${t.other[1]}" title="${t.other[3]}" aria-label="${t.other[3]}">${t.other[2]}</a><a class="nav-download" href="/download/">${t.download} <span aria-hidden="true">↓</span></a></nav></div></header>`;
-const footer = t => `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}">OpenSkiTime<span class="brand-dot">.</span></a><p>${t.tagline}</p></div><div class="shell footer-bottom"><span>${t.license}</span><nav aria-label="Footer"><a href="/privacy/">${t.privacy}</a><a href="/code-signing/">${t.signing}</a><a href="${repo}/blob/master/LICENSE">${t.licenseLink}</a><a href="${repo}/issues">${t.issue} ↗</a><a href="${repo}/security/advisories/new">${t.vulnerability} ↗</a><a href="${repo}">${t.source} ↗</a></nav></div></footer>`;
+const footer = t => `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}">OpenSkiTime<span class="brand-dot">.</span></a><p>${t.tagline}</p></div><div class="shell footer-bottom"><span>${t.license} · ${t.maintainedBy} ${maintainer.name}, <a href="mailto:${maintainer.email}">${maintainer.email}</a></span><nav aria-label="Footer"><a href="/privacy/">${t.privacy}</a><a href="/code-signing/">${t.signing}</a><a href="${repo}/blob/master/LICENSE">${t.licenseLink}</a><a href="${repo}/issues">${t.issue} ↗</a><a href="${repo}/security/advisories/new">${t.vulnerability} ↗</a><a href="${repo}">${t.source} ↗</a></nav></div></footer>`;
 
 // One source for the visible FAQ and its FAQPage structured data, so search and answer engines read the same text visitors do.
 const faq = {
@@ -84,8 +86,10 @@ const software = lang => ({
       ...(release ? { softwareVersion: release.tag_name.slice(1) } : {}),
       featureList: ['Competitor registration and Excel paste', 'FIS points list lookup', 'Start list draw', 'ALGE Timy, MT1 and ALGE Results timing input', 'Classification with audit history', 'Race points and FIS penalty calculation', 'FIS XML results and timing report', 'PDF start lists and results', 'Live results in the browser', 'Offline race operation'],
       keywords: 'ski race timing software, alpine ski timing, ski racing results, FIS timing, ALGE timing, live results',
+      author: { '@id': `${site}/#maintainer` }, maintainer: { '@id': `${site}/#maintainer` },
       sameAs: [repo]
     },
+    { '@type': 'Person', '@id': `${site}/#maintainer`, name: maintainer.name, email: `mailto:${maintainer.email}`, url: maintainer.github, sameAs: [maintainer.github] },
     { '@type': 'SoftwareSourceCode', codeRepository: repo, programmingLanguage: 'C#', runtimePlatform: '.NET 10', license: `${repo}/blob/master/LICENSE`, targetProduct: { '@id': `${site}/#software` } },
     { '@type': 'FAQPage', mainEntity: faq[lang].map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
   ]
@@ -127,10 +131,10 @@ for (const [name, route, lang, title, description] of pages) {
   await mkdir(target, { recursive: true });
   await writeFile(path.join(target, name === '404' ? '404.html' : 'index.html'), html);
 }
-// RFC 9116. Each deployment renews the expiry; the contact is GitHub private vulnerability reporting.
+// RFC 9116. Each deployment renews the expiry; contacts in order of preference: GitHub private vulnerability reporting, then the maintainer's email.
 const expires = new Date(Date.UTC(new Date().getUTCFullYear() + 1, new Date().getUTCMonth(), new Date().getUTCDate()));
 await mkdir(path.join(output, '.well-known'), { recursive: true });
-await writeFile(path.join(output, '.well-known', 'security.txt'), `Contact: ${repo}/security/advisories/new\nExpires: ${expires.toISOString().replace('.000Z', 'Z')}\nPolicy: ${repo}/blob/master/SECURITY.md\nPreferred-Languages: en, fi\nCanonical: ${site}/.well-known/security.txt\n`);
+await writeFile(path.join(output, '.well-known', 'security.txt'), `Contact: ${repo}/security/advisories/new\nContact: mailto:${maintainer.email}\nExpires: ${expires.toISOString().replace('.000Z', 'Z')}\nPolicy: ${repo}/blob/master/SECURITY.md\nPreferred-Languages: en, fi\nCanonical: ${site}/.well-known/security.txt\n`);
 const lastmod = new Date().toISOString().slice(0, 10);
 await writeFile(path.join(output, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${pages.filter(p => p[0] !== '404').map(p => `<url><loc>${site}${p[1]}</loc><lastmod>${lastmod}</lastmod></url>`).join('')}</urlset>\n`);
 console.log(`Built ${pages.length} pages in ${output}; download: ${asset ? release.tag_name : 'pre-release'}.`);
