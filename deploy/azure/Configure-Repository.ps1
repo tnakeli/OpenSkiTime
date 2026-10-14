@@ -21,14 +21,17 @@ foreach ($name in @('LIVE_DEPLOY_ENABLED','WEBSITE_DEPLOY_ENABLED')) {
     & gh variable set $name --repo $repository --body false
     if ($LASTEXITCODE -ne 0) { throw 'Could not disable deployment while configuring safeguards.' }
 }
-foreach ($name in @('production-live','production-website','production-release')) {
+foreach ($name in @('production-live','production-website','production-release','code-signing')) {
     $null = GitHub "repos/$repository/environments/$name" @{
         deployment_branch_policy=@{protected_branches=$false;custom_branch_policies=$true}
     } 'PUT'
     $desired = switch ($name) {
         'production-live' { @(@{name='master';type='branch'},@{name='live-v*';type='tag'}) }
         'production-website' { @(@{name='master';type='branch'},@{name='v*';type='tag'}) }
-        'production-release' { @(@{name='v*';type='tag'}) }
+        # Windows releases are published by windows-sign.yml, which the maintainer dispatches on master.
+        'production-release' { @(@{name='master';type='branch'}) }
+        # Signing needs no secrets; the environment limits the job to master and holds the CERTUM_EMAIL variable.
+        'code-signing' { @(@{name='master';type='branch'}) }
     }
     $current = (GitHub "repos/$repository/environments/$name/deployment-branch-policies").branch_policies
     foreach ($policy in $current) {

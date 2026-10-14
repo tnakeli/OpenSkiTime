@@ -123,6 +123,7 @@ The Inno Setup uninstaller can be signed only while the installer is compiled, s
 
 ### One-time repository setup
 
+- Environment `production-release`: deployment branches limited to `master`, because `windows-sign.yml` is dispatched on master and publishes from there. `deploy/azure/Configure-Repository.ps1` applies this policy and the `code-signing` policy below.
 - Environment `code-signing` (created 2026-10-14): deployment branches limited to `master`, and environment variable `CERTUM_EMAIL` set to the Certum account e-mail. It needs no secrets and no reviewers; entering the code is the approval.
 - `deploy/windows/signing-certificate.txt` contains the certificate thumbprint. A change of operator also changes `operator` in `scripts/release-signing.mjs`. Read it from a file signed by hand with ssign: `(Get-AuthenticodeSignature file.exe).SignerCertificate.Thumbprint`.
 - The maintainer's GitHub and Certum accounts use multi-factor authentication.
