@@ -65,7 +65,7 @@ Add user-visible changes under `## [Unreleased]` in the relevant changelog durin
    ```
 
 6. **Watch `Windows release`.** It tests, packages, verifies installation, scans dependencies and publishes the release. Stable releases then rebuild the website download link.
-7. **Verify the published release:** download the installer from GitHub, compare it with `SHA256SUMS.txt`, install it on a test machine, check Settings → About shows the version, and for stable releases check `https://openskiti.me/download/`.
+7. **Verify the published release:** download the installer and `SHA256SUMS.txt` from GitHub into one folder and check them with the PowerShell command in the release notes' Verification section (or `sha256sum -c --ignore-missing SHA256SUMS.txt` on Linux), install it on a test machine, check Settings → About shows the version, and for stable releases check `https://openskiti.me/download/`.
 8. If a problem is found after publication, do not replace files or move the tag. Publish a new PATCH or preview version. A broken release can be marked as a prerelease and its notes edited to point to the fix.
 
 ## Live server release checklist

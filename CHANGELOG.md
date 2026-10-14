@@ -11,7 +11,6 @@ This version changes the `.ost` series format (saved FIS points). Series files f
 ### Added
 
 - A competitor cannot be entered in a competition of the other gender. Ticking or pasting such an entry is refused with the reason, and saving checks it on every path. Existing wrong entries in older files do not block other changes and can always be removed.
-
 - **Forerunners in Timing:** the **Forerunners** button in At start enters, edits or copies from Run 1 the run's forerunners during the race. They are the same forerunners as in Results, start before the competitors, are timed and audited like competitors but marked in their own colour. Timing shows their times (below the competitors in Ranking, without a rank) to check the timing; they are never ranked, never in the results and never published with a time in live timing.
 - **Start lists:** before the first draw, every entered competitor is shown with the discipline points the draw will use, sorted by points; points that differ from the loaded FIS list are highlighted as errors. Bibs can start from any number and skip listed numbers (for example `13, 27, 40-42`), and can be reassigned as often as needed. A competitor can be moved to another start position with a reason, keeping the assigned bib. Every change is saved and audited as a new start-list revision.
 
@@ -29,6 +28,7 @@ This version changes the `.ost` series format (saved FIS points). Series files f
 ### Fixed
 
 - **Browse FIS homologations** works again for competitions with a gender.
+- **Release checksums:** `SHA256SUMS.txt` uses LF line endings throughout, so `sha256sum -c` verifies it directly. The release notes give a PowerShell command for checking downloads on Windows.
 
 ## [0.1.0-preview.2] - 2026-10-05
 

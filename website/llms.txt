@@ -12,6 +12,7 @@ Key facts:
 - Live results: self-hosted live timing server or the hosted live.openskiti.me service
 - Status: pre-release development; rehearse with the simulator and independent backup timing before use at a race
 - Languages: user interface and documentation in English; Finnish overview page available
+- Maintainer: Teemu Niemi (GitHub @tnakeli, tniemi@gmail.com)
 
 ## Website
 

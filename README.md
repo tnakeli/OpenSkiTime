@@ -96,7 +96,7 @@ Referee forms use their own FIS layout, fixed margins and no organizer backgroun
 
 OpenSkiTime has adapters for ALGE Timy 2/3 native USB, MT1 USB/serial and the ALGE Results service. A simulator and ASCII replay are available for practice. Device connection and configuration live in Settings; timing capture continues independently of optional online work.
 
-**Live timing** offers FIS TCP/HTTPS for FIS races and a standalone browser view for every race. Local publishing works offline; Cloud publishing uses the same server and can run alongside FIS. A Cloud server accepts new races only from publishers holding a key issued by its operator; save it in Settings → Live timing. You can run your own server, or contact the maintainer for a key to use the hosted `live.openskiti.me`. The server's front page lists every race it is publishing. The timing view shows all three statuses and provides Start, Stop, Refresh and session deletion controls. See [live timing setup and operation](docs/live-timing.md) and [cloud server deployment](docs/live-timing-cloud-deployment.md).
+**Live timing** offers FIS TCP/HTTPS for FIS races and a standalone browser view for every race. Local publishing works offline; Cloud publishing uses the same server and can run alongside FIS. A Cloud server accepts new races only from publishers holding a key issued by its operator; save it in Settings → Live timing. You can run your own server, or contact the [maintainer](#maintainer) for a key to use the hosted `live.openskiti.me`. The server's front page lists every race it is publishing. The timing view shows all three statuses and provides Start, Stop, Refresh and session deletion controls. See [live timing setup and operation](docs/live-timing.md) and [cloud server deployment](docs/live-timing-cloud-deployment.md).
 
 ![Live timing browser view with fictional athletes, intermediate times and unofficial rankings](docs/screenshots/10-live-timing.png)
 
@@ -119,3 +119,7 @@ dotnet run --project src/OpenSkiTime.Desktop -c Release
 ```
 
 Run the automated tests with `dotnet test OpenSkiTime.slnx -c Release`.
+
+## Maintainer
+
+OpenSkiTime is developed and maintained by **Teemu Niemi** (GitHub [@tnakeli](https://github.com/tnakeli), <tniemi@gmail.com>). Use [GitHub issues](https://github.com/tnakeli/OpenSkiTime/issues) for bugs and feature requests, and the [security policy](SECURITY.md) for vulnerabilities.

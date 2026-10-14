@@ -49,9 +49,10 @@ if (!$SkipInstaller) {
     & $Iscc "/DAppVersion=$Version" "/DAppNumericVersion=$assemblyVersion" "/DSourceDir=$app" "/DOutputDir=$output" (Join-Path $repository 'deploy/windows/installer.iss')
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 }
-$hashes = Get-ChildItem -LiteralPath $output -File | Where-Object Extension -in '.exe','.zip' | ForEach-Object {
+$hashes = Get-ChildItem -LiteralPath $output -File | Where-Object Extension -in '.exe','.zip' | Sort-Object Name | ForEach-Object {
     $hash = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
-    $hash.Hash.ToLowerInvariant() + '  ' + $_.Name
+    $hash.Hash.ToLowerInvariant() + '  ' + $_.Name + "`n"
 }
-$hashes | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt') -Encoding utf8
+# Standard sha256sum format: LF terminators and no BOM, so `sha256sum -c` works and the release job can append lines.
+[IO.File]::WriteAllText((Join-Path $output 'SHA256SUMS.txt'), (-join $hashes), [Text.UTF8Encoding]::new($false))
 Write-Host "Unsigned Windows package created in $output"

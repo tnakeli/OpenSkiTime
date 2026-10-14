@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report security vulnerabilities privately through [GitHub private vulnerability reporting](https://github.com/tnakeli/OpenSkiTime/security/advisories/new). Do not open a public issue for a suspected vulnerability.
+Report security vulnerabilities privately through [GitHub private vulnerability reporting](https://github.com/tnakeli/OpenSkiTime/security/advisories/new). Do not open a public issue for a suspected vulnerability. If you cannot use GitHub, email the maintainer, Teemu Niemi, at <tniemi@gmail.com>.
 
 Include the affected component (desktop application, live timing server, website or deployment scripts), the version or commit, steps to reproduce and the impact you expect. Use synthetic data only: never attach credentials, publisher keys, downloaded FIS lists or personal race databases.
 

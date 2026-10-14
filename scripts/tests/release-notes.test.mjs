@@ -55,6 +55,8 @@ test('application notes have separate application and live sections with compati
   assert.doesNotMatch(notes, /live-v0\.2\.0/);
   assert.match(notes, /Unsigned build/);
   assert.match(notes, /SHA256SUMS\.txt/);
+  assert.match(notes, /Get-FileHash -LiteralPath \$name -Algorithm SHA256/);
+  assert.match(notes, /sha256sum -c --ignore-missing SHA256SUMS\.txt/);
   assert.throws(() => appNotes('- No protocol here.', live, '1.0.0'), /must state the live protocol/);
 });
 

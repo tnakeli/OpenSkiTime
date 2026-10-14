@@ -45,7 +45,20 @@ Rehearse before race day and back up event files before updating. Incompatible s
 
 The attached CycloneDX SBOM describes detected runtime dependencies. CVE reports include all severities; high and critical findings block publication. Native vendor components may need separate advisories.
 
-Compare downloaded files with \`SHA256SUMS.txt\`. Checksums verify file integrity, not publisher identity.
+Checksums verify file integrity, not publisher identity. Download \`SHA256SUMS.txt\` into the folder with the downloaded files and run the check there. Each listed file that is present prints OK or FAILED.
+
+Windows PowerShell:
+
+\`\`\`powershell
+Get-Content SHA256SUMS.txt | ForEach-Object {
+  $hash, $name = $_ -split '  ', 2
+  if (Test-Path -LiteralPath $name) {
+    if ((Get-FileHash -LiteralPath $name -Algorithm SHA256).Hash -eq $hash) { "OK      $name" } else { "FAILED  $name" }
+  }
+}
+\`\`\`
+
+Linux: \`sha256sum -c --ignore-missing SHA256SUMS.txt\`. macOS: \`shasum -a 256 -c --ignore-missing SHA256SUMS.txt\`.
 `;
 }
 
