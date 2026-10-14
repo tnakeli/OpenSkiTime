@@ -23,6 +23,10 @@ Key facts:
 - [Privacy](https://openskiti.me/privacy/): local race data and optional online integrations
 - [Code signing policy](https://openskiti.me/code-signing/): how releases are built, approved and signed
 
+## Video
+
+- [Demo video on YouTube](https://www.youtube.com/watch?v=VgQcExvV3S0): a complete two-run FIS slalom with 100 synthetic athletes, from entries to live results, FIS XML and PDF reports (2:31, silent, English captions)
+
 ## Source and documentation
 
 - [GitHub repository](https://github.com/tnakeli/OpenSkiTime): source code, issues and releases

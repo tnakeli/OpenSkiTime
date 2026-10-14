@@ -22,6 +22,10 @@ for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide
     assert.equal(scripts.length, 1, `Missing structured data in ${page}`);
     assert.match(html, /<link rel="alternate" hreflang="fi" href="https:\/\/openskiti\.me\/fi\/">/);
     assert.match(html, /<link rel="alternate" hreflang="x-default" href="https:\/\/openskiti\.me\/">/);
+    // The demo video links out to YouTube; the page itself loads no third-party frame.
+    assert.match(html, /<a class="video-link" href="https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}">/, `Missing demo video link in ${page}`);
+    assert(!/<iframe\b/i.test(html), `Unexpected iframe in ${page}`);
+    assert(JSON.parse(scripts[0][2])['@graph'].some(node => node['@type'] === 'VideoObject'), `Missing VideoObject in ${page}`);
   }
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
   for (const [, attr, value] of html.matchAll(/\b(href|src)="([^"]+)"/g)) {
