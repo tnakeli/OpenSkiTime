@@ -218,7 +218,7 @@
                                          "rank":  null,
                                          "difference":  null,
                                          "at":  "2026-10-03T12:03:00+03:00",
-                                         "startedAt":  null,
+                                         "startedAt":  "2026-10-03T12:02:20+03:00",
                                          "startSourceTicks":  null,
                                          "finishSourceTicks":  null,
                                          "intermediates":  [
@@ -245,7 +245,7 @@
                                          "rank":  null,
                                          "difference":  null,
                                          "at":  "2026-10-03T12:03:00+03:00",
-                                         "startedAt":  null,
+                                         "startedAt":  "2026-10-03T12:02:45+03:00",
                                          "startSourceTicks":  null,
                                          "finishSourceTicks":  null,
                                          "intermediates":  null,
