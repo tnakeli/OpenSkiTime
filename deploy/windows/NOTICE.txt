@@ -1,6 +1,8 @@
 OpenSkiTime is currently in pre-release development.
 
-This package is unsigned. Windows may display an unknown-publisher warning.
+OpenSkiTime programs and the installer are digitally signed with the
+project's Certum code signing certificate issued to Teemu Niemi. See
+https://openskiti.me/code-signing/ for the signing policy.
 Download packages only from https://github.com/tnakeli/OpenSkiTime/releases.
 
 Rehearse the complete race workflow with the simulator and your actual timing

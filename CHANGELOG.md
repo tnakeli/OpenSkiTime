@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Security
+
+- **Signed releases:** the installer, its uninstaller and the OpenSkiTime programs are digitally signed and timestamped with the project's Certum code signing certificate issued to Teemu Niemi. Check the installer's *Digital Signatures* tab before running it. Windows SmartScreen may still warn about a new download until it has built a reputation.
+
 ## [0.2.0-preview.1] - 2026-10-14
 
 This version uses live protocol 1 and changes the `.ost` series format (saved FIS points). Series files from earlier versions cannot be opened; create a new series.

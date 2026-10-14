@@ -43,7 +43,7 @@ This version publishes with **live protocol ${protocol}**. ${compatible.length ?
 
 Windows x64 installer and portable package. The .NET 10 runtime is included. The installer is per-user and needs no administrator rights.
 
-**Unsigned build:** Windows may show an unknown-publisher warning. Code signing is not enabled yet. Download only from this project's GitHub Releases.
+**Digitally signed:** the installer and OpenSkiTime programs are signed with the project's Certum code signing certificate issued to Teemu Niemi and timestamped. Check the installer's *Digital Signatures* tab before running it. Windows SmartScreen may still warn about a new download until the release has built a reputation. Download only from this project's GitHub Releases; see the [code signing policy](https://openskiti.me/code-signing/).
 
 Rehearse before race day and back up event files before updating. Incompatible series files are preserved and rejected; automatic schema upgrades are not available. ALGE native USB needs the vendor driver and SDK separately.
 
