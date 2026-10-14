@@ -10,7 +10,7 @@ Key facts:
 - Timing input: ALGE Timy (USB), ALGE MT1 (serial) and ALGE Results sources; optional B timing and hand-timing evidence
 - FIS: points-list lookup, start list draw, race points and FIS penalty calculation, TD-approved FIS XML results and timing report; FIS submission is currently test mode only
 - Live results: self-hosted live timing server or the hosted live.openskiti.me service
-- Status: pre-release development; rehearse with the simulator and independent backup timing before use at a race
+- Status: in development and not yet intended for timing real races; testing at real competitions during the 2026/27 season. Rehearse with the simulator and independent backup timing
 - Languages: user interface and documentation in English; Finnish overview page available
 - Maintainer: Teemu Niemi (GitHub @tnakeli, tniemi@gmail.com)
 

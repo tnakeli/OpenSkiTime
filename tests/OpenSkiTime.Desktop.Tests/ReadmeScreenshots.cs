@@ -86,6 +86,7 @@ public partial class DesktopWorkflowTests
                     competition.Id, true, null, revision);
                 revision = saved.Revision;
             }
+            await SaveCachedFisPointsAsync(workspace, cache);
 
             using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
                 fisStore: cache, recentSeriesStore: new RecentSeriesStore(root),
@@ -148,6 +149,8 @@ public partial class DesktopWorkflowTests
                 CaptureDraw(window, output, "05-timing.png");
                 await Pulse("finish", "12:01:53.6700");
                 await Pulse("intermediate:1", "12:01:55.2700");
+                // The view refreshes after the snapshot: wait until it shows the last impulse assigned.
+                await WaitTimingAsync(vm, () => vm.TimestampRows.Count > 0 && vm.TimestampRows.All(x => x.Bib is not null));
                 CaptureDraw(window, output, "overview.png");
                 await vm.DisconnectTimingCommand.ExecuteAsync(null);
 

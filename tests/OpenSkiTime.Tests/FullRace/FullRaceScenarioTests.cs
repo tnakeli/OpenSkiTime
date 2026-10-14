@@ -66,6 +66,39 @@ public sealed class FullRaceScenarioTests
         }
     }
 
+    // The same 100-athlete race with race-day changes: points saved with the series and drawn from the file, bibs from 101
+    // skipping missing numbers, a competitor moved after the draw with a reason, and three forerunners timed before the
+    // competitors in both runs. Results must still equal the independent expectations, and repeat identically.
+    [Fact]
+    public async Task HundredAthleteRaceWithRaceDayChangesMatchesIndependentExpectations()
+    {
+        int[] skipped = [113, 127, 140, 141, 142];
+        var variant = new FullRaceVariant(SavedPoints: true, FirstBib: 101, SkippedBibs: skipped, Move: (5, 40),
+            Forerunners: [new("A", "Aino", "SYNTHFORE", "FIN"), new("B", "Bea", "SYNTHFORE", "SWE"), new("C", "Cilla", "SYNTHFORE", "NOR")]);
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-full-race-changes", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var first = await new FullRaceScenario(new SyntheticRace(), Path.Combine(root, "execution-1"), variant).RunAsync();
+            var second = await new FullRaceScenario(new SyntheticRace(), Path.Combine(root, "execution-2"), variant).RunAsync();
+            Assert.Empty(first.Discrepancies);
+            Assert.Empty(second.Discrepancies);
+            Assert.Equal(first.Canonical(), second.Canonical());
+            Assert.Equal(Enumerable.Range(101, 105).Except(skipped), first.Run1Order.Select(x => x.Bib).Order());
+            var moved = new SyntheticRace().Athletes[5].Code;
+            Assert.Equal(40, first.Run1Order.Single(x => x.Code == moved).Position);
+            Assert.Equal(s_run1Counts, new[] { first.Run1.Starters, first.Run1.Finished + first.Run1.Dsq, first.Run1.Dns, first.Run1.Dnf, first.Run1.Dsq });
+            Assert.Equal(s_run2Counts, new[] { first.Run2.Starters, first.Run2.Finished, first.Run2.Dnf, first.Run2.Dsq });
+            // Raw input keeps every impulse: the reference race's packets plus 3 forerunners x start, intermediate, finish.
+            Assert.Equal((289 + 9, 280 + 9), (first.Run1.RawPackets, first.Run2.RawPackets));
+            Assert.Equal(91, first.XmlRankedResults);
+            Assert.Equal(9, first.XmlNotRanked);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) { DeleteTree(root); }
+        }
+    }
+
     // Folders under a user's Documents can inherit the read-only attribute, which blocks Directory.Delete; clear it on
     // the test's own files and folders before removing them.
     private static void DeleteTree(string path)

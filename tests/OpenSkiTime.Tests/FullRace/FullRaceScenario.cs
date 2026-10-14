@@ -14,6 +14,16 @@ namespace OpenSkiTime.Tests.FullRace;
 internal sealed record RunEvidence(int Starters, int Finished, int Dns, int Dnf, int Dsq, int RawPackets, int Observations,
     int AuditEntries, int ManualTimestamps, int IgnoredImpulses, IReadOnlyList<string> Discrepancies);
 
+// Race-day changes on top of the reference race. The default reproduces the reference race exactly.
+// SavedPoints: the FIS points are saved with the series and the draw reads them from the file instead of the list.
+// FirstBib/SkippedBibs: bib numbering of the draw. Move: an athlete (index into SyntheticRace.Athletes) moved after the
+// draw to another Run 1 start position with a reason, keeping the bib. Forerunners: timed before each run's competitors.
+internal sealed record FullRaceVariant(bool SavedPoints = false, int FirstBib = 1, IReadOnlyList<int>? SkippedBibs = null,
+    (int Athlete, int ToPosition)? Move = null, IReadOnlyList<TimingForerunner>? Forerunners = null)
+{
+    public static FullRaceVariant Reference { get; } = new();
+}
+
 internal sealed record FullRaceOutcome(string FilePath, IReadOnlyList<(int Position, int Bib, string Code)> Run1Order,
     IReadOnlyList<int> Run2Order, RunEvidence Run1, RunEvidence Run2, IReadOnlyList<ExpectedFinalRow> Expected,
     IReadOnlyList<FisResultRow> Actual, decimal CalculatedPenalty, decimal AppliedPenalty, string XmlFileName,
@@ -38,8 +48,10 @@ internal sealed record FullRaceOutcome(string FilePath, IReadOnlyList<(int Posit
 // Drives the complete synthetic two-run slalom through the application boundary: real SQLite series file, TSV import,
 // the FIS draw, the simulator timing source with the ALGE decoder, audited corrections, Run 2 order, results, penalty,
 // XML approval, reopen and backup. Every step is checked against ExpectedResults.
-internal sealed class FullRaceScenario(SyntheticRace race, string root)
+internal sealed class FullRaceScenario(SyntheticRace race, string root, FullRaceVariant? variant = null)
 {
+    private readonly FullRaceVariant _variant = variant ?? FullRaceVariant.Reference;
+    private IReadOnlyList<TimingForerunner> Forerunners => _variant.Forerunners ?? [];
     public const string Operator = "Race Secretary";
     private readonly List<string> _log = [];
     private readonly List<string> _discrepancies = [];
@@ -87,25 +99,50 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
             "Synthetic points list is not valid on the race date");
 
         // Run 1 draw (fixed seed) and independent draw-rule checks.
-        var entrants = desk.Competitors.Where(x => entered.Contains(x.Id)).Select(x =>
-        {
-            decimal? points = list.Athletes.TryGetValue(x.Values.FederationCode!, out var fis)
-                && fis.Points?.TryGetValue("SL", out var value) == true ? value : null;
-            return new DrawEntrant(x.Id, x.Values, points);
-        }).ToArray();
+        decimal? ListPoints(string code) => list.Athletes.TryGetValue(code, out var fis) && fis.Points?.TryGetValue("SL", out var value) == true ? value : null;
         var pointsSource = new PointsListSource(list.ListCode, list.ValidFrom, list.ValidTo, list.PenaltyRules);
+        if (_variant.SavedPoints)
+        {
+            // Update from FIS list + Save: every competitor's points saved with the series in one batch with the list.
+            var info = new FisPointsListInfo(list.ListCode, list.Name, list.ValidFrom, list.ValidTo, list.PenaltyRules);
+            var rows = desk.Competitors.Select(x => new DeskBatchRow(x.Id, x.Values, [],
+                list.Athletes.TryGetValue(x.Values.FederationCode!, out var fis) ? CompetitorFisPoints.FromList(list.ListCode, fis.Points) : null, true)).ToArray();
+            await workspace.ApplyDeskBatchAsync(new DeskBatch(series.Id, desk.Revision, rows, [], [info]));
+            desk = await workspace.ReadCompetitorDeskAsync();
+            Check(desk.PointsList(list.ListCode) is { } saved && saved with { PenaltyRules = null } == info with { PenaltyRules = null }
+                && saved.PenaltyRules is not null, "Saved points list differs from the loaded list");
+            Check(desk.Competitors.All(x => desk.FisPointsOf(x.Id)?.Sl == ListPoints(x.Values.FederationCode!)), "Saved SL points differ from the list");
+            Log($"Saved the SL points of {desk.Competitors.Count(x => desk.FisPointsOf(x.Id)?.Sl is not null)} athletes with points list {list.ListCode}.");
+        }
+        // The draw reads the points saved with the series (or, for the reference race, the loaded list).
+        var entrants = desk.Competitors.Where(x => entered.Contains(x.Id)).Select(x => new DrawEntrant(x.Id, x.Values,
+            _variant.SavedPoints ? desk.FisPointsOf(x.Id)?.Sl : ListPoints(x.Values.FederationCode!))).ToArray();
+        var options = new DrawOptions(15, 30, _variant.FirstBib, _variant.SkippedBibs);
         var plan1 = FisStartOrder.FirstRun(competition.Id, competition.Values, Gender.Female, entrants, pointsSource,
-            new(15, 30, 1), SyntheticRace.DrawSeed);
+            options, SyntheticRace.DrawSeed);
         var replay = FisStartOrder.FirstRun(competition.Id, competition.Values, Gender.Female, entrants.Reverse().ToArray(), pointsSource,
-            new(15, 30, 1), SyntheticRace.DrawSeed);
+            options, SyntheticRace.DrawSeed);
         Check(plan1.Entries.Select(x => x.Entrant.CompetitorId).SequenceEqual(replay.Entries.Select(x => x.Entrant.CompetitorId)),
             "Draw is not reproducible from the saved seed and input");
         CheckFirstRunDraw(plan1);
+        if (_variant.Move is { } move) { plan1 = MoveAfterDraw(plan1, race.Athletes[move.Athlete].Code, move.ToPosition); }
         var desk1 = await workspace.SaveStartListAsync(new(plan1, desk.Revision, Operator, "Draw", At(10, 0)));
         var list1 = desk1.Revisions.Single(x => x.Plan.RunNumber == 1);
+        Check(list1.Plan.Entries.Select(x => (x.Position, x.Bib, x.Entrant.CompetitorId)).SequenceEqual(plan1.Entries.Select(x => (x.Position, x.Bib, x.Entrant.CompetitorId)))
+            && (list1.Plan.Changes?.Count ?? 0) == (plan1.Changes?.Count ?? 0), "Saved Run 1 start list differs from the drawn and changed plan");
         var run1Order = list1.Plan.Entries.Select(x => (x.Position, x.Bib, x.Entrant.Athlete.FederationCode!)).ToArray();
         Log($"Run 1 draw saved: {list1.Plan.Entries.Count} starters, first group {list1.Plan.Entries.Count(x => x.Group == "First group")}, " +
             $"no points {list1.Plan.Entries.Count(x => x.Group == "No points")}, seed {SyntheticRace.DrawSeed}.");
+
+        // Forerunners of both runs are saved with the race information (as in Results or the Timing Forerunners dialog).
+        if (Forerunners.Count > 0)
+        {
+            var information = (await workspace.ReadRaceInformationAsync(competition.Id))?.Values ?? RaceInformation.Empty(competition.Values);
+            information = information with { Runs = information.Runs.Select(x => x with
+            { Forerunners = Forerunners.Select(r => new RaceForerunner(r.Letter, new(r.FirstName, r.LastName, r.Nation))).ToArray() }).ToArray() };
+            await workspace.SaveRaceInformationAsync(competition.Id, information, (await workspace.ReadAsync()).Revision, At(9, 30));
+            Log($"Saved forerunners {string.Join(", ", Forerunners.Select(x => x.Letter))} for both runs.");
+        }
 
         // Run 1 timing.
         var expected1 = ExpectedResults.Run(1, run1Order, race.Run1);
@@ -164,6 +201,7 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
 
         // Persistence: close, reopen and compare; backup, open the backup as a restored series.
         var before = Fingerprint(timing1, timing2);
+        var forerunnersBefore = ForerunnerFingerprint(timing1, timing2);
         var evidence = await EvidenceAsync(workspace, list1.Id, list2.Id);
         var backup = Path.Combine(root, "backup", "synthetic-full-race-backup.ost");
         Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
@@ -173,9 +211,18 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
         {
             await workspace.OpenAsync(path);
             await workspace.Timing!.SelectRunAsync(list1.Id);
+            await workspace.Timing.SetForerunnersAsync(list1.Id, Forerunners);
             var reopened1 = workspace.Timing.Snapshot!;
             await workspace.Timing.SelectRunAsync(list2.Id);
+            await workspace.Timing.SetForerunnersAsync(list2.Id, Forerunners);
             var reopened2 = workspace.Timing.Snapshot!;
+            Check(ForerunnerFingerprint(reopened1, reopened2) == forerunnersBefore, $"Forerunner timing changed after reopening {Path.GetFileName(path)}");
+            if (_variant.SavedPoints)
+            {
+                var reopenedDesk = await workspace.ReadCompetitorDeskAsync();
+                Check(reopenedDesk.Competitors.All(x => reopenedDesk.FisPointsOf(x.Id)?.Sl == ListPoints(x.Values.FederationCode!)),
+                    $"Saved FIS points changed after reopening {Path.GetFileName(path)}");
+            }
             Check(Fingerprint(reopened1, reopened2) == before, $"Timing changed after reopening {Path.GetFileName(path)}");
             var stored = Assert.Single(await workspace.ReadApprovedResultsAsync(competition.Id));
             Check(stored.Xml.AsSpan().SequenceEqual(xml) && stored.AppliedPenalty == penalty.Applied, "Approved XML changed after reopen");
@@ -196,8 +243,12 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
     private void CheckFirstRunDraw(StartListPlan plan)
     {
         var entries = plan.Entries;
-        Check(entries.Count == SyntheticRace.AthleteCount && entries.Select(x => x.Bib).SequenceEqual(Enumerable.Range(1, SyntheticRace.AthleteCount)),
-            "Run 1 bibs are not 1..100 in start order");
+        // Independent bib numbering: from the first bib upwards in start order, never handing out a skipped number.
+        var skipped = (_variant.SkippedBibs ?? []).ToHashSet();
+        var expectedBibs = Enumerable.Range(_variant.FirstBib, SyntheticRace.AthleteCount + skipped.Count).Where(x => !skipped.Contains(x))
+            .Take(SyntheticRace.AthleteCount);
+        Check(entries.Count == SyntheticRace.AthleteCount && entries.Select(x => x.Bib).SequenceEqual(expectedBibs),
+            $"Run 1 bibs are not {_variant.FirstBib}.. in start order without the skipped bibs");
         var withPoints = entries.Where(x => x.Entrant.Points is not null).ToArray();
         var sortedPoints = withPoints.Select(x => x.Entrant.Points!.Value).Order().ToArray();
         // First group: the best 15, expanded by equal points at the boundary (indices 13–15 share points → 16).
@@ -219,12 +270,32 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
     {
         var timing = workspace.Timing!;
         await timing.SelectRunAsync(list.Id);
+        await timing.SetForerunnersAsync(list.Id, Forerunners);
         await timing.FollowStartOrderAsync(true);
+        if (Forerunners.Count > 0)
+        {
+            Check(RaceFlow.Waiting(timing.Snapshot!).Select(x => x.Bib).Take(Forerunners.Count + 1)
+                .SequenceEqual(Forerunners.Select(x => x.Key).Append(list.Plan.Entries.OrderBy(x => x.Position).First().Bib)),
+                $"Run {run}: forerunners do not wait before the first competitor");
+        }
         var source = new SimulatorTimingSource();
         await timing.StartAsync(source, new("Simulator", "Synthetic full race", SyntheticRace.RaceDate, Simulation: true)
             { IntermediateChannels = [2], Operator = Operator }, Operator);
         var events = new List<(long At, int Order, Func<Task> Act)>();
         var pulses = 0; var manual = 0; var ignored = 0;
+        // Forerunners start one minute apart, the last one a minute before the first competitor, and are fully timed.
+        var forerunnerTimes = new Dictionary<int, long>();
+        for (var i = 0; i < Forerunners.Count; i++)
+        {
+            var start = SyntheticRace.StartTimeOfDay(run, 1) - (Forerunners.Count - i) * TimeSpan.TicksPerMinute;
+            var intermediate = start + TimeSpan.FromSeconds(24).Ticks + i * 1_230_000L;
+            var finish = start + TimeSpan.FromSeconds(52).Ticks + i * 3_170_000L;
+            events.Add((start, 1, () => PulseAsync(timing, source, 0, start)));
+            events.Add((intermediate, 1, () => PulseAsync(timing, source, 2, intermediate)));
+            events.Add((finish, 1, () => PulseAsync(timing, source, 1, finish)));
+            pulses += 3;
+            forerunnerTimes[Forerunners[i].Key] = (finish - start) / (TimeSpan.TicksPerMillisecond * 10);
+        }
         foreach (var entry in list.Plan.Entries)
         {
             var code = entry.Entrant.Athlete.FederationCode!;
@@ -311,6 +382,15 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
         var discrepancies = new List<string>();
         if (!snapshot.Complete) { discrepancies.Add($"Run {run} is not complete"); }
         if (snapshot.Unresolved != 0) { discrepancies.Add($"Run {run} has {snapshot.Unresolved} unresolved impulses"); }
+        // Forerunners: finished with their own time (truncated to hundredths), never ranked, never among the results.
+        foreach (var runner in Forerunners)
+        {
+            var row = snapshot.Forerunners.SingleOrDefault(x => x.Bib == runner.Key);
+            if (row is not { Status: TimingStatus.Finished, Rank: null, IsForerunner: true } || row.Hundredths != forerunnerTimes[runner.Key])
+            { discrepancies.Add($"Run {run} forerunner {runner.Letter}: expected finished {forerunnerTimes[runner.Key]} unranked, actual {row?.Status} {row?.Hundredths} rank {row?.Rank}"); }
+        }
+        if (snapshot.Results.Any(x => x.IsForerunner || TimingForerunner.IsKey(x.Bib)) || snapshot.Results.Count != list.Plan.Entries.Count)
+        { discrepancies.Add($"Run {run} results include forerunners or miss competitors"); }
         if (data.Packets.Count != pulses) { discrepancies.Add($"Run {run} raw packets {data.Packets.Count}, pulses sent {pulses}"); }
         foreach (var d in discrepancies) { _discrepancies.Add(d); }
         var evidence = new RunEvidence(list.Plan.Entries.Count,
@@ -320,6 +400,11 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
             snapshot.Audit.Count(x => x.After.Kind == DecisionKind.ManualTime), snapshot.Observations.Count(x => x.Ignored), discrepancies);
         Check(manual == evidence.ManualTimestamps && ignored == evidence.IgnoredImpulses,
             $"Run {run} manual/ignored expected {manual}/{ignored} actual {evidence.ManualTimestamps}/{evidence.IgnoredImpulses}");
+        if (Forerunners.Count > 0)
+        {
+            Log($"Run {run} forerunners {string.Join(", ", snapshot.Forerunners.Select(x => $"{Forerunners.Single(r => r.Key == x.Bib).Letter} {ExpectedResults.FormatHundredths(x.Hundredths)}"))}; " +
+                $"{snapshot.Audit.Count(x => x.After.Bib is { } b && TimingForerunner.IsKey(b))} audited forerunner decisions.");
+        }
         Log($"Run {run} timed: {evidence.Starters} on list, {evidence.Finished} finished, {evidence.Dns} DNS, {evidence.Dnf} DNF, {evidence.Dsq} DSQ; " +
             $"{evidence.RawPackets} raw packets, {evidence.Observations} observations, {evidence.AuditEntries} audit entries, " +
             $"{evidence.ManualTimestamps} manual timestamp(s), {evidence.IgnoredImpulses} ignored impulse(s).");
@@ -427,6 +512,26 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root)
         }
         return text.ToString();
     }
+
+    // A recorded move after the draw: the athlete takes the new position, everyone keeps their bib, the others keep
+    // their relative order, and the reason is kept with the change.
+    private StartListPlan MoveAfterDraw(StartListPlan drawn, string code, int toPosition)
+    {
+        var moved = drawn.Entries.Single(x => x.Entrant.Athlete.FederationCode == code);
+        var plan = FisStartOrder.Apply(drawn, new(StartListChangeKind.Move, "Late at the start gate: moved by the jury", moved.Entrant.CompetitorId, toPosition));
+        var others = drawn.Entries.Where(x => x != moved).Select(x => x.Entrant.CompetitorId);
+        Check(plan.Entries.Single(x => x.Position == toPosition).Entrant.CompetitorId == moved.Entrant.CompetitorId
+            && plan.Entries.Single(x => x.Entrant.CompetitorId == moved.Entrant.CompetitorId).Bib == moved.Bib
+            && plan.Entries.Where(x => x.Position != toPosition).Select(x => x.Entrant.CompetitorId).SequenceEqual(others)
+            && plan.Entries.Select(x => x.Position).SequenceEqual(Enumerable.Range(1, drawn.Entries.Count))
+            && plan.Entries.Select(x => x.Bib).Order().SequenceEqual(drawn.Entries.Select(x => x.Bib).Order())
+            && plan.Changes is [{ Kind: StartListChangeKind.Move, Reason.Length: > 0 }], "Start position move is wrong");
+        Log($"Moved bib {moved.Bib} ({code}) from position {moved.Position} to {toPosition} with a reason; bibs unchanged.");
+        return plan;
+    }
+
+    private static string ForerunnerFingerprint(TimingSnapshot first, TimingSnapshot second) => string.Join("\n",
+        new[] { first, second }.SelectMany(s => s.Forerunners.Select(x => $"{s.ListId:N} {x.Bib} {x.Status} {x.Hundredths} {x.Rank}")));
 
     private static string Fingerprint(TimingSnapshot first, TimingSnapshot second) => string.Join("\n",
         new[] { first, second }.SelectMany(s => s.Results.Select(x => $"{s.ListId:N} {x.Bib} {x.Status} {x.Hundredths} {x.Rank} {string.Join('/', x.Splits.Select(y => y.Hundredths))} {x.Disqualification}"))

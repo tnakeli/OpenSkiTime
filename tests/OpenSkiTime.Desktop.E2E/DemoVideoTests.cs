@@ -9,6 +9,11 @@ namespace OpenSkiTime.Desktop.E2E;
 // chapter log (title, caption, playback speed) is written for scripts/demo-video/compose.py.
 // Opt-in: OPENSKITIME_DESKTOP_E2E=1, OPENSKITIME_DEMO_VIDEO=<output directory>, OPENSKITIME_DEMO_LIVE_SNAPSHOTS=<exported
 // live snapshots> and OPENSKITIME_DEMO_LETTERHEAD=<A4 background PDF> (scripts/demo-video/make-letterhead.py).
+// Everything the application shows or opens lives in a new demonstration folder outside the user profile
+// (OPENSKITIME_DEMO_ROOT, default C:\OpenSkiTimeDemo), which is also its working directory: the series, the exported XML,
+// the letterhead and the PDFs. Before recording, one unrecorded file dialog is confirmed in that folder, so every
+// recorded Windows file dialog opens there instead of in the user's own folders and nothing needs to be blurred.
+// Only the FIS calendar's technical-delegate columns, which name real officials, are blurred.
 public sealed class DemoVideoTests
 {
     private static readonly JsonSerializerOptions s_json = new() { WriteIndented = true };
@@ -22,7 +27,13 @@ public sealed class DemoVideoTests
         output = Path.GetFullPath(output);
         Directory.CreateDirectory(output);
         var letterhead = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_LETTERHEAD");
-        var root = Path.Combine(Path.GetTempPath(), "openskitime-demo", Guid.NewGuid().ToString("N"));
+        var root = DemoRoot();
+        if (!string.IsNullOrWhiteSpace(letterhead))
+        {
+            var copy = Path.Combine(root, "Organizer letterhead.pdf");
+            File.Copy(letterhead, copy);
+            letterhead = copy;
+        }
         var race = new SyntheticRace();
         var file = Path.Combine(root, "Synthetic Alpine Cup 2026.ost");
         var chapters = new List<Chapter>();
@@ -41,7 +52,13 @@ public sealed class DemoVideoTests
             open = null;
         }
 
-        using var app = DesktopApp.Launch(root, local => File.WriteAllBytes(Path.Combine(local, "fis-points-list.zip"), race.PointsListArchive()));
+        void PrepareLocalData(string local) => File.WriteAllBytes(Path.Combine(local, "fis-points-list.zip"), race.PointsListArchive());
+        // Unrecorded warm-up: Windows reopens file dialogs in the folder last confirmed by this application.
+        using (var warmUp = DesktopApp.Launch(root, PrepareLocalData))
+        {
+            new RaceOffice(warmUp, race).CreateSeries(Path.Combine(root, "Setup", "Dialog warm-up.ost"));
+        }
+        using var app = DesktopApp.Launch(root, PrepareLocalData);
         app.Maximize();
         var office = new RaceOffice(app, race) { Pace = 2, OperatorName = "Race office" };
         var redactions = new List<(double Start, double End, System.Drawing.Rectangle Area)>();
@@ -49,7 +66,7 @@ public sealed class DemoVideoTests
         // Times are measured from just before ffmpeg starts; the first captured frame follows shortly after, so marks
         // are at most slightly late. Redactions get a generous margin on both sides to absorb that offset.
         const double margin = 2.0;
-        office.FileDialog = (area, shown) =>
+        office.SensitiveArea = (area, shown) =>
         {
             var now = clock.Elapsed.TotalSeconds;
             if (shown) { dialog ??= (Math.Max(0, now - margin), area); }
@@ -92,13 +109,13 @@ public sealed class DemoVideoTests
             office.DisconnectTiming();
             Begin("Live Timing", "Spectators follow intermediates, run times, totals and ties live in any browser.", 2);
             ShowLiveTiming();
-            Begin("Results and FIS XML", "The FIS penalty is calculated for the TD; approval stores the exact FIS XML in the series file.", 4, maskStatus: true);
+            Begin("Results and FIS XML", "The FIS penalty is calculated for the TD; approval stores the exact FIS XML in the series file.", 4);
             office.OpenResults();
             office.ScrollPage(-12);
             Attempt(output, "jury", () => office.EnterChiefOfRace("Pekka", "SYNTHCHIEF", "FIN"));
             Attempt(output, "race-information", office.CompleteRaceInformation);
-            Attempt(output, "xml", () => office.ApproveAndExportXml(Path.Combine(output, "exported-" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture))));
-            Begin("Branded PDF reports", "PDF Factory prints every list on the organizer's letterhead in one click.", 2.5, maskStatus: true);
+            Attempt(output, "xml", () => office.ApproveAndExportXml(Path.Combine(root, "Exports")));
+            Begin("Branded PDF reports", "PDF Factory prints every list on the organizer's letterhead in one click.", 2.5);
             Attempt(output, "pdf", () => office.GeneratePdfs(letterhead));
             office.Pause(1500);
             Close();
@@ -112,10 +129,24 @@ public sealed class DemoVideoTests
             File.WriteAllText(Path.Combine(output, "chapters.json"), JsonSerializer.Serialize(chapters.Select(x => new
             { start = x.Start, end = x.End, title = x.Title, caption = x.Caption, speed = x.Speed, maskStatus = x.MaskStatus }), s_json));
             File.WriteAllText(Path.Combine(output, "series-file.txt"), file);
-            // File dialogs show the user's own folders; compose.py blurs these areas (with a margin) for their duration.
+            // The FIS calendar's technical-delegate columns; compose.py blurs these areas (with a margin) for their duration.
             File.WriteAllText(Path.Combine(output, "redactions.json"), JsonSerializer.Serialize(redactions.Select(x => new
             { start = x.Start, end = x.End, x = x.Area.X, y = x.Area.Y, w = x.Area.Width, h = x.Area.Height }), s_json));
         }
+    }
+
+    // A new folder for this recording outside the user profile, so no path on screen shows the account name.
+    private static string DemoRoot()
+    {
+        var configured = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_ROOT");
+        var parent = Path.GetFullPath(string.IsNullOrWhiteSpace(configured) ? @"C:\OpenSkiTimeDemo" : configured);
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (parent.StartsWith(profile, StringComparison.OrdinalIgnoreCase) || parent.Contains(Environment.UserName, StringComparison.OrdinalIgnoreCase))
+        { throw new InvalidOperationException("OPENSKITIME_DEMO_ROOT must be outside the user profile and must not contain the account name."); }
+        var root = Path.Combine(parent, "Demo " + DateTime.Now.ToString("yyyy-MM-dd HHmmss", CultureInfo.InvariantCulture));
+        if (Directory.Exists(root)) { throw new InvalidOperationException("Demonstration folder already exists: " + root); }
+        Directory.CreateDirectory(root);
+        return root;
     }
 
     // A failing step is recorded (and reported) instead of discarding the whole recording.

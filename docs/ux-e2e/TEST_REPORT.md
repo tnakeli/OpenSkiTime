@@ -49,6 +49,19 @@ Expected-vs-actual: 100/100 final rows match; discrepancies: none. The per-athle
 - A device retransmitting an identical start line: the second observation is `Duplicate` of the first, raw input keeps all 3 packets, the result is unaffected and survives reopening.
 - A missing finish without hand time keeps the run incomplete and blocks `ToRunFinishes`; malformed manual time or a blank reason is rejected without an audit row; a valid hand time is audited (operator/reason) and produces the manual finish flag.
 
+### Race-day changes on the same 100-athlete race
+
+`HundredAthleteRaceWithRaceDayChangesMatchesIndependentExpectations` (same command) runs the identical race twice with the changes an operator makes on race day, through the same application boundary, and compares every result row with the independent expectations:
+
+| Change | How | Assertion against |
+|---|---|---|
+| FIS points saved with the series | One desk batch saves the SL points of all 100 athletes with the synthetic list's code, validity and penalty rules (as Update from FIS list + Save) | Saved points equal the list for every athlete, also after reopening the file and the backup; the draw reads the saved points |
+| Bib numbering | Draw with first bib 101 and skipped bibs 113, 127, 140–142 | Bibs follow the start order from 101 without the skipped numbers (101–205 minus five) |
+| Start position moved | After the draw, an athlete is moved to position 40 with a reason (`StartListChange` Move) | The athlete is at position 40 with the original bib, all others keep their relative order and bibs, the change and its reason are saved with the start list |
+| Forerunners | Three forerunners saved in the race information for both runs and timed (start, intermediate, finish) one minute apart before the first competitor | They wait before the first competitor, finish with their own truncated times, never get a rank, never appear among the results; their timing is identical after reopening; raw input has 9 more packets per run (298 and 289) |
+
+The competitor results, the Run 2 order (31-athlete reversed group at the tie), the penalty and the XML (91 ranked, 9 not ranked) equal the independent expectations; both executions produce identical canonical output. Result on 2026-10-14: 5/5 `FullRace` tests passed (43 s).
+
 ## Live Timing in the browser (Playwright, Chromium)
 
 Commands (see `DEVELOPMENT.md`): export the snapshots with `ExportLiveSnapshotsOfTheFullRace`, then `python tests/live-timing-full-race-e2e.py --snapshots <dir> --screenshots <dir>`.

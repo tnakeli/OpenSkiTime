@@ -67,7 +67,7 @@ if (asset && !asset.browser_download_url.startsWith(`${repo}/releases/download/$
 }
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const download = asset
-  ? `<p class="eyebrow">Windows x64 · ${escape(release.tag_name)}${preview ? ' · Preview' : ''}</p><h2>${preview ? 'Try the development preview.' : 'Ready for your next rehearsal.'}</h2><p>${preview ? 'A preview for testing and rehearsals. Do not rely on it alone at an official race; always use independent backup timing. ' : ''}The installer includes the .NET runtime and the local live timing tools.</p><a class="button" href="${escape(asset.browser_download_url)}">Download for Windows <span aria-hidden="true">↓</span></a><p class="small"><a href="${repo}/releases/tag/${escape(release.tag_name)}">Release notes and SHA-256 checksums ↗</a></p><p class="notice">This installer is currently unsigned. Windows may display an unknown-publisher warning. Download only from this project’s GitHub Releases.</p>`
+  ? `<p class="eyebrow">Windows x64 · ${escape(release.tag_name)}${preview ? ' · Preview' : ''}</p><h2>${preview ? 'Try the development preview.' : 'Ready for your next rehearsal.'}</h2><p>${preview ? 'A preview for evaluation and rehearsals. OpenSkiTime is still in development and is not yet intended for timing real races. It will be tested at real competitions during the 2026/27 season. Always use independent backup timing. ' : ''}The installer includes the .NET runtime and the local live timing tools.</p><a class="button" href="${escape(asset.browser_download_url)}">Download for Windows <span aria-hidden="true">↓</span></a><p class="small"><a href="${repo}/releases/tag/${escape(release.tag_name)}">Release notes and SHA-256 checksums ↗</a></p><p class="notice">This installer is currently unsigned. Windows may display an unknown-publisher warning. Download only from this project’s GitHub Releases.</p>`
   : `<p class="eyebrow">Pre-release development</p><h2>The first installer is on its way.</h2><p>There is no published Windows installer yet. You can run the current development version from source and follow progress on GitHub.</p><a class="button" href="${repo}/releases">View releases <span aria-hidden="true">↗</span></a><p class="small"><a href="/guide/#from-source">Run from source →</a></p>`;
 const faqHtml = lang => `<div class="faq">${faq[lang].map(([q, a]) => `<details><summary>${escape(q)}</summary><p>${escape(a)}</p></details>`).join('')}</div>`;
 // JSON-LD is a data block, not a script: browsers do not execute it and the CSP needs no script-src.
@@ -111,7 +111,7 @@ for (const [name, route, lang, title, description] of pages) {
     `<meta name="description" content="${escape(description)}">`,
     name === '404' ? `<meta name="robots" content="noindex">` : `<link rel="canonical" href="${site}${route}">`,
     ...(translated ? [...Object.entries(alternates).map(([l, r]) => `<link rel="alternate" hreflang="${l}" href="${site}${r}">`), `<link rel="alternate" hreflang="x-default" href="${site}/">`] : []),
-    `<meta name="theme-color" content="#12323c">`,
+    `<meta name="theme-color" content="#14234a">`,
     `<meta property="og:site_name" content="OpenSkiTime">`,
     `<meta property="og:title" content="${escape(title)}">`,
     `<meta property="og:description" content="${escape(description)}">`,

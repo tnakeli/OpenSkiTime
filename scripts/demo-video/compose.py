@@ -20,7 +20,7 @@ FONT_BOLD = 'C\\:/Windows/Fonts/segoeuib.ttf'
 FONT_LIGHT = 'C\\:/Windows/Fonts/segoeuil.ttf'
 WIDTH, HEIGHT, BAND = 1920, 1080, 48
 FPS = 30
-NAVY, TEAL, GOLD = '0x0B2430', '0x087E78', '0xF3C969'
+NAVY, ACCENT, GOLD = '0x14234A', '0x2563EB', '0xF3C969'
 ENCODE = ['-c:v', 'libx264', '-preset', 'medium', '-crf', '19', '-pix_fmt', 'yuv420p', '-r', str(FPS)]
 SILENCE = ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo']
 
@@ -42,14 +42,14 @@ def card(path, lines, seconds):
     """A gradient card; lines = [(text, font, size, color, y)]."""
     fade = f'fade=t=in:st=0:d=0.5,fade=t=out:st={seconds - 0.5}:d=0.5'
     draw = ','.join(text(t, f, s, c, '(w-text_w)/2', y) for t, f, s, c, y in lines)
-    vf = f"drawbox=x=(iw-140)/2:y=330:w=140:h=8:color={TEAL}:t=fill,{draw},{fade}"
+    vf = f"drawbox=x=(iw-140)/2:y=330:w=140:h=8:color={ACCENT}:t=fill,{draw},{fade}"
     run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi',
-         '-i', f'gradients=s={WIDTH}x{HEIGHT}:c0={NAVY}:c1=0x0E5F5A:x0=0:y0=0:x1={WIDTH}:y1={HEIGHT}:d={seconds}:r={FPS}:speed=0.002',
+         '-i', f'gradients=s={WIDTH}x{HEIGHT}:c0={NAVY}:c1=0x1E3A8A:x0=0:y0=0:x1={WIDTH}:y1={HEIGHT}:d={seconds}:r={FPS}:speed=0.002',
          *SILENCE, '-t', str(seconds), '-vf', vf, *ENCODE, '-c:a', 'aac', '-shortest', str(path)])
 
 
 def redact_filters(chapter, redactions):
-    """Blur file-dialog areas (they list the user's own folders) for the time they were on screen."""
+    """Blur recorded sensitive areas (the FIS calendar's technical delegates) for the time they were on screen."""
     filters = []
     for r in redactions:
         a, b = max(r['start'], chapter['start']), min(r['end'], chapter['end'])
@@ -68,17 +68,14 @@ def segment(raw, path, chapter, index, total, redactions=()):
     vf = ','.join([
         f'setpts=(PTS-STARTPTS)/{speed}', f'fps={FPS}',
         f'pad={WIDTH}:{HEIGHT}:0:0:color={NAVY}',
-        # the window title bar shows local file paths; replace it with a neutral bar
-        f'drawbox=x=0:y=0:w=iw:h=24:color=0x0E2A35:t=fill',
-        text('OpenSkiTime  ·  Synthetic Alpine Cup 2026', FONT, 15, '0xB8C9D1', 14, 4),
-        # the application's status line (just above the band) can show local paths after an export
+        # optional: hide the application's status line (just above the band)
         *([f'drawbox=x=0:y=1008:w=iw:h=24:color=0xFFFFFF:t=fill'] if chapter.get('maskStatus') else []),
         # lower-third band: chapter number pill, title and caption
         f'drawbox=x=0:y=ih-{BAND}:w=iw:h={BAND}:color={NAVY}:t=fill',
-        f'drawbox=x=0:y=ih-{BAND}:w=6:h={BAND}:color={TEAL}:t=fill',
+        f'drawbox=x=0:y=ih-{BAND}:w=6:h={BAND}:color={ACCENT}:t=fill',
         text(f'{index:02d}', FONT_BOLD, 22, GOLD, 24, f'h-{BAND}+12'),
         text(chapter['title'], FONT_BOLD, 22, 'white', 70, f'h-{BAND}+12'),
-        text(chapter['caption'], FONT, 20, '0xCFE3E6', f'70+{len(chapter["title"]) * 12 + 40}', f'h-{BAND}+14'),
+        text(chapter['caption'], FONT, 20, '0xC3CEE6', f'70+{len(chapter["title"]) * 12 + 40}', f'h-{BAND}+14'),
         *([text(tag, FONT_BOLD, 18, GOLD, 'w-text_w-24', f'h-{BAND}+15')] if tag else []),
         f'fade=t=in:st=0:d=0.25', f'fade=t=out:st={max(duration - 0.25, 0):.3f}:d=0.25',
     ])
@@ -110,13 +107,13 @@ def showcase(pages, path, seconds=8):
         chain.append(f'[{last}][p{i}]overlay=x={x0 + i * (page_w + gap) - 4}:y={(HEIGHT - page_h) // 2 - 30}[o{i}]')
         last = f'o{i}'
     chain.append(f"[{last}]zoompan=z='min(zoom+0.0002,1.025)':d={seconds * FPS}:s={WIDTH}x{HEIGHT}:fps={FPS}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)',"
-                 f"drawbox=x=0:y=ih-{BAND}:w=iw:h={BAND}:color={NAVY}:t=fill,drawbox=x=0:y=ih-{BAND}:w=6:h={BAND}:color={TEAL}:t=fill,"
+                 f"drawbox=x=0:y=ih-{BAND}:w=iw:h={BAND}:color={NAVY}:t=fill,drawbox=x=0:y=ih-{BAND}:w=6:h={BAND}:color={ACCENT}:t=fill,"
                  + text('PDF', FONT_BOLD, 22, GOLD, 24, f'h-{BAND}+12') + ','
                  + text('Generated reports on the organizer letterhead', FONT_BOLD, 22, 'white', 80, f'h-{BAND}+12') + ','
-                 + text('start list · official results · FIS referee report — rendered from the PDFs the application wrote', FONT, 20, '0xCFE3E6', 640, f'h-{BAND}+14')
+                 + text('start list · official results · FIS referee report — rendered from the PDFs the application wrote', FONT, 20, '0xC3CEE6', 640, f'h-{BAND}+14')
                  + f',fade=t=in:st=0:d=0.4,fade=t=out:st={seconds - 0.4}:d=0.4[v]')
     run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi',
-         '-i', f'gradients=s={WIDTH}x{HEIGHT}:c0={NAVY}:c1=0x123B4A:x0=0:y0=0:x1={WIDTH}:y1={HEIGHT}:d={seconds}:r={FPS}',
+         '-i', f'gradients=s={WIDTH}x{HEIGHT}:c0={NAVY}:c1=0x22356A:x0=0:y0=0:x1={WIDTH}:y1={HEIGHT}:d={seconds}:r={FPS}',
          *inputs, *SILENCE, '-filter_complex', ';'.join(chain), '-map', '[v]', '-map', f'{count + 1}:a',
          '-t', str(seconds), *ENCODE, '-c:a', 'aac', '-shortest', str(path)])
     return seconds
@@ -137,9 +134,9 @@ def main():
     work = Path(tempfile.mkdtemp(prefix='compose-', dir=recording))
     parts = [work / '00-intro.mp4']
     card(parts[0], [('OpenSkiTime', FONT_BOLD, 112, 'white', 370),
-                    ('Alpine race timing for the race office', FONT_LIGHT, 44, '0xCFE3E6', 520),
+                    ('Alpine race timing for the race office', FONT_LIGHT, 44, '0xC3CEE6', 520),
                     ('FIS data · fair draw · live timing · results · branded reports — offline first', FONT, 30, GOLD, 600),
-                    ('A complete two-run slalom with 100 synthetic athletes, recorded from the running application', FONT, 24, '0x9FB8BF', 960)], 4.5)
+                    ('A complete two-run slalom with 100 synthetic athletes, recorded from the running application', FONT, 24, '0x8796BC', 960)], 4.5)
     total = 4.5
     for index, chapter in enumerate(chapters, 1):
         path = work / f'{index:02d}.mp4'
@@ -151,9 +148,9 @@ def main():
         total += showcase(pages[:3], parts[-1])
     parts.append(work / '99-outro.mp4')
     card(parts[-1], [('OpenSkiTime', FONT_BOLD, 96, 'white', 380),
-                     ('Open source alpine race timing', FONT_LIGHT, 40, '0xCFE3E6', 510),
+                     ('Open source alpine race timing', FONT_LIGHT, 40, '0xC3CEE6', 510),
                      ('openskiti.me', FONT_BOLD, 34, GOLD, 590),
-                     ('All athletes, clubs and results in this video are synthetic.', FONT, 22, '0x9FB8BF', 960)], 4)
+                     ('All athletes, clubs and results in this video are synthetic.', FONT, 22, '0x8796BC', 960)], 4)
     total += 4
     (work / 'list.txt').write_text(''.join(f"file '{p.name}'\n" for p in parts), encoding='utf-8')
     run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', str(work / 'list.txt'),
