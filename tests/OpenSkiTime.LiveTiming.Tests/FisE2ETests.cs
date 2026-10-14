@@ -139,6 +139,8 @@ public sealed class FisE2ETests
         Assert.Equal("sequence=7 error=\"Bad password [REDACTED]\"",FisProtocol.Summarize("<livetiming sequence=\"7\"><error>Bad password pw-secret</error></livetiming>","pw-secret"));
         Assert.Equal("sequence=[REDACTED] startlist run=[REDACTED]; raceevent[dnf#[REDACTED]]",
             FisProtocol.Summarize("<livetiming sequence=\"pw-secret\"><startlist runno=\"pw-secret\"/><raceevent><dnf bib=\"pw-secret\"/></raceevent></livetiming>","pw-secret"));
+        var cut=FisProtocol.Summarize($"<livetiming sequence=\"7\"><error>{new string('x',192)}pw-secret</error></livetiming>","pw-secret");
+        Assert.DoesNotContain("pw-secr",cut,StringComparison.Ordinal);
         Assert.Equal("[Malformed protocol message omitted]",FisProtocol.Summarize("<livetiming"));
     }
     private static void ValidateProtocol(string[] messages)

@@ -40,7 +40,8 @@ public static class FisProtocol
             {
                 if (element.Name == "error")
                 {
-                    var text = element.Value;
+                    // Redact before truncating so a cut cannot leave a partial password behind.
+                    var text = Scrub(element.Value);
                     parts.Add("error=\"" + (text.Length > 200 ? text[..200] + "…" : text) + "\"");
                 }
                 else if (element.Name == "raceevent")
@@ -57,9 +58,10 @@ public static class FisProtocol
             }
             var summary = $"sequence={(string?)root.Attribute("sequence") ?? "-"} " + (parts.Count == 0 ? "(empty)" : string.Join("; ", parts));
             // A rejected response may echo the password in any field; scrub the complete summary.
-            return string.IsNullOrEmpty(password) ? summary : summary.Replace(password, "[REDACTED]", StringComparison.Ordinal);
+            return Scrub(summary);
         }
         catch (System.Xml.XmlException) { return "[Malformed protocol message omitted]"; }
+        string Scrub(string value) => string.IsNullOrEmpty(password) ? value : value.Replace(password, "[REDACTED]", StringComparison.Ordinal);
     }
     internal static string Describe(string xml, string? password, bool wireTrace) => wireTrace ? Redact(xml, password) : Summarize(xml, password);
     public static void ValidateAck(string xml, long sequence)
