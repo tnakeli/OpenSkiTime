@@ -104,6 +104,8 @@ Settings → About shows the software version (Semantic Versioning) and the impl
 
 ## Current scope
 
+**OpenSkiTime is still in development and is not yet intended for timing real races. It will be tested at real competitions during the 2026/27 season.** Use it for evaluation and rehearsals only, together with independent backup timing.
+
 OpenSkiTime is in pre-release development. The current draw profile covers standard FIS two-run SL/GS and single-run DH/SG. Local category draws, special Cup, youth, snow-seed and three-run formats are not yet supported. Automatic backup-time substitution and production FIS result submission are pending. Generated XML acceptance by FIS and physical-device race operation still require verification, including a complete rehearsal with independent backup timing.
 
 New series files use the current development format. Incompatible older development files are rejected without modification; automatic schema upgrades are not available. Create a new series for the current version and retain older files and backups.

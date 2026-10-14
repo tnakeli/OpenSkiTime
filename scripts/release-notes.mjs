@@ -20,12 +20,18 @@ export function section(changelog, version) {
   return body;
 }
 
+export const developmentStatus = 'OpenSkiTime is still in development and is not yet intended for timing real races. It will be tested at real competitions during the 2026/27 season. Use it for evaluation and rehearsals only, always with independent backup timing.';
+
 export function appNotes(changes, live, version) {
   const protocol = /live protocol (\d+)/i.exec(changes)?.[1];
   if (!protocol) throw new Error(`Application section for ${version} must state the live protocol it uses (e.g. "live protocol 1").`);
   const compatible = [...live.matchAll(/^## \[(\d+\.\d+\.\d+)\][^\n]*\n+Live protocol: (\d+)/gm)]
     .filter(m => m[2] === protocol).map(m => `live-v${m[1]}`);
-  return `## Application
+  return `## Development status
+
+${developmentStatus}
+
+## Application
 
 ${changes}
 

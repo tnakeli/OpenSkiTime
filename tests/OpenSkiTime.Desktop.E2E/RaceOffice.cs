@@ -20,9 +20,12 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
 
     public void Chapter(string title) => chapter?.Invoke(title);
 
-    // Called with screen areas that must not appear in recordings while they are shown (true) and when they disappear
-    // (false): Windows file dialogs list the user's own folders, and the FIS calendar names real officials.
+    // Called with a Windows file dialog's screen area when it is shown (true) and when it closes (false).
     public Action<System.Drawing.Rectangle, bool>? FileDialog { get; set; }
+
+    // Called with screen areas that must not appear in recordings while they are shown (true) and when they disappear
+    // (false): the FIS calendar names real technical delegates.
+    public Action<System.Drawing.Rectangle, bool>? SensitiveArea { get; set; }
 
     private void TrackDialog(AutomationElement dialog)
     {
@@ -429,14 +432,14 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         var races = app.ById("SeriesCalendarCompetitionsGrid");
         var tdHeader = app.Retry(() => races.FindAllDescendants(app.By.ByName("TD SURNAME")).FirstOrDefault());
         var area = races.BoundingRectangle;
-        FileDialog?.Invoke(new System.Drawing.Rectangle(tdHeader.BoundingRectangle.Left, area.Top, area.Right - tdHeader.BoundingRectangle.Left, area.Height), true);
+        SensitiveArea?.Invoke(new System.Drawing.Rectangle(tdHeader.BoundingRectangle.Left, area.Top, area.Right - tdHeader.BoundingRectangle.Left, area.Height), true);
         var rows = grid.FindAllDescendants(app.By.ByControlType(ControlType.DataItem));
         var row = rows[Math.Min(3, rows.Length - 1)];
         var bounds = row.BoundingRectangle;
         Mouse.Click(new System.Drawing.Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2));
         Pause(2500);
         app.Click("Close calendar");
-        FileDialog?.Invoke(default, false);
+        SensitiveArea?.Invoke(default, false);
         Pause(500);
     }
 

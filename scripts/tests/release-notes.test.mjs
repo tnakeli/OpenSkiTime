@@ -50,7 +50,7 @@ test('version text is matched literally, not as a pattern', () => {
 
 test('application notes have separate application and live sections with compatible servers', () => {
   const notes = appNotes(section(changelog, '1.2.0-preview.1'), live, '1.2.0-preview.1');
-  assert.match(notes, /^## Application\n/);
+  assert.match(notes, /^## Development status\n\n[^\n]*not yet intended for timing real races[^\n]*\n\n## Application\n/);
   assert.match(notes, /## Live timing\n\nThis version publishes with \*\*live protocol 2\*\*\. Compatible live server releases: live-v0\.3\.0,/);
   assert.doesNotMatch(notes, /live-v0\.2\.0/);
   assert.match(notes, /Unsigned build/);

@@ -49,6 +49,19 @@ Expected-vs-actual: 100/100 final rows match; discrepancies: none. The per-athle
 - A device retransmitting an identical start line: the second observation is `Duplicate` of the first, raw input keeps all 3 packets, the result is unaffected and survives reopening.
 - A missing finish without hand time keeps the run incomplete and blocks `ToRunFinishes`; malformed manual time or a blank reason is rejected without an audit row; a valid hand time is audited (operator/reason) and produces the manual finish flag.
 
+### Race-day changes on the same 100-athlete race
+
+`HundredAthleteRaceWithRaceDayChangesMatchesIndependentExpectations` (same command) runs the identical race twice with the changes an operator makes on race day, through the same application boundary, and compares every result row with the independent expectations:
+
+| Change | How | Assertion against |
+|---|---|---|
+| FIS points saved with the series | One desk batch saves the SL points of all 100 athletes with the synthetic list's code, validity and penalty rules (as Update from FIS list + Save) | Saved points equal the list for every athlete, also after reopening the file and the backup; the draw reads the saved points |
+| Bib numbering | Draw with first bib 101 and skipped bibs 113, 127, 140–142 | Bibs follow the start order from 101 without the skipped numbers (101–205 minus five) |
+| Start position moved | After the draw, an athlete is moved to position 40 with a reason (`StartListChange` Move) | The athlete is at position 40 with the original bib, all others keep their relative order and bibs, the change and its reason are saved with the start list |
+| Forerunners | Three forerunners saved in the race information for both runs and timed (start, intermediate, finish) one minute apart before the first competitor | They wait before the first competitor, finish with their own truncated times, never get a rank, never appear among the results; their timing is identical after reopening; raw input has 9 more packets per run (298 and 289) |
+
+The competitor results, the Run 2 order (31-athlete reversed group at the tie), the penalty and the XML (91 ranked, 9 not ranked) equal the independent expectations; both executions produce identical canonical output. Result on 2026-10-14: 5/5 `FullRace` tests passed (43 s).
+
 ## Live Timing in the browser (Playwright, Chromium)
 
 Commands (see `DEVELOPMENT.md`): export the snapshots with `ExportLiveSnapshotsOfTheFullRace`, then `python tests/live-timing-full-race-e2e.py --snapshots <dir> --screenshots <dir>`.
@@ -125,6 +138,8 @@ Recorded from the real running application by `DemoVideoTests.RecordDemonstratio
 6. Results with FIS penalty, jury and race information, TD approval, XML exported (`FIN9123.xml`).
 7. PDF Factory with an organizer letterhead (`scripts/demo-video/make-letterhead.py`, embedded as the PDF background with 40/24 mm margins): 13 reports generated; three generated pages are shown in the closing showcase (rendered with `scripts/demo-video/Render-PdfPage.ps1`).
 
-Privacy in the recording: the operator field is set to a role name ("Race office") instead of the Windows account; Windows file dialogs (which first list the user's own Documents folder) and the FIS calendar's technical-delegate columns are blurred for the time they are on screen (`redactions.json`), the window title bar (local temp path) is replaced by a neutral bar, and the status line is hidden in the results and PDF chapters (export path). Redaction boundaries were checked frame by frame in the final video. FIS points-list download, which contains real athletes, is not shown. All race data is synthetic.
+Privacy in the recording (since 2026-10-14): the application runs in a new folder under `OPENSKITIME_DEMO_ROOT` (default `C:\OpenSkiTimeDemo`, refused inside the user profile or when it contains the account name), which is its working directory and holds the series, exported XML, letterhead and PDFs. An unrecorded warm-up confirms one file dialog there, so recorded file dialogs open in that folder and no longer need blurring; the application's own title bar and status line show no personal path. Only the FIS calendar's technical-delegate columns are blurred. Record on a desktop without remote-control overlays or notifications: other applications' windows (for example a remote-support panel) appear in the screen capture and can cover controls the driver needs. The description below is of the earlier recording.
+
+Privacy in the earlier recording: the operator field is set to a role name ("Race office") instead of the Windows account; Windows file dialogs (which first list the user's own Documents folder) and the FIS calendar's technical-delegate columns are blurred for the time they are on screen (`redactions.json`), the window title bar (local temp path) is replaced by a neutral bar, and the status line is hidden in the results and PDF chapters (export path). Redaction boundaries were checked frame by frame in the final video. FIS points-list download, which contains real athletes, is not shown. All race data is synthetic.
 
 PDF headers and footers: the organizer letterhead uses the existing PDF Factory background feature; no renderer change was needed for it. The review of the generated Official Results found jury functions printed as XML codes (`TechnicalDelegate:`, `ChiefRace:`); they now print their display names (shared `RaceInformation.JuryFunctionLabel`, asserted in `PdfFactoryTests`).
