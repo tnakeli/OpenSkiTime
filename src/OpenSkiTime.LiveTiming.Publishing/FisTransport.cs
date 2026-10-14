@@ -40,7 +40,7 @@ public static class FisProtocol
             {
                 if (element.Name == "error")
                 {
-                    var text = string.IsNullOrEmpty(password) ? element.Value : element.Value.Replace(password, "[REDACTED]", StringComparison.Ordinal);
+                    var text = element.Value;
                     parts.Add("error=\"" + (text.Length > 200 ? text[..200] + "…" : text) + "\"");
                 }
                 else if (element.Name == "raceevent")
@@ -55,7 +55,9 @@ public static class FisProtocol
                     parts.Add(element.Name.LocalName + (run is null ? "" : " run=" + run) + (children == 0 ? "" : $" items={children}"));
                 }
             }
-            return $"sequence={(string?)root.Attribute("sequence") ?? "-"} " + (parts.Count == 0 ? "(empty)" : string.Join("; ", parts));
+            var summary = $"sequence={(string?)root.Attribute("sequence") ?? "-"} " + (parts.Count == 0 ? "(empty)" : string.Join("; ", parts));
+            // A rejected response may echo the password in any field; scrub the complete summary.
+            return string.IsNullOrEmpty(password) ? summary : summary.Replace(password, "[REDACTED]", StringComparison.Ordinal);
         }
         catch (System.Xml.XmlException) { return "[Malformed protocol message omitted]"; }
     }
