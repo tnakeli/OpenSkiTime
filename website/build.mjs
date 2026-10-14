@@ -9,6 +9,8 @@ const repo = 'https://github.com/tnakeli/OpenSkiTime';
 // The maintainer is named on every page and in the structured data so that the project's publisher can be identified.
 const maintainer = { name: 'Teemu Niemi', email: 'tniemi@gmail.com', github: 'https://github.com/tnakeli' };
 const image = `${site}/assets/overview.png`;
+// The demo video plays on YouTube. The page shows a local poster and links out, so no third-party content loads with the site.
+const video = { id: 'VgQcExvV3S0', url: 'https://www.youtube.com/watch?v=VgQcExvV3S0', poster: 'demo-video.jpg', uploadDate: '2026-10-14', duration: 'PT2M31S', name: 'OpenSkiTime demo: a two-run FIS slalom from entries to results', description: 'A complete two-run alpine slalom with 100 synthetic athletes, recorded from the running application: FIS calendar, Excel entries, FIS draw, simulated timing, a referee DSQ, Run 2 start order, live results, FIS XML and PDF reports.' };
 // [source, route, language, full title, description]
 const pages = [
   ['index', '/', 'en', 'OpenSkiTime – Free alpine ski race timing software', 'Free, open-source alpine ski race timing software for Windows: registration, start lists, ALGE timing, FIS points and XML results, PDF reports and live results. Works offline.'],
@@ -71,6 +73,11 @@ const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<'
 const download = asset
   ? `<p class="eyebrow">Windows x64 · ${escape(release.tag_name)}${preview ? ' · Preview' : ''}</p><h2>${preview ? 'Try the development preview.' : 'Ready for your next rehearsal.'}</h2><p>${preview ? 'A preview for evaluation and rehearsals. OpenSkiTime is still in development and is not yet intended for timing real races. It will be tested at real competitions during the 2026/27 season. Always use independent backup timing. ' : ''}The installer includes the .NET runtime and the local live timing tools.</p><a class="button" href="${escape(asset.browser_download_url)}">Download for Windows <span aria-hidden="true">↓</span></a><p class="small"><a href="${repo}/releases/tag/${escape(release.tag_name)}">Release notes and SHA-256 checksums ↗</a></p><p class="notice">${unsigned ? 'This installer is unsigned. Windows may display an unknown-publisher warning.' : 'The installer is digitally signed by Teemu Niemi (Certum code signing certificate). Windows SmartScreen may still warn about a new download until it has built a reputation.'} Download only from this project’s GitHub Releases.</p>`
   : `<p class="eyebrow">Pre-release development</p><h2>The first installer is on its way.</h2><p>There is no published Windows installer yet. You can run the current development version from source and follow progress on GitHub.</p><a class="button" href="${repo}/releases">View releases <span aria-hidden="true">↗</span></a><p class="small"><a href="/guide/#from-source">Run from source →</a></p>`;
+const videoText = {
+  en: { eyebrow: 'SEE A WHOLE RACE', heading: 'A two-run slalom.<br>In two and a half minutes.', intro: 'From the FIS calendar and an Excel entry list to the draw, timing, a referee DSQ, live results, FIS XML and PDF reports. Recorded from the running application; captions explain each step.', bar: 'OpenSkiTime / Demo', watch: 'Watch on YouTube', alt: 'Play the OpenSkiTime demo video on YouTube: combined Run 2 ranking of a fictional women’s slalom', caption: 'Opens YouTube. 100 synthetic athletes and simulated timing; no sound.' },
+  fi: { eyebrow: 'KATSO KOKO KILPAILU', heading: 'Kahden kierroksen pujottelu<br>kahdessa ja puolessa minuutissa.', intro: 'FIS-kalenterista ja Excelin osallistujalistasta arvontaan, ajanottoon, tuomarin hylkäykseen, live-tuloksiin, FIS XML:ään ja PDF-raportteihin. Tallennettu käynnissä olevasta ohjelmasta; englanninkieliset tekstit selittävät vaiheet.', bar: 'OpenSkiTime / Esittely', watch: 'Katso YouTubessa', alt: 'Toista OpenSkiTime-esittelyvideo YouTubessa: kuvitteellisen naisten pujottelun yhdistetyt tulokset toisen kierroksen jälkeen', caption: 'Avautuu YouTubeen. 100 kuvitteellista urheilijaa ja simuloitu ajanotto; ei ääntä.' }
+};
+const videoHtml = lang => { const v = videoText[lang]; return `<div class="section-heading"><div><p class="eyebrow">${v.eyebrow}</p><h2>${v.heading}</h2></div><p>${v.intro}</p></div><figure class="product-shot"><div class="window-bar"><span></span><span></span><span></span><p>${v.bar}</p><b>2:31</b></div><a class="video-link" href="${video.url}"><img src="/assets/${video.poster}" width="1440" height="810" alt="${escape(v.alt)}" loading="lazy"><span class="play-button">${v.watch} <span aria-hidden="true">▶</span></span></a><figcaption>${v.caption}</figcaption></figure>`; };
 const faqHtml = lang => `<div class="faq">${faq[lang].map(([q, a]) => `<details><summary>${escape(q)}</summary><p>${escape(a)}</p></details>`).join('')}</div>`;
 // JSON-LD is a data block, not a script: browsers do not execute it and the CSP needs no script-src.
 const jsonLd = value => `<script type="application/ld+json">${JSON.stringify(value).replace(/</g, '\\u003c')}</script>`;
@@ -93,6 +100,7 @@ const software = lang => ({
     },
     { '@type': 'Person', '@id': `${site}/#maintainer`, name: maintainer.name, email: `mailto:${maintainer.email}`, url: maintainer.github, sameAs: [maintainer.github] },
     { '@type': 'SoftwareSourceCode', codeRepository: repo, programmingLanguage: 'C#', runtimePlatform: '.NET 10', license: `${repo}/blob/master/LICENSE`, targetProduct: { '@id': `${site}/#software` } },
+    { '@type': 'VideoObject', '@id': `${site}/#demo-video`, name: video.name, description: video.description, inLanguage: 'en', thumbnailUrl: `${site}/assets/${video.poster}`, uploadDate: video.uploadDate, duration: video.duration, url: video.url, embedUrl: `https://www.youtube-nocookie.com/embed/${video.id}`, about: { '@id': `${site}/#software` } },
     { '@type': 'FAQPage', mainEntity: faq[lang].map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
   ]
 });
@@ -101,12 +109,12 @@ await mkdir(path.join(output, 'assets'), { recursive: true });
 for (const name of ['site.css', 'favicon.svg', 'robots.txt', 'staticwebapp.config.json', 'llms.txt']) {
   await copyFile(path.join(root, name), path.join(output, name));
 }
-for (const name of ['overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png']) {
+for (const name of [video.poster, 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png']) {
   await copyFile(path.join(root, '..', 'docs', 'screenshots', name), path.join(output, 'assets', name));
 }
 for (const [name, route, lang, title, description] of pages) {
   const t = text[lang];
-  const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang));
+  const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang));
   const translated = Object.values(alternates).includes(route);
   const head = [
     `<title>${escape(title)}</title>`,

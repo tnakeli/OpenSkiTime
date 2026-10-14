@@ -27,3 +27,5 @@ python scripts/Capture-PublicScreenshots.py --website
 ```
 
 The Visual previews GitHub workflow runs this browser capture in a Linux CI environment. Its `public-screenshots` artifact includes the live image and desktop/mobile previews of the homepage and guide. The browser is restricted to the loopback demo servers; it cannot reach a real race service. Preview processes are stopped after capture. The public website links gallery images at full resolution and labels all examples as synthetic.
+
+`demo-video.jpg` is the website poster for the YouTube demo video: a 1440-pixel frame at 1:35 of the published video (combined Run 2 ranking), extracted with `ffmpeg -ss 95 -i OpenSkiTime-demo.mp4 -frames:v 1 -vf scale=1440:-1 -q:v 3 demo-video.jpg`. The video is recorded from the running application with 100 synthetic athletes and simulated timing. The video file itself stays outside Git.
