@@ -6,7 +6,7 @@ The production branch rules require `Secrets`, `Windows security` and `Container
 
 ## Secret scanning
 
-The `Secrets` check runs Gitleaks over every reachable commit on every pull request, master build, weekly and manual run, including documentation-only changes. A secret removed in a later commit still fails the check, because it remains in history: rotate the credential, do not just delete it. Findings are redacted in the job log. Reviewed false positives (synthetic test values only) are listed by exact fingerprint in `.gitleaksignore`; never add a real credential there. GitHub secret scanning with push protection and Dependabot alerts/security updates are enabled on the repository as an additional layer.
+The `Secrets` check runs Gitleaks over every reachable commit on every pull request, master build, weekly and manual run, including documentation-only changes (`scripts/scan-secrets.sh`). Merge commits are scanned for changes made while resolving conflicts, which Gitleaks skips by default; `scripts/test-scan-secrets.sh` verifies this on a synthetic repository before each scan. A secret removed in a later commit still fails the check, because it remains in history: rotate the credential, do not just delete it. Findings are redacted in the job log. Reviewed false positives (synthetic test values only) are listed by exact fingerprint in `.gitleaksignore`; never add a real credential there. GitHub secret scanning with push protection and Dependabot alerts/security updates are enabled on the repository as an additional layer.
 
 Gitleaks 8.30.1 is installed like Trivy: a fixed upstream release verified against a checksum pinned in `.github/actions/setup-gitleaks`.
 
