@@ -18,7 +18,7 @@ try
     if (mode is "fis-tcp" or "fis-https")
     {
         var password = Environment.GetEnvironmentVariable("OST_FIS_PASSWORD") ?? throw new InvalidOperationException("Set OST_FIS_PASSWORD outside the repository.");
-        IFisLiveTimingTransport transport = mode == "fis-tcp" ? new FisTcpTransport(args[1], 1550, Console.WriteLine) : new FisHttpsTransport(args[1], Console.WriteLine);
+        IFisLiveTimingTransport transport = mode == "fis-tcp" ? new FisTcpTransport(args[1], 1550, Console.WriteLine, wireTrace: true) : new FisHttpsTransport(args[1], Console.WriteLine, wireTrace: true);
         await using var publisher = new FisPublisher(transport, password);
         await publisher.PublishAsync(initial, true, stop.Token);
         foreach (var state in SyntheticRace.Simulate(initial)) { await publisher.PublishAsync(state, false, stop.Token); await Task.Delay(100, stop.Token); }
