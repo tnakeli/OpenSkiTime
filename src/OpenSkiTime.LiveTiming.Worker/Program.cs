@@ -76,9 +76,12 @@ try
                             }
                             else
                             {
+                                // Full wire XML contains racer identities; it is logged only when the operator opts in for troubleshooting.
+                                var wireTrace = Environment.GetEnvironmentVariable("OST_FIS_WIRE_TRACE") == "1";
+                                if (wireTrace) { log.Write("FIS wire trace enabled: log contains racer identities"); }
                                 IFisLiveTimingTransport transport = options.Kind == PublisherKind.FisTcp
-                                    ? new FisTcpTransport(options.Endpoint, options.TcpPort, log.Write)
-                                    : new FisHttpsTransport(options.Endpoint, log.Write);
+                                    ? new FisTcpTransport(options.Endpoint, options.TcpPort, log.Write, wireTrace)
+                                    : new FisHttpsTransport(options.Endpoint, log.Write, wireTrace: wireTrace);
                                 fis = new(transport, options.FisPassword);
                             }
                         }

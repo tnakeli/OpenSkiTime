@@ -45,6 +45,11 @@ foreach ($name in @('production-live','production-website','production-release',
         }
     }
 }
+# Secret scanning with push protection, Dependabot alerts/security updates and immutable releases.
+$null = GitHub "repos/$repository" @{security_and_analysis=@{secret_scanning=@{status='enabled'};secret_scanning_push_protection=@{status='enabled'};dependabot_security_updates=@{status='enabled'}}} 'PATCH'
+$null = GitHub "repos/$repository/vulnerability-alerts" $null 'PUT'
+$null = GitHub "repos/$repository/automated-security-fixes" $null 'PUT'
+$null = GitHub "repos/$repository/immutable-releases" $null 'PUT'
 # Keep unrelated rulesets. Repository admins retain the platform's inherent emergency authority.
 $rulesets = GitHub "repos/$repository/rulesets"
 $branch = @{
@@ -54,7 +59,7 @@ $branch = @{
     rules=@(
         @{type='deletion'},@{type='non_fast_forward'},
         @{type='pull_request';parameters=@{required_approving_review_count=1;dismiss_stale_reviews_on_push=$true;require_code_owner_review=$true;require_last_push_approval=$false;required_review_thread_resolution=$true}},
-        @{type='required_status_checks';parameters=@{strict_required_status_checks_policy=$true;required_status_checks=@(@{context='Website'},@{context='Windows tests'},@{context='Infrastructure'},@{context='Windows security'},@{context='Container security'})}}
+        @{type='required_status_checks';parameters=@{strict_required_status_checks_policy=$true;required_status_checks=@(@{context='Secrets'},@{context='Website'},@{context='Windows tests'},@{context='Infrastructure'},@{context='Windows security'},@{context='Container security'})}}
     )
 }
 $tags = @{

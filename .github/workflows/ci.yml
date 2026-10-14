@@ -37,6 +37,19 @@ jobs:
             fi
           fi
           echo "application=$application" | tee -a "$GITHUB_OUTPUT"
+  secrets:
+    name: Secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Scan every reachable commit, not only the tip: a secret removed later still leaks through history.
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-gitleaks
+      - run: bash scripts/test-scan-secrets.sh
+      # Reviewed false positives are listed by fingerprint in .gitleaksignore. Findings are redacted in the log.
+      - run: bash scripts/scan-secrets.sh .
   website:
     name: Website
     runs-on: ubuntu-latest

@@ -1,0 +1,3 @@
+# Reviewed false positives only, by exact fingerprint. Never add a real credential here: rotate it instead.
+# Synthetic publisher key in a desktop settings test.
+b278a839589c3f15cbf05753ee91c2127d42ed95:tests/OpenSkiTime.Desktop.Tests/ReportSettingsWorkflowTests.cs:generic-api-key:195

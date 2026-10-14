@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Security
+
+- **FIS live timing logs without racer data:** the local live timing diagnostic log no longer stores racer names, nations, clubs or FIS codes from FIS messages; it records only message structure, bibs and FIS errors. Full protocol tracing for troubleshooting is opt-in with the `OST_FIS_WIRE_TRACE=1` environment variable.
+
 ## [0.2.0-preview.2] - 2026-10-14
 
 This version uses live protocol 1 and keeps the `.ost` series format of 0.2.0-preview.1; its series files open unchanged.
