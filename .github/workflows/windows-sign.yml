@@ -1,0 +1,225 @@
+name: Windows signing and release
+run-name: Sign and publish ${{ inputs.tag }}
+# Started by the maintainer with `node scripts/release-signing.mjs submit vX.Y.Z` after windows-release.yml has
+# built and tested the tag. The job asks for a one-time SimplySign code through an encrypted handshake; no
+# long-lived signing secret is stored in GitHub. See docs/release-process.md.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Application release tag (vX.Y.Z) whose tested build is signed and published
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: windows-sign
+  cancel-in-progress: false
+jobs:
+  sign:
+    if: github.repository == 'tnakeli/OpenSkiTime'
+    environment: code-signing
+    runs-on: windows-2025
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.source.outputs.version }}
+      sha: ${{ steps.source.outputs.sha }}
+      prerelease: ${{ steps.source.outputs.prerelease }}
+    env:
+      SIGNING_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release source
+        shell: pwsh
+        run: ./scripts/Assert-ReleaseSource.ps1 -SigningTag $env:SIGNING_TAG
+      - name: Find the tested build of this tag
+        id: source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $sha = git rev-parse HEAD
+          $runs = (gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/windows-release.yml/runs?event=push&head_sha=$sha&per_page=20" | ConvertFrom-Json).workflow_runs
+          $build = $runs | Where-Object { $_.head_branch -eq $env:SIGNING_TAG -and $_.conclusion -eq 'success' } | Select-Object -First 1
+          if (!$build) { throw "No successful windows-release.yml build exists for $env:SIGNING_TAG." }
+          $artifacts = (gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/actions/runs/$($build.id)/artifacts?per_page=100" | ConvertFrom-Json).artifacts
+          $artifact = $artifacts | Where-Object { $_.name -eq 'windows-unsigned' -and !$_.expired } | Select-Object -First 1
+          if (!$artifact) { throw "The $env:SIGNING_TAG build has no unexpired windows-unsigned artifact; build the tag again." }
+          if ($artifact.digest -notmatch '^sha256:[0-9a-f]{64}$') { throw 'The unsigned build artifact has no SHA-256 digest.' }
+          # Download by artifact ID and check the digest GitHub recorded at upload, so exactly the tested build is signed.
+          $zip = Join-Path $env:RUNNER_TEMP 'windows-unsigned.zip'
+          Invoke-WebRequest -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$($artifact.id)/zip" -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } -OutFile $zip -MaximumRetryCount 3
+          if ('sha256:' + (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $artifact.digest) { throw 'The unsigned build artifact does not match its SHA-256 digest.' }
+          Expand-Archive -LiteralPath $zip -DestinationPath artifacts/windows/app
+          Remove-Item -LiteralPath $zip
+          $version = $env:SIGNING_TAG.Substring(1)
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          "build-run=$($build.id)" >> $env:GITHUB_OUTPUT
+          "artifact-id=$($artifact.id)" >> $env:GITHUB_OUTPUT
+          "artifact-digest=$($artifact.digest)" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($version.Contains('-').ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "Signing $env:SIGNING_TAG from build $($build.html_url), artifact $($artifact.id) ($($artifact.digest))" >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - uses: ./.github/actions/setup-ssign
+      # Fail before asking for a code, so a configuration error never wastes the maintainer's code.
+      - name: Check signing configuration
+        shell: pwsh
+        env:
+          CERTUM_EMAIL: ${{ vars.CERTUM_EMAIL }}
+        run: |
+          if (!$env:CERTUM_EMAIL) { throw 'Set the CERTUM_EMAIL variable in the code-signing environment.' }
+          Import-Module ./scripts/WindowsSigning.psm1
+          Write-Host "Expected signing certificate: $(Get-SigningThumbprint)"
+          Get-OpenSkiTimeBinaries artifacts/windows/app | Out-Null
+      - name: Create signing request
+        shell: pwsh
+        env:
+          SIGNING_SHA: ${{ steps.source.outputs.sha }}
+          SIGNING_BUILD_RUN: ${{ steps.source.outputs.build-run }}
+          SIGNING_ARTIFACT_ID: ${{ steps.source.outputs.artifact-id }}
+          SIGNING_ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact-digest }}
+        run: node scripts/release-signing.mjs request artifacts/signing-request
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signing-request-${{ github.run_attempt }}
+          path: artifacts/signing-request/signing-request.json
+          retention-days: 1
+          if-no-files-found: error
+      # release-signing.mjs watches this step by name; rename both together.
+      - name: Receive signing code and sign application files
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNING_SHA: ${{ steps.source.outputs.sha }}
+          CERTUM_EMAIL: ${{ vars.CERTUM_EMAIL }}
+        run: |
+          $code = node scripts/release-signing.mjs receive
+          if ($LASTEXITCODE -ne 0 -or !$code) { throw 'No signing code was received.' }
+          Write-Host "::add-mask::$code"
+          $env:CERTUM_TOKEN = $code
+          ./scripts/Sign-WindowsPackage.ps1 -AppDirectory artifacts/windows/app -SignTool $env:SSIGN
+      - name: Assemble and sign the installer and portable package
+        shell: pwsh
+        env:
+          CERTUM_EMAIL: ${{ vars.CERTUM_EMAIL }}
+          # ssign requires a code argument, but it reuses the session opened in the previous step and does not send this.
+          CERTUM_TOKEN: session-cached
+          RELEASE_VERSION: ${{ steps.source.outputs.version }}
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (!(Test-Path -LiteralPath $compiler)) { throw 'Pinned Windows runner must provide Inno Setup 6.' }
+          ./scripts/Package-Windows.ps1 -Version $env:RELEASE_VERSION -Stage Assemble -Iscc $compiler -SignTool $env:SSIGN
+      - name: Verify signatures
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.source.outputs.version }}
+        run: ./scripts/Test-WindowsSignatures.ps1 -PackageDirectory artifacts/windows -Version $env:RELEASE_VERSION
+      - name: Verify package checksums with sha256sum
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.source.outputs.version }}
+        run: |
+          bash scripts/verify-checksums.sh artifacts/windows "OpenSkiTime-$RELEASE_VERSION-win-x64-setup.exe" "OpenSkiTime-$RELEASE_VERSION-win-x64.zip"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-release
+          # A re-run of a failed job replaces the artifact instead of failing on the existing name.
+          overwrite: true
+          path: |
+            artifacts/windows/*.exe
+            artifacts/windows/*.zip
+            artifacts/windows/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
+      # Tests run the packaged processes after the release files are uploaded, so they cannot alter them.
+      - name: Test signed child processes without an installed .NET runtime
+        shell: pwsh
+        run: ./scripts/Test-WindowsPackage.ps1 -PackageDirectory artifacts/windows/app
+      - name: Verify signed installer, reinstall and uninstall preservation
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.source.outputs.version }}
+        run: ./scripts/Test-WindowsInstaller.ps1 -Installer "artifacts/windows/OpenSkiTime-$env:RELEASE_VERSION-win-x64-setup.exe" -VerifySignatures
+  security:
+    needs: sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Provenance names the released tag's commit, not the master commit the workflow was dispatched from.
+      SOURCE_COMMIT: ${{ needs.sign.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - uses: ./.github/actions/scan-windows
+        with:
+          artifact: windows-release
+      - name: Include security reports and their checksums in release
+        run: |
+          cp artifacts/security/windows/* artifacts/windows/
+          cd artifacts/windows
+          sha256sum sbom.cdx.json cve.json cve-gate.txt provenance.txt >> SHA256SUMS.txt
+          cd "$GITHUB_WORKSPACE"
+          bash scripts/verify-checksums.sh artifacts/windows sbom.cdx.json cve.json cve-gate.txt provenance.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-reviewed-release
+          # A re-run of a failed job replaces the artifact instead of failing on the existing name.
+          overwrite: true
+          path: artifacts/windows/*
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    needs: [sign, security]
+    environment: production-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-reviewed-release
+          path: release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - name: Verify release checksums before publication
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          bash source/scripts/verify-checksums.sh release "OpenSkiTime-${RELEASE_TAG#v}-win-x64-setup.exe" "OpenSkiTime-${RELEASE_TAG#v}-win-x64.zip" sbom.cdx.json cve.json cve-gate.txt provenance.txt
+      - name: Publish immutable release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+          PRERELEASE: ${{ needs.sign.outputs.prerelease }}
+        run: |
+          # Application and live server notes come from CHANGELOG.md / CHANGELOG-LIVE.md at the tagged commit.
+          node source/scripts/release-notes.mjs app "${RELEASE_TAG#v}" release-notes.md
+          # Stable application releases are explicitly "latest" on the Releases page; live-v* releases never are.
+          # The website download selects the newest stable vX.Y.Z itself (scripts/read-release.mjs).
+          flags=(--latest)
+          if [ "$PRERELEASE" = "true" ]; then flags=(--prerelease --latest=false); fi
+          gh release create "$RELEASE_TAG" release/* --repo "$REPOSITORY" --verify-tag --title "OpenSkiTime $RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
+  website:
+    # Previews are offered on the download page until a stable release exists; scripts/read-release.mjs decides.
+    needs: [sign, publish]
+    uses: ./.github/workflows/website.yml
+    secrets: inherit

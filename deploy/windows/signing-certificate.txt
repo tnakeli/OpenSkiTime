@@ -1,0 +1,3 @@
+# SHA-1 thumbprint of the Certum code signing certificate that release signatures must use.
+# Update it in a reviewed pull request when the certificate is renewed.
+1D3DB65248381C9A41DC006392ECBA30CA21A8B8

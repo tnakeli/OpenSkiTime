@@ -1,0 +1,14 @@
+name: Set up ssign
+description: Install a fixed ssign release (Certum SimplySign cloud signing client) with an independently pinned checksum
+runs:
+  using: composite
+  steps:
+    - shell: pwsh
+      run: |
+        $directory = Join-Path $env:RUNNER_TEMP 'openskitime-ssign'
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+        $zip = Join-Path $directory 'ssign.zip'
+        Invoke-WebRequest -Uri https://github.com/Le-Syl21/ssign/releases/download/v0.1.7/ssign-windows-x86_64.zip -OutFile $zip -MaximumRetryCount 3
+        if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne '4EE5389A74DDBEB67E18FE8C8B963734CA13DE7B24BEFFBE430C3F427ECC5E40') { throw 'ssign checksum mismatch.' }
+        Expand-Archive -LiteralPath $zip -DestinationPath $directory
+        "SSIGN=$(Join-Path $directory 'ssign.exe')" >> $env:GITHUB_ENV

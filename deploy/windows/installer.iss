@@ -33,6 +33,12 @@ CloseApplications=yes
 RestartApplications=no
 SetupLogging=no
 MinVersion=10.0.22000
+#ifdef SignInstaller
+; Package-Windows.ps1 -SignTool defines the "ssign" command. Inno Setup signs the uninstaller while
+; compiling (it cannot be signed afterwards inside setup.exe) and then the finished installer.
+SignTool=ssign
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
