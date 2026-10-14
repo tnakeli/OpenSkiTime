@@ -27,6 +27,39 @@ public static class FisProtocol
         }
         catch (System.Xml.XmlException) { return "[Malformed protocol response omitted]"; }
     }
+    // Default diagnostic form: message structure, bibs and FIS error text only. Racer names, nations and FIS codes
+    // stay out of routine logs; the full redacted XML is written only when wire tracing is explicitly enabled.
+    public static string Summarize(string xml, string? password = null)
+    {
+        try
+        {
+            var root = XDocument.Parse(xml).Root;
+            if (root is null) { return "[Empty protocol message]"; }
+            var parts = new List<string>();
+            foreach (var element in root.Elements())
+            {
+                if (element.Name == "error")
+                {
+                    var text = string.IsNullOrEmpty(password) ? element.Value : element.Value.Replace(password, "[REDACTED]", StringComparison.Ordinal);
+                    parts.Add("error=\"" + (text.Length > 200 ? text[..200] + "…" : text) + "\"");
+                }
+                else if (element.Name == "raceevent")
+                {
+                    parts.Add("raceevent[" + string.Join(",", element.Elements().Select(e =>
+                        e.Name.LocalName + ((string?)e.Attribute("bib") is { } bib ? "#" + bib : "") + ((string?)e.Attribute("correction") == "y" ? "(correction)" : ""))) + "]");
+                }
+                else
+                {
+                    var run = (string?)element.Attribute("runno");
+                    var children = element.Elements().Count();
+                    parts.Add(element.Name.LocalName + (run is null ? "" : " run=" + run) + (children == 0 ? "" : $" items={children}"));
+                }
+            }
+            return $"sequence={(string?)root.Attribute("sequence") ?? "-"} " + (parts.Count == 0 ? "(empty)" : string.Join("; ", parts));
+        }
+        catch (System.Xml.XmlException) { return "[Malformed protocol message omitted]"; }
+    }
+    internal static string Describe(string xml, string? password, bool wireTrace) => wireTrace ? Redact(xml, password) : Summarize(xml, password);
     public static void ValidateAck(string xml, long sequence)
     {
         try
@@ -43,29 +76,30 @@ public sealed class FisHttpsTransport : IFisLiveTimingTransport
 {
     private readonly HttpClient _http;
     private readonly Action<string> _log;
-    public FisHttpsTransport(string endpoint, Action<string> log, HttpMessageHandler? handler = null)
+    private readonly bool _wireTrace;
+    public FisHttpsTransport(string endpoint, Action<string> log, HttpMessageHandler? handler = null, bool wireTrace = false)
     {
         var uri = new Uri(endpoint);
         if (uri.Scheme != "https") { throw new LiveValidationException("FIS HTTPS requires TLS."); }
         _http = new(handler ?? new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = uri, Timeout = TimeSpan.FromSeconds(8), MaxResponseContentBufferSize = 65536 };
-        _log = log;
+        _log = log; _wireTrace = wireTrace;
     }
     public async Task SendAsync(string xml, long sequence, CancellationToken ct)
     {
         var password = (string?)XDocument.Parse(xml).Root?.Attribute("passwd");
-        _log("FIS HTTPS TX " + FisProtocol.Redact(xml));
+        _log("FIS HTTPS TX " + FisProtocol.Describe(xml, null, _wireTrace));
         using var content = new StringContent(xml, Encoding.UTF8, "text/plain");
         using var response = await _http.PostAsync("", content, ct);
         var bytes = await response.Content.ReadAsByteArrayAsync(ct);
         if (bytes.Length > 65536) { throw new IOException("Oversized FIS response."); }
         var reply = Encoding.UTF8.GetString(bytes);
-        _log($"FIS HTTPS {(int)response.StatusCode} RX " + FisProtocol.Redact(reply,password));
+        _log($"FIS HTTPS {(int)response.StatusCode} RX " + FisProtocol.Describe(reply, password, _wireTrace));
         response.EnsureSuccessStatusCode(); FisProtocol.ValidateAck(reply, sequence);
     }
     public void Disconnect() { }
     public ValueTask DisposeAsync() { _http.Dispose(); return ValueTask.CompletedTask; }
 }
-public sealed class FisTcpTransport(string host, int port, Action<string> log) : IFisLiveTimingTransport
+public sealed class FisTcpTransport(string host, int port, Action<string> log, bool wireTrace = false) : IFisLiveTimingTransport
 {
     private TcpClient? _tcp;
     private string _pending = "";
@@ -81,7 +115,7 @@ public sealed class FisTcpTransport(string host, int port, Action<string> log) :
                 _tcp = new TcpClient { NoDelay = true };
                 await _tcp.ConnectAsync(host, port, timeout.Token); log("FIS TCP connected");
             }
-            log("FIS TCP TX " + FisProtocol.Redact(xml));
+            log("FIS TCP TX " + FisProtocol.Describe(xml, null, wireTrace));
             var stream = _tcp.GetStream();
             await stream.WriteAsync(Encoding.UTF8.GetBytes(xml), timeout.Token);
             var bytes = new byte[4096];
@@ -96,7 +130,7 @@ public sealed class FisTcpTransport(string host, int port, Action<string> log) :
                 if (start >= 0 && end > start)
                 {
                     var reply = _pending[start..end]; _pending = _pending[end..];
-                    log("FIS TCP RX " + FisProtocol.Redact(reply,password));
+                    log("FIS TCP RX " + FisProtocol.Describe(reply, password, wireTrace));
                     FisProtocol.ValidateAck(reply, sequence); return;
                 }
                 var count = await stream.ReadAsync(bytes, timeout.Token);

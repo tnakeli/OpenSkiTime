@@ -81,7 +81,12 @@ public sealed class FisE2ETests
         Assert.Equal(2,connections);
         ValidateProtocol(messages.ToArray());
         Assert.DoesNotContain(logs,l=>l.Contains("synthetic-test-secret",StringComparison.Ordinal));
-        Assert.Contains(logs,l=>l.Contains("[REDACTED]",StringComparison.Ordinal));
+        // Default logs describe message structure only: no racer names, clubs or FIS codes.
+        Assert.Contains(messages,m=>m.Contains("TEST1",StringComparison.Ordinal)&&m.Contains("990001",StringComparison.Ordinal));
+        Assert.DoesNotContain(logs,l=>l.Contains("TEST1",StringComparison.Ordinal)||l.Contains("Synthetic",StringComparison.Ordinal)
+            ||l.Contains("Test Club",StringComparison.Ordinal)||l.Contains("990001",StringComparison.Ordinal));
+        Assert.Contains(logs,l=>l.StartsWith("FIS TCP TX sequence=",StringComparison.Ordinal)&&l.Contains("startlist run=1 items=18",StringComparison.Ordinal));
+        Assert.Contains(logs,l=>l.Contains("finish#1(correction)",StringComparison.Ordinal));
         Assert.Contains(messages,m=>m.Contains("correction=\"y\"",StringComparison.Ordinal));
         var docs=messages.Select(XDocument.Parse).ToArray();
         Assert.Contains(docs,d=>d.Root!.Element("keepalive") is not null);
@@ -113,15 +118,26 @@ public sealed class FisE2ETests
         await app.StartAsync();
         var logs=new List<string>();
         using var handler=new HttpClientHandler { AllowAutoRedirect=false,ServerCertificateCustomValidationCallback=(_,cert,_,_)=>cert?.Thumbprint==certificate.Thumbprint };
-        await using var publisher=new FisPublisher(new FisHttpsTransport($"https://127.0.0.1:{port}/al/",logs.Add,handler),"synthetic-test-secret");
+        await using var publisher=new FisPublisher(new FisHttpsTransport($"https://127.0.0.1:{port}/al/",logs.Add,handler,wireTrace:true),"synthetic-test-secret");
         var state=SyntheticRace.Create(18); await publisher.PublishAsync(state,true,CancellationToken.None);
         foreach(var next in SyntheticRace.Simulate(state)) { state=next; await publisher.PublishAsync(state,false,CancellationToken.None); }
         ValidateProtocol(messages.ToArray());
         Assert.DoesNotContain(logs,l=>l.Contains("synthetic-test-secret",StringComparison.Ordinal));
+        // Opt-in wire trace keeps the full XML for protocol reconstruction, with the password redacted.
+        Assert.Contains(logs,l=>l.Contains("[REDACTED]",StringComparison.Ordinal)&&l.Contains("TEST1",StringComparison.Ordinal));
         reject=true; await Assert.ThrowsAsync<HttpRequestException>(()=>publisher.KeepAliveAsync(CancellationToken.None));
         Assert.Throws<IOException>(()=>FisProtocol.ValidateAck("<livetiming sequence=\"wrong\"/>",1));
         Assert.Throws<IOException>(()=>FisProtocol.ValidateAck("<livetiming sequence=\"1\"><error>Rejected</error></livetiming>",1));
         await app.StopAsync();
+    }
+    [Fact]
+    public void DefaultSummaryOmitsRacerIdentitiesAndRedactsEchoedPassword()
+    {
+        const string sent="<livetiming codex=\"9754\" passwd=\"pw-secret\" sequence=\"7\"><startlist runno=\"1\"><racer order=\"1\"><bib>1</bib><lastname>SYNTHETIC</lastname><firstname>Racer</firstname><nat>FIN</nat><fiscode>990001</fiscode></racer></startlist><raceevent><finish bib=\"1\" correction=\"y\"><time>1:00.00</time></finish></raceevent></livetiming>";
+        var summary=FisProtocol.Summarize(sent);
+        Assert.Equal("sequence=7 startlist run=1 items=1; raceevent[finish#1(correction)]",summary);
+        Assert.Equal("sequence=7 error=\"Bad password [REDACTED]\"",FisProtocol.Summarize("<livetiming sequence=\"7\"><error>Bad password pw-secret</error></livetiming>","pw-secret"));
+        Assert.Equal("[Malformed protocol message omitted]",FisProtocol.Summarize("<livetiming"));
     }
     private static void ValidateProtocol(string[] messages)
     {

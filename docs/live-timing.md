@@ -98,7 +98,9 @@ Initialization is raceinfo → run startlist → active run → replayed run sta
 
 Event timestamps retain actual source date/time/offset even during resend; parent send timestamps reflect transmission time. Keepalive runs after five minutes of inactivity, in the recommended five–ten-minute interval. FIS socket operations/acknowledgements time out after eight seconds. No `clear`, cancellation or official-result command is sent automatically. Live timing is not official result submission.
 
-Worker debug logs are under `%LOCALAPPDATA%/OpenSkiTime/LiveTimingLogs`, rotated at 4 MiB per process plus one previous file. They record lifecycle, retry/health, HTTP statuses, snapshot/event operations and redacted FIS wire XML. Password attributes and echoed passwords are redacted; signing keys and publisher tokens are never logged. FIS wire logs can contain racer identities because protocol reconstruction is explicitly required; retain them only locally, restrict access and delete them after troubleshooting. They are never committed or added to the series database.
+Worker debug logs are under `%LOCALAPPDATA%/OpenSkiTime/LiveTimingLogs`, rotated at 4 MiB per process plus one previous file. They record lifecycle, retry/health, HTTP statuses, snapshot/event operations and a structural summary of each FIS message: sequence, message types, run numbers, item counts, event types with bib and correction flag, and FIS error text. Racer names, nations, clubs and FIS codes are not logged by default. Passwords echoed in FIS errors are redacted; signing keys and publisher tokens are never logged.
+
+For protocol reconstruction, set `OST_FIS_WIRE_TRACE=1` in the environment before starting OpenSkiTime. The worker then logs the full FIS wire XML with password attributes and echoed passwords redacted, and writes a notice that the log contains racer identities. Enable it only while troubleshooting, retain such logs only locally, restrict access and delete them afterwards. Logs are never committed or added to the series database. The developer harness always traces, because it sends only synthetic racers.
 
 ## Build, simulation and tests
 
