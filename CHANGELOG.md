@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.2.0-preview.2] - 2026-10-14
+
+This version uses live protocol 1 and keeps the `.ost` series format of 0.2.0-preview.1; its series files open unchanged.
+
 ### Security
 
 - **Signed releases:** the installer, its uninstaller and the OpenSkiTime programs are digitally signed and timestamped with the project's Certum code signing certificate issued to Teemu Niemi. Check the installer's *Digital Signatures* tab before running it. Windows SmartScreen may still warn about a new download until it has built a reputation.
@@ -82,7 +86,8 @@ First public preview of the Windows application, for rehearsals and evaluation. 
 - Local category draws, special Cup, youth, snow-seed and three-run formats are not supported. Automatic backup-time substitution and production FIS submission are pending.
 - ALGE native USB needs the vendor driver and SDK, installed separately.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.1...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.2...HEAD
+[0.2.0-preview.2]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.1...v0.2.0-preview.2
 [0.2.0-preview.1]: https://github.com/tnakeli/OpenSkiTime/compare/v0.1.0-preview.2...v0.2.0-preview.1
 [0.1.0-preview.2]: https://github.com/tnakeli/OpenSkiTime/compare/v0.1.0-preview.1...v0.1.0-preview.2
 [0.1.0-preview.1]: https://github.com/tnakeli/OpenSkiTime/releases/tag/v0.1.0-preview.1
