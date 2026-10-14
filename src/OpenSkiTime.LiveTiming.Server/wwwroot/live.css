@@ -1,1 +1,99 @@
-:root{font-family:system-ui,sans-serif;color:#e6edf3;background:#101923;color-scheme:dark}body{margin:0}a{color:#64d5ba}header{background:#172a39;padding:16px 4%;display:flex;justify-content:space-between;gap:16px}header .home{color:inherit;text-decoration:none}main{max-width:1200px;margin:auto;padding:24px 4%}h1{margin-bottom:8px}#metadata,#updated,.note,#empty{color:#a9bbc8}#course{padding:12px;background:#203849;border-left:4px solid #64d5ba}nav{display:flex;flex-wrap:wrap;gap:8px}nav[hidden]{display:none}#splitMode{margin-top:8px}button{padding:8px 16px;border:1px solid #4a6172;border-radius:4px;background:#203849;color:inherit;cursor:pointer}button[aria-pressed=true]{background:#35695f}.table{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px}th{text-align:left;color:#a9bbc8;background:#172a39;white-space:nowrap}th[hidden]{display:none}td,th{padding:12px 9px;border-bottom:1px solid #2d404e}.num{font-variant-numeric:tabular-nums;white-space:nowrap}tr.oncourse{background:#203849}tr.finished td:first-child{color:#64d5ba}.note{font-size:12px}#races{list-style:none;padding:0;margin:16px 0}#races li{display:flex;flex-direction:column;gap:4px;padding:14px 12px;border-bottom:1px solid #2d404e}#races a{font-size:18px;font-weight:600}#races span{color:#a9bbc8;font-size:14px}footer{max-width:1200px;margin:auto;padding:16px 4% 32px;display:flex;flex-wrap:wrap;gap:16px;font-size:13px}@media(max-width:600px){main{padding:16px 10px}header{font-size:12px}h1{font-size:24px}td,th{padding:9px 6px;font-size:12px}td:nth-child(3){min-width:120px}}
+/* OpenSkiTime live timing · Race Signal theme. Light by default; the dark scheme follows the viewer's system setting. */
+:root {
+  color-scheme: light dark;
+  --surface: #FFFFFF; --surface-head: #EEF2F7; --text: #111827; --text-2: #475569;
+  --accent: #1D4ED8; --accent-hover: #1E40AF; --on-accent: #FFFFFF; --accent-text: #1D4ED8; --link: #1D4ED8;
+  --selected: #DBEAFE; --info: #EFF6FF; --border: #CBD5E1; --line: #E2E8F0; --live: #16A34A; --waiting: #D97706;
+  --flash: #FEF3C7; --flash-edge: #D97706; --error: #B91C1C;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text); background: var(--surface);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #101923; --surface-head: #172A39; --text: #E6EDF3; --text-2: #A9BBC8;
+    --accent: #2563EB; --accent-hover: #1D4ED8; --on-accent: #FFFFFF; --accent-text: #93C5FD; --link: #93C5FD;
+    --selected: #203849; --info: #203849; --border: #4A6172; --line: #2D404E; --live: #4ADE80; --waiting: #FBBF24;
+    --flash: #4A3A0C; --flash-edge: #FBBF24; --error: #FCA5A5;
+  }
+}
+body { margin: 0; line-height: 1.35; }
+a { color: var(--link); }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 2px; }
+
+main { max-width: 1200px; margin: auto; padding: 6px 12px 12px; }
+
+/* One compact bar: competition on the left, run and split selectors, update time and connection on the right.
+   On narrow screens the controls wrap to a second row. */
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-bottom: 6px; }
+.title { flex: 1 1 260px; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+h1 { margin: 0; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+#metadata { margin: 0; color: var(--text-2); font-size: 13px; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; order: 2; }
+.status { order: 3; }
+nav { display: inline-flex; }
+nav[hidden] { display: none; }
+button { min-height: 32px; padding: 0 10px; margin-left: -1px; border: 1px solid var(--border); border-radius: 0; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+nav button:first-child { margin-left: 0; border-radius: 4px 0 0 4px; }
+nav button:last-child { border-radius: 0 4px 4px 0; }
+nav button:only-child { border-radius: 4px; }
+button:hover { border-color: var(--accent-text); position: relative; }
+button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); position: relative; }
+button[aria-pressed=true]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.status { display: flex; align-items: center; gap: 2px 10px; }
+#updated { margin: 0; color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.connection { color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.connection::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--waiting); }
+.connection[data-state=live]::before { background: var(--live); }
+
+/* On course and the latest finisher of the current run. */
+.banner { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 0 0 6px; padding: 4px 8px; background: var(--info); border-left: 4px solid var(--accent-text); font-size: 14px; font-weight: 600; }
+.banner p { margin: 0; overflow-wrap: anywhere; }
+#course:empty, #latest[hidden], #forerunners[hidden] { display: none; }
+#forerunners { font-weight: 500; color: var(--text-2); }
+/* On course: one racer per line with a running time. */
+#course { display: flex; gap: 2px 10px; align-items: baseline; }
+#course .label { white-space: nowrap; }
+#course .oncourse { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 1px 10px; }
+#course .oncourse li { display: contents; }
+#course .oncourse .bib { text-align: right; font-variant-numeric: tabular-nums; }
+#course .oncourse .clock { text-align: right; font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; color: var(--accent-text); min-width: 4.5em; }
+#course .oncourse .clock.muted { font-size: 13px; font-weight: 500; color: var(--text-2); }
+/* The latest finisher, highlighted for a few seconds when it changes; DNF/DSQ in the error colour. */
+#latest { padding: 0 6px; margin: 0 -6px; border-radius: 3px; transition: background-color .6s, box-shadow .6s; }
+#latest.out { color: var(--error); }
+#latest.flash, tr.flash td { background: var(--flash); box-shadow: inset 0 0 0 2px var(--flash-edge); }
+@media (prefers-reduced-motion: reduce) { #latest { transition: none; } }
+
+.table { overflow-x: auto; border-top: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th { text-align: left; color: var(--text-2); background: var(--surface-head); font-size: 13px; font-weight: 600; white-space: nowrap; }
+th[hidden] { display: none; }
+td, th { padding: 7px 8px; border-bottom: 1px solid var(--line); line-height: 1.25; }
+td:first-child { font-weight: 700; }
+td:nth-child(3) { font-weight: 600; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.oncourse { background: var(--selected); }
+tr.oncourse td:first-child { box-shadow: inset 4px 0 0 var(--accent-text); }
+tr.finished td:first-child { color: var(--accent-text); }
+.note { color: var(--text-2); font-size: 13px; }
+#empty { color: var(--text-2); }
+
+#races { list-style: none; padding: 0; margin: 8px 0; border-top: 1px solid var(--line); }
+#races li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+#races a { font-size: 17px; font-weight: 600; padding: 4px 0; overflow-wrap: anywhere; }
+#races span { color: var(--text-2); font-size: 14px; }
+
+footer { max-width: 1200px; margin: auto; padding: 12px 12px 24px; display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--text-2); }
+
+@media (max-width: 600px) {
+  main { padding: 6px 10px 10px; }
+  h1 { font-size: 17px; }
+  /* Phones: update time and connection sit beside the competition name, the selectors get their own row. */
+  .title { flex-basis: 180px; }
+  .status { order: 1; flex-direction: column; align-items: flex-end; }
+  .controls { order: 2; }
+  table { font-size: 14px; }
+  td, th { padding: 6px 5px; }
+  td:nth-child(3) { min-width: 120px; }
+  td:nth-child(4) { min-width: 8.5em; }
+}

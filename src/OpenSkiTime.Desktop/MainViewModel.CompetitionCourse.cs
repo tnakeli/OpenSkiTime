@@ -17,9 +17,11 @@ public sealed partial class MainViewModel
     [NotifyPropertyChangedFor(nameof(HasCompetitionHomologationStatus))]
     private string _competitionHomologationStatus = "";
     public bool HasCompetitionHomologationStatus => !string.IsNullOrWhiteSpace(CompetitionHomologationStatus);
-    private (string? Path, Guid? Id, string Place, string Nation, Discipline Discipline, string Gender, string Date)? _homologationContext;
-    private (string?, Guid?, string, string, Discipline, string, string) CourseContext()
-        => (workspace.FilePath, _editingCompetitionId, CompetitionLocation.Trim(), CompetitionNation.Trim().ToUpperInvariant(), CompetitionDiscipline, CompetitionGender, CompetitionDateText);
+    private (string? Path, Guid? Id, string Nation, Discipline Discipline, string Gender, string Date)? _homologationContext;
+    // The FIS lookup takes the calendar gender code (M, W, A), not the displayed Men / Women / Mixed.
+    // What decides the list: nation, discipline, gender and race date. The location only chooses the preselected course.
+    private (string?, Guid?, string, Discipline, string, string) CourseContext()
+        => (workspace.FilePath, _editingCompetitionId, CompetitionNation.Trim().ToUpperInvariant(), CompetitionDiscipline, CompetitionGenderLabels.ToCode(CompetitionGender), CompetitionDateText);
 
     [RelayCommand]
     private async Task BrowseCompetitionHomologationsAsync()
@@ -30,15 +32,21 @@ public sealed partial class MainViewModel
         try
         {
             var courses = await new FisCourseClient(_informationHttp).FindAsync(context.Item3, context.Item4,
-                context.Item5, context.Item6, AsDate(context.Item7, "Competition date"), _fisStore.ReadApiKey());
+                context.Item5, AsDate(context.Item6, "Competition date"), _fisStore.ReadApiKey());
             if (context != CourseContext()) { return; }
             _homologationContext = context;
             SelectedCompetitionHomologation = null; CompetitionHomologations.Clear();
             foreach (var course in courses) { CompetitionHomologations.Add(course); }
             OnPropertyChanged(nameof(HasCompetitionHomologations));
-            CompetitionHomologationStatus = courses.Count == 0 ? "No homologations match this location, discipline, gender and race date. Enter course details manually."
-                : "Choose a homologation and apply it. Course fields and per-run Results details remain editable.";
-            if (courses.Count == 1) { SelectedCompetitionHomologation = courses[0]; ApplyCompetitionHomologation(); }
+            // Nothing is applied automatically: the best match is preselected and Apply homologation copies it.
+            var match = FisCourseClient.BestMatch(courses, CompetitionLocation, CompetitionHomologation);
+            SelectedCompetitionHomologation = match;
+            CompetitionHomologationStatus = courses.Count == 0
+                ? $"FIS has no homologations for this discipline and gender in {context.Item3} valid on the race date. Enter course details manually."
+                : match is not null
+                    ? $"{courses.Count} homologations in {context.Item3}. Selected {match.Place} · {match.CourseName}; check it, or choose another course, then Apply homologation."
+                    : string.IsNullOrWhiteSpace(CompetitionLocation) ? $"{courses.Count} homologations in {context.Item3}. Choose the course, then Apply homologation."
+                    : $"{courses.Count} homologations in {context.Item3}; none at \"{CompetitionLocation.Trim()}\". Choose the course, then Apply homologation.";
         }
         catch (Exception ex) when (ex is DomainValidationException or HttpRequestException or IOException or OperationCanceledException or PlatformNotSupportedException)
         {
@@ -56,7 +64,7 @@ public sealed partial class MainViewModel
     private void ApplyCompetitionHomologation()
     {
         if (SelectedCompetitionHomologation is not { } course || _homologationContext != CourseContext())
-        { CompetitionHomologationStatus = "Browse again after changing the location, date or event."; return; }
+        { CompetitionHomologationStatus = "Browse again after changing the nation, discipline, gender or date."; return; }
         CompetitionCourseName = course.CourseName; CompetitionHomologation = course.HomologationCode;
         CompetitionStartAltitude = course.StartAltitude?.ToString(CultureInfo.InvariantCulture) ?? "";
         CompetitionFinishAltitude = course.FinishAltitude?.ToString(CultureInfo.InvariantCulture) ?? "";

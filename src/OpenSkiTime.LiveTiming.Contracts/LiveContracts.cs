@@ -24,7 +24,10 @@ public sealed record LiveResult(int Bib, LiveStatus Status, long? Hundredths, in
     public int? TotalRank { get; init; }
     public long? TotalDifference { get; init; }
 }
-public sealed record LiveRun(int Number, DateTimeOffset ListCreatedAt, int[] StartOrder, LiveResult[] Results);
+// A forerunner's progress through the run (at start, on course, finished, DNS/DNF). Deliberately no time.
+public sealed record LiveForerunner(string Letter, string LastName, string FirstName, string Nation, LiveStatus Status);
+public sealed record LiveRun(int Number, DateTimeOffset ListCreatedAt, int[] StartOrder, LiveResult[] Results,
+    LiveForerunner[]? Forerunners = null);
 public sealed record LiveCompetition(string Name, string Place, string Discipline, DateOnly Date,
     bool IsFis, string Codex, string Gender, string Category, int IntermediateCount, string Slope = "");
 public sealed record LiveSnapshot(long Version, LiveCompetition Competition, LiveCompetitor[] Competitors,
@@ -56,6 +59,12 @@ public sealed record LiveSnapshot(long Version, LiveCompetition Competition, Liv
                 || run.Results.Any(x => !run.StartOrder.Contains(x.Bib)))
             { throw new LiveValidationException("Invalid run or start order."); }
             foreach (var result in run.Results) { ValidateResult(result, Competition.IntermediateCount); }
+            var forerunners = run.Forerunners ?? [];
+            if (forerunners.Length > 50 || forerunners.Any(x => x is null || x.Letter is not { Length: >= 1 and <= 16 } || !x.Letter.All(char.IsAsciiLetterOrDigit)
+                    || x.Status is not (LiveStatus.Ready or LiveStatus.OnCourse or LiveStatus.Finished or LiveStatus.DNS or LiveStatus.DNF or LiveStatus.Review))
+                || forerunners.Select(x => x.Letter.ToUpperInvariant()).Distinct().Count() != forerunners.Length)
+            { throw new LiveValidationException("Invalid forerunners."); }
+            foreach (var f in forerunners) { foreach (var text in new[] { f.LastName, f.FirstName, f.Nation }) { ValidateText(text); } }
         }
     }
     public static void ValidateResult(LiveResult r, int intermediateCount)

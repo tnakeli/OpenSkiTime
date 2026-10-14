@@ -96,7 +96,13 @@ public sealed record ParticipationDetails(Guid CompetitorId, Guid CompetitionId,
 public sealed record CategoryRuleDetails(Guid Id, CategoryRuleValues Values);
 public sealed record CompetitorDeskDetails(
     Guid SeriesId, long Revision, IReadOnlyList<CompetitorDetails> Competitors,
-    IReadOnlyList<ParticipationDetails> Participations, IReadOnlyList<CategoryRuleDetails> Categories);
+    IReadOnlyList<ParticipationDetails> Participations, IReadOnlyList<CategoryRuleDetails> Categories,
+    IReadOnlyDictionary<Guid, CompetitorFisPoints>? FisPoints = null, IReadOnlyList<FisPointsListInfo>? PointsLists = null)
+{
+    // Saved FIS points of a competitor, or null when none are saved in this series.
+    public CompetitorFisPoints? FisPointsOf(Guid competitorId) => FisPoints is not null && FisPoints.TryGetValue(competitorId, out var points) ? points : null;
+    public FisPointsListInfo? PointsList(string code) => PointsLists?.FirstOrDefault(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
+}
 public sealed record DeskMutationResult<T>(long Revision, T Value);
 
 public static class CategoryResolver

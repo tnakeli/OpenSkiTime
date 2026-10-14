@@ -76,7 +76,7 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
-    public async Task LateHomologationResponseCannotFillAnotherLocation()
+    public async Task LateHomologationResponseForAnotherNationIsDiscarded()
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-late-course-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder);
         try
@@ -91,7 +91,8 @@ public partial class DesktopWorkflowTests
             await vm.OpenSeriesCommand.ExecuteAsync(null); vm.ShowCompetitionsCommand.Execute(null);
             vm.CompetitionCourseName = "Manual course";
             var lookup = vm.BrowseCompetitionHomologationsCommand.ExecuteAsync(null);
-            Assert.True(vm.IsHomologationBusy); vm.CompetitionLocation = "Other place";
+            // The list depends on nation, discipline, gender and date; a change during the lookup discards the late answer.
+            Assert.True(vm.IsHomologationBusy); vm.CompetitionNation = "SWE";
             response.SetResult(new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new {
                 data = new[] { new FisCourseHomologation(1, "123/10/26", "Test slope", "Test place", "FIN", "AL", "SL", "A", 500, 300, 200, 640, new(2025, 1, 1), new(2030, 1, 1)) } }), Encoding.UTF8, "application/json") });
             await lookup;
@@ -119,9 +120,15 @@ public partial class DesktopWorkflowTests
             await vm.OpenSeriesCommand.ExecuteAsync(null); vm.ShowCompetitionsCommand.Execute(null);
             vm.CompetitionName = "Synthetic race"; vm.CompetitionShortLabel = "SL W"; vm.CompetitionFisCode = "0034";
             vm.CompetitionCourseName = "Manual before browse";
+            vm.CompetitionGender = "Women"; // Shown as a word; the lookup still sends the FIS code.
             var window = new MainWindow { DataContext = vm, Width = 1366, Height = 900, WindowState = WindowState.Normal }; window.Show(); window.UpdateLayout();
             await vm.BrowseCompetitionHomologationsCommand.ExecuteAsync(null);
             Assert.Equal(2, vm.CompetitionHomologations.Count); Assert.Equal("Manual before browse", vm.CompetitionCourseName);
+            // The course at the competition location is preselected but not applied.
+            Assert.Equal("Test place", vm.SelectedCompetitionHomologation?.Place);
+            Assert.Contains("Selected Test place", vm.CompetitionHomologationStatus, StringComparison.Ordinal);
+            // A moved race: a new location keeps the list, and any course can be applied.
+            vm.CompetitionLocation = "Moved place";
             var picker = window.FindControl<ComboBox>("CompetitionHomologationPicker")!; picker.SelectedItem = vm.CompetitionHomologations.Single(x => x.HomologationId == 2);
             vm.ApplyCompetitionHomologationCommand.Execute(null);
             Assert.Equal("Other slope", vm.CompetitionCourseName); Assert.Equal("510", vm.CompetitionStartAltitude); Assert.Equal("640", vm.CompetitionCourseLength);

@@ -33,6 +33,9 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public RunningTimeDisplay Clock { get; } = new();
     public int Position => Result.Entry.Position;
     public int Bib => Result.Bib;
+    // Forerunners are shown by their identifier (for example "F · A") and never with a time.
+    public bool IsForerunner => Result.IsForerunner;
+    public string BibText => Result.IsForerunner ? $"F · {Result.ForerunnerLetter}" : Bib.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public string Code => Result.Entry.Entrant.Athlete.FederationCode ?? "";
     public string Name => Result.Name;
     public string Status => Result.Status switch { TimingStatus.OnCourse => "On course", TimingStatus.Review => "No time", _ => Result.Status.ToString() };
@@ -260,6 +263,9 @@ public sealed partial class MainViewModel
             }
             TimingDeviceDate = (timing.LastCaptureOptions?.DeviceDate ?? TimingCompetition.Values.Date).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             await timing.FollowStartOrderAsync(FollowTimingOrder);
+            // Reopening the same run keeps an open forerunner draft; another run starts from its saved forerunners.
+            if (changingRun || !ShowForerunnerEditor) { ShowForerunnerEditor = false; await LoadTimingForerunnersAsync(); }
+            else { await LoadTimingForerunnersAsync(keepEditorDraft: true); }
             _shownTiming = null;
             ConfigureTimingCheckpoints();
             if (entering || changingRun)
@@ -562,8 +568,10 @@ public sealed partial class MainViewModel
         var selectedBib = SelectedTimingRow?.Bib;
         var selectedObservation = SelectedTimingObservation?.Key;
         var selectedHistory = SelectedTimingHistory?.Id;
+        // Forerunners follow the competitors so they can be selected, classified (DNS/DNF) and dragged like them.
         SyncTimingRows(TimingRows, TimingEngine.Combined(snapshot, _previousTiming)
-            .Select(row => new TimingGridRow(row.Result, row.Total, row.Rank)).ToArray());
+            .Select(row => new TimingGridRow(row.Result, row.Total, row.Rank))
+            .Concat(snapshot.Forerunners.Select(x => new TimingGridRow(x, null, null))).ToArray());
         var editingTime = CorrectedTimeText;
         var editingBib = ObservationBibText;
         // Keep the operator's competitor. Only a newly shown run selects its first row; a background refresh never

@@ -32,13 +32,15 @@ public sealed class LiveTimingLayoutTests
             Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
             var button = view.FindControl<Button>("LiveTimingButton")!;
             Assert.Null(button.Flyout); Assert.Same(vm.OpenLiveTimingCommand, button.Command);
-            Assert.Equal(Color.Parse("#E6F3F4"), Assert.IsAssignableFrom<ISolidColorBrush>(button.Foreground).Color);
+            Assert.Contains("secondaryAction", button.Classes);
             Assert.True(view.Bounds.Width < 310, $"Live strip width {view.Bounds.Width}");
             var labels = view.GetVisualDescendants().OfType<TextBlock>().Where(x => x.Text is "Local" or "Cloud" or "FIS").ToArray();
             Assert.Equal(3, labels.Length);
-            Assert.Equal(Color.Parse("#49BA91"), Assert.IsAssignableFrom<ISolidColorBrush>(labels.Single(x => x.Text == "Local").Foreground).Color);
-            Assert.Equal(Color.Parse("#EF7777"), Assert.IsAssignableFrom<ISolidColorBrush>(labels.Single(x => x.Text == "Cloud").Foreground).Color);
-            Assert.Equal(Color.Parse("#DCE6E9"), Assert.IsAssignableFrom<ISolidColorBrush>(labels.Single(x => x.Text == "FIS").Foreground).Color);
+            // Each channel's dot shows its state: running, problem, stopped.
+            Color Dot(string label) => Assert.IsAssignableFrom<ISolidColorBrush>(((Panel)labels.Single(x => x.Text == label).Parent!).Children.OfType<Border>().Single().Background).Color;
+            Assert.Equal(Color.Parse("#16A34A"), Dot("Local"));
+            Assert.Equal(Color.Parse("#DC2626"), Dot("Cloud"));
+            Assert.Equal(Color.Parse("#94A3B8"), Dot("FIS"));
             var tips = view.GetVisualDescendants().OfType<Border>().Select(ToolTip.GetTip).OfType<string>().ToArray();
             Assert.Contains(tips, x => x.Contains("Last OK", StringComparison.Ordinal));
             Assert.Contains(tips, x => x.Contains("Synthetic connection error", StringComparison.Ordinal));
@@ -76,6 +78,7 @@ public sealed class LiveTimingLayoutTests
         var panelApp = new PanelApp(); panelApp.Initialize();
         var styles = panelApp.Styles.ToArray(); panelApp.Styles.Clear();
         foreach (var style in styles) { window.Styles.Add(style); }
+        foreach (var resource in panelApp.Resources) { window.Resources[resource.Key] = resource.Value; }
         window.Show();
         try
         {

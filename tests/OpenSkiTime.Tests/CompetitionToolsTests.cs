@@ -46,10 +46,29 @@ public sealed class CompetitionToolsTests
                 meta = new { current_page = page, last_page = 2 }, links = new { next = "https://untrusted.example/page" } }), Encoding.UTF8, "application/json") };
         });
         using var http = new HttpClient(handler);
-        var found = await new FisCourseClient(http).FindAsync("Test place", "FIN", Discipline.Slalom, "W", new(2026, 3, 21));
-        Assert.Equal([1, 4], found.Select(x => x.HomologationId));
-        Assert.Equal(2, calls.Count); Assert.All(calls, x => Assert.StartsWith("https://api.fis-ski.com/homologation/course/AL?place=Test place&eventCode=SL&nationCode=FIN&page=", x, StringComparison.Ordinal));
+        var found = await new FisCourseClient(http).FindAsync("FIN", Discipline.Slalom, "W", new(2026, 3, 21));
+        // The whole nation: a course at another place is listed too, sorted by place.
+        Assert.Equal([1, 4, 5], found.Select(x => x.HomologationId));
+        Assert.Equal("Wrong place", found[^1].Place);
+        Assert.Equal(2, calls.Count); Assert.All(calls, x => Assert.StartsWith("https://api.fis-ski.com/homologation/course/AL?eventCode=SL&nationCode=FIN&page=", x, StringComparison.Ordinal));
         Assert.Equal(640, found[0].CourseLength);
+    }
+
+    [Fact]
+    public void BestMatchPrefersTheHomologationCodeThenTheCalendarLocation()
+    {
+        // FIS calendar place "Passo Stelvio | Bormio"; FIS lists the courses under the exact places "Stelvio" and "Bormio".
+        Assert.Equal(["Passo Stelvio | Bormio", "Passo Stelvio", "Bormio", "Passo", "Stelvio"], FisCourseClient.PlaceTerms("Passo Stelvio | Bormio"));
+        Assert.Equal(["Test place"], FisCourseClient.PlaceTerms(" Test place "));
+        var upper = Course(34633) with { Place = "Stelvio", CourseName = "Synthetic upper", HomologationCode = "15924/10/25" };
+        var lower = Course(32404) with { Place = "Bormio", CourseName = "Synthetic lower", HomologationCode = "13817/11/20" };
+        var other = Course(1) with { Place = "Other place" };
+        FisCourseHomologation[] courses = [lower, other, upper];
+        Assert.Same(upper, FisCourseClient.BestMatch(courses, "Passo Stelvio | Bormio", "15924/10/25"));
+        Assert.Same(lower, FisCourseClient.BestMatch(courses, "Passo Stelvio | Bormio", ""));
+        Assert.Same(other, FisCourseClient.BestMatch(courses, "other PLACE", null));
+        Assert.Null(FisCourseClient.BestMatch(courses, "Nowhere", null));
+        Assert.Null(FisCourseClient.BestMatch(courses, "", null));
     }
 
     [Fact]
@@ -58,7 +77,7 @@ public sealed class CompetitionToolsTests
         using var handler = new Handler(_ => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new {
             data = new[] { Course(1), Course(2) with { StartAltitude = -1 } } }), Encoding.UTF8, "application/json") });
         using var http = new HttpClient(handler);
-        await Assert.ThrowsAsync<DomainValidationException>(() => new FisCourseClient(http).FindAsync("Test place", "FIN", Discipline.Slalom, "W", new(2026, 3, 21)));
+        await Assert.ThrowsAsync<DomainValidationException>(() => new FisCourseClient(http).FindAsync("FIN", Discipline.Slalom, "W", new(2026, 3, 21)));
     }
 
     [Fact]

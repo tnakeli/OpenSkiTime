@@ -82,7 +82,7 @@ public sealed partial class PanelChannel(string label, PublisherKind kind) : Obs
     [ObservableProperty] private string _detail = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPublicUrl))] private string _publicUrl = "";
     [ObservableProperty] private string _expiration = "";
-    [ObservableProperty] private string _indicatorColor = "#DCE6E9";
+    [ObservableProperty] private string _indicatorColor = "#94A3B8";
     public void Update(LiveChannelHealth channel)
     {
         ArgumentNullException.ThrowIfNull(channel);
@@ -90,6 +90,6 @@ public sealed partial class PanelChannel(string label, PublisherKind kind) : Obs
         Status = h.State.ToString(); PublicUrl = h.PublicUrl ?? "";
         Expiration = h.ExpiresAt is { } expiry ? "Expires " + expiry.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) : "";
         Detail = h.Error ?? h.Notice ?? (h.LastSuccessfulPublish is { } last ? "Last published " + last.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "Ready to start");
-        IndicatorColor = h.State == PublisherState.Stopped ? "#DCE6E9" : h.State == PublisherState.Running ? "#238067" : "#B94B4B";
+        IndicatorColor = h.State == PublisherState.Stopped ? "#94A3B8" : h.State == PublisherState.Running ? "#16A34A" : "#DC2626";
     }
 }

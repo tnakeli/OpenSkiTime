@@ -5,12 +5,12 @@
   </UserControl.Styles>
   <Border Classes="workSurface" Padding="{DynamicResource SectionInset}">
     <Grid RowDefinitions="Auto,Auto,*,Auto">
-      <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,10">
-        <TextBlock Text="PDF Factory" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+        <TextBlock Text="PDF Factory" Classes="sectionTitle" VerticalAlignment="Center" />
         <TextBlock Grid.Column="1" Text="Generating PDFs…" IsVisible="{Binding IsPdfBusy}" VerticalAlignment="Center" Margin="0,0,10,0" />
         <Button Grid.Column="2" Content="Generate All" Command="{Binding GenerateAllPdfsCommand}" IsEnabled="{Binding !IsPdfBusy}" Classes="primaryAction" />
       </Grid>
-      <Expander Grid.Row="1" Header="PDF settings" Margin="0,0,0,10">
+      <Expander Grid.Row="1" Header="PDF settings" Margin="0,0,0,8" HorizontalAlignment="Stretch">
         <StackPanel Spacing="8" IsEnabled="{Binding !IsPdfBusy}">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Text="{Binding PdfTemplateLabel}" VerticalAlignment="Center" />
@@ -29,7 +29,7 @@
           <TextBlock Text="Use a one-page A4 PDF and leave space for race data. The background is embedded in the .ost file. Referee Report uses its own fixed margins and FIS form layout." TextWrapping="Wrap" />
         </StackPanel>
       </Expander>
-      <DataGrid Name="PdfReportGrid" Grid.Row="2" ItemsSource="{Binding PdfReports}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" IsEnabled="{Binding !IsPdfBusy}">
+      <DataGrid Name="PdfReportGrid" Grid.Row="2" Classes="raceGrid" ItemsSource="{Binding PdfReports}" AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal" IsEnabled="{Binding !IsPdfBusy}">
         <DataGrid.Columns>
           <DataGridTextColumn Header="Report" Binding="{Binding Name}" Width="2*" />
           <DataGridTemplateColumn Header="Output file" Width="3*">
@@ -52,7 +52,7 @@
           </DataGridTemplateColumn>
         </DataGrid.Columns>
       </DataGrid>
-      <TextBlock Grid.Row="3" Text="{Binding PdfSummary}" TextWrapping="Wrap" Margin="0,10,0,0" />
+      <TextBlock Grid.Row="3" Text="{Binding PdfSummary}" TextWrapping="Wrap" Margin="0,8,0,0" />
     </Grid>
   </Border>
 </UserControl>

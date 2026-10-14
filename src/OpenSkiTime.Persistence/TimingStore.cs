@@ -74,8 +74,9 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
             var ids = sessions.Select(x => x.Id).ToArray();
             var raw = await db.RawPackets.AsNoTracking().Where(x => ids.Contains(x.SessionId)).ToArrayAsync(ct);
             var audit = await db.TimingAudit.AsNoTracking().Where(x => x.ListId == listId).OrderBy(x => x.Id).ToArrayAsync(ct);
+            var forerunners = await SavedForerunnersAsync(db, list.Plan.CompetitionId, list.Plan.RunNumber, ct);
             return new(list, sessions, raw.Select(x => new RawTimingPacket(x.SessionId, x.Sequence, x.ReceivedAt,
-                x.Protocol, x.Source, x.Stream, x.Bytes)).ToArray(), audit.Select(ToAudit).ToArray());
+                x.Protocol, x.Source, x.Stream, x.Bytes)).ToArray(), audit.Select(ToAudit).ToArray(), forerunners);
         }
         catch (Exception ex) when (ex is SqliteException or JsonException or IOException or UnauthorizedAccessException)
         { throw new SeriesFileException("Timing data could not be read. Preserve this file and check storage.", ex); }
@@ -261,6 +262,11 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
             var changes = (await db.TimingAudit.Where(x => x.ListId == listId).OrderBy(x => x.Id).ToArrayAsync(ct)).Select(ToAudit).ToArray();
             var list = await db.StartLists.SingleAsync(x => x.Id == listId, ct);
             var entries = (await ReadListAsync(db, list, ct)).Plan.Entries;
+            var run = await db.Runs.AsNoTracking().SingleAsync(x => x.Id == list.RunId, ct);
+            HashSet<int>? forerunnerKeys = null;
+            // Forerunners are not in the start list: they must be saved for this run in the race information.
+            async Task<bool> IsSavedForerunnerAsync(int key)
+                => (forerunnerKeys ??= await SavedForerunnerKeysAsync(db, run.CompetitionId, run.Number, ct)).Contains(key);
             var results = new List<TimingAuditRow>();
             foreach (var edit in edits)
             {
@@ -278,7 +284,8 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                         ? TimingEngine.CurrentDecision(new(DecisionKind.ManualTime, after.ObservationKey), changes).Timestamp is not null
                         : await ReferencesRunInputAsync(db, listId, after.ObservationKey!, ct);
                     if (!exists) { throw new DomainValidationException("The observation must reference original data in this run."); }
-                    if (after.Bib is { } bib && !entries.Any(x => x.Bib == bib)) { throw new DomainValidationException("Unknown bib."); }
+                    if (after.Bib is { } bib && (TimingForerunner.IsKey(bib) ? !await IsSavedForerunnerAsync(bib) : !entries.Any(x => x.Bib == bib)))
+                    { throw new DomainValidationException("Unknown bib."); }
                 }
                 else if (after.Kind == DecisionKind.ManualTime)
                 {
@@ -290,6 +297,10 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                     if (after.StartOrder is { } order && !TimingEngine.ParseStartOrder(order).Order()
                         .SequenceEqual(entries.Select(x => x.Bib).Order()))
                     { throw new DomainValidationException("The start order must include every starter exactly once."); }
+                }
+                else if (after.CompetitorId is { } id && TimingForerunner.KeyOfId(id) is { } key)
+                {
+                    if (!await IsSavedForerunnerAsync(key)) { throw new DomainValidationException("Unknown starter."); }
                 }
                 else if (!entries.Any(x => x.Entrant.CompetitorId == after.CompetitorId))
                 { throw new DomainValidationException("Unknown starter."); }

@@ -72,9 +72,10 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public bool IsResultsSection => ActiveSection == WorkspaceSection.Results;
     public bool IsTimingReportSection => ActiveSection == WorkspaceSection.TimingReport;
     public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection && !IsTimingReportSection && !IsPdfFactorySection;
+    // Title bar heading of the active race: "SL Women / Run 1", only the competition in competition-wide views.
     public string ActiveRaceLabel => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
-        ? IsResultsSection || IsTimingReportSection || IsPdfFactorySection ? $"{race.Values.ShortLabel}  ▾"
-            : $"{race.Values.ShortLabel}  /  Run {_activeRaceRun}  ▾" : "Choose competition  ▾";
+        ? IsResultsSection || IsTimingReportSection || IsPdfFactorySection ? race.Values.ShortLabel
+            : $"{race.Values.ShortLabel} / Run {_activeRaceRun}" : string.Empty;
     public string ActiveRaceName => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
         ? race.Values.Name : string.Empty;
     public bool ActiveRaceUsesTiming => IsTimingSection || (!IsDrawSection && _activeRaceSection == WorkspaceSection.Timing);

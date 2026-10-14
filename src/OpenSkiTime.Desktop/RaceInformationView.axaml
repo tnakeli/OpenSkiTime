@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:OpenSkiTime.Desktop"
              x:Class="OpenSkiTime.Desktop.RaceInformationView" x:CompileBindings="False">
-  <StackPanel Spacing="10">
+  <StackPanel Spacing="8">
     <TextBlock Text="Race information" Classes="sectionTitle" />
     <TextBlock Text="{Binding ResultsCourseSummary}" Classes="supportingText" TextWrapping="Wrap" />
     <TextBlock Text="{Binding ResultsPointsList}" Classes="supportingText" />
@@ -19,7 +19,7 @@
       </DataGrid.Columns>
     </DataGrid>
     <ItemsControl ItemsSource="{Binding ResultsRuns}">
-      <ItemsControl.ItemTemplate><DataTemplate><local:RaceRunView Margin="0,0,0,10" /></DataTemplate></ItemsControl.ItemTemplate>
+      <ItemsControl.ItemTemplate><DataTemplate><local:RaceRunView Margin="0,0,0,8" /></DataTemplate></ItemsControl.ItemTemplate>
     </ItemsControl>
     <Expander Header="Browse weather forecast (optional)" IsExpanded="False">
       <StackPanel Spacing="8">

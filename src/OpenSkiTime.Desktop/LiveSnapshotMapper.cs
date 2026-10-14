@@ -32,8 +32,12 @@ public static class LiveSnapshotMapper
                 start.At, start.Ticks, finish.Ticks, r.Splits.Where(x => x.Hundredths is not null).Select(x =>
                 { var source = Source(x.ObservationKey); return new LiveSplit(x.Number, x.Hundredths!.Value, source.At ?? at, source.Ticks); }).ToArray());
         }).ToArray();
+        // Forerunners are published with their progress only, never a time or a rank.
+        var forerunners = snapshot.Forerunners.Select(x => new LiveForerunner(x.ForerunnerLetter!, x.Entry.Entrant.Athlete.Surname,
+            x.Entry.Entrant.Athlete.FirstName, x.Entry.Entrant.Athlete.Nation ?? "", Enum.Parse<LiveStatus>(x.Status.ToString()))).ToArray();
         return new(list.Plan.RunNumber, list.CreatedAt,
-            snapshot.StartOrder.Count > 0 ? snapshot.StartOrder.ToArray() : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray(), results);
+            snapshot.StartOrder.Count > 0 ? snapshot.StartOrder.ToArray() : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray(), results,
+            forerunners.Length == 0 ? null : forerunners);
     }
     // From Run 2 on, each finisher's combined time over all runs so far, ranked like the timing view's Run 2 ranking
     // (equal totals share a rank) with the gap to the best total. A racer without a finished time in every earlier run

@@ -36,11 +36,23 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     {
         app.Click(section);
         Pause(300);
+        // Settings also opens its tab menu; close it so the next click reaches the view.
+        if (section == "Settings") { app.Press(VirtualKeyShort.ESCAPE); Pause(200); }
+    }
+
+    // Runs an item of the title bar's File menu.
+    public void FileMenu(string item)
+    {
+        app.Click("File");
+        Pause(300);
+        var entry = app.Retry(() => app.Automation.GetDesktop().FindAllDescendants(app.By.ByControlType(ControlType.MenuItem))
+            .FirstOrDefault(x => x.Name == item));
+        if (entry.Patterns.Invoke.IsSupported) { entry.Patterns.Invoke.Pattern.Invoke(); } else { DesktopApp.Invoke(entry); }
     }
 
     public void CreateSeries(string path)
     {
-        Navigate("1  Event series");
+        Navigate("Event series");
         var s = race.Series;
         app.SetText(app.Field("SERIES NAME *"), s.Name); Pause();
         app.SetText(app.Field("LOCATION *"), s.Location); Pause();
@@ -107,7 +119,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
 
     public void CreateCompetition()
     {
-        Navigate("2  Competitions");
+        Navigate("Competitions");
         app.Click("Add competition");
         Pause(400);
         var c = race.Competition;
@@ -117,7 +129,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         app.SetText(FieldAfter(form, "FIS CATEGORY"), c.Calendar!.Category);
         SetNumber(FieldAfter(form, "INTERMEDIATES"), c.IntermediateCount);
         app.SetText(FieldAfter(form, "FIS CODEX"), c.FisCode!);
-        Select(FieldAfter("LOCATION", "GENDER"), c.Calendar.Gender);
+        Select(FieldAfter("LOCATION", "GENDER"), OpenSkiTime.Application.CompetitionGenderLabels.Format(c.Calendar.Gender));
         var td = c.Calendar.TechnicalDelegate!;
         app.SetText(FieldAfter("TECHNICAL DELEGATE", "SURNAME"), td.LastName);
         app.SetText(FieldAfter("TECHNICAL DELEGATE", "FIRST NAME"), td.FirstName);
@@ -137,7 +149,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
 
     public void ImportCompetitors()
     {
-        Navigate("3  Competitors");
+        Navigate("Competitors");
         Clipboard.SetText(race.CompetitorTsv());
         var grid = app.ById("CompetitorGrid");
         if (DesktopApp.PhysicalInput)
@@ -147,10 +159,10 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         }
         else { grid.Focus(); }
         Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_V);
-        app.WaitUntil(() => app.TryByName($"Pasted {SyntheticRace.AthleteCount} rows. Review the highlighted cells, then choose Save changes.") is not null,
+        app.WaitUntil(() => app.TryByName($"Pasted {SyntheticRace.AthleteCount} rows. Review the highlighted cells, then choose Save.") is not null,
             "pasted rows", TimeSpan.FromSeconds(30));
         Pause(1500);
-        app.Click("Save changes");
+        app.Click("Save");
         app.WaitUntil(() => app.TryByName("All changes saved") is not null, "competitors saved", TimeSpan.FromSeconds(30));
         Pause(800);
     }
@@ -174,7 +186,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
 
     public void DrawFirstRun()
     {
-        OpenRun("4  Start lists  ▾", 1);
+        OpenRun("Start lists", 1);
         app.Click("Draw");
         app.WaitUntil(() => app.TryByName("Start list ready") is not null, "draw saved", TimeSpan.FromSeconds(30));
         Pause(1000);
@@ -320,10 +332,10 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // Ranking column filter on BIB; an empty value clears it (the filter button clears an active filter).
     public void FilterRanking(string value)
     {
-        var button = app.ById("RankingFilterButton_Bib");
+        var button = app.ById("RankingFilterButton_BibText");
         DesktopApp.Invoke(button);
         if (value.Length == 0) { Pause(300); return; }
-        var box = app.Retry(() => app.Automation.GetDesktop().FindFirstDescendant(app.By.ByAutomationId("RankingFilter_Bib")));
+        var box = app.Retry(() => app.Automation.GetDesktop().FindFirstDescendant(app.By.ByAutomationId("RankingFilter_BibText")));
         app.SetText(box, value);
         app.Press(VirtualKeyShort.RETURN);
         Pause(400);
@@ -342,7 +354,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         app.SetText(FieldAfter("STATUS", "JUDGE (OPTIONAL)"), "Gate judge 3"); Pause();
         DesktopApp.Invoke(app.ById("SaveTimingClassification"));
         Pause(800);
-        if (app.Window.FindFirstDescendant(app.By.ByAutomationId("RankingFilterButton_Bib")) is { } filter
+        if (app.Window.FindFirstDescendant(app.By.ByAutomationId("RankingFilterButton_BibText")) is { } filter
             && app.ById("RankingGrid").FindAllDescendants(app.By.ByControlType(ControlType.DataItem)).Length <= 1)
         { DesktopApp.Invoke(filter); Pause(300); } // clear the bib filter again
     }
@@ -367,7 +379,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
 
     public void OpenResults()
     {
-        app.Click("6  Results  ▾");
+        app.Click("Results");
         Pause(400);
         var item = app.Retry(() => app.Automation.GetDesktop().FindAllDescendants(app.By.ByControlType(ControlType.MenuItem))
             .FirstOrDefault(x => x.Name.StartsWith(race.Competition.ShortLabel, StringComparison.Ordinal)));
@@ -382,7 +394,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // Opens an existing series through the Windows open dialog (full path typed into the file name box).
     public void OpenSeries(string path)
     {
-        app.Click("Open file");
+        FileMenu("Open file");
         OpenFileDialog("Open event series file", path);
         app.WaitUntil(() => app.Window.Title.StartsWith(path, StringComparison.OrdinalIgnoreCase), "series opened", TimeSpan.FromSeconds(30));
         Pause(800);
@@ -408,7 +420,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // Settings); an event is selected to show its races, then the calendar is closed without importing anything.
     public void BrowseFisCalendar()
     {
-        Navigate("1  Event series");
+        Navigate("Event series");
         app.Click("Browse FIS calendar");
         var grid = app.ById("SeriesCalendarEventsGrid");
         app.WaitUntil(() => grid.FindAllDescendants(app.By.ByControlType(ControlType.DataItem)).Length > 3, "FIS calendar loaded", TimeSpan.FromSeconds(90));
@@ -530,7 +542,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // then every available report in one click.
     public void GeneratePdfs(string? letterhead = null)
     {
-        app.Click("8  PDF Factory  ▾");
+        app.Click("PDF Factory");
         Pause(600);
         // The competition menu opens with the section; dismiss it, or the next click only closes the menu.
         app.Press(VirtualKeyShort.ESCAPE);

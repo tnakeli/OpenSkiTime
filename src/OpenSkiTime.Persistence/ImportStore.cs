@@ -33,6 +33,9 @@ internal sealed partial class SqliteSeriesFileSession
             var competitors = await db.Competitors.ToDictionaryAsync(x => x.Id, ct);
             var entries = await db.Participations.ToDictionaryAsync(x => (x.CompetitorId, x.CompetitionId), ct);
             var seen = new HashSet<Guid>();
+            var regendered = new HashSet<Guid>();
+            var pointsCleared = new List<Guid>();
+            var entered = new HashSet<(Guid CompetitorId, Guid CompetitionId)>();
             var created = 0;
             var updated = 0;
             foreach (var item in commit.Rows)
@@ -56,7 +59,12 @@ internal sealed partial class SqliteSeriesFileSession
                     db.Competitors.Add(competitor);
                     created++;
                 }
+                var previousGender = competitor.Gender;
+                var previousCode = competitor.FederationCodeKey;
                 Assign(competitor, values);
+                if (item.CompetitorId is not null && !string.Equals(previousCode, competitor.FederationCodeKey, StringComparison.OrdinalIgnoreCase))
+                { pointsCleared.Add(competitor.Id); }
+                if (item.CompetitorId is null || competitor.Gender != previousGender) { regendered.Add(competitor.Id); }
                 var patchedCompetitions = new HashSet<Guid>();
                 foreach (var patch in item.Entries)
                 {
@@ -83,9 +91,11 @@ internal sealed partial class SqliteSeriesFileSession
                         db.Participations.Add(entry);
                     }
                     if (patch.Participates is { } participates) { entry.Participates = participates; }
+                    if (patch.Participates == true) { entered.Add(key); }
                     if (patch.BibSpecified) { entry.ImportedBib = patch.ImportedBib; }
                 }
             }
+            EntryGenderCheck.Ensure(competitions, competitors, entries.Values, regendered, entered);
             var codeDuplicate = competitors.Values.Where(x => x.FederationCodeKey is not null)
                 .GroupBy(x => x.FederationCodeKey!, StringComparer.OrdinalIgnoreCase).FirstOrDefault(x => x.Count() > 1);
             if (codeDuplicate is not null)
@@ -117,6 +127,7 @@ internal sealed partial class SqliteSeriesFileSession
             {
                 throw new DomainValidationException("The import violates a database data rule; no rows were saved.");
             }
+            await FisPointsStore.ClearAsync(db, pointsCleared, ct);
             await transaction.CommitAsync(ct);
             return new ImportCommitResult(series.Revision, created, updated);
         }

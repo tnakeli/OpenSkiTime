@@ -71,12 +71,16 @@ public class SeriesFileTests
         Assert.Equal(0L, await command.ExecuteScalarAsync());
         command.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='trigger' AND name IN ('RawTimingPackets_NoUpdate','RawTimingPackets_NoDelete','TimingAudit_NoUpdate','TimingAudit_NoDelete','ApprovedResults_NoUpdate','ApprovedResults_NoDelete','RaceInformation_NoUpdate','RaceInformation_NoDelete')";
         Assert.Equal(8L, await command.ExecuteScalarAsync());
+        // Saved FIS points are part of the current format, created with the file.
+        command.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('CompetitorFisPoints','FisPointsLists')";
+        Assert.Equal(2L, await command.ExecuteScalarAsync());
     }
 
     [Theory]
     [InlineData("OpenSkiTime.New/1")]
     [InlineData("OpenSkiTime.Development/1")]
     [InlineData("OpenSkiTime.Development/2")]
+    [InlineData("OpenSkiTime.Development/4")]
     [InlineData("OpenSkiTime.Development/999")]
     public async Task IncompatibleDevelopmentFileIsRejectedWithoutChangingIt(string format)
     {

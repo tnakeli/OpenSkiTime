@@ -60,9 +60,60 @@ public sealed record DisqualificationDetails(int? Gate = null, string Reason = "
 public sealed record TimingAudit(long Id, Guid ListId, DateTimeOffset At, string Operator, string Reason,
     TimingDecision Before, TimingDecision After, long? ReversesId = null);
 
+/// <summary>
+/// A forerunner of a run. Forerunners go through timing (at start, on course, finished) before the competitors but are
+/// never ranked and never part of competitor results. Impulses are assigned to <see cref="Key"/>, a number above every
+/// bib that is derived from the forerunner's identifier, so editing names or order never moves an assignment.
+/// </summary>
+public sealed record TimingForerunner(string Letter, string FirstName, string LastName, string Nation)
+{
+    public const int FirstKey = 100_000;
+    public int Key => KeyOf(Letter);
+
+    // Deterministic FNV-1a of the upper-case identifier mapped above the bib range (bibs are 1–99999).
+    public static int KeyOf(string letter)
+    {
+        ArgumentNullException.ThrowIfNull(letter);
+        var hash = 2166136261u;
+        foreach (var c in letter.Trim().ToUpperInvariant()) { hash = unchecked((hash ^ c) * 16777619u); }
+        return FirstKey + (int)(hash % 899_999u);
+    }
+
+    public static bool IsKey(int bib) => bib >= FirstKey;
+
+    private static readonly byte[] s_idTail = [0x46, 0x4F, 0x52, 0x45, 0x52, 0x55, 0x4E, 0x00]; // ASCII "FORERUN" + 0
+
+    public static Guid IdOf(int key) => new(key, 0, 0, s_idTail);
+
+    // The forerunner key of the competitor id timing gives a forerunner; null for every other id.
+    public static int? KeyOfId(Guid id)
+    {
+        var bytes = id.ToByteArray();
+        var key = BitConverter.ToInt32(bytes, 0);
+        return bytes.AsSpan(8).SequenceEqual(s_idTail) && bytes[4] == 0 && bytes[5] == 0 && bytes[6] == 0 && bytes[7] == 0 && IsKey(key) ? key : null;
+    }
+
+    public static void Validate(IReadOnlyList<TimingForerunner> forerunners)
+    {
+        ArgumentNullException.ThrowIfNull(forerunners);
+        if (forerunners.Any(x => x.Letter.Length is < 1 or > 16 || !x.Letter.All(char.IsAsciiLetterOrDigit))
+            || forerunners.Select(x => x.Letter.ToUpperInvariant()).Distinct().Count() != forerunners.Count)
+        { throw new DomainValidationException("Forerunners need a unique identifier of 1–16 letters or digits."); }
+        if (forerunners.Select(x => x.Key).Distinct().Count() != forerunners.Count)
+        { throw new DomainValidationException("Two forerunner identifiers clash in timing. Choose a different identifier for one of them."); }
+    }
+
+    internal StartListEntry Entry(int position) => new(position, Key,
+        new DrawEntrant(IdOf(Key),
+            new CompetitorValues(LastName, FirstName, null, null, Nation, null, null), null), "Forerunner");
+}
+
 public sealed record TimingResult(StartListEntry Entry, TimingStatus Status, long? Hundredths,
     int? Rank, string? StartKey, string? FinishKey, string Detail)
 {
+    // A forerunner row: timed through the queues, never ranked, never in competitor results; its time is not shown.
+    public bool IsForerunner { get; init; }
+    public string? ForerunnerLetter { get; init; }
     public IReadOnlyList<TimingSplit> Splits { get; init; } = [];
     public DisqualificationDetails? Disqualification { get; init; }
     // The assigned start/finish is an operator-entered time (shown as "m" next to the time).
@@ -95,6 +146,10 @@ public sealed record TimingSnapshot(Guid ListId, long AuditVersion, IReadOnlyLis
     IReadOnlyList<ObservationReview> Observations, IReadOnlyList<TimingAudit> Audit)
 {
     public IReadOnlyList<int> StartOrder { get; init; } = [];
+    // Forerunner rows of this run, in their running order. Not part of Results, ranks, completion or exports.
+    public IReadOnlyList<TimingResult> Forerunners { get; init; } = [];
+    // Everyone timed in this run: forerunners and competitors.
+    public IEnumerable<TimingResult> Participants => Forerunners.Concat(Results);
     public int Unresolved => Observations.Count(x => x.State == "Unassigned" || x.State == "Review");
     public bool Complete => Results.Count > 0 && Results.All(x => x.Status is TimingStatus.Finished
         or TimingStatus.DNS or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS);

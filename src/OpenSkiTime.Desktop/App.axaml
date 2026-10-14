@@ -5,42 +5,81 @@
              RequestedThemeVariant="Light">
   <Application.Resources>
     <local:GenderLabelConverter x:Key="GenderLabelConverter" />
-    <SolidColorBrush x:Key="CanvasBrush">#EAF0F2</SolidColorBrush>
+    <!-- Race Signal theme. Semantic tokens only: views refer to these keys, never to raw colours. -->
+    <SolidColorBrush x:Key="CanvasBrush">#F1F5F9</SolidColorBrush>
     <SolidColorBrush x:Key="SurfaceBrush">#FFFFFF</SolidColorBrush>
-    <SolidColorBrush x:Key="SubtleSurfaceBrush">#F5F8F9</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyBrush">#102F3B</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyRaisedBrush">#1B4050</SolidColorBrush>
-    <SolidColorBrush x:Key="BorderBrush">#CDDCE1</SolidColorBrush>
-    <SolidColorBrush x:Key="LineBrush">#DFE8EB</SolidColorBrush>
-    <SolidColorBrush x:Key="TextBrush">#193845</SolidColorBrush>
-    <SolidColorBrush x:Key="MutedTextBrush">#58717C</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentBrush">#087E78</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentHoverBrush">#086F6A</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentTintBrush">#E1F1EF</SolidColorBrush>
-    <SolidColorBrush x:Key="SuccessBrush">#238067</SolidColorBrush>
-    <SolidColorBrush x:Key="WarningBrush">#A96A20</SolidColorBrush>
-    <SolidColorBrush x:Key="PendingCellBrush">#FFF0B8</SolidColorBrush>
-    <SolidColorBrush x:Key="ErrorBrush">#A63D3D</SolidColorBrush>
-    <SolidColorBrush x:Key="ErrorTintBrush">#FCEDEC</SolidColorBrush>
-    <SolidColorBrush x:Key="SelectionBrush">#D8ECE9</SolidColorBrush>
-    <SolidColorBrush x:Key="FocusBrush">#088A84</SolidColorBrush>
-    <Thickness x:Key="PageInset">22,18,22,22</Thickness>
-    <Thickness x:Key="SectionInset">20,16</Thickness>
-    <CornerRadius x:Key="SurfaceRadius">6</CornerRadius>
-    <CornerRadius x:Key="ControlRadius">4</CornerRadius>
-    <x:Double x:Key="TitleSize">19</x:Double>
-    <x:Double x:Key="SectionSize">16</x:Double>
-    <x:Double x:Key="BodySize">12</x:Double>
-    <x:Double x:Key="MetaSize">10</x:Double>
+    <SolidColorBrush x:Key="SubtleSurfaceBrush">#F8FAFC</SolidColorBrush>
+    <SolidColorBrush x:Key="HeaderSurfaceBrush">#EEF2F7</SolidColorBrush>
+    <SolidColorBrush x:Key="HoverBrush">#F1F5F9</SolidColorBrush>
+    <SolidColorBrush x:Key="NavyBrush">#14234A</SolidColorBrush>
+    <SolidColorBrush x:Key="NavyRaisedBrush">#22356A</SolidColorBrush>
+    <SolidColorBrush x:Key="NavyHoverBrush">#2D4482</SolidColorBrush>
+    <SolidColorBrush x:Key="NavyPressedBrush">#0D1834</SolidColorBrush>
+    <SolidColorBrush x:Key="NavyBorderBrush">#3E5291</SolidColorBrush>
+    <SolidColorBrush x:Key="NavyHoverBorderBrush">#6C80BD</SolidColorBrush>
+    <SolidColorBrush x:Key="NavyDisabledBrush">#1A2B57</SolidColorBrush>
+    <SolidColorBrush x:Key="NavyDisabledBorderBrush">#2E3F70</SolidColorBrush>
+    <SolidColorBrush x:Key="OnNavyTextBrush">#FFFFFF</SolidColorBrush>
+    <SolidColorBrush x:Key="OnNavyMutedTextBrush">#C3CEE6</SolidColorBrush>
+    <SolidColorBrush x:Key="OnNavyDisabledTextBrush">#8796BC</SolidColorBrush>
+    <SolidColorBrush x:Key="OnNavyAccentBrush">#2563EB</SolidColorBrush>
+    <SolidColorBrush x:Key="OnNavyAccentHoverBrush">#3B82F6</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderBrush">#CBD5E1</SolidColorBrush>
+    <SolidColorBrush x:Key="LineBrush">#E2E8F0</SolidColorBrush>
+    <SolidColorBrush x:Key="TextBrush">#111827</SolidColorBrush>
+    <SolidColorBrush x:Key="MutedTextBrush">#475569</SolidColorBrush>
+    <SolidColorBrush x:Key="DisabledTextBrush">#64748B</SolidColorBrush>
+    <SolidColorBrush x:Key="DisabledSurfaceBrush">#F1F5F9</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentBrush">#1D4ED8</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentHoverBrush">#1E40AF</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentPressedBrush">#1E3A8A</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentTintBrush">#EFF6FF</SolidColorBrush>
+    <SolidColorBrush x:Key="SuccessBrush">#166534</SolidColorBrush>
+    <SolidColorBrush x:Key="SuccessTintBrush">#DCFCE7</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningBrush">#92400E</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningTintBrush">#FEF3C7</SolidColorBrush>
+    <SolidColorBrush x:Key="PendingCellBrush">#FEF3C7</SolidColorBrush>
+    <SolidColorBrush x:Key="ErrorBrush">#B91C1C</SolidColorBrush>
+    <SolidColorBrush x:Key="ErrorTintBrush">#FEE2E2</SolidColorBrush>
+    <SolidColorBrush x:Key="ErrorBorderBrush">#FCA5A5</SolidColorBrush>
+    <!-- Attention on the dark timing banner (B clock and device clock warnings). -->
+    <SolidColorBrush x:Key="BannerWarningBrush">#F3C969</SolidColorBrush>
+    <SolidColorBrush x:Key="BannerWarningTextBrush">#3B2C00</SolidColorBrush>
+    <!-- Connection and publishing dots on light surfaces: connected / problem. Text always states the state too. -->
+    <SolidColorBrush x:Key="LiveOkBrush">#16A34A</SolidColorBrush>
+    <!-- Forerunners in timing: their own tint so they are never read as competitors. -->
+    <SolidColorBrush x:Key="ForerunnerBrush">#EDE9FE</SolidColorBrush>
+    <SolidColorBrush x:Key="ForerunnerTextBrush">#4C1D95</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionBrush">#DBEAFE</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionTextBrush">#111827</SolidColorBrush>
+    <!-- Selected text inside inputs: light highlight that keeps the text readable. -->
+    <SolidColorBrush x:Key="TextSelectionBrush">#BFDBFE</SolidColorBrush>
+    <SolidColorBrush x:Key="FocusBrush">#1D4ED8</SolidColorBrush>
+    <!-- The OpenSkiTime mark keeps its own colour. -->
+    <SolidColorBrush x:Key="BrandBrush">#087E78</SolidColorBrush>
+    <Thickness x:Key="PageInset">12,8,12,8</Thickness>
+    <Thickness x:Key="SectionInset">16,12</Thickness>
+    <CornerRadius x:Key="SurfaceRadius">4</CornerRadius>
+    <CornerRadius x:Key="ControlRadius">3</CornerRadius>
+    <x:Double x:Key="TitleSize">17</x:Double>
+    <x:Double x:Key="SectionSize">15</x:Double>
+    <x:Double x:Key="BodySize">13</x:Double>
+    <x:Double x:Key="MetaSize">11</x:Double>
+    <x:Double x:Key="ControlHeight">30</x:Double>
+    <!-- Fluent's expander headers default to 48 px. -->
+    <x:Double x:Key="ExpanderMinHeight">34</x:Double>
+    <Thickness x:Key="ExpanderHeaderPadding">12,0,12,0</Thickness>
+    <Thickness x:Key="ExpanderContentPadding">12,8</Thickness>
+    <FontFamily x:Key="TimeFontFamily">Cascadia Mono,Consolas,DejaVu Sans Mono,monospace</FontFamily>
     <!-- Fluent derives check boxes, toggles, sliders and focus accents from the system accent. Pin it to the
          OpenSkiTime accent so every control uses one colour instead of the Windows blue. -->
-    <Color x:Key="SystemAccentColor">#087E78</Color>
-    <Color x:Key="SystemAccentColorDark1">#086F6A</Color>
-    <Color x:Key="SystemAccentColorDark2">#07605C</Color>
-    <Color x:Key="SystemAccentColorDark3">#06514E</Color>
-    <Color x:Key="SystemAccentColorLight1">#0B9A93</Color>
-    <Color x:Key="SystemAccentColorLight2">#3FB3AC</Color>
-    <Color x:Key="SystemAccentColorLight3">#7CCDC7</Color>
+    <Color x:Key="SystemAccentColor">#1D4ED8</Color>
+    <Color x:Key="SystemAccentColorDark1">#1E40AF</Color>
+    <Color x:Key="SystemAccentColorDark2">#1E3A8A</Color>
+    <Color x:Key="SystemAccentColorDark3">#172554</Color>
+    <Color x:Key="SystemAccentColorLight1">#2563EB</Color>
+    <Color x:Key="SystemAccentColorLight2">#60A5FA</Color>
+    <Color x:Key="SystemAccentColorLight3">#BFDBFE</Color>
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
@@ -48,6 +87,7 @@
     <StyleInclude Source="avares://OpenSkiTime.Desktop/TimingStyles.axaml" />
     <Style Selector="Window">
       <Setter Property="Icon" Value="avares://OpenSkiTime.Desktop/Assets/openskitime.ico" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
 
     <Style Selector="Border.workSurface">
@@ -61,6 +101,13 @@
       <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    </Style>
+    <!-- Informational note (rule values, penalty summary): pale accent with a strong accent edge. -->
+    <Style Selector="Border.infoNote">
+      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="Padding" Value="10,8" />
     </Style>
     <Style Selector="TextBlock.sectionTitle">
       <Setter Property="FontSize" Value="{DynamicResource SectionSize}" />
@@ -76,8 +123,13 @@
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     </Style>
+    <!-- Supporting text that explains why an action cannot run yet. -->
+    <Style Selector="TextBlock.supportingText.attention">
+      <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
     <Style Selector="StackPanel.field">
-      <Setter Property="Spacing" Value="5" />
+      <Setter Property="Spacing" Value="4" />
     </Style>
     <Style Selector="TextBlock.fieldLabel">
       <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
@@ -85,37 +137,58 @@
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     </Style>
     <Style Selector="Button.sectionNav">
-      <Setter Property="MinHeight" Value="31" />
-      <Setter Property="Padding" Value="13,5" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="Padding" Value="10,5" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="BorderThickness" Value="0,0,0,3" />
       <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="Normal" />
     </Style>
-    <Style Selector="Button.sectionNav:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+    <Style Selector="Button.sectionNav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
     <Style Selector="Button.sectionNav.active">
-      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.sectionNav.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.sectionNav:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,3" />
+    </Style>
+    <Style Selector="Button.sectionNav:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
     </Style>
     <!-- Unavailable steps (no series open) stay flat: Fluent's disabled template would draw grey boxes. -->
     <Style Selector="Button.sectionNav:disabled /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Foreground" Value="#8FA3AA" />
+      <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
     </Style>
 
     <Style Selector="TextBox">
-      <Setter Property="MinHeight" Value="34" />
-      <Setter Property="Padding" Value="9,6" />
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+      <!-- Padding leaves room for the 2 px focus border inside the minimum height, so focusing never resizes a field. -->
+      <Setter Property="Padding" Value="8,4" />
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    </Style>
+    <Style Selector="TextBox, NumericUpDown /template/ TextBox">
+      <Setter Property="SelectionBrush" Value="{DynamicResource TextSelectionBrush}" />
+      <Setter Property="SelectionForegroundBrush" Value="{DynamicResource TextBrush}" />
     </Style>
     <Style Selector="TextBox:pointerover">
       <Setter Property="BorderBrush" Value="{DynamicResource MutedTextBrush}" />
@@ -125,11 +198,20 @@
       <Setter Property="BorderThickness" Value="2" />
     </Style>
     <Style Selector="TextBox:disabled">
-      <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+      <Setter Property="Background" Value="{DynamicResource DisabledSurfaceBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+    </Style>
+    <Style Selector="TextBox:disabled /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{DynamicResource DisabledSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+    </Style>
+    <!-- In-cell editors fit the dense grid rows. -->
+    <Style Selector="DataGridCell TextBox, DataGridCell ComboBox">
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="5,2" />
     </Style>
     <Style Selector="TextBlock.gridCell">
-      <Setter Property="Padding" Value="6,5" />
+      <Setter Property="Padding" Value="6,4" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBlock.gridCell.changed">
@@ -141,116 +223,177 @@
       <Setter Property="Background" Value="{DynamicResource PendingCellBrush}" />
     </Style>
     <Style Selector="ComboBox, NumericUpDown">
-      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
       <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="Padding" Value="8,4,8,4" />
     </Style>
     <Style Selector="ComboBox:focus, NumericUpDown:focus">
       <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
     </Style>
+    <Style Selector="ComboBox:focus-visible /template/ Border#Background">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="CheckBox">
+      <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    </Style>
+    <Style Selector="Expander">
+      <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
 
     <Style Selector="Button.primaryAction, Button.secondaryAction, Button.toolbarAction, Button.dangerAction, Button.dateAction">
-      <Setter Property="MinHeight" Value="34" />
-      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+      <Setter Property="Padding" Value="12,4" />
       <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.primaryAction">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
-    <Style Selector="Button.primaryAction:pointerover">
+    <Style Selector="Button.primaryAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="Foreground" Value="White" />
     </Style>
-    <Style Selector="Button.primaryAction:pressed">
-      <Setter Property="Background" Value="{DynamicResource NavyBrush}" />
+    <Style Selector="Button.primaryAction:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentPressedBrush}" />
+      <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.secondaryAction, Button.dateAction">
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
-    <Style Selector="Button.secondaryAction:pointerover, Button.dateAction:pointerover">
+    <Style Selector="Button.secondaryAction:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.dateAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    </Style>
+    <Style Selector="Button.secondaryAction:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.dateAction:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
     <Style Selector="Button.toolbarAction">
       <Setter Property="Background" Value="{DynamicResource NavyRaisedBrush}" />
-      <Setter Property="BorderBrush" Value="#41616B" />
-      <Setter Property="Foreground" Value="#E6F3F4" />
-    </Style>
-    <Style Selector="Button.toolbarAction:pointerover">
-      <Setter Property="Background" Value="#285365" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NavyBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyTextBrush}" />
     </Style>
     <!-- Disabled toolbar actions stay on the navy bar: Fluent's light disabled colours would make them nearly invisible. -->
     <Style Selector="Button.toolbarAction:disabled /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#16384A" />
-      <Setter Property="BorderBrush" Value="#2F5363" />
-      <Setter Property="Foreground" Value="#7F9CA6" />
+      <Setter Property="Background" Value="{DynamicResource NavyDisabledBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NavyDisabledBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyDisabledTextBrush}" />
     </Style>
     <Style Selector="Button.toolbarAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#285365" />
-      <Setter Property="BorderBrush" Value="#5C8592" />
-      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="{DynamicResource NavyHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NavyHoverBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyTextBrush}" />
     </Style>
-    <Style Selector="Button.activeRace">
-      <Setter Property="MinHeight" Value="34" />
-      <Setter Property="Padding" Value="12,6" />
-      <Setter Property="Background" Value="{DynamicResource NavyRaisedBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-      <Setter Property="BorderThickness" Value="0,0,0,2" />
-      <Setter Property="Foreground" Value="White" />
+    <Style Selector="Button.toolbarAction:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource NavyPressedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NavyHoverBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyTextBrush}" />
+    </Style>
+    <!-- Title bar: plain text menus on the navy bar, separated by thin dividers. -->
+    <Style Selector="TextBlock.titleText">
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyTextBrush}" />
+      <Setter Property="FontSize" Value="14" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="FontSize" Value="16" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.activeRace:pointerover">
-      <Setter Property="Background" Value="#285365" />
+    <Style Selector="TextBlock.titleSeparator">
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyMutedTextBrush}" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.activeRace:focus-visible">
-      <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+    <Style Selector="Border.titleDivider">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Margin" Value="4,9" />
+      <Setter Property="Background" Value="{DynamicResource NavyBorderBrush}" />
+    </Style>
+    <Style Selector="DropDownButton.titleMenu">
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyTextBrush}" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="DropDownButton.titleMenu /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyTextBrush}" />
+    </Style>
+    <Style Selector="DropDownButton.titleMenu:pointerover /template/ ContentPresenter#PART_ContentPresenter, DropDownButton.titleMenu:flyout-open /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource NavyHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyTextBrush}" />
+    </Style>
+    <Style Selector="DropDownButton.titleMenu:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource NavyPressedBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyTextBrush}" />
+    </Style>
+    <Style Selector="DropDownButton.titleMenu:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyDisabledTextBrush}" />
+    </Style>
+    <Style Selector="DropDownButton.titleMenu /template/ PathIcon#DropDownGlyph">
+      <Setter Property="Foreground" Value="{DynamicResource OnNavyMutedTextBrush}" />
+      <Setter Property="Width" Value="9" />
+      <Setter Property="Margin" Value="8,0,0,0" />
+    </Style>
+    <Style Selector="DropDownButton.titleMenu:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource OnNavyTextBrush}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
-    <Style Selector="SplitButton.toolbarAction">
-      <Setter Property="MinHeight" Value="34" />
-      <Setter Property="Background" Value="{DynamicResource NavyRaisedBrush}" />
-      <Setter Property="BorderBrush" Value="#41616B" />
-      <Setter Property="Foreground" Value="#E6F3F4" />
-      <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-    <Style Selector="SplitButton.toolbarAction:pointerover">
-      <Setter Property="Background" Value="#285365" />
-    </Style>
-    <Style Selector="SplitButton.toolbarAction:focus-visible">
-      <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
-    </Style>
     <Style Selector="Button.dangerAction">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="#D8BCBC" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
     </Style>
-    <Style Selector="Button.dangerAction:pointerover">
+    <Style Selector="Button.dangerAction:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.dangerAction:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
     </Style>
     <Style Selector="Button:focus-visible">
       <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
       <Setter Property="BorderThickness" Value="2" />
     </Style>
+    <!-- Disabled actions keep readable text on a flat neutral surface instead of fading the whole control. -->
+    <Style Selector="Button.primaryAction:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.secondaryAction:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.dangerAction:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.dateAction:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DisabledSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+    </Style>
     <Style Selector="Button:disabled">
       <Setter Property="Opacity" Value="0.52" />
     </Style>
-    <Style Selector="Button.toolbarAction:disabled, Button.sectionNav:disabled">
+    <Style Selector="Button.toolbarAction:disabled, Button.sectionNav:disabled, Button.primaryAction:disabled, Button.secondaryAction:disabled, Button.dangerAction:disabled, Button.dateAction:disabled">
       <Setter Property="Opacity" Value="1" />
     </Style>
-    <!-- A toggle that opens an inline editor: secondary when closed, accent tint while open. -->
+    <!-- A toggle that opens an inline editor: secondary when closed, selection tint while open. -->
     <Style Selector="ToggleButton.secondaryAction">
-      <Setter Property="MinHeight" Value="30" />
-      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="12,3" />
       <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
@@ -265,20 +408,24 @@
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
     <Style Selector="ToggleButton.secondaryAction:checked /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
+    <Style Selector="ToggleButton.secondaryAction:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
     <!-- Compact tabs: Fluent's default tab headers are display-size text, out of scale with the race office UI. -->
     <Style Selector="TabItem">
-      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontSize" Value="13" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="MinHeight" Value="32" />
       <Setter Property="Padding" Value="12,0" />
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     </Style>
     <Style Selector="TabItem:selected">
-      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     </Style>
     <Style Selector="TabItem:selected /template/ Border#PART_SelectedPipe">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
@@ -295,23 +442,34 @@
       </Setter>
     </Style>
     <Style Selector="GridSplitter.paneSplitter:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
     </Style>
 
+    <!-- Race grids: dense rows, tabular figures, strong selection with an accent edge, subtle hover. -->
     <Style Selector="DataGrid.raceGrid">
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontFeatures" Value="+tnum" />
+      <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource LineBrush}" />
+    </Style>
+    <!-- Fluent sets 15 px on the cell itself; race grids use dense 13 px rows (timing grids 14 px below). -->
+    <Style Selector="DataGrid.raceGrid DataGridCell">
+      <Setter Property="FontSize" Value="13" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridColumnHeader">
-      <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
+      <Setter Property="Background" Value="{DynamicResource HeaderSurfaceBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
       <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     </Style>
-    <Style Selector="DataGrid.raceGrid DataGridRow:pointerover">
-      <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
+    <Style Selector="DataGrid.raceGrid DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="Fill" Value="{DynamicResource HoverBrush}" />
+      <Setter Property="Opacity" Value="1" />
     </Style>
     <Style Selector="DataGrid.timingGrid DataGridColumnHeader">
       <Setter Property="Padding" Value="6,0" />
@@ -321,7 +479,7 @@
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:selected">
       <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:selected /template/ Border#RowBorder">
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
@@ -333,7 +491,15 @@
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridCell:selected">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}" />
+    </Style>
+    <Style Selector="ListBoxItem">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="8,4" />
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}" />
     </Style>
     <Style Selector="Border.statusBar">
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
@@ -341,13 +507,14 @@
     </Style>
     <Style Selector="Border.statusBar.error">
       <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
-      <Setter Property="BorderBrush" Value="#E6BDBA" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
     </Style>
     <Style Selector="TextBlock.statusText">
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     </Style>
     <Style Selector="TextBlock.statusText.error">
       <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
   </Application.Styles>
 </Application>

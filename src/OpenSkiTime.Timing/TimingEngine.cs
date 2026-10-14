@@ -5,7 +5,7 @@ namespace OpenSkiTime.Timing;
 public static class TimingEngine
 {
     public static TimingSnapshot Replay(StartListRevision list, IReadOnlyList<TimingObservation> observations,
-        IReadOnlyList<TimingAudit> audit, int startChannel, int finishChannel)
+        IReadOnlyList<TimingAudit> audit, int startChannel, int finishChannel, IReadOnlyList<TimingForerunner>? forerunners = null)
     {
         ArgumentNullException.ThrowIfNull(list);
         ArgumentNullException.ThrowIfNull(observations);
@@ -39,7 +39,13 @@ public static class TimingEngine
         var rows = new List<TimingResult>();
         var assignedByBib = reviewed.Where(x => x.Bib is not null && x.State == "Assigned")
             .GroupBy(x => x.Bib!.Value).ToDictionary(x => x.Key, x => x.Select(r => r.Observation).ToArray());
-        foreach (var entry in list.Plan.Entries)
+        // Forerunners use the same impulse rules and get their times (they test the timing), but only competitors are
+        // ranked and form the results; live timing and results never carry a forerunner's time.
+        var forerunnerRows = new List<TimingResult>();
+        foreach (var (forerunner, index) in (forerunners ?? []).Select((x, i) => (x, i)))
+        { forerunnerRows.Add(Evaluate(forerunner.Entry(index + 1)) with { IsForerunner = true, ForerunnerLetter = forerunner.Letter }); }
+        foreach (var entry in list.Plan.Entries) { rows.Add(Evaluate(entry)); }
+        TimingResult Evaluate(StartListEntry entry)
         {
             var id = entry.Entrant.CompetitorId;
             var assigned = assignedByBib.GetValueOrDefault(entry.Bib) ?? [];
@@ -86,19 +92,20 @@ public static class TimingEngine
                     valid ? "" : "Review intermediate impulses / clock continuity")
                 { Manual = pulse.ManualEntry || starts.Length == 1 && starts[0].ManualEntry };
             }).ToArray();
-            rows.Add(new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
+            return new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
             { Splits = splits, Disqualification = status == TimingStatus.DSQ ? classification?.Disqualification : null,
-              StartManual = starts.Length == 1 && starts[0].ManualEntry, FinishManual = finishes.Length == 1 && finishes[0].ManualEntry });
+              StartManual = starts.Length == 1 && starts[0].ManualEntry, FinishManual = finishes.Length == 1 && finishes[0].ManualEntry };
         }
         var finishedTimes = rows.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
-        var badSplits = rows.SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
+        // Forerunners test the timing: an inconsistent intermediate of theirs needs review like a competitor's.
+        var badSplits = rows.Concat(forerunnerRows).SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
             .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
         var startOrder = decisions.TryGetValue("q", out var queue) && queue.StartOrder is { } savedOrder
             ? ParseStartOrder(savedOrder) : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
         return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
             rows.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
             reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray())
-        { StartOrder = startOrder };
+        { StartOrder = startOrder, Forerunners = forerunnerRows };
     }
 
     // Operator-entered timestamps come only from audited ManualTime decisions (their latest state, so an undo removes
@@ -230,7 +237,7 @@ public static class TimingEngine
                 if (decision.Ignored || observation.Observation.Kind != ObservationKind.Impulse || observation.DuplicateOf is not null
                     || !knownChannel)
                 { throw new DomainValidationException("Only an original timing impulse can be assigned. Other input can be reviewed and ignored."); }
-                if (!snapshot.Results.Any(x => x.Bib == bib)) { throw new DomainValidationException("That bib is not on this run's start list."); }
+                if (!snapshot.Participants.Any(x => x.Bib == bib)) { throw new DomainValidationException("That bib is not on this run's start list."); }
             }
         }
         else if (decision.Kind == DecisionKind.ManualTime)
@@ -253,7 +260,11 @@ public static class TimingEngine
         }
         else
         {
-            if (!snapshot.Results.Any(x => x.CompetitorId == decision.CompetitorId)) { throw new DomainValidationException("Select a starter in this run."); }
+            var forerunner = snapshot.Forerunners.Any(x => x.CompetitorId == decision.CompetitorId);
+            if (!forerunner && !snapshot.Results.Any(x => x.CompetitorId == decision.CompetitorId)) { throw new DomainValidationException("Select a starter in this run."); }
+            // A forerunner can be marked as not started or not finished; it has no result to disqualify or correct.
+            if (forerunner && (decision.Kind != DecisionKind.Status || decision.Status is TimingStatus.DSQ or TimingStatus.NPS))
+            { throw new DomainValidationException("Forerunners can only be marked DNS or DNF; they have no result."); }
             if (decision.Status is not null && decision.Status is not (TimingStatus.DNS or TimingStatus.DNF or TimingStatus.DSQ or TimingStatus.NPS))
             { throw new DomainValidationException("Choose DNS, DNF, DSQ or NPS; clear the classification to use the recorded times."); }
             if (decision.Hundredths is <= 0 or > 720000) { throw new DomainValidationException("A corrected time must be greater than zero and no longer than two hours."); }

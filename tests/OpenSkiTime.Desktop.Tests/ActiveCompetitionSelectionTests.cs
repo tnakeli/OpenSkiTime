@@ -49,22 +49,22 @@ public partial class DesktopWorkflowTests
             window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             try
             {
-                var selector = window.FindControl<Button>("ActiveRaceButton")!;
+                var heading = window.FindControl<TextBlock>("ActiveRaceTitleText")!;
                 Assert.Contains("Run 2", vm.ActiveRaceLabel, StringComparison.Ordinal);
                 (await OpenCompetitionNavigationAsync(window, vm, "ResultsMenuButton", "SL1")).Hide();
                 Assert.True(vm.IsResultsSection);
                 Assert.Equal(first.Id, vm.ResultsCompetition!.Id);
-                AssertCompetitionOnlySelection(window, vm, selector, "SL1");
+                AssertCompetitionOnlySelection(window, vm, heading, "SL1");
                 Assert.DoesNotContain(window.GetVisualDescendants().OfType<ResultsView>().Single()
                     .GetVisualDescendants().OfType<ComboBox>(), box => ReferenceEquals(box.ItemsSource, vm.FisCompetitions));
                 (await OpenCompetitionNavigationAsync(window, vm, "TimingReportMenuButton", "SL1")).Hide();
                 Assert.True(vm.IsTimingReportSection);
                 Assert.Equal(first.Id, vm.ReportCompetition!.Id);
-                AssertCompetitionOnlySelection(window, vm, selector, "SL1");
+                AssertCompetitionOnlySelection(window, vm, heading, "SL1");
                 (await OpenCompetitionNavigationAsync(window, vm, "PdfFactoryButton", "SL1")).Hide();
                 Assert.True(vm.IsPdfFactorySection);
                 Assert.Equal(first.Id, vm.PdfCompetition!.Id);
-                AssertCompetitionOnlySelection(window, vm, selector, "SL1");
+                AssertCompetitionOnlySelection(window, vm, heading, "SL1");
                 Assert.True(vm.IsActiveRaceDestination(first.Id, 2, WorkspaceSection.Timing));
                 await vm.OpenTimingRunCommand.ExecuteAsync(vm.ActiveRaceDestination);
                 Assert.Equal(2, vm.TimingRun);
@@ -78,7 +78,7 @@ public partial class DesktopWorkflowTests
                 resultsMenu.Hide();
                 Assert.True(vm.IsResultsSection);
                 Assert.Equal(second.Id, vm.ResultsCompetition!.Id);
-                AssertCompetitionOnlySelection(window, vm, selector, "SL2");
+                AssertCompetitionOnlySelection(window, vm, heading, "SL2");
                 var reportMenu = await OpenCompetitionNavigationAsync(window, vm, "TimingReportMenuButton", "SL2");
                 Assert.Equal(second.Id, vm.ReportCompetition!.Id);
                 var reportChoice = reportMenu.Items.OfType<MenuItem>().Single(item => item.CommandParameter is CompetitionDetails race && race.Id == first.Id);
@@ -94,11 +94,11 @@ public partial class DesktopWorkflowTests
                 pdfMenu.Hide();
                 Assert.True(vm.IsPdfFactorySection);
                 Assert.Equal(second.Id, vm.PdfCompetition!.Id);
-                AssertCompetitionOnlySelection(window, vm, selector, "SL2");
+                AssertCompetitionOnlySelection(window, vm, heading, "SL2");
                 Assert.Contains(vm.PdfReports, row => row.FileName.StartsWith("SL2_", StringComparison.Ordinal));
                 Assert.DoesNotContain(vm.PdfReports, row => row.FileName.StartsWith("SL1_", StringComparison.Ordinal));
-                PressSettingsControl(window, selector);
-                var activePdfMenu = Assert.IsType<MenuFlyout>(selector.Flyout);
+                // The competition is chosen in the section menus; the title bar only shows it.
+                var activePdfMenu = await OpenCompetitionNavigationAsync(window, vm, "PdfFactoryButton", "SL2");
                 var firstChoice = activePdfMenu.Items.OfType<MenuItem>().Single(item => item.CommandParameter is CompetitionDetails race && race.Id == first.Id);
                 firstChoice.Command!.Execute(firstChoice.CommandParameter);
                 await vm.SelectActiveCompetitionCommand.ExecutionTask!;
@@ -117,15 +117,12 @@ public partial class DesktopWorkflowTests
         }
     }
 
-    private static void AssertCompetitionOnlySelection(Window window, MainViewModel vm, Button selector, string label)
+    private static void AssertCompetitionOnlySelection(Window window, MainViewModel vm, TextBlock heading, string label)
     {
         window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-        Assert.Equal(label + "  ▾", vm.ActiveRaceLabel);
-        Assert.Equal(vm.ActiveRaceLabel, selector.Content);
-        PressSettingsControl(window, selector);
-        var menu = Assert.IsType<MenuFlyout>(selector.Flyout);
-        AssertCompetitionMenu(menu, vm, label);
-        menu.Hide();
+        Assert.Equal(label, vm.ActiveRaceLabel);
+        Assert.Equal(label, heading.Text);
+        Assert.True(heading.IsEffectivelyVisible);
     }
 
     private static async Task<MenuFlyout> OpenCompetitionNavigationAsync(Window window, MainViewModel vm, string buttonName, string label)

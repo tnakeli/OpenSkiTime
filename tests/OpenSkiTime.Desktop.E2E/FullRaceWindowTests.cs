@@ -52,7 +52,7 @@ public sealed class FullRaceWindowTests
                 app.Screenshot(steps, "04-run1-draw.png");
                 order1 = SeriesFileEvidence.StartOrder(file, 1);
                 Assert.Equal(SyntheticRace.AthleteCount, order1.Count);
-                office.OpenRun("5  Timing  ▾", 1);
+                office.OpenRun("Timing", 1);
                 office.ConnectSimulator();
                 app.Screenshot(steps, "05-timing-connected.png");
                 office.TimeRun(1, order1, plan1, (done, total) =>
@@ -64,7 +64,7 @@ public sealed class FullRaceWindowTests
                 office.PrepareSecondRun();
                 app.Screenshot(steps, "09-run2-start-list.png");
                 order2 = SeriesFileEvidence.StartOrder(file, 2);
-                office.OpenRun("5  Timing  ▾", 2);
+                office.OpenRun("Timing", 2);
                 office.EnsureConnected();
                 office.TimeRun(2, order2, plan2, (done, total) =>
                 { if (done == total / 2) { app.Screenshot(steps, "10-run2-live.png"); } });

@@ -9,7 +9,7 @@
      <WrapPanel IsEnabled="{Binding !IsReportBusy}">
       <StackPanel IsEnabled="False" Width="90" Margin="0,0,8,4"><TextBlock Text="RUN" Classes="eyebrow"/><ComboBox Name="ReportImportRunPicker" ItemsSource="{Binding ReportImportRuns}" SelectedItem="{Binding ReportImportRun}"/></StackPanel>
       <StackPanel IsEnabled="False" Width="135" Margin="0,0,8,4"><TextBlock Text="SOURCE" Classes="eyebrow"/><ComboBox ItemsSource="{Binding ReportImageRoles}" SelectedItem="{Binding ReportImageRole}"/></StackPanel>
-      <StackPanel IsEnabled="False" Width="100" Margin="0,0,8,4"><TextBlock Text="MATCH ± SECONDS" Classes="eyebrow"/><TextBox Text="{Binding ReportMatchTolerance}"/></StackPanel>
+      <StackPanel IsEnabled="False" Width="116" Margin="0,0,8,4"><TextBlock Text="MATCH ± SECONDS" Classes="eyebrow"/><TextBox Text="{Binding ReportMatchTolerance}"/></StackPanel>
       <StackPanel Width="140" Margin="0,0,8,4" IsEnabled="{Binding CanEditReportDevice}"><TextBlock Text="INPUT" Classes="eyebrow"/><ComboBox Name="ReportInputModePicker" ItemsSource="{Binding ReportInputModes}" SelectedItem="{Binding ReportInputMode}" HorizontalAlignment="Stretch"/></StackPanel>
       <Button Name="OpenReceiptImagesButton" Content="Open images…" Classes="secondaryAction" Click="OpenImages_Click" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding IsReportImageInput}"/><Button Content="Paste image" Classes="secondaryAction" Click="PasteImage_Click" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding IsReportImageInput}"/>
      </WrapPanel>

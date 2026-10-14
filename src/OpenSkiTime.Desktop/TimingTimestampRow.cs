@@ -8,7 +8,8 @@ public sealed record TimingTimestampCell(Guid ListId, ObservationReview Review, 
     public string Time => TimingTime.FormatTimeOfDay(Review.Observation.DeviceTicks);
     public int Channel => Review.Observation.Channel!.Value;
     public string Position => MainViewModel.TimingPositionLabel(Channel);
-    public string State => Review.Ignored ? "Ignored" : Review.Bib is null ? "Unassigned" : $"Bib {Review.Bib}";
+    public string State => Review.Ignored ? "Ignored" : Review.Bib is null ? "Unassigned"
+        : TimingForerunner.IsKey(Review.Bib.Value) ? "Forerunner" : $"Bib {Review.Bib}";
     // Operator-entered (not received from a device); shown as a small "m" next to the time.
     public bool IsManual => Review.Observation.ManualEntry;
     public string Hint => $"{Position} · {Time}{(IsManual ? " · " + Review.Observation.Message : "")} · {State}. "
@@ -17,6 +18,10 @@ public sealed record TimingTimestampCell(Guid ListId, ObservationReview Review, 
 
 public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IReadOnlyList<TimingTimestampCell?> Cells)
 {
+    public string? ForerunnerLetter { get; init; }
+    public bool IsForerunner => ForerunnerLetter is not null;
+    public string BibText => ForerunnerLetter is { } letter ? $"F · {letter}" : Bib?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+
     public static IReadOnlyList<TimingTimestampRow> Create(TimingSnapshot snapshot, int intermediateCount)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -36,22 +41,34 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
                 Cells(c => c == pulse.Observation.Channel ? Cell(pulse) : null).ToArray()));
         }
         var byBib = input.Where(x => x.Bib is not null).GroupBy(x => x.Bib!.Value).ToDictionary(x => x.Key, x => x.ToArray());
-        foreach (var result in snapshot.Results.OrderBy(x => x.Entry.Position))
+        // Forerunners' impulses stay visible and correctable like a competitor's.
+        foreach (var result in snapshot.Forerunners.Concat(snapshot.Results.OrderBy(x => x.Entry.Position)))
         {
-            if (!byBib.TryGetValue(result.Bib, out var pulses)) { continue; }
+            if (!byBib.TryGetValue(result.Bib, out var pulses))
+            {
+                // A forerunner classified before any impulse keeps a row here, so it can still be selected and its
+                // status cleared; forerunners never appear in the ranking.
+                if (result.IsForerunner && result.Status is TimingStatus.DNS or TimingStatus.DNF)
+                {
+                    rows.Add(new($"{result.Bib}:status", result.Bib, $"Forerunner · {result.Name} · {result.Status}", Cells(_ => null).ToArray())
+                    { ForerunnerLetter = result.ForerunnerLetter });
+                }
+                continue;
+            }
             var byChannel = pulses.GroupBy(x => x.Observation.Channel!.Value).ToDictionary(x => x.Key, x => x.ToArray());
             // Keep extra assigned impulses separately; never hide them behind a single chosen timestamp.
             for (var i = 0; i < byChannel.Values.Max(x => x.Length); i++)
             {
-                rows.Add(new($"{result.Bib}:{i}", result.Bib, result.Name + (i == 0 ? "" : " · extra impulse"),
-                    Cells(c => channels.Contains(c) && byChannel.TryGetValue(c, out var values) && i < values.Length ? Cell(values[i]) : null).ToArray()));
+                rows.Add(new($"{result.Bib}:{i}", result.Bib, (result.IsForerunner ? "Forerunner · " : "") + result.Name + (i == 0 ? "" : " · extra impulse"),
+                    Cells(c => channels.Contains(c) && byChannel.TryGetValue(c, out var values) && i < values.Length ? Cell(values[i]) : null).ToArray())
+                { ForerunnerLetter = result.ForerunnerLetter });
             }
         }
         // Use journal arrival order, not device time: clock resets and late packets must not reorder history.
         var arrival = snapshot.Observations.Select((review, index) => (review.Observation.Key, index))
             .ToDictionary(x => x.Key, x => x.index);
         return rows.OrderByDescending(row => row.Cells.OfType<TimingTimestampCell>()
-            .Max(cell => arrival[cell.Key])).ToArray();
+            .Select(cell => arrival[cell.Key]).DefaultIfEmpty(-1).Max()).ToArray();
     }
 }
 

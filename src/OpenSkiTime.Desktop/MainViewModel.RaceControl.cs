@@ -56,7 +56,9 @@ public sealed partial class MainViewModel
     {
         var timing = workspace.Timing;
         foreach (var row in TimingRows.Concat(OnCourseRows).Concat(RunningRows))
-        { row.Clock.Time = TimingTime.Format(row.Result.Status == TimingStatus.OnCourse ? timing?.RunningHundredths(row.Result.StartKey) : row.Result.Hundredths) + row.ClockManualMark; }
+        {
+            row.Clock.Time = TimingTime.Format(row.Result.Status == TimingStatus.OnCourse ? timing?.RunningHundredths(row.Result.StartKey) : row.Result.Hundredths) + row.ClockManualMark;
+        }
         foreach (var row in AtStartRows) { row.Clock.Marker = row.Bib == timing?.ArmedStart ? "▶" : ""; }
         foreach (var row in RunningRows)
         { row.Clock.Marker = row.Bib == timing?.ArmedFinish ? "▶" : ""; }
@@ -158,6 +160,7 @@ public sealed partial class MainViewModel
                         splitFields[category].GetValueOrDefault(split.Number) ?? [])).ToArray()
                 };
             });
+            foreach (var forerunner in snapshot.Forerunners) { currentRows[forerunner.Bib] = new TimingGridRow(forerunner, null, null); }
             TimingGridRow Map(TimingResult result) => currentRows[result.Bib];
             var onCourse = RaceFlow.OnCourse(snapshot).Select(Map).ToArray();
             SyncTimingRows(OnCourseRows, onCourse);
@@ -175,8 +178,12 @@ public sealed partial class MainViewModel
                 .ThenByDescending(x => x.Result.StartKey is null ? long.MinValue : snapshot.Observations
                     .First(y => y.Observation.Key == x.Result.StartKey).Observation.DeviceTicks ?? long.MinValue);
             SyncTimingRows(RunningRows, arrivalOrder.Select(Present).ToArray());
-            var ranked = currentRows.Values.Where(x => x.Result.Status != TimingStatus.Ready && x.Result.Status != TimingStatus.OnCourse)
+            var ranked = currentRows.Values.Where(x => !x.IsForerunner && x.Result.Status != TimingStatus.Ready && x.Result.Status != TimingStatus.OnCourse)
                 .Where(x => x.Result.Status != TimingStatus.Review || x.Result.FinishKey is not null).Select(Present).ToArray();
+            // Forerunners that finished or were classified follow the competitors with their times (to check the timing),
+            // never with a rank; they are not part of the results.
+            var timedForerunners = snapshot.Forerunners.Where(x => x.Status is not (TimingStatus.Ready or TimingStatus.OnCourse))
+                .Select(x => currentRows[x.Bib] with { Category = HasTimingCategories ? "Forerunners" : "" }).ToArray();
             long? RankedTime(TimingGridRow row) => row.Result.Status == TimingStatus.Finished ? ShowTimingTotal ? row.Total : row.Result.Hundredths : null;
             var categoryOrder = _desk?.Categories.GroupBy(x => x.Values.Label).ToDictionary(x => x.Key, x => x.Min(r => r.Values.DisplayOrder)) ?? [];
             if (HasTimingCategories && RankingView.GroupDescriptions.Count == 0)
@@ -185,7 +192,8 @@ public sealed partial class MainViewModel
             // Ex aequo competitors share a rank and are listed with the higher bib first (ICR 617.3.3), as in official results.
             RankingRows.UpdateRows(() => SyncTimingRows(RankingRows, ranked.OrderBy(x => categoryOrder.GetValueOrDefault(x.Category, int.MaxValue))
                 .ThenBy(x => x.Category, StringComparer.Ordinal).ThenByOfficialResult(RankedTime, x => x.Bib).ThenBy(x => x.Position)
-                .Select(x => x with { DisplayRank = ResultOrder.Rank(RankedTime(x), ranked.Where(y => y.Category == x.Category).Select(RankedTime)) }).ToArray()));
+                .Select(x => x with { DisplayRank = ResultOrder.Rank(RankedTime(x), ranked.Where(y => y.Category == x.Category).Select(RankedTime)) })
+                .Concat(timedForerunners).ToArray()));
             RaceQueueVersion++;
             OnPropertyChanged(nameof(RaceQueueVersion));
             OnCourseLabel = $"ON COURSE · {onCourse.Length}";
@@ -196,7 +204,8 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(HasUnassignedFinish));
         }
         string Expected(int channel, string empty) => timing!.IsHeld(channel) ? "HOLD · impulses kept unassigned"
-            : snapshot.Results.FirstOrDefault(x => x.Bib == timing.ExpectedBib(channel)) is { } row ? $"{row.Bib} · {row.Name}" : empty;
+            : snapshot.Participants.FirstOrDefault(x => x.Bib == timing.ExpectedBib(channel)) is { } row
+                ? row.IsForerunner ? $"Forerunner {row.ForerunnerLetter} · {row.Name}" : $"{row.Bib} · {row.Name}" : empty;
         NextStartLabel = Expected(0, "No starter selected");
         _displayedNextStart = timing.IsHeld(0) ? null : timing.ExpectedBib(0);
         ExpectedFinishLabel = Expected(1, "No competitor expected");

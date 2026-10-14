@@ -72,7 +72,7 @@ public sealed class DemoVideoTests
             Begin("Homologated equipment and timing", "FIS equipment homologations come from the FIS API; the simulator stands in for start, intermediate and finish.", 4);
             Attempt(output, "homologations", office.RefreshEquipmentHomologations);
             var order1 = SeriesFileEvidence.StartOrder(file, 1);
-            office.OpenRun("5  Timing  ▾", 1);
+            office.OpenRun("Timing", 1);
             office.ConnectSimulator();
             Begin("Run 1 · 100 racers", "Impulses are saved before they are shown, assigned in start order and ranked live. DNS and DNF are one click.", 5);
             office.FastImpulses = true;
@@ -83,7 +83,7 @@ public sealed class DemoVideoTests
             Begin("Run 2 start order", "Best 30 reversed from Run 1; a tie at 30th brings the tied racer along. Bibs stay.", 2);
             office.PrepareSecondRun();
             var order2 = SeriesFileEvidence.StartOrder(file, 2);
-            office.OpenRun("5  Timing  ▾", 2);
+            office.OpenRun("Timing", 2);
             office.EnsureConnected();
             Begin("Run 2 · combined ranking", "The ranking switches to combined times; equal totals share a rank.", 5);
             office.TimeRun(2, order2, FullRaceWindowTests.WindowPlan(race.Run2));

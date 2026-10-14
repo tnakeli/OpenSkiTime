@@ -19,6 +19,8 @@ public sealed partial class TimingView
         _rankingColumnControls = new(this.FindControl<DataGrid>("RankingGrid")!, vm.RankingView,
             "Ranking", RankingColumnValue, (row, key) => key switch
             {
+                // Sorted by the number, filtered by what is shown (a forerunner's "F · A").
+                "BibText" => row.BibText,
                 "DisplayTime" => row.DisplayTime, "TotalTime" => row.TotalTime, "PreviousRunRanked" => row.PreviousRunRanked,
                 _ when IntermediateIndex(key) is { } index => row.RankedIntermediates.ElementAtOrDefault(index) ?? "",
                 _ => ColumnGridController<TimingGridRow>.Text(RankingColumnValue(row, key))
@@ -54,7 +56,7 @@ public sealed partial class TimingView
 
     private static object? RankingColumnValue(TimingGridRow row, string key) => key switch
     {
-        "DisplayRank" => row.DisplayRank, "Bib" => row.Bib, "Name" => row.Name,
+        "DisplayRank" => row.DisplayRank, "BibText" => row.Bib, "Name" => row.Name,
         "Result.Entry.Entrant.Athlete.Nation" => row.Result.Entry.Entrant.Athlete.Nation,
         "Result.Entry.Entrant.Athlete.Club" => row.Result.Entry.Entrant.Athlete.Club,
         "DisplayTime" => row.Result.Hundredths, "TotalTime" => row.Total, "PreviousRunRanked" => row.PreviousRunHundredths,

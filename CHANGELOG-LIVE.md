@@ -8,8 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- Forerunners: the race page shows each forerunner's progress (at start, on course, finished, DNS/DNF) and includes forerunners on course in the banner. Their times are never published.
+
 ### Changed
 
+- The top of the race page is one compact bar (two rows on phones): competition, run and split selectors, update time and connection. The page no longer repeats the product name; it is in the browser tab title.
+- On course is a list: every racer on course of the current run, one per line, with a running time that ticks in real time. The banner also shows the last finisher of the current run with time and rank, or DNF/DSQ when that was the latest outcome, highlighted for a few seconds when it changes.
+- Refreshed live results page: light theme by default with white surfaces and strong blue accents, a compact header and run selectors so the results start higher on phones, larger result text and aligned times. Viewers whose device uses a dark theme keep a dark page.
 - When every starter of the current run has finished or been classified, the race banner shows "Run N complete" instead of an empty "On course · —".
 
 ## [0.2.0] - 2026-10-05

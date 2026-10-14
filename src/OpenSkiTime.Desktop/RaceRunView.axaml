@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="OpenSkiTime.Desktop.RaceRunView" x:CompileBindings="False">
-  <Border Classes="subtleSurface" Padding="12">
-    <StackPanel Spacing="8">
-      <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="16" />
+  <Border Classes="subtleSurface" Padding="10,8">
+    <StackPanel Spacing="6">
+      <TextBlock Text="{Binding Label}" Classes="sectionTitle" />
       <WrapPanel>
         <StackPanel Classes="field" Width="190" Margin="0,0,8,6"><TextBlock Text="COURSE" Classes="fieldLabel" /><TextBox Text="{Binding Course}" /></StackPanel>
         <StackPanel Classes="field" Width="145" Margin="0,0,8,6"><TextBlock Text="HOMOLOGATION" Classes="fieldLabel" /><TextBox Text="{Binding Homologation}" /></StackPanel>

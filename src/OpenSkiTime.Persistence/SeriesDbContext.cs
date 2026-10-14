@@ -5,7 +5,7 @@ namespace OpenSkiTime.Persistence;
 
 public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> options) : DbContext(options)
 {
-    internal const string Format = "OpenSkiTime.Development/4";
+    internal const string Format = "OpenSkiTime.Development/5";
     internal DbSet<SeriesRow> Series => Set<SeriesRow>();
     internal DbSet<CompetitionRow> Competitions => Set<CompetitionRow>();
     internal DbSet<CompetitorRow> Competitors => Set<CompetitorRow>();

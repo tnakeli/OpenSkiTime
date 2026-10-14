@@ -24,7 +24,8 @@ public sealed partial class MainViewModel
     public bool HasCompetitionCalendarStatus => !string.IsNullOrWhiteSpace(CompetitionCalendarStatus);
     [ObservableProperty] private bool _isCompetitionDataBusy;
     private string _competitionCalendarSource = "";
-    public IReadOnlyList<string> CompetitionGenders { get; } = ["", "W", "M", "A"];
+    // Shown as Women / Men / Mixed; the series file and FIS messages keep the calendar codes W / M / A.
+    public IReadOnlyList<string> CompetitionGenders { get; } = CompetitionGenderLabels.Choices;
 
     private void LoadCompetitionCalendar(CompetitionValues? values)
     {
@@ -36,7 +37,7 @@ public sealed partial class MainViewModel
         CompetitionSeason = (c?.Season ?? FisSeason.FromSeries(_current?.Values.Season ?? Season, date)).ToString(CultureInfo.InvariantCulture);
         CompetitionLocation = c?.Location ?? _current?.Values.Location ?? "";
         CompetitionNation = c?.Nation ?? _current?.Values.Nation ?? "";
-        CompetitionCalendarCategory = c?.Category ?? ""; CompetitionGender = c?.Gender ?? "";
+        CompetitionCalendarCategory = c?.Category ?? ""; CompetitionGender = CompetitionGenderLabels.Format(c?.Gender);
         CompetitionTdLastName = c?.TechnicalDelegate?.LastName ?? "";
         CompetitionTdFirstName = c?.TechnicalDelegate?.FirstName ?? "";
         CompetitionTdNation = c?.TechnicalDelegate?.Nation ?? "";
@@ -51,7 +52,7 @@ public sealed partial class MainViewModel
         if (!int.TryParse(CompetitionSeason, NumberStyles.None, CultureInfo.InvariantCulture, out var season))
         { throw new DomainValidationException("Enter the FIS season as a year, for example 2027."); }
         return new CompetitionCalendarData(season, CompetitionLocation, CompetitionNation, CompetitionCalendarCategory,
-            CompetitionGender, new(CompetitionTdLastName, CompetitionTdFirstName, CompetitionTdNation, CompetitionTdNumber,
+            CompetitionGenderLabels.ToCode(CompetitionGender), new(CompetitionTdLastName, CompetitionTdFirstName, CompetitionTdNation, CompetitionTdNumber,
                 string.IsNullOrWhiteSpace(CompetitionTdFirstName) || string.IsNullOrWhiteSpace(CompetitionTdLastName) ? CompetitionTdOriginalName : ""),
             _competitionCalendarSource).Validated();
     }

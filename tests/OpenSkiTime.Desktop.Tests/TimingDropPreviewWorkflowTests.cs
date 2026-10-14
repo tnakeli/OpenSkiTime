@@ -54,6 +54,7 @@ public partial class DesktopWorkflowTests
                     competition.Id, true, null, revision)).Revision;
             }
             var preferences = new TimingPreferencesStore(root);
+            await SaveCachedFisPointsAsync(workspace, cache);
             using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" }, fisStore: cache,
                 recentSeriesStore: new RecentSeriesStore(root), timingPreferencesStore: preferences);
             await vm.OpenSeriesCommand.ExecuteAsync(null);

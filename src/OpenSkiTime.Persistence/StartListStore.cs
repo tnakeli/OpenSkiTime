@@ -146,6 +146,8 @@ internal sealed partial class SqliteSeriesFileSession
             { throw new DomainValidationException("A newer Run 1 revision exists. Use that revision first."); }
             expected = FisStartOrder.SecondRun(first, plan.SourceResults, plan.Options.ReverseCount);
         }
+        // Recorded order and bib changes are replayed on top of the recalculated draw or Run 2 order.
+        expected = FisStartOrder.WithChanges(expected, plan.Changes);
         if (JsonSerializer.Serialize(expected) != JsonSerializer.Serialize(plan))
         { throw new DomainValidationException("Start-list order does not match the recorded draw rules and inputs."); }
         var enteredIds = await db.Participations.Where(x => x.CompetitionId == plan.CompetitionId && x.Participates)
