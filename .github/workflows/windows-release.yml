@@ -63,7 +63,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: ./scripts/Test-WindowsInstaller.ps1 -Installer "artifacts/windows/OpenSkiTime-$env:RELEASE_VERSION-win-x64-setup.exe"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-release
           path: |
@@ -88,7 +88,7 @@ jobs:
           sha256sum sbom.cdx.json cve.json cve-gate.txt provenance.txt >> SHA256SUMS.txt
           cd "$GITHUB_WORKSPACE"
           bash scripts/verify-checksums.sh artifacts/windows sbom.cdx.json cve.json cve-gate.txt provenance.txt
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-reviewed-release
           path: artifacts/windows/*
