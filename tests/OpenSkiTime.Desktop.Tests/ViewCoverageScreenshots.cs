@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -33,7 +34,7 @@ public partial class DesktopWorkflowTests
                 fisStore: cache, recentSeriesStore: new RecentSeriesStore(root),
                 categoryRulePresetStore: new CategoryRulePresetStore(root), timingPreferencesStore: new TimingPreferencesStore(root),
                 reportDefaultsStore: new TimingReportDefaultsStore(root), timingDeviceCache: new FisTimingDeviceCache(root));
-            foreach (var (width, height) in new[] { (1280, 800), (1920, 1080) })
+            foreach (var (width, height) in CoverageSizes())
             {
                 var folder = Path.Combine(output, $"{width}x{height}");
                 var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = width, Height = height };
@@ -70,6 +71,14 @@ public partial class DesktopWorkflowTests
                     vm.ShowTimingClassificationEditor = false;
                     await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 2));
                     CaptureDraw(window, folder, "10-timing-run2.png");
+                    vm.ShowForerunnerEditor = true;
+                    vm.TimingForerunners[0].FirstName = "Synthetic"; vm.TimingForerunners[0].LastName = "Forerunner";
+                    vm.AddTimingForerunnerCommand.Execute(null);
+                    vm.TimingForerunners[1].FirstName = "Synthetic"; vm.TimingForerunners[1].LastName = "Second";
+                    CaptureDraw(window, folder, "10a-timing-forerunner-editor.png");
+                    await vm.SaveTimingForerunnersCommand.ExecuteAsync(null);
+                    Assert.False(vm.IsError, vm.StatusMessage);
+                    CaptureDraw(window, folder, "10b-timing-forerunners-at-start.png");
                     await vm.ShowResultsCommand.ExecuteAsync(null);
                     await vm.LoadResultsCommand.ExecuteAsync(null);
                     CaptureDraw(window, folder, "11-results.png");
@@ -109,5 +118,15 @@ public partial class DesktopWorkflowTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    private static (int Width, int Height)[] CoverageSizes()
+    {
+        // Optional OPENSKITIME_VIEW_COVERAGE_SIZES, e.g. "1366x768,1280x720": window sizes in device-independent units,
+        // so 1920×1080 at 150 % display scaling is 1280x720.
+        var sizes = Environment.GetEnvironmentVariable("OPENSKITIME_VIEW_COVERAGE_SIZES");
+        if (string.IsNullOrWhiteSpace(sizes)) { return [(1280, 800), (1920, 1080)]; }
+        return sizes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(size => size.Split('x', 'X')).Select(parts => (int.Parse(parts[0], CultureInfo.InvariantCulture), int.Parse(parts[1], CultureInfo.InvariantCulture))).ToArray();
     }
 }

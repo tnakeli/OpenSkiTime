@@ -55,6 +55,7 @@ public partial class MainWindow : Window
             _gridViewModel.PropertyChanged += OnGridViewModelPropertyChanged;
         }
         RebuildCompetitionColumns();
+        BuildTitleMenus();
         RebuildRecentMenu();
         UpdateCompetitorGridHeight();
         InstallCompetitionColumnControls();
@@ -68,16 +69,58 @@ public partial class MainWindow : Window
     private void OnRecentFilesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         => RebuildRecentMenu();
 
-    private void ActiveRace_Click(object? sender, RoutedEventArgs e)
+    private static readonly string[] s_settingsTabs = ["FIS", "Timing devices", "Timing report", "Live timing", "About"];
+
+    // File and Settings menus of the title bar. Recent files are a submenu of File.
+    private void BuildTitleMenus()
     {
-        if (DataContext is not MainViewModel vm) { return; }
-        if ((vm.IsResultsSection || vm.IsTimingReportSection || vm.IsPdfFactorySection) && sender is Button button)
+        if (_gridViewModel is not { } vm) { return; }
+        MenuItem Item(string header, System.Windows.Input.ICommand command, string? name = null) => new() { Header = header, Command = command, Name = name };
+        var file = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+        file.Items.Add(Item("New series", vm.NewSeriesCommand));
+        file.Items.Add(Item("Open file", vm.OpenSeriesCommand));
+        file.Items.Add(new MenuItem { Header = "Open recent", Name = "RecentFilesMenu" });
+        file.Items.Add(new Separator());
+        var backup = Item("Backup / transfer", vm.BackupCommand);
+        backup.Bind(IsEnabledProperty, new Binding(nameof(MainViewModel.IsOpen)) { Source = vm });
+        file.Items.Add(backup);
+        var close = Item("Close file", vm.CloseSeriesCommand);
+        close.Bind(IsEnabledProperty, new Binding(nameof(MainViewModel.IsOpen)) { Source = vm });
+        file.Items.Add(close);
+        this.FindControl<DropDownButton>("FileMenuButton")!.Flyout = file;
+        var settings = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+        for (var i = 0; i < s_settingsTabs.Length; i++)
         {
-            ShowCompetitionMenu(button, vm);
-            return;
+            var tab = i;
+            var item = new MenuItem { Header = s_settingsTabs[i] };
+            item.Click += (_, _) => { vm.SelectedSettingsTab = tab; vm.ShowSettingsCommand.Execute(null); };
+            settings.Items.Add(item);
         }
-        if (vm.ActiveRaceUsesTiming) { TimingMenu_Click(sender, e); }
-        else { DrawMenu_Click(sender, e); }
+        this.FindControl<DropDownButton>("SettingsMenuButton")!.Flyout = settings;
+    }
+
+    // Settings opens the settings view; its menu goes straight to a settings tab.
+    private void SettingsMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm) { vm.ShowSettingsCommand.Execute(null); }
+    }
+
+    // The empty title bar moves the window like a native caption; a double-click maximizes or restores.
+    private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.Source is Visual source && (source as Control)?.FindAncestorOfType<Button>(includeSelf: true) is not null) { return; }
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) { return; }
+        if (e.ClickCount == 2) { WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; }
+        else { BeginMoveDrag(e); }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        base.OnPropertyChanged(change);
+        // Windows draws its minimize, maximize and close buttons over the right end of the extended title bar.
+        if (change.Property == IsExtendedIntoWindowDecorationsProperty && this.FindControl<Border>("CaptionButtonSpace") is { } space)
+        { space.Width = IsExtendedIntoWindowDecorations ? 140 : 0; }
     }
 
     private async void ResultsMenu_Click(object? sender, RoutedEventArgs e)
@@ -104,7 +147,7 @@ public partial class MainWindow : Window
             if (vm.ActiveRaceDestination?.Competition.Id == competition.Id)
             {
                 item.Header = $"{competition.Values.ShortLabel}  ·  ACTIVE";
-                item.Icon = new TextBlock { Text = "●", Foreground = Avalonia.Media.Brushes.Teal };
+                item.Icon = new TextBlock { Text = "●", Foreground = ThemeBrushes.Accent };
                 item.FontWeight = Avalonia.Media.FontWeight.SemiBold;
             }
             menu.Items.Add(item);
@@ -135,7 +178,7 @@ public partial class MainWindow : Window
             var item = new MenuItem { Header = competition.Competition.Values.ShortLabel };
             if (vm.ActiveRaceDestination?.Competition.Id == competition.Competition.Id)
             { item.Header = $"{competition.Competition.Values.ShortLabel}  ·  ACTIVE";
-              item.Icon = new TextBlock { Text = "●", Foreground = Avalonia.Media.Brushes.Teal }; item.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+              item.Icon = new TextBlock { Text = "●", Foreground = ThemeBrushes.Accent }; item.FontWeight = Avalonia.Media.FontWeight.SemiBold;
               activeItem = item; }
             foreach (var run in competition.Runs)
             {
@@ -143,7 +186,7 @@ public partial class MainWindow : Window
                     CommandParameter = new DrawDestination(competition.Competition, run) };
                 if (vm.IsActiveRaceDestination(competition.Competition.Id, run, WorkspaceSection.Draw))
                 { runItem.Header = $"Run {run}  ·  OPEN";
-                  runItem.Icon = new TextBlock { Text = "✓", Foreground = Avalonia.Media.Brushes.Teal }; runItem.FontWeight = Avalonia.Media.FontWeight.SemiBold; }
+                  runItem.Icon = new TextBlock { Text = "✓", Foreground = ThemeBrushes.Accent }; runItem.FontWeight = Avalonia.Media.FontWeight.SemiBold; }
                 item.Items.Add(runItem);
             }
             menu.Items.Add(item);
@@ -154,7 +197,8 @@ public partial class MainWindow : Window
 
     private void RebuildRecentMenu()
     {
-        if (this.FindControl<SplitButton>("OpenFileButton")?.Flyout is not MenuFlyout flyout) { return; }
+        if ((this.FindControl<DropDownButton>("FileMenuButton")?.Flyout as MenuFlyout)?.Items.OfType<MenuItem>()
+            .FirstOrDefault(x => x.Name == "RecentFilesMenu") is not { } flyout) { return; }
         flyout.Items.Clear();
         if (_gridViewModel is null || _gridViewModel.RecentFiles.Count == 0)
         {
@@ -195,7 +239,7 @@ public partial class MainWindow : Window
             var item = new MenuItem { Header = competition.Competition.Values.ShortLabel };
             if (vm.ActiveRaceDestination?.Competition.Id == competition.Competition.Id)
             { item.Header = $"{competition.Competition.Values.ShortLabel}  ·  ACTIVE";
-              item.Icon = new TextBlock { Text = "●", Foreground = Avalonia.Media.Brushes.Teal }; item.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+              item.Icon = new TextBlock { Text = "●", Foreground = ThemeBrushes.Accent }; item.FontWeight = Avalonia.Media.FontWeight.SemiBold;
               activeItem = item; }
             foreach (var run in competition.Runs)
             {
@@ -203,7 +247,7 @@ public partial class MainWindow : Window
                     CommandParameter = new DrawDestination(competition.Competition, run) };
                 if (vm.IsActiveRaceDestination(competition.Competition.Id, run, WorkspaceSection.Timing))
                 { runItem.Header = $"Run {run}  ·  OPEN";
-                  runItem.Icon = new TextBlock { Text = "✓", Foreground = Avalonia.Media.Brushes.Teal }; runItem.FontWeight = Avalonia.Media.FontWeight.SemiBold; }
+                  runItem.Icon = new TextBlock { Text = "✓", Foreground = ThemeBrushes.Accent }; runItem.FontWeight = Avalonia.Media.FontWeight.SemiBold; }
                 item.Items.Add(runItem);
             }
             menu.Items.Add(item);

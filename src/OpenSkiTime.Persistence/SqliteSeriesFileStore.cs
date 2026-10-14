@@ -54,6 +54,7 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
                     CREATE TRIGGER TimingReportSubmissions_NoUpdate BEFORE UPDATE ON TimingReportSubmissions BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     CREATE TRIGGER TimingReportSubmissions_NoDelete BEFORE DELETE ON TimingReportSubmissions BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
                     """, ct);
+                await db.Database.ExecuteSqlRawAsync(FisPointsStore.Schema, ct);
                 var row = new SeriesRow { Id = Guid.NewGuid(), Revision = 1 };
                 Assign(row, validated);
                 db.Series.Add(row);

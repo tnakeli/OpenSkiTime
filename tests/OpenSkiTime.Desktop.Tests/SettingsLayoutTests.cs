@@ -45,11 +45,11 @@ public partial class DesktopWorkflowTests
             try
             {
                 var nav = window.GetVisualDescendants().OfType<Button>()
-                    .Where(x => x.Classes.Contains("sectionNav") && x.Content is string text && text.Length > 0 && char.IsAsciiDigit(text[0]))
+                    .Where(x => x.Classes.Contains("sectionNav") && x.Parent is WrapPanel)
                     .ToArray();
                 Assert.Equal(8, nav.Length);
-                Assert.Contains(nav, x => Equals(x.Content, "8  PDF Factory  ▾"));
-                Assert.Contains(nav, x => Equals(x.Content, "7  Timing report  ▾"));
+                Assert.Contains(nav, x => Equals(x.Content, "PDF Factory"));
+                Assert.Contains(nav, x => Equals(x.Content, "Timing report"));
                 foreach (var button in nav) { WithinWindowWidth(window, button); }
                 Assert.All(nav, button => Assert.True(button.IsEffectivelyVisible));
                 Assert.Single(nav.Select(button => button.TranslatePoint(default, window)!.Value.Y).Distinct());

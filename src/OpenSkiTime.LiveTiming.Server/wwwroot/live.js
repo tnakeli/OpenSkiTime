@@ -3,6 +3,9 @@
   const id = location.pathname.split('/')[2];
   const get = name => document.getElementById(name);
   let state, selectedRun, followedRun, socket, retry, attempt = 0, waiting = false, stale = false, watchPending = false;
+  // The latest finisher (or DNF/DSQ) is highlighted for a few seconds when it changes, not on the first view.
+  const flashMs = 6000;
+  let latestKey = null, flashUntil = 0, flashTimer;
   // The server pings every 15 s; longer silence means a dead or half-open connection (e.g. replaced revision).
   const serverTimeout = 35000, pingInterval = 15000;
   const time = value => value == null ? '—' : `${Math.floor(value / 6000)}:${String(Math.floor(value / 100) % 60).padStart(2, '0')}.${String(value % 100).padStart(2, '0')}`;
@@ -10,12 +13,15 @@
   const splitModeKey = 'openskitime.live.splitMode';
   let splitMode = (() => { try { return localStorage.getItem(splitModeKey) === 'sector' ? 'sector' : 'intermediate'; } catch { return 'intermediate'; } })();
   const gender = value => ({M:'Men', L:'Women', W:'Women', A:'Mixed'})[value] || '';
+  // The connection state is shown in the race bar (and on the race list); a dot marks a live connection.
+  const connection = text => document.querySelectorAll('[data-connection]').forEach(e => { e.textContent = text; e.dataset.state = text === 'Live' ? 'live' : 'waiting'; });
+  const title = name => { document.title = name ? `${name} · OpenSkiTime Live` : 'OpenSkiTime Live Timing'; };
   async function list() {
     try {
       const response = await fetch('/api/sessions', {cache:'no-store'});
       if (!response.ok) throw Error('List failed');
       const races = await response.json();
-      get('connection').textContent = 'Live';
+      connection('Live');
       get('races').replaceChildren(...races.map(r => {
         const li = document.createElement('li'), a = document.createElement('a'), meta = document.createElement('span');
         a.href = `/r/${encodeURIComponent(r.sessionId)}`; a.textContent = r.name;
@@ -23,26 +29,70 @@
         li.append(a, meta); return li;
       }));
       get('empty').hidden = races.length > 0;
-    } catch { get('connection').textContent = 'Reconnecting'; }
+    } catch { connection('Reconnecting'); }
     retry = setTimeout(list, 30000);
   }
   function render(next) {
     state = next;
     get('results').replaceChildren(); get('runs').replaceChildren();
-    if (!next) { get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('updated').textContent = ''; return; }
-    get('name').textContent = next.competition.name;
+    if (!next) { get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('latest').hidden = true; get('forerunners').hidden = true; get('updated').textContent = ''; title(); return; }
+    get('name').textContent = next.competition.name; title(next.competition.name);
     get('metadata').textContent = `${next.competition.place} · ${next.competition.discipline} · ${next.competition.date}`;
     // A viewer may look at another run; when the race moves on to a new current run, every viewer follows it.
     if (next.currentRun !== followedRun || !next.runs.some(r => r.number === selectedRun)) { selectedRun = followedRun = next.currentRun; }
     next.runs.forEach(r => { const b = document.createElement('button'); b.textContent = `Run ${r.number}`; b.setAttribute('aria-pressed', r.number === selectedRun); b.onclick = () => { selectedRun = r.number; render(state); }; get('runs').append(b); });
     const run = next.runs.find(r => r.number === selectedRun);
-    const onCourse = next.runs.find(r => r.number === next.currentRun).results.filter(r => r.status === 'OnCourse').map(r => { const c = next.competitors.find(c => c.bib === r.bib); return `${r.bib} ${c.lastName} ${c.firstName}`; });
-    // Once every starter of the current run is finished or classified, the banner says so instead of an empty course.
+    // Everyone on course of the current run, one per line in start order, each with a running time. Forerunners are
+    // listed first with an F and never get a time.
     const current = next.runs.find(r => r.number === next.currentRun);
+    const onCourse = (current.forerunners || []).filter(f => f.status === 'OnCourse').map(f => ({bib: `F ${f.letter}`, name: `${f.lastName} ${f.firstName}`, forerunner: true}))
+      .concat(current.results.filter(r => r.status === 'OnCourse').sort((a, b) => (Date.parse(a.startedAt) || 0) - (Date.parse(b.startedAt) || 0))
+        .map(r => { const c = next.competitors.find(c => c.bib === r.bib); return {bib: String(r.bib), name: `${c.lastName} ${c.firstName}`, startedAt: r.startedAt}; }));
+    // Once every starter of the current run is finished or classified, the banner says so instead of an empty course.
     const complete = current.startOrder.length > 0 && current.startOrder.every(bib => { const r = current.results.find(x => x.bib === bib); return r && !['Ready', 'OnCourse', 'Review'].includes(r.status); });
-    get('course').textContent = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained'
-      : onCourse.length ? `On course · ${onCourse.join(' / ')}` : complete ? `Run ${next.currentRun} complete` : 'On course · —';
-    get('updated').textContent = `Run ${selectedRun} · Last live update ${new Date(next.updatedAt).toLocaleString()}`;
+    const course = get('course');
+    if (stale || next.paused || !onCourse.length) {
+      course.textContent = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained'
+        : complete ? `Run ${next.currentRun} complete` : 'On course · —';
+    } else {
+      const label = document.createElement('span'); label.className = 'label'; label.textContent = 'On course';
+      const list = document.createElement('ol'); list.className = 'oncourse';
+      onCourse.forEach(x => {
+        const li = document.createElement('li'), bib = document.createElement('span'), who = document.createElement('span'), clock = document.createElement('span');
+        bib.className = 'bib'; bib.textContent = x.bib; who.className = 'who'; who.textContent = x.name; clock.className = 'clock';
+        if (x.forerunner) { clock.textContent = 'forerunner'; clock.classList.add('muted'); }
+        else if (x.startedAt) { clock.dataset.started = x.startedAt; clock.textContent = liveRunningTime(x.startedAt, Date.now()); }
+        else clock.textContent = '—';
+        li.append(bib, who, clock); list.append(li);
+      });
+      course.replaceChildren(label, list);
+    }
+    // The latest finisher of the current run (or the latest DNF/DSQ) stays visible even when the time ranks low.
+    const last = liveLatestFinish(current.results, ['Finished', 'DNF', 'DSQ']), totalRanked = current.number > 1 && last?.totalHundredths != null;
+    const latest = get('latest');
+    latest.hidden = !last;
+    if (last) {
+      const c = next.competitors.find(c => c.bib === last.bib), place = totalRanked ? last.totalRank : last.rank, finished = last.status === 'Finished';
+      latest.textContent = finished ? `Last finish · ${last.bib} ${c.lastName} ${c.firstName} · ${time(last.hundredths)}`
+        + (totalRanked ? ` · Total ${time(last.totalHundredths)}` : '') + (place ? ` · Rank ${place}` : '')
+        : `Last · ${last.bib} ${c.lastName} ${c.firstName} · ${last.status}`;
+      latest.classList.toggle('out', !finished);
+    }
+    const key = last ? `${current.number}:${last.bib}:${last.status}:${last.hundredths}` : '';
+    if (latestKey !== null && key && key !== latestKey) {
+      flashUntil = Date.now() + flashMs; clearTimeout(flashTimer);
+      // Redraw when the highlight ends; the redraw decides from the time, so a later update cannot keep it on.
+      flashTimer = setTimeout(() => { if (state) render(state); }, flashMs + 50);
+    }
+    latestKey = key;
+    const flashing = !!last && Date.now() < flashUntil;
+    latest.classList.toggle('flash', flashing);
+    // Forerunners of the shown run: where each one is (at start, on course, finished), never a time.
+    const forerunnerState = s => ({Ready:'at start', OnCourse:'on course', Finished:'finished', DNS:'DNS', DNF:'DNF', Review:'checking'})[s] || s;
+    const shownRunners = run.forerunners || [];
+    get('forerunners').hidden = shownRunners.length === 0;
+    get('forerunners').textContent = shownRunners.length === 0 ? '' : 'Forerunners · ' + shownRunners.map(f => `${f.letter} ${f.lastName} ${f.firstName}: ${forerunnerState(f.status)}`).join(' · ');
+    get('updated').textContent = `Run ${selectedRun} · ${new Date(next.updatedAt).toLocaleTimeString()}`;
     // Split columns appear only when this run has at least one intermediate time; the viewer picks intermediate or sector times.
     const splits = liveSplitCount(run.results);
     get('splitMode').hidden = splits === 0;
@@ -62,6 +112,7 @@
     const rows = liveResultOrder(run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'}), run.startOrder, rank);
     rows.forEach(r => {
       const c = next.competitors.find(c => c.bib === r.bib), tr = document.createElement('tr'); tr.dataset.bib = r.bib; tr.className = r.status.toLowerCase();
+      if (flashing && run.number === current.number && r.bib === last.bib) tr.classList.add('flash');
       [rank(r) || '—', r.bib, `${c.lastName} ${c.firstName}`, [c.nation,c.club].filter(Boolean).join(' / '), r.status,
         ...liveEarlierRuns(next, run.number, r.bib).map(x => earlierRun(x.result)), ...liveSplitValues(r, splits, splitMode).map(time),
         time(r.hundredths), ...(later ? [time(r.totalHundredths)] : []), gap(r) == null ? '—' : '+' + time(gap(r))]
@@ -70,7 +121,7 @@
     });
   }
   function schedule() {
-    get('connection').textContent = 'Reconnecting'; clearTimeout(retry); waiting = true;
+    connection('Reconnecting'); clearTimeout(retry); waiting = true;
     // Exponential backoff with jitter spreads every viewer's reconnect after a service restart.
     retry = setTimeout(connect, Math.min(15000, 1000 * 2 ** attempt++) * (0.5 + Math.random() / 2));
   }
@@ -84,7 +135,7 @@
   async function connect() {
     clearTimeout(retry); waiting = false;
     try {
-      get('connection').textContent = 'Connecting';
+      connection('Connecting');
       const response = await fetch('/live/negotiate?negotiateVersion=1', {method:'POST'});
       if (!response.ok) throw Error('Negotiation failed');
       const info = await response.json(), url = new URL('/live', location.href);
@@ -95,7 +146,7 @@
         heard = Date.now(); pending += event.data; const messages = pending.split('\u001e'); pending = messages.pop();
         for (const raw of messages) {
           if (!raw) continue; const message = JSON.parse(raw);
-          if (!handshaken) { if (message.error) { drop(current); return; } handshaken = true; attempt = 0; watchPending = true; get('connection').textContent = 'Live'; current.send(JSON.stringify({type:1,target:'Watch',arguments:[id],invocationId:'1'}) + '\u001e'); }
+          if (!handshaken) { if (message.error) { drop(current); return; } handshaken = true; attempt = 0; watchPending = true; connection('Live'); current.send(JSON.stringify({type:1,target:'Watch',arguments:[id],invocationId:'1'}) + '\u001e'); }
           else if (message.type === 1 && message.target === 'State') {
             // After a service restart the server is empty until the publisher restores it; keep showing the last results meanwhile.
             const next = message.arguments[0]; stale = watchPending && !next && !!state; watchPending = false;
@@ -118,5 +169,7 @@
     try { localStorage.setItem(splitModeKey, splitMode); } catch { /* Not remembered; the choice still applies now. */ }
     if (state) render(state);
   });
+  // Running times on course tick between updates; only the clocks change, nothing else is redrawn.
+  setInterval(() => { const now = Date.now(); document.querySelectorAll('#course .clock[data-started]').forEach(e => { e.textContent = liveRunningTime(e.dataset.started, now); }); }, 100);
   if (id) { get('race').hidden = false; connect(); } else { get('list').hidden = false; list(); }
 })();

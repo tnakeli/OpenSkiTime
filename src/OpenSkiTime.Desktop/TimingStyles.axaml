@@ -20,7 +20,7 @@
  </Style>
  <Style Selector="Border.timingDropPreview TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="FontSize" Value="12" /></Style>
  <Style Selector="Border.timingDropPreview TextBlock.timingDropPreviewResult">
-  <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" /><Setter Property="FontSize" Value="14" /><Setter Property="FontWeight" Value="SemiBold" />
+  <Setter Property="FontFamily" Value="{DynamicResource TimeFontFamily}" /><Setter Property="FontSize" Value="14" /><Setter Property="FontWeight" Value="SemiBold" />
  </Style>
  <Style Selector="Border.timingDropPreview.invalid"><Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" /></Style>
  <Style Selector="Border.timingDropPreview.invalid TextBlock.timingDropPreviewResult">
@@ -28,100 +28,128 @@
  </Style>
  <Style Selector="TextBlock.raceQueueHint">
   <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  <Setter Property="Padding" Value="8,5" /><Setter Property="FontSize" Value="12" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  <Setter Property="Padding" Value="8,4" /><Setter Property="FontSize" Value="13" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
  </Style>
  <Style Selector="TextBlock.raceDropHint">
   <Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" />
   <Setter Property="FontWeight" Value="SemiBold" />
  </Style>
- <Style Selector="Button.statusDrop">
-  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="4" />
-  <Setter Property="MinWidth" Value="48" /><Setter Property="MinHeight" Value="24" />
-  <Setter Property="Padding" Value="7,3" /><Setter Property="FontSize" Value="11" />
- </Style>
- <Style Selector="Button.statusDrop:pointerover">
-  <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+ <Style Selector="Button.statusDrop:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
  </Style>
  <Style Selector="Button.statusDrop.timingStatusDropTarget">
   <Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" />
   <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="2" />
  </Style>
+ <Style Selector="Button.statusDrop.timingStatusDropTarget /template/ ContentPresenter#PART_ContentPresenter">
+  <Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" />
+  <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+ </Style>
  <Style Selector="TextBlock.raceClock">
-  <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" /><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /><Setter Property="FontWeight" Value="SemiBold" />
+  <Setter Property="FontFamily" Value="{DynamicResource TimeFontFamily}" /><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /><Setter Property="FontWeight" Value="Bold" />
  </Style>
  <Style Selector="DataGrid.timingGrid DataGridRowGroupHeader">
-  <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="FontWeight" Value="SemiBold" />
+  <Setter Property="Background" Value="{DynamicResource HeaderSurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="FontWeight" Value="SemiBold" />
  </Style>
  <Style Selector="TextBlock.raceRunningTime">
-  <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" />
+  <Setter Property="FontFamily" Value="{DynamicResource TimeFontFamily}" />
   <Setter Property="FontSize" Value="28" />
-  <Setter Property="FontWeight" Value="SemiBold" />
+  <Setter Property="FontWeight" Value="Bold" />
   <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
  </Style>
  <Style Selector="Border.racePane">
   <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
   <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-  <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="4" />
+  <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadius}" />
  </Style>
  <Style Selector="Border.raceExpected">
   <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
   <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   <Setter Property="BorderThickness" Value="3,0,0,0" /><Setter Property="Padding" Value="10,8" />
  </Style>
- <Style Selector="Border.raceConnection">
-  <Setter Property="Background" Value="{DynamicResource NavyBrush}" /><Setter Property="Padding" Value="10,3" />
-  <Setter Property="CornerRadius" Value="4" />
- </Style>
- <Style Selector="TextBlock.raceConnectionText"><Setter Property="Foreground" Value="#E1F1EF" /><Setter Property="FontSize" Value="11" /></Style>
- <Style Selector="TextBlock.raceHeading">
-  <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" /><Setter Property="Padding" Value="8,7" />
-  <Setter Property="FontSize" Value="10" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
- </Style>
  <Style Selector="TextBlock.raceIdentity">
   <Setter Property="FontSize" Value="15" /><Setter Property="FontWeight" Value="SemiBold" />
   <Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
  </Style>
- <Style Selector="DataGrid.timingGrid"><Setter Property="BorderThickness" Value="0" /><Setter Property="FontSize" Value="12" /></Style>
+ <Style Selector="DataGrid.timingGrid"><Setter Property="BorderThickness" Value="0" /></Style>
+
+ <!-- Device and publishing strip under the navigation: white, one dense row, dots for connection state. -->
+ <Style Selector="Border.raceConnection">
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+  <Setter Property="BorderThickness" Value="0,0,0,1" /><Setter Property="Padding" Value="12,5" />
+ </Style>
+ <Style Selector="TextBlock.raceConnectionText"><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="FontSize" Value="13" /><Setter Property="VerticalAlignment" Value="Center" /></Style>
+ <Style Selector="Border.stripDivider"><Setter Property="Width" Value="1" /><Setter Property="Margin" Value="12,3" /><Setter Property="Background" Value="{DynamicResource BorderBrush}" /></Style>
+ <Style Selector="Ellipse.connectionDot"><Setter Property="Width" Value="10" /><Setter Property="Height" Value="10" /><Setter Property="Fill" Value="{DynamicResource DisabledTextBrush}" /><Setter Property="VerticalAlignment" Value="Center" /></Style>
+ <Style Selector="Ellipse.connectionDot.on"><Setter Property="Fill" Value="{DynamicResource LiveOkBrush}" /></Style>
+ <!-- Timing position switches: on = filled accent, HOLD = outlined, disabled = dimmed but readable. -->
  <Style Selector="local|TimingView ToggleButton">
-  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="4" />
-  <Setter Property="MinHeight" Value="19" /><Setter Property="Padding" Value="7,1" /><Setter Property="FontSize" Value="10" />
+  <Setter Property="MinHeight" Value="24" /><Setter Property="Padding" Value="8,1" /><Setter Property="FontSize" Value="12" /><Setter Property="FontWeight" Value="SemiBold" />
+  <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
  </Style>
- <Style Selector="local|TimingView ToggleButton:checked">
-  <Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" />
- </Style>
- <!-- Timing position switches and Show B on the dark connection banner. Fluent sets template-part colours per state,
-      so the parts are styled directly: on = filled accent, HOLD = outlined, disabled = dimmed but readable. -->
  <Style Selector="Border.raceConnection ToggleButton /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#E1F1EF" /><Setter Property="BorderBrush" Value="#8FB3BC" />
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
  </Style>
  <Style Selector="Border.raceConnection ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="#24505F" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="#B7D3D9" />
+  <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
  </Style>
  <Style Selector="Border.raceConnection ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="#0F9A92" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="#0F9A92" />
+  <Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
  </Style>
  <Style Selector="Border.raceConnection ToggleButton:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="#13B0A7" /><Setter Property="BorderBrush" Value="#13B0A7" />
+  <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
  </Style>
  <Style Selector="Border.raceConnection ToggleButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#7E9BA4" /><Setter Property="BorderBrush" Value="#3E6370" />
+  <Setter Property="Background" Value="{DynamicResource DisabledSurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
  </Style>
  <Style Selector="Border.raceConnection ToggleButton:disabled:checked /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="#2B5A66" /><Setter Property="Foreground" Value="#B7CDD2" /><Setter Property="BorderBrush" Value="#2B5A66" />
+  <Setter Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
  </Style>
  <Style Selector="Border.raceConnection Button#ShowBackupButton /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="#1B4050" /><Setter Property="Foreground" Value="#E1F1EF" /><Setter Property="BorderBrush" Value="#8FB3BC" /><Setter Property="BorderThickness" Value="1" />
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" />
  </Style>
  <Style Selector="Border.raceConnection Button#ShowBackupButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="#24505F" /><Setter Property="Foreground" Value="White" />
+  <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
  </Style>
  <Style Selector="Border.raceConnection Button#ShowBackupButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#7E9BA4" /><Setter Property="BorderBrush" Value="#3E6370" />
+  <Setter Property="Background" Value="{DynamicResource DisabledSurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
  </Style>
  <Style Selector="Border.raceConnection Button:disabled, Border.raceConnection ToggleButton:disabled"><Setter Property="Opacity" Value="1" /></Style>
  <Style Selector="Border.raceConnection Button#ShowBackupButton.backupWarning /template/ ContentPresenter#PART_ContentPresenter">
-  <Setter Property="Background" Value="#F3C969" /><Setter Property="Foreground" Value="#3B2C00" /><Setter Property="BorderBrush" Value="#F3C969" />
+  <Setter Property="Background" Value="{DynamicResource BannerWarningBrush}" /><Setter Property="Foreground" Value="{DynamicResource BannerWarningTextBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+ </Style>
+ <!-- Pane headings: dark, bold and uppercase on a light header band. -->
+ <Style Selector="TextBlock.raceHeading">
+  <Setter Property="Background" Value="{DynamicResource HeaderSurfaceBrush}" /><Setter Property="Padding" Value="10,6" />
+  <Setter Property="FontSize" Value="14" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+ </Style>
+ <Style Selector="TextBlock.raceHeadingText">
+  <Setter Property="FontSize" Value="13" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="VerticalAlignment" Value="Center" />
+ </Style>
+ <!-- Action row at the bottom of the On course pane. -->
+ <Style Selector="Border.paneActions">
+  <Setter Property="Background" Value="{DynamicResource HeaderSurfaceBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+  <Setter Property="BorderThickness" Value="0,1,0,0" /><Setter Property="Padding" Value="8,6" />
+ </Style>
+ <Style Selector="Button.statusDrop">
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+  <Setter Property="MinWidth" Value="64" /><Setter Property="MinHeight" Value="30" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
+  <Setter Property="Padding" Value="12,3" /><Setter Property="FontSize" Value="13" /><Setter Property="FontWeight" Value="Bold" />
+ </Style>
+ <!-- Correction bar above the classification editor. -->
+ <Style Selector="Border.correctionBar">
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+  <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadius}" /><Setter Property="Padding" Value="10,4,4,4" />
+ </Style>
+ <!-- Forerunner rows: violet tint and italic text, distinct from selection (blue) and pending changes (amber). -->
+ <Style Selector="DataGrid.timingGrid DataGridRow.forerunner /template/ Rectangle#BackgroundRectangle">
+  <Setter Property="Fill" Value="{DynamicResource ForerunnerBrush}" /><Setter Property="Opacity" Value="1" />
+ </Style>
+ <Style Selector="DataGrid.timingGrid DataGridRow.forerunner">
+  <Setter Property="FontStyle" Value="Italic" /><Setter Property="Foreground" Value="{DynamicResource ForerunnerTextBrush}" />
+ </Style>
+ <Style Selector="DataGrid.timingGrid DataGridRow.forerunner:selected /template/ Rectangle#BackgroundRectangle">
+  <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
  </Style>
 </Styles>

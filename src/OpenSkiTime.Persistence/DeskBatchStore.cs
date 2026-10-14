@@ -44,6 +44,10 @@ internal sealed partial class SqliteSeriesFileSession
                 }
             }
             var seen = new HashSet<Guid>();
+            var regendered = new HashSet<Guid>();
+            var pointChanges = new List<(Guid CompetitorId, CompetitorFisPoints? Points)>();
+            var pointsCleared = new List<Guid>();
+            var entered = new HashSet<(Guid CompetitorId, Guid CompetitionId)>();
             var created = 0;
             var updated = 0;
             foreach (var item in batch.Rows)
@@ -66,7 +70,13 @@ internal sealed partial class SqliteSeriesFileSession
                     db.Competitors.Add(row);
                     created++;
                 }
+                var previousGender = row.Gender;
+                var previousCode = row.FederationCodeKey;
                 Assign(row, values);
+                if (item.CompetitorId is null || row.Gender != previousGender) { regendered.Add(row.Id); }
+                if (item.FisPointsSpecified) { pointChanges.Add((row.Id, item.FisPoints)); }
+                else if (item.CompetitorId is not null && !string.Equals(previousCode, row.FederationCodeKey, StringComparison.OrdinalIgnoreCase))
+                { pointsCleared.Add(row.Id); }
                 var entryIds = new HashSet<Guid>();
                 foreach (var patch in item.Entries)
                 {
@@ -91,9 +101,12 @@ internal sealed partial class SqliteSeriesFileSession
                         entries.Add(key, entry);
                     }
                     if (patch.Participates is { } participates) { entry.Participates = participates; }
+                    if (patch.Participates == true) { entered.Add(key); }
                     if (patch.BibSpecified) { entry.ImportedBib = patch.ImportedBib; }
                 }
             }
+            EntryGenderCheck.Ensure(competitions, competitors, entries.Values, regendered, entered);
+            var (points, pointLists) = await FisPointsStore.ValidateAsync(db, pointChanges, batch.PointsLists, ct);
             if (competitors.Values.Where(x => x.FederationCodeKey is not null)
                 .GroupBy(x => x.FederationCodeKey!, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1))
             {
@@ -117,6 +130,9 @@ internal sealed partial class SqliteSeriesFileSession
             {
                 throw new DomainValidationException("The competitor changes conflict with existing data; nothing was saved.");
             }
+            // Saved FIS points and their lists commit together with the competitor changes.
+            await FisPointsStore.ClearAsync(db, pointsCleared, ct);
+            await FisPointsStore.WriteAsync(db, points, pointLists, ct);
             await transaction.CommitAsync(ct);
             return new DeskBatchResult(series.Revision, created, updated, deletions.Count);
         }

@@ -1,19 +1,33 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="OpenSkiTime.Desktop.DrawView" x:CompileBindings="False">
-  <Border Classes="workSurface" Padding="16">
+  <UserControl.Styles>
+    <!-- Saved points that differ from the loaded FIS list. -->
+    <Style Selector="TextBlock.gridCell.pointsMismatch">
+      <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </UserControl.Styles>
+  <Border Classes="workSurface" Padding="{DynamicResource SectionInset}">
     <Grid RowDefinitions="Auto,Auto,*">
-      <Grid Margin="0,0,0,10">
+      <Grid Margin="0,0,0,6">
         <StackPanel Spacing="3" VerticalAlignment="Center">
           <TextBlock Name="DrawStateText" Text="{Binding DrawState}" Classes="sectionTitle" />
         </StackPanel>
       </Grid>
-      <StackPanel Grid.Row="1" Spacing="8" Margin="0,0,0,10">
-        <TextBlock Text="{Binding DrawHelp}" Classes="supportingText" TextWrapping="Wrap" />
+      <StackPanel Grid.Row="1" Spacing="6" Margin="0,0,0,8">
+        <TextBlock Name="DrawHelpText" Text="{Binding DrawHelp}" Classes="supportingText" Classes.attention="{Binding DrawEntryIssue, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" TextWrapping="Wrap" />
+        <TextBlock Name="DrawPointsListText" Text="{Binding DrawPointsListText}" IsVisible="{Binding DrawPointsListText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   Classes="supportingText" Classes.attention="{Binding DrawPointsListWarning}" TextWrapping="Wrap" />
         <Expander Header="Draw settings · FIS standard" HorizontalAlignment="Stretch" IsVisible="{Binding IsFirstDrawRun}">
           <StackPanel Spacing="8" Margin="0,8,0,0" IsEnabled="{Binding !IsDrawBusy}">
-            <Grid ColumnDefinitions="110,12,110,*">
-              <StackPanel Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="FIRST BIB" Classes="fieldLabel" /><NumericUpDown Value="{Binding DrawFirstBib}" Minimum="1" Maximum="99999" FormatString="0" /></StackPanel>
+            <Grid ColumnDefinitions="110,12,110,12,*,12,Auto">
+              <StackPanel Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="FIRST BIB" Classes="fieldLabel" /><NumericUpDown Name="DrawFirstBibInput" Value="{Binding DrawFirstBib}" Minimum="1" Maximum="99999" FormatString="0" /></StackPanel>
               <StackPanel Grid.Column="2" Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="FIRST GROUP" Classes="fieldLabel" /><NumericUpDown Value="{Binding FirstDrawGroup}" Minimum="1" Maximum="15" FormatString="0" /></StackPanel>
+              <StackPanel Grid.Column="4" Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="SKIPPED BIBS" Classes="fieldLabel" />
+                <TextBox Name="DrawSkippedBibsInput" Text="{Binding DrawSkippedBibsText}" Watermark="Missing bibs, e.g. 13, 27, 40-42" ToolTip.Tip="These bib numbers are not handed out; assignment continues with the next number." /></StackPanel>
+              <Button Grid.Column="6" Name="AssignBibsButton" Content="Assign bibs" Command="{Binding AssignBibsCommand}" IsEnabled="{Binding CanAssignBibs}" Classes="secondaryAction" VerticalAlignment="Bottom"
+                      ToolTip.Tip="Give the start list new bibs in its current order from the first bib, skipping the listed numbers. Possible until timing begins." />
             </Grid>
             <TextBlock Text="SL/GS: 2 runs · DH/SG: 1 run. Standard FIS profile; special Cup, youth and snow-seed rules are not included." IsVisible="{Binding IsDrawFis}" Classes="supportingText" TextWrapping="Wrap" />
           </StackPanel>
@@ -23,18 +37,25 @@
             <TextBlock Text="Reverse fastest" VerticalAlignment="Center" />
             <ComboBox Name="DrawReversePicker" ItemsSource="{Binding ReverseChoices}" SelectedItem="{Binding DrawReverseCount}" Width="90" />
           </StackPanel>
-          <Button Grid.Column="1" Content="{Binding DrawActionLabel}" Command="{Binding PrepareDrawCommand}" IsEnabled="{Binding CanPrepareDraw}" Classes="primaryAction" />
+          <Button Grid.Column="1" Content="{Binding DrawActionLabel}" Command="{Binding PrepareDrawCommand}" Classes="primaryAction" />
           <Button Grid.Column="3" Content="Export TSV" Command="{Binding ExportDrawCommand}" IsEnabled="{Binding CanExportDraw}" Classes="secondaryAction" />
           <Button Grid.Column="5" Content="Print view…" Command="{Binding PrintDrawCommand}" IsEnabled="{Binding CanExportDraw}" Classes="secondaryAction" ToolTip.Tip="Save a printable HTML file. Open it in a browser to print or save as PDF." />
         </Grid>
       </StackPanel>
-      <Grid Grid.Row="2" RowDefinitions="Auto,*">
-        <Grid ColumnDefinitions="*,Auto,8,Auto" Margin="0,0,0,8">
-          <TextBlock Text="{Binding DrawListInfo}" Classes="supportingText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      <Grid Grid.Row="2" RowDefinitions="Auto,*,Auto">
+        <Grid ColumnDefinitions="*,Auto,8,Auto" Margin="0,0,0,6">
+          <TextBlock Text="{Binding DrawListInfo}" Classes="supportingText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsVisible="{Binding !ShowDrawPreview}" />
+          <TextBlock Name="DrawPreviewInfoText" Text="{Binding DrawPreviewInfo}" Classes="supportingText" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding ShowDrawPreview}" />
           <Button Grid.Column="1" Content="Start list" Command="{Binding ShowDrawListCommand}" IsVisible="{Binding IsLaterDrawRun}" Classes="sectionNav" Classes.active="{Binding !IsResultInputOpen}" />
           <Button Grid.Column="3" Content="Run 1 input" Command="{Binding ShowRunInputCommand}" IsVisible="{Binding IsLaterDrawRun}" Classes="sectionNav" Classes.active="{Binding IsResultInputOpen}" />
         </Grid>
-        <DataGrid Grid.Row="1" Name="DrawStartListGrid" IsVisible="{Binding !IsResultInputOpen}" Classes="raceGrid" ItemsSource="{Binding DrawStartListRows}" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="30" ColumnHeaderHeight="30" GridLinesVisibility="Horizontal">
+        <DataGrid Grid.Row="1" Name="DrawStartListGrid" Classes="raceGrid" ItemsSource="{Binding DrawStartListRows}" SelectedItem="{Binding SelectedDrawRow}" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="28" ColumnHeaderHeight="28" GridLinesVisibility="Horizontal">
+          <DataGrid.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="!IsResultInputOpen" />
+              <Binding Path="!ShowDrawPreview" />
+            </MultiBinding>
+          </DataGrid.IsVisible>
           <DataGrid.Styles>
             <Style Selector="DataGridRow">
               <Setter Property="FontWeight" Value="{Binding Weight}" />
@@ -53,13 +74,29 @@
             <DataGridTextColumn Header="GROUP" Binding="{Binding Entry.Group}" Width="140" />
           </DataGrid.Columns>
         </DataGrid>
+        <!-- Before the Run 1 draw: entered competitors with their saved points, best first. -->
+        <DataGrid Grid.Row="1" Name="DrawPreviewGrid" Classes="raceGrid" ItemsSource="{Binding DrawPreviewRows}" IsVisible="{Binding ShowDrawPreview}" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="28" ColumnHeaderHeight="28" GridLinesVisibility="Horizontal">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="#" Binding="{Binding Order}" Width="55" />
+            <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="95" />
+            <DataGridTextColumn Header="SURNAME" Binding="{Binding Surname}" Width="2*" />
+            <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="2*" />
+            <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="80" />
+            <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="75" />
+            <DataGridTextColumn Header="CLUB" Binding="{Binding Club}" Width="2*" />
+            <DataGridTemplateColumn Header="FIS PTS" Width="95"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <TextBlock Text="{Binding PointsText}" Classes="gridCell" Classes.pointsMismatch="{Binding DiffersFromList}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="LOADED LIST" Width="110"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <TextBlock Text="{Binding ListPointsText}" Classes="gridCell" Classes.pointsMismatch="{Binding DiffersFromList}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+          </DataGrid.Columns>
+        </DataGrid>
         <Grid Grid.Row="1" RowDefinitions="Auto,*" IsVisible="{Binding IsResultInputOpen}" IsEnabled="{Binding CanEditDrawResults}">
           <Grid ColumnDefinitions="*,Auto,8,Auto" Margin="0,0,0,8">
             <TextBlock Text="{Binding RunInputHelp}" TextWrapping="Wrap" Classes="supportingText" Margin="0,0,12,0" />
             <Button Grid.Column="1" Content="Paste results (Bib / Time / Status)" Command="{Binding PasteDrawResultsCommand}" IsVisible="{Binding !HasCapturedRunInput}" Classes="secondaryAction" />
             <Button Grid.Column="3" Content="Discard input" Command="{Binding DiscardRunInputCommand}" IsEnabled="{Binding HasUnsavedRunInput}" Classes="dangerAction" />
           </Grid>
-          <DataGrid Grid.Row="1" Name="DrawResultsGrid" Classes="raceGrid" ItemsSource="{Binding DrawResults}" AutoGenerateColumns="False" IsReadOnly="{Binding HasCapturedRunInput}" RowHeight="30" GridLinesVisibility="Horizontal">
+          <DataGrid Grid.Row="1" Name="DrawResultsGrid" Classes="raceGrid" ItemsSource="{Binding DrawResults}" AutoGenerateColumns="False" IsReadOnly="{Binding HasCapturedRunInput}" RowHeight="28" GridLinesVisibility="Horizontal">
             <DataGrid.Columns>
               <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" IsReadOnly="True" Width="65" />
               <DataGridTextColumn Header="CODE" Binding="{Binding Code}" IsReadOnly="True" Width="95" />
@@ -69,6 +106,20 @@
             </DataGrid.Columns>
           </DataGrid>
         </Grid>
+        <!-- Move the selected competitor (for example a penalty); the bib stays with the competitor until bibs are assigned again. -->
+        <Border Grid.Row="2" Name="DrawMovePanel" Classes="subtleSurface" Padding="10,6" Margin="0,6,0,0" IsVisible="{Binding CanEditStartList}">
+          <Grid ColumnDefinitions="Auto,12,90,12,*,12,Auto">
+            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" MinWidth="220">
+              <Run Text="{Binding SelectedDrawRow.Entry.Bib, StringFormat='Bib {0} ', FallbackValue='Select a competitor'}" />
+              <Run Text="{Binding SelectedDrawRow.Entry.Entrant.Athlete.Surname, FallbackValue=''}" />
+              <Run Text="{Binding SelectedDrawRow.Entry.Position, StringFormat=' · position {0}', FallbackValue=''}" />
+            </TextBlock>
+            <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="MOVE TO" Classes="fieldLabel" /><TextBox Name="DrawMoveToInput" Text="{Binding DrawMoveToPosition}" Watermark="Position" /></StackPanel>
+            <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="REASON" Classes="fieldLabel" /><TextBox Name="DrawMoveReasonInput" Text="{Binding DrawMoveReason}" Watermark="For example: start penalty" /></StackPanel>
+            <Button Grid.Column="6" Name="MoveDrawEntryButton" Content="Move" Command="{Binding MoveDrawEntryCommand}" Classes="secondaryAction" VerticalAlignment="Bottom"
+                    ToolTip.Tip="Moves the selected competitor to the position. The bib stays with the competitor; use Assign bibs to renumber." />
+          </Grid>
+        </Border>
       </Grid>
     </Grid>
   </Border>

@@ -74,8 +74,8 @@ internal sealed class ColumnHeaderControls
         {
             var value = filterValue(); var active = !string.IsNullOrWhiteSpace(value);
             title.FontStyle = active ? FontStyle.Italic : FontStyle.Normal;
-            funnel.Fill = active ? Brush.Parse("#008A9B") : Brushes.Transparent;
-            funnel.Stroke = Brush.Parse(active ? "#008A9B" : "#64748B");
+            funnel.Fill = active ? ThemeBrushes.Accent : Brushes.Transparent;
+            funnel.Stroke = active ? ThemeBrushes.Accent : ThemeBrushes.MutedText;
             arrow.Text = direction() is { } descending ? descending ? "↓" : "↑" : "↕";
             ToolTip.SetTip(filter, active ? $"Filter: {value} — click to clear" : "Filter " + label);
         };

@@ -68,10 +68,15 @@ public sealed class StartListTests
     }
 
     [Fact]
-    public void DrawRejectsUnsupportedFormatsStalePointsAndIncompleteAthletes()
+    public void DrawRejectsUnsupportedFormatsAndIncompleteAthletes()
     {
         Assert.Throws<DomainValidationException>(() => FisStartOrder.FirstRun(Guid.NewGuid(), s_race with { RunCount = 3 }, Gender.Female, Entrants(2), s_points, new(), "seed"));
-        Assert.Throws<DomainValidationException>(() => FisStartOrder.FirstRun(Guid.NewGuid(), s_race, Gender.Female, Entrants(2), s_points with { ValidTo = new(2026, 9, 20) }, new(), "seed"));
+        // A points list that is not valid on the race date is allowed; the plan records exactly which list was used.
+        var stale = s_points with { ValidTo = new(2026, 9, 20) };
+        var drawn = FisStartOrder.FirstRun(Guid.NewGuid(), s_race, Gender.Female, Entrants(2), stale, new(), "seed");
+        Assert.Equal(stale, drawn.PointsList);
+        Assert.False(drawn.PointsList.IsEffectiveOn(s_race.Date));
+        Assert.True(s_points.IsEffectiveOn(s_race.Date));
         var entrants = Entrants(2);
         entrants[0] = entrants[0] with { Athlete = entrants[0].Athlete with { Surname = "" } };
         Assert.Throws<DomainValidationException>(() => Draw(entrants));
@@ -267,5 +272,81 @@ public sealed class StartListTests
             { throw new InvalidOperationException("Unexpected test folder."); }
             Directory.Delete(full, recursive: true);
         }
+    }
+
+    [Fact]
+    public void BibsSkipListedNumbersAndCanBeReassignedInTheCurrentOrder()
+    {
+        Assert.Equal([3, 5, 6, 9], FisStartOrder.Bibs(3, [4, 7, 8], 4));
+        Assert.Equal([13, 27, 40, 41, 42], FisStartOrder.ParseBibList(" 27, 13 40-42 13"));
+        Assert.Empty(FisStartOrder.ParseBibList(""));
+        Assert.Throws<DomainValidationException>(() => FisStartOrder.ParseBibList("12, x"));
+        Assert.Throws<DomainValidationException>(() => FisStartOrder.ParseBibList("42-40"));
+        Assert.Throws<DomainValidationException>(() => FisStartOrder.Bibs(99998, [99999], 2));
+
+        var plan = Draw(Entrants(6), new(FirstBib: 10, SkippedBibs: [12, 13]));
+        Assert.Equal([10, 11, 14, 15, 16, 17], plan.Entries.Select(x => x.Bib));
+        Assert.Null(plan.Changes);
+
+        // A penalty move keeps the competitor's bib; later competitors move up.
+        var penalised = plan.Entries[1];
+        var moved = FisStartOrder.Apply(plan, new(StartListChangeKind.Move, " Start penalty ", penalised.Entrant.CompetitorId, ToPosition: 6));
+        Assert.Equal(penalised.Entrant.CompetitorId, moved.Entries[^1].Entrant.CompetitorId);
+        Assert.Equal(11, moved.Entries[^1].Bib);
+        Assert.Equal([10, 14, 15, 16, 17, 11], moved.Entries.Select(x => x.Bib));
+        Assert.Equal(Enumerable.Range(1, 6), moved.Entries.Select(x => x.Position));
+        Assert.Equal("Start penalty", Assert.Single(moved.Changes!).Reason);
+
+        // Bibs can be assigned again in the current order, any number of times.
+        var renumbered = FisStartOrder.Apply(moved, new(StartListChangeKind.AssignBibs, "Bib set changed", FirstBib: 1, SkippedBibs: [3]));
+        Assert.Equal([1, 2, 4, 5, 6, 7], renumbered.Entries.Select(x => x.Bib));
+        Assert.Equal(moved.Entries.Select(x => x.Entrant.CompetitorId), renumbered.Entries.Select(x => x.Entrant.CompetitorId));
+        var again = FisStartOrder.Apply(renumbered, new(StartListChangeKind.AssignBibs, "Again", FirstBib: 21));
+        Assert.Equal([21, 22, 23, 24, 25, 26], again.Entries.Select(x => x.Bib));
+        Assert.Equal(3, again.Changes!.Count);
+        Assert.Equal(JsonSerializer.Serialize(again), JsonSerializer.Serialize(FisStartOrder.WithChanges(plan, again.Changes)));
+
+        // Every change needs a reason and valid values; Run 2 keeps the Run 1 bibs.
+        Assert.Throws<DomainValidationException>(() => FisStartOrder.Apply(plan, new(StartListChangeKind.Move, " ", penalised.Entrant.CompetitorId, ToPosition: 2)));
+        Assert.Throws<DomainValidationException>(() => FisStartOrder.Apply(plan, new(StartListChangeKind.Move, "Penalty", penalised.Entrant.CompetitorId, ToPosition: 7)));
+        Assert.Throws<DomainValidationException>(() => FisStartOrder.Apply(plan, new(StartListChangeKind.Move, "Penalty", Guid.NewGuid(), ToPosition: 1)));
+        var results = again.Entries.Select((x, i) => new RunFinish(x.Entrant.CompetitorId, FinishStatus.Finished, 6000 + i)).ToArray();
+        var second = FisStartOrder.SecondRun(Stored(again), results);
+        Assert.Null(second.Changes);
+        Assert.Throws<DomainValidationException>(() => FisStartOrder.Apply(second, new(StartListChangeKind.AssignBibs, "Not here", FirstBib: 1)));
+        var secondMoved = FisStartOrder.Apply(second, new(StartListChangeKind.Move, "Late at start", second.Entries[0].Entrant.CompetitorId, ToPosition: 3));
+        Assert.Equal(second.Entries[0].Bib, secondMoved.Entries[2].Bib);
+    }
+
+    [Fact]
+    public async Task SavedChangesAreVerifiedAgainstTheDrawAndAnUnrecordedEditIsRejected()
+    {
+        using var folder = new TestFolder();
+        var path = folder.PathFor("changes.ost");
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        var plan = await SeedAsync(workspace, path);
+        var series = await workspace.ReadAsync();
+        var desk = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Initial draw", s_at));
+        var drawn = Assert.Single(desk.Revisions).Plan;
+        var moved = FisStartOrder.Apply(drawn, new(StartListChangeKind.Move, "Start penalty", drawn.Entries[0].Entrant.CompetitorId, ToPosition: drawn.Entries.Count));
+        desk = await workspace.SaveStartListAsync(new(moved, desk.SeriesRevision, "Operator", "Penalty", s_at));
+        var renumbered = FisStartOrder.Apply(desk.Revisions.OrderByDescending(x => x.Revision).First().Plan,
+            new(StartListChangeKind.AssignBibs, "Bibs after penalty", FirstBib: 5, SkippedBibs: [6]));
+        desk = await workspace.SaveStartListAsync(new(renumbered, desk.SeriesRevision, "Operator", "Bibs", s_at));
+        var latest = desk.Revisions.OrderByDescending(x => x.Revision).First();
+        Assert.Equal(3, latest.Revision);
+        Assert.Equal(renumbered.Entries, latest.Plan.Entries);
+        Assert.Equal(2, latest.Plan.Changes!.Count);
+
+        // Editing the order or bibs without a recorded change does not match the draw and is refused.
+        var tampered = latest.Plan with { Entries = latest.Plan.Entries.Select(x => x.Position == 1 ? x with { Bib = 999 } : x).ToArray() };
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(tampered, desk.SeriesRevision, "Operator", "Tampered", s_at)));
+        var unrecorded = latest.Plan with { Changes = null };
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(unrecorded, desk.SeriesRevision, "Operator", "Unrecorded", s_at)));
+
+        // Once the run has started, the list is locked.
+        var started = await workspace.MarkRunStartedAsync(latest.Id, desk.SeriesRevision, "Starter", s_at);
+        var late = FisStartOrder.Apply(latest.Plan, new(StartListChangeKind.Move, "Too late", latest.Plan.Entries[0].Entrant.CompetitorId, ToPosition: 2));
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveStartListAsync(new(late, started.SeriesRevision, "Operator", "Too late", s_at)));
     }
 }

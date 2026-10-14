@@ -82,7 +82,9 @@ public sealed class StandalonePublisher : IDisposable
         var structureChanged = _sent is null || _sent.Competition != snapshot.Competition || _sent.CurrentRun != snapshot.CurrentRun
             || snapshot.Runs.Any(r => _sent.Runs.FirstOrDefault(p => p.Number == r.Number)?.Results.Any(p => !r.Results.Any(x => x.Bib == p.Bib)) == true)
             || !_sent.Competitors.SequenceEqual(snapshot.Competitors) || _sent.Runs.Length != snapshot.Runs.Length
-            || snapshot.Runs.Any(r => !_sent.Runs.Any(p => p.Number == r.Number && p.StartOrder.SequenceEqual(r.StartOrder)));
+            || snapshot.Runs.Any(r => !_sent.Runs.Any(p => p.Number == r.Number && p.StartOrder.SequenceEqual(r.StartOrder)))
+            // Result events carry no forerunners, so any forerunner change goes out with the full state.
+            || snapshot.Runs.Any(r => !(_sent.Runs.FirstOrDefault(p => p.Number == r.Number)?.Forerunners ?? []).SequenceEqual(r.Forerunners ?? []));
         // One changed row is an event. Several (a new leader moves every rank and gap) replace the state at once: viewers
         // never see a half-applied ranking, and one request replaces a request and a broadcast per row.
         if (refresh || structureChanged || changes.Length != 1)

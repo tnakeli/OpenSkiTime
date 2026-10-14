@@ -60,6 +60,7 @@ public partial class DesktopWorkflowTests
                 revision = (await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Athlete", 2000, $"{123456 + i}", "FIN", "Test club", Gender.Female),
                     competition.Id, true, null, revision)).Revision;
             }
+            await SaveCachedFisPointsAsync(workspace, cache);
             using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
                 fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
             await vm.OpenSeriesCommand.ExecuteAsync(null);
@@ -135,6 +136,7 @@ public partial class DesktopWorkflowTests
             }
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_M5_VISUAL_DIR");
             var dialogs = new FileDialogsStub { NewPath = file, OpenPath = file, BackupPath = file + ".backup" };
+            await SaveCachedFisPointsAsync(workspace, cache);
             using var vm = new MainViewModel(workspace, dialogs, fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
@@ -324,6 +326,7 @@ public partial class DesktopWorkflowTests
             var revision = series.Revision;
             for (var i = 0; i < 12; i++)
             { revision = (await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Athlete", 2000, $"{123456 + i}", "FIN", "Test club", Gender.Female), competition.Id, true, null, revision)).Revision; }
+            await SaveCachedFisPointsAsync(workspace, cache);
             using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
                 fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
             await vm.OpenSeriesCommand.ExecuteAsync(null);
@@ -348,12 +351,12 @@ public partial class DesktopWorkflowTests
                 Button RankingIcon(string name) => ranking.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name);
                 void PressRanking(Button button)
                 { button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
-                PressRanking(RankingIcon("RankingSort_Bib"));
+                PressRanking(RankingIcon("RankingSort_BibText"));
                 Assert.Equal(1, vm.RankingView.OfType<TimingGridRow>().First().Bib);
-                PressRanking(RankingIcon("RankingSort_Bib"));
+                PressRanking(RankingIcon("RankingSort_BibText"));
                 Assert.Equal(12, vm.RankingView.OfType<TimingGridRow>().First().Bib);
                 Assert.Equal(1, vm.SelectedTimingRow!.Bib);
-                PressRanking(RankingIcon("RankingFilterButton_Bib"));
+                PressRanking(RankingIcon("RankingFilterButton_BibText"));
                 var filterPanel = (StackPanel)view.RankingFilterMenu!.Content!;
                 filterPanel.Children.OfType<TextBox>().Single().Text = "1";
                 PressRanking(filterPanel.Children.OfType<StackPanel>().Single().Children.OfType<Button>().Single(x => Equals(x.Content, "Apply")));
@@ -362,7 +365,7 @@ public partial class DesktopWorkflowTests
                     CompetitorId: timing.Snapshot!.Results.Single(x => x.Bib == 2).CompetitorId, Hundredths: 6999), "Timer", "Synthetic update during filtering");
                 vm.RefreshTiming();
                 Assert.Equal([12, 11, 10, 1], vm.RankingView.OfType<TimingGridRow>().Select(x => x.Bib));
-                PressRanking(RankingIcon("RankingFilterButton_Bib"));
+                PressRanking(RankingIcon("RankingFilterButton_BibText"));
                 Assert.Equal(12, vm.RankingView.OfType<TimingGridRow>().Count());
                 PressRanking(RankingIcon("RankingSort_DisplayTime"));
                 Assert.Equal(2, vm.RankingView.OfType<TimingGridRow>().Last().Bib);

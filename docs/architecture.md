@@ -106,7 +106,7 @@ PDF Factory renders locally and stores source-version/hash metadata in the serie
 | Property | Implemented behavior |
 |---|---|
 | Engine | SQLite via EF Core; one `.ost` file per series. No central race database. |
-| Development format | `OpenSkiTime.Development/4`, stored in the single Series row. |
+| Development format | `OpenSkiTime.Development/5`, stored in the single Series row. |
 | Creation/opening | Create the current model in a temporary sibling file, then move into place. Open checks format and SQLite integrity before accepting the session. |
 | Compatibility | Reject incompatible development files unchanged; no migrations or automatic schema upgrades during pre-release development. |
 | Connections | Short-lived contexts; WAL journal, `synchronous=FULL`, foreign keys enabled, pooling disabled, five-second SQLite timeout. |

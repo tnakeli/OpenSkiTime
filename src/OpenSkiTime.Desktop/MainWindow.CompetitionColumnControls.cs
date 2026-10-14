@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia.Collections;
 using Avalonia.Controls;
+using OpenSkiTime.Application;
 using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Desktop;
@@ -30,7 +31,7 @@ public partial class MainWindow
         "Values.Date" => row.Values.Date, "Values.ShortLabel" => row.Values.ShortLabel,
         "Values.Name" => row.Values.Name, "Values.Discipline" => row.Values.Discipline.ToString(),
         "Values.FisCode" => row.Values.FisCode, "Values.Calendar.Category" => row.Values.Calendar?.Category,
-        "Values.Calendar.Gender" => row.Values.Calendar?.Gender, "Values.Calendar.Location" => row.Values.Calendar?.Location,
+        "Values.Calendar.Gender" => CompetitionGenderLabels.Format(row.Values.Calendar?.Gender), "Values.Calendar.Location" => row.Values.Calendar?.Location,
         "Values.CourseName" => row.Values.CourseName,
         "Values" => new HomologationDisplayConverter().Convert(row.Values, typeof(string), null, CultureInfo.InvariantCulture),
         "Values.Calendar.TechnicalDelegate.LastName" => row.Values.Calendar?.TechnicalDelegate?.LastName,

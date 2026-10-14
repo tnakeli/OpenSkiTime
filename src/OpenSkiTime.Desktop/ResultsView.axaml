@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:OpenSkiTime.Desktop" x:Class="OpenSkiTime.Desktop.ResultsView" x:CompileBindings="False">
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Spacing="12">
-      <Border Classes="workSurface" Padding="16">
+    <StackPanel Spacing="8">
+      <Border Classes="workSurface" Padding="{DynamicResource SectionInset}">
         <StackPanel Spacing="10">
           <Grid ColumnDefinitions="*,Auto">
             <StackPanel Spacing="2"><TextBlock Text="RACE / OFFICIAL RESULTS" Classes="eyebrow" />
@@ -14,8 +14,8 @@
 
         </StackPanel>
       </Border>
-      <Border Name="ResultsFisInformation" Classes="workSurface" Padding="16" IsVisible="{Binding ResultsIsFis}"><local:RaceInformationView /></Border>
-      <Border Classes="workSurface" Padding="16" IsVisible="{Binding ResultsIsFis}">
+      <Border Name="ResultsFisInformation" Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding ResultsIsFis}"><local:RaceInformationView /></Border>
+      <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding ResultsIsFis}">
         <StackPanel Spacing="10">
           <StackPanel Spacing="2"><TextBlock Text="TD REVIEW / PENALTY" Classes="eyebrow" />
             <TextBlock Text="Penalty calculation" Classes="sectionTitle" /></StackPanel>
@@ -34,7 +34,7 @@
             </DataGrid.Columns>
           </DataGrid>
           <TextBlock Text="{Binding ResultsRuleSource}" TextWrapping="Wrap" Classes="supportingText" />
-          <Border Background="#E4F1EF" Padding="12"><TextBlock Text="{Binding ResultsRuleValues}" TextWrapping="Wrap" /></Border>
+          <Border Classes="infoNote"><TextBlock Text="{Binding ResultsRuleValues}" TextWrapping="Wrap" /></Border>
           <TextBlock Text="BEST TEN FINISHERS / A AND C" Classes="fieldLabel" />
           <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultTopTen}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" Height="340" RowHeight="28" ColumnHeaderHeight="28">
             <DataGrid.Columns>
@@ -56,10 +56,10 @@
             </DataGrid.Columns>
           </DataGrid>
           <TextBlock Text="All ties at rank 10 are included. Selected finishers use the points cap where list or race points exceed it." Classes="supportingText" TextWrapping="Wrap" />
-          <Border Background="#E4F1EF" Padding="12"><TextBlock Text="{Binding ResultsPenaltySummary}" TextWrapping="Wrap" FontWeight="SemiBold" /></Border>
+          <Border Classes="infoNote"><TextBlock Text="{Binding ResultsPenaltySummary}" TextWrapping="Wrap" FontWeight="SemiBold" /></Border>
         </StackPanel>
       </Border>
-      <Border Classes="workSurface" Padding="16" IsVisible="{Binding ResultsIsFis}">
+      <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding ResultsIsFis}">
         <StackPanel Spacing="10">
           <TextBlock Text="XML file" Classes="sectionTitle" />
           <WrapPanel>

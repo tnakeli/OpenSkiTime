@@ -13,7 +13,7 @@ public sealed partial class LiveTimingChannel(MainViewModel owner, string label,
     public bool IsFis => Kind is PublisherKind.FisTcp or PublisherKind.FisHttps;
     public bool IsStandalone => !IsFis;
     public int? WorkerProcessId { get; private set; }
-    public string IndicatorColor => Status == "Stopped" ? "#DCE6E9" : Status == "Running" ? "#49BA91" : "#EF7777";
+    public string IndicatorColor => Status == "Stopped" ? "#94A3B8" : Status == "Running" ? "#16A34A" : "#DC2626";
     public string Summary => $"{Label} · {Status}";
     public string StatusToolTip => Summary + "\n" + Detail + (Expiration.Length > 0 ? "\n" + Expiration : "");
     [ObservableProperty] private string _status = "Stopped";

@@ -12,7 +12,9 @@ Fairness concerns **the order within the same draw group**. Grouping by FIS poin
 
 This explanation covers the current profile based on FIS rules: two-run slalom and giant slalom, and single-run downhill and super-G. It does not describe every special rule for local, youth, Cup or Masters competitions. The selected profile and settings must be checked for the particular race.
 
-For Run 1, the software uses competitors entered in the race and their discipline-specific points from the loaded FIS points list. The list must be valid on the race date. Competitor IDs and FIS codes must be unique; missing required athlete information prevents the draw.
+For Run 1, the software uses competitors entered in the race and their discipline-specific points saved in the event series (**Competitors → Update from FIS list → Save**), together with the code and validity dates of the list they came from. A list that is not valid on the race date does not block the draw, but Start lists shows the list in use with a NOT VALID warning. Competitor IDs and FIS codes must be unique; missing required athlete information prevents the draw.
+
+Before the first draw, Start lists shows every entered competitor with the discipline points that the draw will use, sorted by points. A saved points value that differs from the points list loaded on this computer is shown in the error colour, so outdated points are visible before drawing.
 
 | Competitor group | How the start order is formed |
 | --- | --- |
@@ -85,7 +87,9 @@ This is a verifiable observation about the implementation. Frequency variation i
 
 The series `.ost` file stores competition details, athlete input snapshots and points, the points-list identifier and validity dates, settings, seed, rule version and resulting order. It also records the start-list revision, creation time, operator and reason. The operator field is the identity supplied to the application; it is not independently verified proof of identity.
 
-Successfully saving a redraw creates a new start-list revision. The application blocks redraws once the run has been marked started or timing capture has begun for it. Run 1 also cannot be redrawn after Run 2 references its bibs.
+Successfully saving a redraw creates a new start-list revision.
+
+**Bibs and start-order changes.** Bibs are assigned in Run 1 start order from **FIRST BIB** (default 1), skipping the numbers listed in **SKIPPED BIBS** (for example `13, 27, 40-42`). **Assign bibs** reassigns them in the current order as often as needed. A competitor can be moved to another start position (for example as a penalty) with **MOVE TO**, a required **REASON** and **Move**; the competitor keeps the bib already assigned, so reassign bibs afterwards when they should follow the new order. Each bib assignment and move is saved as a new start-list revision that records the change with its operator and reason. Verification replays the draw from its seed and then applies the recorded changes in order; a start list whose order or bibs differ from the draw plus its recorded changes is rejected as modified outside the application. Both are available only until timing capture has begun for Run 1; Run 2 order still comes only from Run 1 results. The application blocks redraws once the run has been marked started or timing capture has begun for it. Run 1 also cannot be redrawn after Run 2 references its bibs.
 
 **Verification limit:** redraws can be performed before the run begins. Unsaved attempts, failed attempts and experiments outside the application are not all recorded in start-list history. This implementation also has no external digital signature or public commitment to the seed. Replay establishes that the saved order matches the saved inputs; it does not alone establish that someone never searched for a favourable seed or modified the database outside the application.
 

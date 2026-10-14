@@ -34,6 +34,7 @@ public partial class DesktopWorkflowTests
             var competition=series.Competitions[0]; competitionId=competition.Id; var revision=series.Revision;
             for(var i=0;i<12;i++)
             { revision=(await workspace.SaveDeskRowAsync(null,new($"TEST{i:00}","Synthetic",2000,$"{123456+i}","FIN","Test Club",Gender.Female),competition.Id,true,null,revision)).Revision; }
+            await SaveCachedFisPointsAsync(workspace, cache);
             using var vm=new MainViewModel(workspace,new FileDialogsStub { OpenPath=file,NewPath=file,BackupPath=file+".backup" },fisStore:cache,recentSeriesStore:new RecentSeriesStore(root));
             await vm.OpenSeriesCommand.ExecuteAsync(null); await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition,1)); await vm.PrepareDrawCommand.ExecuteAsync(null);
             await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition,1)); Assert.False(vm.IsError,vm.StatusMessage);

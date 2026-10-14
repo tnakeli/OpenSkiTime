@@ -122,6 +122,14 @@ public sealed class LivePublishingTests
         state = SyntheticRace.Update(state, 2, LiveStatus.Finished, 4900);
         await publisher.PublishAsync(state, false, CancellationToken.None);
         Assert.Equal(["state"], requests.ToArray());
+        // A forerunner finishing as the next competitor starts: one row changed, but the forerunner must not be lost.
+        state = state with { Runs = [state.Runs[0] with { Forerunners = [new("A", "SYNTHRUNNER", "Ada", "FIN", LiveStatus.OnCourse)] }] };
+        await publisher.PublishAsync(state, false, CancellationToken.None);
+        requests.Clear();
+        state = SyntheticRace.Update(state, 3, LiveStatus.OnCourse, null);
+        state = state with { Runs = [state.Runs[0] with { Forerunners = [new("A", "SYNTHRUNNER", "Ada", "FIN", LiveStatus.Finished)] }] };
+        await publisher.PublishAsync(state, false, CancellationToken.None);
+        Assert.Equal(["state"], requests.ToArray());
     }
 
     [Fact]

@@ -3,14 +3,15 @@
         xmlns:local="using:OpenSkiTime.Desktop"
         x:Class="OpenSkiTime.Desktop.MainWindow" x:CompileBindings="False"
         Title="{Binding WindowTitle}" Width="1280" Height="820" MinWidth="980" MinHeight="680" WindowState="Maximized"
-        Background="{DynamicResource CanvasBrush}">
+        Background="{DynamicResource CanvasBrush}"
+        RequestedThemeVariant="Dark" ExtendClientAreaToDecorationsHint="True" ExtendClientAreaChromeHints="PreferSystemChrome" ExtendClientAreaTitleBarHeightHint="36">
   <Window.Resources>
     <local:HomologationDisplayConverter x:Key="HomologationDisplayConverter" />
   </Window.Resources>
   <Window.Styles>
     <Style Selector="WrapPanel.sectionNavigation > Button">
-      <Setter Property="Margin" Value="0,0,4,0" />
-      <Setter Property="Padding" Value="6,5" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="14,6" />
     </Style>
     <Style Selector="DataGrid.columnControls DataGridColumnHeader">
       <Setter Property="Padding" Value="4,0" />
@@ -28,75 +29,62 @@
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     </Style>
   </Window.Styles>
+  <!-- The window frame uses the dark variant so Windows draws light caption buttons on the navy title bar;
+       everything inside the window stays in the light theme. -->
+  <!-- A maximized window with an extended title bar reaches past the screen edges; the off-screen margin keeps the
+       title bar and status bar inside the work area. -->
+  <ThemeVariantScope RequestedThemeVariant="Light" Margin="{Binding OffScreenMargin, RelativeSource={RelativeSource AncestorType=Window}}">
   <Grid RowDefinitions="Auto,Auto,*,Auto">
-    <Border Grid.Row="0" Background="{DynamicResource NavyBrush}" Padding="22,11">
-      <!-- Fluent's hover/pressed/open states use light-theme brushes in the control templates, which turn the text
-           dark on the navy bar. Keep every button state on the bar light-on-navy. -->
-      <Border.Resources>
-        <SolidColorBrush x:Key="ButtonBackgroundPointerOver">#285365</SolidColorBrush>
-        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver">#5C8592</SolidColorBrush>
-        <SolidColorBrush x:Key="ButtonForegroundPointerOver">White</SolidColorBrush>
-        <SolidColorBrush x:Key="ButtonBackgroundPressed">#0C2530</SolidColorBrush>
-        <SolidColorBrush x:Key="ButtonBorderBrushPressed">#5C8592</SolidColorBrush>
-        <SolidColorBrush x:Key="ButtonForegroundPressed">White</SolidColorBrush>
-        <SolidColorBrush x:Key="ButtonBackgroundDisabled">#16384A</SolidColorBrush>
-        <SolidColorBrush x:Key="ButtonBorderBrushDisabled">#2F5363</SolidColorBrush>
-        <SolidColorBrush x:Key="ButtonForegroundDisabled">#7F9CA6</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonBackgroundPointerOver">#285365</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonBorderBrushPointerOver">#5C8592</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonForegroundPointerOver">White</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonBackgroundPressed">#0C2530</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonBorderBrushPressed">#5C8592</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonForegroundPressed">White</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonBackgroundDisabled">#16384A</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonBorderBrushDisabled">#2F5363</SolidColorBrush>
-        <SolidColorBrush x:Key="SplitButtonForegroundDisabled">#7F9CA6</SolidColorBrush>
-      </Border.Resources>
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <Border Width="30" Height="30" Background="{DynamicResource AccentBrush}" CornerRadius="4">
-            <TextBlock Text="O" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Foreground="White" />
-          </Border>
-          <TextBlock Text="OpenSkiTime" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
-          <TextBlock Name="ProductVersionText" Text="{Binding ProductVersionLabel}" Foreground="#B8C9D1" FontSize="12" VerticalAlignment="Center" ToolTip.Tip="{Binding ProductLabel}" />
+    <!-- Title bar: the window caption is part of the navy bar (Windows keeps its own minimize, maximize and close buttons
+         at the right). The empty bar area moves the window; a double-click maximizes or restores it. -->
+    <Border Grid.Row="0" Name="TitleBar" Background="{DynamicResource NavyBrush}" Height="36" Padding="12,0,0,0" PointerPressed="TitleBar_PointerPressed">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Background="Transparent" ToolTip.Tip="{Binding ProductLabel}">
+          <!-- The OpenSkiTime mountain mark (assets/icons/openskitime.svg) without its tile. -->
+          <Viewbox Width="27" Height="19" VerticalAlignment="Center">
+            <Canvas Width="48" Height="34">
+              <Polygon Points="1,32 19,2 28,17 34,7 47,32" Fill="#F4F3EB" />
+              <Polygon Points="19,2 26,14 19,11 14,15" Fill="#8BB6AD" />
+              <Line StartPoint="31,20" EndPoint="25,32" Stroke="#E86949" StrokeThickness="4" />
+            </Canvas>
+          </Viewbox>
+          <TextBlock Text="OpenSkiTime" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource OnNavyTextBrush}" VerticalAlignment="Center" />
         </StackPanel>
-        <Button Name="ActiveRaceButton" Grid.Column="1" Content="{Binding ActiveRaceLabel}" Click="ActiveRace_Click"
-                IsVisible="{Binding IsOpen}" IsEnabled="{Binding CanEditCompetitions}" Classes="activeRace" HorizontalAlignment="Left"
-                VerticalAlignment="Center" Margin="20,0,12,0" MaxWidth="260" ToolTip.Tip="Select competition and run" />
-        <TextBlock Name="ActiveRaceNameText" Grid.Column="2" Text="{Binding ActiveRaceName}" ToolTip.Tip="{Binding ActiveRaceName}"
-                   Foreground="White" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0" IsVisible="{Binding IsOpen}" />
-        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsEnabled="{Binding !IsDrawBusy}">
-          <Button Content="New series" Command="{Binding NewSeriesCommand}" Classes="toolbarAction" />
-          <SplitButton Name="OpenFileButton" Content="Open file" Command="{Binding OpenSeriesCommand}" Classes="toolbarAction">
-            <SplitButton.Flyout>
-              <MenuFlyout Placement="Bottom" />
-            </SplitButton.Flyout>
-          </SplitButton>
-          <Border Width="1" Background="#42606A" Margin="4,6" />
-          <Button Content="Backup / transfer" Command="{Binding BackupCommand}" IsEnabled="{Binding IsOpen}" Classes="toolbarAction" />
-          <Button Content="Close file" Command="{Binding CloseSeriesCommand}" IsEnabled="{Binding IsOpen}" Classes="toolbarAction" />
-          <Border Width="1" Background="#42606A" Margin="4,6" />
-          <Button Content="Settings" Command="{Binding ShowSettingsCommand}" Classes="toolbarAction" />
+        <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,*" Margin="10,0,12,0" VerticalAlignment="Center"
+              IsVisible="{Binding ActiveRaceName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="|" Classes="titleSeparator" />
+          <TextBlock Grid.Column="1" Name="ActiveRaceTitleText" Text="{Binding ActiveRaceLabel}" Classes="titleText" Margin="10,0" />
+          <TextBlock Grid.Column="2" Text="|" Classes="titleSeparator" />
+          <TextBlock Grid.Column="3" Name="ActiveRaceNameText" Text="{Binding ActiveRaceName}" ToolTip.Tip="{Binding ActiveRaceName}"
+                     Classes="titleText" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+        </Grid>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Stretch" IsEnabled="{Binding !IsDrawBusy}">
+          <Border Classes="titleDivider" />
+          <DropDownButton Name="FileMenuButton" Content="File" Classes="titleMenu" ToolTip.Tip="New, open, backup and close the event series file" />
+          <Border Classes="titleDivider" />
+          <DropDownButton Name="SettingsMenuButton" Content="Settings" Classes="titleMenu" Click="SettingsMenu_Click" />
+          <Border Classes="titleDivider" />
+          <!-- Room for the Windows caption buttons when the bar extends into the title bar. -->
+          <Border Name="CaptionButtonSpace" Width="0" />
         </StackPanel>
       </Grid>
     </Border>
-    <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="22,7">
+    <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,0,12,0">
       <WrapPanel Classes="sectionNavigation" Orientation="Horizontal">
-        <Button Content="1  Event series" Command="{Binding ShowSeriesCommand}" Click="Navigation_Click" Classes="sectionNav" Classes.active="{Binding IsSeriesSection}" />
-        <Button Content="2  Competitions" Command="{Binding ShowCompetitionsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitionsSection}" />
-        <Button Content="3  Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
-        <Button Name="DrawMenuButton" Content="4  Start lists  ▾" Click="DrawMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsDrawSection}" />
-        <Button Name="TimingMenuButton" Content="5  Timing  ▾" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
-        <Button Name="ResultsMenuButton" Content="6  Results  ▾" Click="ResultsMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsResultsSection}" />
-        <Button Name="TimingReportMenuButton" Content="7  Timing report  ▾" Click="TimingReportMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingReportSection}" />
-        <Button Name="PdfFactoryButton" Content="8  PDF Factory  ▾" Click="PdfFactoryMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsPdfFactorySection}" />
+        <Button Content="Event series" Command="{Binding ShowSeriesCommand}" Click="Navigation_Click" Classes="sectionNav" Classes.active="{Binding IsSeriesSection}" />
+        <Button Content="Competitions" Command="{Binding ShowCompetitionsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitionsSection}" />
+        <Button Content="Competitors" Command="{Binding ShowCompetitorsCommand}" Click="Navigation_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsCompetitorsSection}" />
+        <Button Name="DrawMenuButton" Content="Start lists" Click="DrawMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsDrawSection}" />
+        <Button Name="TimingMenuButton" Content="Timing" Click="TimingMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingSection}" />
+        <Button Name="ResultsMenuButton" Content="Results" Click="ResultsMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsResultsSection}" />
+        <Button Name="TimingReportMenuButton" Content="Timing report" Click="TimingReportMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingReportSection}" />
+        <Button Name="PdfFactoryButton" Content="PDF Factory" Click="PdfFactoryMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsPdfFactorySection}" />
       </WrapPanel>
     </Border>
     <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsFormSection}">
-      <StackPanel Margin="{DynamicResource PageInset}" Spacing="12" HorizontalAlignment="Stretch">
+      <StackPanel Margin="{DynamicResource PageInset}" Spacing="8" HorizontalAlignment="Stretch">
         <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSeriesSection}">
-          <StackPanel Spacing="14">
+          <StackPanel Spacing="10">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Spacing="1">
                 <TextBlock Text="WORKSPACE / SERIES" Classes="eyebrow" />
@@ -139,7 +127,7 @@
                     <DataGridTextColumn Header="CODEX" Binding="{Binding FisCode}" Width="85" />
                     <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Discipline}" Width="140" />
                     <DataGridTextColumn Header="CATEGORY" Binding="{Binding Calendar.Category}" Width="100" />
-                    <DataGridTextColumn Header="GENDER" Binding="{Binding Calendar.Gender}" Width="85" />
+                    <DataGridTextColumn Header="GENDER" Binding="{Binding Calendar.Gender, Converter={StaticResource GenderLabelConverter}}" Width="85" />
                     <DataGridTextColumn Header="TD SURNAME" Binding="{Binding Calendar.TechnicalDelegate.LastName}" Width="160" />
                     <DataGridTextColumn Header="TD FIRST NAME" Binding="{Binding Calendar.TechnicalDelegate.FirstName}" Width="140" />
                     <DataGridTextColumn Header="TD NATION" Binding="{Binding Calendar.TechnicalDelegate.Nation}" Width="95" />
@@ -152,7 +140,7 @@
                 </StackPanel>
               </StackPanel>
             </Border>
-            <StackPanel Spacing="12">
+            <StackPanel Spacing="10">
               <Grid ColumnDefinitions="2*,12,2*,12,2*,12,100,12,110">
                 <StackPanel Grid.Column="0" Classes="field">
                   <TextBlock Text="SERIES NAME *" Classes="fieldLabel" />
@@ -212,7 +200,7 @@
             </Grid>
             <DataGrid Name="CompetitionsGrid" Classes="raceGrid columnControls" ItemsSource="{Binding CompetitionView}" SelectedItem="{Binding SelectedCompetition}" AutoGenerateColumns="False"
                       SelectionMode="Single"
-                      IsReadOnly="True" MinHeight="86" MaxHeight="210" RowHeight="36" ColumnHeaderHeight="30"
+                      IsReadOnly="True" MinHeight="86" MaxHeight="210" RowHeight="30" ColumnHeaderHeight="30"
                       GridLinesVisibility="Horizontal" HeadersVisibility="Column" HorizontalGridLinesBrush="{DynamicResource LineBrush}">
               <DataGrid.Resources>
                 <StaticResource x:Key="DataGridRowSelectedBackgroundBrush" ResourceKey="SelectionBrush" />
@@ -232,7 +220,7 @@
                 <DataGridTextColumn Header="DISCIPLINE" Binding="{Binding Values.Discipline}" Width="105" />
                 <DataGridTextColumn Header="CODEX" Binding="{Binding Values.FisCode}" Width="90" />
                 <DataGridTextColumn Header="CATEGORY" Binding="{Binding Values.Calendar.Category}" Width="100" />
-                <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Calendar.Gender}" Width="85" />
+                <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Calendar.Gender, Converter={StaticResource GenderLabelConverter}}" Width="85" />
                 <DataGridTextColumn Header="LOCATION" Binding="{Binding Values.Calendar.Location}" Width="100" />
                 <DataGridTextColumn Header="COURSE" Binding="{Binding Values.CourseName}" Width="105" />
                 <DataGridTextColumn Header="HOMOLOGATION" Binding="{Binding Values, Converter={StaticResource HomologationDisplayConverter}}" Width="240" />
@@ -241,18 +229,18 @@
                 <DataGridTextColumn Header="RUNS" Binding="{Binding Values.RunCount}" Width="75" />
               </DataGrid.Columns>
             </DataGrid>
-            <Border Classes="subtleSurface" Padding="16,13" IsVisible="{Binding IsCompetitionEditing}">
-              <StackPanel Spacing="14">
+            <Border Classes="subtleSurface" Padding="12,10" IsVisible="{Binding IsCompetitionEditing}">
+              <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel Spacing="1">
                     <TextBlock Text="ACTIVE RACE / DETAILS" Classes="eyebrow" />
                     <TextBlock Text="{Binding CompetitionEditorTitle}" Classes="sectionTitle" />
                   </StackPanel>
-                  <Border Grid.Column="1" Background="{DynamicResource AccentTintBrush}" CornerRadius="3" Padding="8,4" VerticalAlignment="Center">
+                  <Border Grid.Column="1" Background="{DynamicResource SelectionBrush}" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CompetitionShortLabel}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
                   </Border>
                 </Grid>
-                <StackPanel Spacing="12">
+                <StackPanel Spacing="10">
                   <Grid ColumnDefinitions="160,12,*,12,232">
                     <StackPanel Grid.Column="0" Classes="field">
                       <TextBlock Text="SHORT NAME *" Classes="fieldLabel" />
@@ -320,7 +308,7 @@
                     <TextBlock Text="{Binding CompetitionTdOriginalName}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding CompetitionTdOriginalName}" />
                   </StackPanel>
                 </StackPanel>
-                  <StackPanel Name="CompetitionCourseDetails" Margin="0,10,0,2" Spacing="12">
+                  <StackPanel Name="CompetitionCourseDetails" Margin="0,8,0,2" Spacing="10">
                     <TextBlock Text="COURSE AND HOMOLOGATION" Classes="fieldLabel" />
                     <StackPanel IsVisible="{Binding IsCompetitionFis}" Spacing="8">
                       <Button Name="BrowseCompetitionHomologationsButton" Content="Browse FIS homologations" Command="{Binding BrowseCompetitionHomologationsCommand}" IsEnabled="{Binding !IsHomologationBusy}" HorizontalAlignment="Left" Classes="secondaryAction" />
@@ -386,7 +374,7 @@
                 <TextBlock Grid.Column="2" Text="{Binding UnsavedChangesText}" FontWeight="SemiBold" VerticalAlignment="Center" />
                 <Button Grid.Column="3" Content="{Binding ChangeReviewButtonText}" Command="{Binding ToggleChangeReviewCommand}"
                         IsEnabled="{Binding HasDeskChangeLog}" Classes="secondaryAction" />
-                <Button Grid.Column="5" Content="Save changes" Command="{Binding CommitDeskChangesCommand}"
+                <Button Grid.Column="5" Content="Save" Command="{Binding CommitDeskChangesCommand}"
                         IsEnabled="{Binding HasDeskChangeLog}" Classes="primaryAction" />
               </Grid>
             </Border>
@@ -405,7 +393,7 @@
             <DataGrid Name="CompetitorGrid" Classes="raceGrid columnControls" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
                       SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" CanUserResizeColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
                       FrozenColumnCount="3" HorizontalScrollBarVisibility="Auto"
-                      MinHeight="300" RowHeight="34" ColumnHeaderHeight="40" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+                      MinHeight="300" RowHeight="30" ColumnHeaderHeight="34" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
               <DataGrid.ContextMenu><ContextMenu>
                 <MenuItem Header="Select all" InputGesture="Ctrl+A" Click="SelectAllContext_Click" />
                 <MenuItem Header="Paste from Excel" InputGesture="Ctrl+V" Click="PasteContext_Click" />
@@ -422,11 +410,11 @@
                 <DataGridTemplateColumn Header="GENDER" SortMemberPath="GenderText" Width="95" MinWidth="60"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding GenderText}" Classes="gridCell" Classes.changed="{Binding IsGenderChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><ComboBox ItemsSource="{Binding AvailableGenders}" SelectedItem="{Binding GenderText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
                 <DataGridTemplateColumn Header="NAT" SortMemberPath="Nation" Width="70" MinWidth="60"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Nation}" Classes="gridCell" Classes.changed="{Binding IsNationChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Nation}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
                 <DataGridTemplateColumn Header="CLUB" SortMemberPath="Club" Width="145" MinWidth="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Club}" Classes="gridCell" Classes.changed="{Binding IsClubChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Club}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTextColumn Header="DH PTS" Binding="{Binding FisDhText}" SortMemberPath="FisDh" IsReadOnly="True" Width="75" MinWidth="55" />
-                <DataGridTextColumn Header="SG PTS" Binding="{Binding FisSgText}" SortMemberPath="FisSg" IsReadOnly="True" Width="75" MinWidth="55" />
-                <DataGridTextColumn Header="SL PTS" Binding="{Binding FisSlText}" SortMemberPath="FisSl" IsReadOnly="True" Width="75" MinWidth="55" />
-                <DataGridTextColumn Header="GS PTS" Binding="{Binding FisGsText}" SortMemberPath="FisGs" IsReadOnly="True" Width="75" MinWidth="55" />
-                <DataGridTextColumn Header="AC PTS" Binding="{Binding FisAcText}" SortMemberPath="FisAc" IsReadOnly="True" Width="75" MinWidth="55" />
+                <DataGridTemplateColumn Header="DH PTS" SortMemberPath="FisDh" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisDhText}" Classes="gridCell" Classes.changed="{Binding IsDhChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="SG PTS" SortMemberPath="FisSg" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisSgText}" Classes="gridCell" Classes.changed="{Binding IsSgChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="SL PTS" SortMemberPath="FisSl" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisSlText}" Classes="gridCell" Classes.changed="{Binding IsSlChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="GS PTS" SortMemberPath="FisGs" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisGsText}" Classes="gridCell" Classes.changed="{Binding IsGsChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="AC PTS" SortMemberPath="FisAc" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisAcText}" Classes="gridCell" Classes.changed="{Binding IsAcChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                 <DataGridTextColumn Header="CATEGORY" Binding="{Binding Category}" SortMemberPath="Category" IsReadOnly="True" Width="125" MinWidth="80" />
               </DataGrid.Columns>
             </DataGrid>
@@ -435,12 +423,12 @@
               <CheckBox Content="Match checked" IsChecked="{Binding SelectedCompetitorRow.WarningApproved}" VerticalAlignment="Center" />
             </StackPanel></Border>
             <Expander Header="Update from FIS" IsExpanded="{Binding IsFisPanelOpen}" HorizontalAlignment="Stretch">
-              <Border Classes="subtleSurface" Padding="12,10" Margin="0,8,0,0">
+              <Border Classes="subtleSurface" Padding="10,8" Margin="0,6,0,0">
                 <StackPanel Spacing="8">
                   <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="2">
                     <TextBlock Text="{Binding FisListDisplay}" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding FisListValidityText}" Classes="supportingText" />
-                  </StackPanel><Button Grid.Column="1" Content="Stage updates for existing competitors" Command="{Binding StageFisUpdatesCommand}" Classes="secondaryAction" /></Grid>
+                  </StackPanel><Button Grid.Column="1" Content="Update from FIS list" Command="{Binding StageFisUpdatesCommand}" ToolTip.Tip="Update name, birth year, gender, nation and club of existing competitors from the loaded FIS list. Changes are highlighted; Save keeps them." Classes="secondaryAction" /></Grid>
                   <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Button Content="Download FIS point list" Command="{Binding DownloadFisListCommand}" IsEnabled="{Binding !IsFisBusy}" Classes="secondaryAction" />
                     <TextBlock Text="Date the list must be effective on" VerticalAlignment="Center" Classes="fieldLabel" />
@@ -458,15 +446,15 @@
                   <ListBox Name="FisSearchResultsList" ItemsSource="{Binding FisSearchResults}" SelectionMode="Multiple" SelectionChanged="FisSearchResults_SelectionChanged" MaxHeight="150">
                     <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" FontSize="12" /></DataTemplate></ListBox.ItemTemplate>
                   </ListBox>
-                  <TextBlock Text="Review highlighted changes, then choose Save changes above the grid." Classes="supportingText" />
+                  <TextBlock Text="Review highlighted changes, then choose Save above the grid." Classes="supportingText" />
                 </StackPanel>
               </Border>
             </Expander>
             <Expander Header="Category rules · birth-year range and gender" HorizontalAlignment="Stretch">
-              <StackPanel Margin="0,10,0,2" Spacing="10">
+              <StackPanel Margin="0,8,0,2" Spacing="8">
                 <DataGrid Classes="raceGrid" ItemsSource="{Binding CategoryRules}" SelectedItem="{Binding SelectedCategoryRule}"
                           AutoGenerateColumns="False" IsReadOnly="True" MinHeight="70" MaxHeight="150"
-                          RowHeight="32" ColumnHeaderHeight="28" HeadersVisibility="Column">
+                          RowHeight="28" ColumnHeaderHeight="28" HeadersVisibility="Column">
                   <DataGrid.Columns>
                     <DataGridTextColumn Header="CATEGORY" Binding="{Binding Values.Label}" Width="*" />
                     <DataGridTextColumn Header="FROM YEAR" Binding="{Binding Values.BirthYearMin}" Width="110" />
@@ -501,18 +489,25 @@
     </ScrollViewer>
     <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />
     <local:PdfFactoryView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsPdfFactorySection}" />
-    <local:TimingView Name="TimingWorkspace" Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsTimingSection}" />
+    <!-- No top inset: the device strip starts right under the navigation instead of being pulled under it. -->
+    <local:TimingView Name="TimingWorkspace" Grid.Row="2" Margin="12,0,12,8" IsVisible="{Binding IsTimingSection}" />
     <local:ResultsView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsResultsSection}" />
     <local:TimingReportView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsTimingReportSection}" />
     <Border Grid.Row="3" Classes="statusBar" Classes.error="{Binding IsError}"
-            BorderThickness="0,1,0,0" Padding="22,8">
+            BorderThickness="0,1,0,0" Padding="12,4">
+      <Grid ColumnDefinitions="*,Auto">
       <StackPanel Orientation="Horizontal" Spacing="8">
-        <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsError}" />
+        <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsError}" />
         <TextBlock Text="!" FontWeight="Bold" Foreground="{DynamicResource ErrorBrush}" IsVisible="{Binding IsError}" />
         <TextBlock Text="{Binding StatusMessage}" Classes="statusText" Classes.error="{Binding IsError}"
-                   FontSize="11" TextWrapping="Wrap" />
-        <TextBlock Text="{Binding TimingCaptureLabel}" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="560" IsVisible="{Binding IsTimingConnected}" />
+                   FontSize="12" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding TimingCaptureLabel}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="560" IsVisible="{Binding IsTimingConnected}" />
       </StackPanel>
+      <!-- Timing: starters, on course and finished of the open run. -->
+      <TextBlock Grid.Column="1" Name="TimingSummaryText" Text="{Binding TimingSummary}" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                 VerticalAlignment="Center" Margin="12,0,0,0" IsVisible="{Binding IsTimingSection}" />
+      </Grid>
     </Border>
   </Grid>
+  </ThemeVariantScope>
 </Window>

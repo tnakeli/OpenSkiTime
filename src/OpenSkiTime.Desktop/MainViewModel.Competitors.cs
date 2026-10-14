@@ -25,7 +25,7 @@ public sealed partial class MainViewModel
     public bool HasDeskChangeLog => DeskChangeLog.Count > 0;
     public string UnsavedChangesText => DeskChangeLog.Count is 0 ? "All changes saved"
         : $"{DeskChangeLog.Count} unsaved change{(DeskChangeLog.Count == 1 ? "" : "s")}";
-    public string ChangeReviewButtonText => IsChangeReviewOpen ? "Hide changes" : "Review changes";
+    public string ChangeReviewButtonText => IsChangeReviewOpen ? "Hide undo" : "Undo";
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ChangeReviewButtonText))]
     private bool _isChangeReviewOpen;
@@ -90,8 +90,7 @@ public sealed partial class MainViewModel
         _allCompetitorRows.Clear();
         foreach (var competitor in _desk.Competitors)
         {
-            var row = CompetitorGridRow.From(competitor);
-            UpdateFisPoints(row);
+            var row = CompetitorGridRow.From(competitor, _desk.FisPointsOf(competitor.Id));
             FillGridEntries(row);
             SubscribeRow(row);
             UpdateCategory(row);
@@ -154,7 +153,8 @@ public sealed partial class MainViewModel
         if (args.PropertyName is not (nameof(CompetitorGridRow.Surname) or nameof(CompetitorGridRow.FirstName)
             or nameof(CompetitorGridRow.BirthYearText) or nameof(CompetitorGridRow.GenderText)
             or nameof(CompetitorGridRow.Nation) or nameof(CompetitorGridRow.Club)
-            or nameof(CompetitorGridRow.FederationCode) or nameof(CompetitorGridRow.IsPendingDelete))) { return; }
+            or nameof(CompetitorGridRow.FederationCode) or nameof(CompetitorGridRow.IsPendingDelete)
+            or nameof(CompetitorGridRow.FisPoints))) { return; }
         if (row.IsPlaceholder && row.HasTypedContent)
         {
             row.IsPlaceholder = false;
@@ -273,6 +273,7 @@ public sealed partial class MainViewModel
             AddFieldChange(row, nameof(CompetitorGridRow.Nation), row.IsNationChanged, "Nation", label);
             AddFieldChange(row, nameof(CompetitorGridRow.Club), row.IsClubChanged, "Club", label);
             AddFieldChange(row, nameof(CompetitorGridRow.FederationCode), row.IsCodeChanged, "Code", label);
+            AddFieldChange(row, nameof(CompetitorGridRow.FisPoints), row.IsFisPointsChanged, "FIS points", label);
             foreach (var choice in row.GridEntries.Where(x => x.IsChanged))
             {
                 DeskChangeLog.Add(new DeskChangeLogEntry(row.LocalId, DeskChangeKind.Entry,
@@ -300,6 +301,7 @@ public sealed partial class MainViewModel
                 nameof(CompetitorGridRow.Nation) => (saved?.Nation, row.Nation),
                 nameof(CompetitorGridRow.Club) => (saved?.Club, row.Club),
                 nameof(CompetitorGridRow.FederationCode) => (saved?.FederationCode, row.FederationCode),
+                nameof(CompetitorGridRow.FisPoints) => (DescribePoints(row.SavedFisPoints), DescribePoints(row.FisPoints)),
                 _ => (null, null),
             };
             DeskChangeLog.Add(new DeskChangeLogEntry(row.LocalId, DeskChangeKind.Edit, field, null,
@@ -308,6 +310,14 @@ public sealed partial class MainViewModel
     }
 
     private static string DisplayChangeValue(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private static string? DescribePoints(CompetitorFisPoints? points)
+    {
+        if (points is null) { return null; }
+        var values = new[] { ("DH", points.Dh), ("SG", points.Sg), ("SL", points.Sl), ("GS", points.Gs), ("AC", points.Ac) }
+            .Where(x => x.Item2 is not null).Select(x => $"{x.Item1} {x.Item2!.Value.ToString("0.00", CultureInfo.InvariantCulture)}").ToArray();
+        return $"list {points.ListCode}: " + (values.Length == 0 ? "no points" : string.Join(", ", values));
+    }
 
     [RelayCommand]
     private void RestoreDeskChange(DeskChangeLogEntry entry)
@@ -377,7 +387,7 @@ public sealed partial class MainViewModel
         finally { _suspendDeskChangeLog = false; }
         RefreshVisibleCompetitors();
         RebuildChangeLog();
-        SetStatus($"{rows.Length} competitor row(s) marked for deletion. Save changes or undo the deletion.");
+        SetStatus($"{rows.Length} competitor row(s) marked for deletion. Save or undo the deletion.");
     }
 
     [RelayCommand]
@@ -401,6 +411,20 @@ public sealed partial class MainViewModel
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(choice);
         var selection = selectedRows?.Where(x => !x.IsPlaceholder && !x.IsPendingDelete).Distinct().ToArray() ?? [];
+        // A men's competition takes only men and a women's competition only women: refuse the tick and say why.
+        if (choice.IsParticipating && Competitions.FirstOrDefault(x => x.Id == choice.CompetitionId) is { } competition)
+        {
+            var code = competition.Values.Calendar?.Gender;
+            var targets = selection.Length > 1 && selection.Contains(row) ? selection : [row];
+            if (targets.FirstOrDefault(x => !CompetitionGenderRule.Allows(code, x.EnteredGender)) is { } wrong)
+            {
+                choice.IsParticipating = false;
+                SetStatus(CompetitionGenderRule.Violation($"{wrong.Surname} {wrong.FirstName}".Trim(), wrong.EnteredGender!.Value,
+                    competition.Values.ShortLabel, CompetitionGenderRule.Required(code)!.Value), error: true);
+                RebuildChangeLog();
+                return Task.CompletedTask;
+            }
+        }
         if (selection.Length > 1 && selection.Contains(row))
         {
             _suspendDeskChangeLog = true;
@@ -435,12 +459,19 @@ public sealed partial class MainViewModel
                     throw new DomainValidationException($"Confirm the matching warning for {unapproved.Surname} before saving.");
                 }
                 var changedRows = _allCompetitorRows.Where(x => x.HasPendingChanges && !x.IsPendingDelete).ToArray();
+                // With a changed Code the points are always sent: the new athlete's points (even when equal to the
+                // saved ones) or none, never the previous athlete's points (for example after undoing only the points).
                 var rows = changedRows.Select(row => new DeskBatchRow(row.Id, row.Draft(),
                     row.GridEntries.Where(x => x.IsChanged).Select(x =>
-                        new ImportEntryPatch(x.CompetitionId, x.IsParticipating, false, null)).ToArray())).ToArray();
+                        new ImportEntryPatch(x.CompetitionId, x.IsParticipating, false, null)).ToArray(),
+                    row.IsFederationCodeChanged && !string.Equals(row.FisPointsCode, row.FederationCode.Trim(), StringComparison.OrdinalIgnoreCase) ? null : row.FisPoints,
+                    row.Id is null ? row.FisPoints is not null : row.IsFisPointsChanged || row.IsFederationCodeChanged)).ToArray();
+                // The lists the staged points came from are saved with them (identity, validity, penalty rules).
+                var listCodes = rows.Where(x => x.FisPointsSpecified && x.FisPoints is not null).Select(x => x.FisPoints!.ListCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var lists = _stagedPointsLists.Values.Where(x => listCodes.Contains(x.Code)).ToArray();
                 var deletes = _allCompetitorRows.Where(x => x.IsPendingDelete && x.Id is not null)
                     .Select(x => x.Id!.Value).ToArray();
-                var result = await workspace.ApplyDeskBatchAsync(new DeskBatch(series.Id, series.Revision, rows, deletes));
+                var result = await workspace.ApplyDeskBatchAsync(new DeskBatch(series.Id, series.Revision, rows, deletes, lists));
                 _current = series with { Revision = result.Revision };
                 await LoadCompetitorDeskAsync();
                 ImportWarnings.Clear();

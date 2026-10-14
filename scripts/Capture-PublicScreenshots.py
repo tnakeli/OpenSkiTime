@@ -66,11 +66,15 @@ def main():
             page = context.new_page()
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
+            # The demo is a moment of a race: running times on course are shown as at the demo's update time.
+            page.clock.set_fixed_time('2026-10-03T12:03:00+03:00')
             page.goto(session['publicUrl'])
             expect(page.locator('#connection')).to_have_text('Live')
             expect(page.locator('#name')).to_have_text('Northern Slalom Women')
             expect(page.locator('#results tr')).to_have_count(12)
-            expect(page.locator('#course')).to_contain_text('4 TUNTURI Helmi')
+            expect(page.locator('#course .oncourse .bib')).to_have_text(['4', '5'])
+            expect(page.locator('#course .oncourse .who').first).to_have_text('TUNTURI Helmi')
+            expect(page.locator('#course .oncourse .clock')).to_have_text(['0:40.0', '0:15.0'])
             expect(page.locator('#results tr').first.locator('td').nth(6)).to_have_text('0:53.67')
             page.get_by_role('button', name='Run 2', exact=True).click()
             expect(page.locator('#updated')).to_contain_text('Run 2')

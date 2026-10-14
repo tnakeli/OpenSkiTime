@@ -69,8 +69,10 @@ public sealed record CaptureSession(Guid Id, Guid ListId, CaptureOptions Options
 public sealed record TransportPacket(string Protocol, string Source, string Stream, byte[] Bytes, DateTimeOffset? ReceivedAt = null);
 public sealed record RawTimingPacket(Guid SessionId, long Sequence, DateTimeOffset ReceivedAt,
     string Protocol, string Source, string Stream, byte[] Bytes);
+// Forerunners: the run's forerunners saved in the race information, so every replay (timing, results, reports, the
+// next run's start list) sees their impulses and review state the same way; they never enter the results.
 public sealed record TimingReplayData(StartListRevision List, IReadOnlyList<CaptureSession> Sessions,
-    IReadOnlyList<RawTimingPacket> Packets, IReadOnlyList<TimingAudit> Audit);
+    IReadOnlyList<RawTimingPacket> Packets, IReadOnlyList<TimingAudit> Audit, IReadOnlyList<TimingForerunner>? Forerunners = null);
 public sealed record TimingAuditChange(TimingDecision Before, TimingDecision After, long? ReversesId = null);
 
 public interface ITimingStore
@@ -186,6 +188,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     // Newest device time per clock received before a live run change. Input at or before it belongs to the previous
     // run (for example ALGE Results history read again after the change) and is never assigned automatically.
     private readonly Dictionary<string, long> _previousRunInput = new(StringComparer.Ordinal);
+    // Forerunners of the selected run (from its race information). Timed before the competitors, never ranked.
+    private IReadOnlyList<TimingForerunner> _forerunners = [];
     private readonly object _stopGate = new();
     private Task? _stopping;
     private bool _followOrder;
@@ -257,7 +261,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         await _state.WaitAsync(ct);
         try
         {
-            _list = data.List;
+            _list = data.List; _forerunners = data.Forerunners ?? [];
             _observations.Clear(); _audit.Clear(); _decoders.Clear(); _sessions.Clear();
             _audit.AddRange(data.Audit); _sessions.AddRange(data.Sessions);
             foreach (var unit in TimingReplay.Units(data.Sessions, data.Packets))
@@ -279,6 +283,50 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
+
+    /// <summary>
+    /// Sets the forerunners of the selected run (from its race information) and recalculates the queues. A forerunner
+    /// that already has assigned impulses cannot be removed; unassign them first so no impulse is silently dropped.
+    /// </summary>
+    public Task SetForerunnersAsync(Guid listId, IReadOnlyList<TimingForerunner> forerunners, CancellationToken ct = default)
+        => SetForerunnersAsync(listId, forerunners, null, ct);
+
+    /// <summary>
+    /// Changes the forerunners together with their durable save: <paramref name="commit"/> runs under the capture state
+    /// gate, so no impulse is attributed with either list while the save is in progress (raw input keeps being
+    /// journalled), and the queue changes only after the save has committed. A failed save leaves timing unchanged.
+    /// </summary>
+    public async Task SetForerunnersAsync(Guid listId, IReadOnlyList<TimingForerunner> forerunners, Func<CancellationToken, Task>? commit,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(forerunners);
+        TimingForerunner.Validate(forerunners);
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_list?.Id != listId)
+            {
+                if (commit is not null) { throw new DomainValidationException("The timing run changed. Nothing was saved."); }
+                return;
+            }
+            var kept = forerunners.Select(x => x.Key).ToHashSet();
+            var removed = _snapshot?.Forerunners.FirstOrDefault(x => !kept.Contains(x.Bib)
+                && _snapshot.Observations.Any(o => o.Bib == x.Bib && o.State == "Assigned"));
+            if (removed is not null)
+            { throw new DomainValidationException($"Forerunner {removed.ForerunnerLetter} has timing impulses. Unassign them before removing the forerunner."); }
+            if (commit is not null) { await commit(ct); }
+            // A start armed automatically on the old queue head follows the new head (for example a forerunner added
+            // before the next competitor); a start the operator chose out of order stays armed.
+            var previousHead = _snapshot is null || RaceFlow.Waiting(_snapshot) is not { Count: > 0 } waitingBefore ? (int?)null : waitingBefore[0].Bib;
+            _forerunners = forerunners.ToArray();
+            Rebuild();
+            if (_followOrder && _expected.Length > 0 && previousHead is { } head && _expected[0] == head) { _expected[0] = 0; }
+            for (var channel = 0; channel < _expected.Length; channel++)
+            { if (_expected[channel] != 0 && _snapshot is not null && !RaceFlow.Expected(_snapshot, channel).Any(x => x.Bib == _expected[channel])) { _expected[channel] = 0; } }
+            AdvanceQueues();
+        }
+        finally { _state.Release(); }
+    }
 
     public async Task RefreshIntermediateCountAsync(CancellationToken ct = default)
     {
@@ -427,7 +475,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     if (next.Length != sessions.Length) { throw new SeriesFileException("The timing store did not switch every device session."); }
                     foreach (var o in _observations.Where(x => x.DeviceTicks is not null && x.ClockId.Length > 0))
                     { _previousRunInput[o.ClockId] = Math.Max(_previousRunInput.GetValueOrDefault(o.ClockId, long.MinValue), o.DeviceTicks!.Value); }
-                    _list = data.List; _observations.Clear(); _audit.Clear(); _sessions.Clear(); _decoders.Clear();
+                    _list = data.List; _forerunners = data.Forerunners ?? []; _observations.Clear(); _audit.Clear(); _sessions.Clear(); _decoders.Clear();
                     _observations.AddRange(restored.Observations.Select(x => x.Observation)); _audit.AddRange(data.Audit);
                     _sessions.AddRange(data.Sessions); _sessions.AddRange(next);
                     // A run change puts every position back on HOLD, before any further input is processed.
@@ -496,7 +544,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void Rebuild()
     {
-        if (_list is not null) { Volatile.Write(ref _snapshot, TimingEngine.Replay(_list, _observations, _audit, 0, 1)); }
+        if (_list is not null) { Volatile.Write(ref _snapshot, TimingEngine.Replay(_list, _observations, _audit, 0, 1, _forerunners)); }
     }
 
     // An uncertain commit (saved, then a storage error reported) makes the retry meet a newer durable audit. Reload it
@@ -512,7 +560,10 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             if (saved is { State: "Assigned", Bib: { } bib } && observation.Channel is { } channel && channel < _expected.Length
                 && ExpectedBib(channel) == bib) { _expected[channel] = 0; }
             AdvanceQueues();
-            await AutoAssignAsync(observation);
+            // A rejected automatic assignment (for example a forerunner removed meanwhile) leaves the impulse unassigned
+            // for review; it never stops capture.
+            try { await AutoAssignAsync(observation); }
+            catch (DomainValidationException) { }
         }
         catch (DomainValidationException) { }
     });
@@ -532,7 +583,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             // (for example recovered from device history) and belongs to an earlier competitor: leave it for review.
             if (ArrivedLate(observation)) { return; }
         }
-        if (bib is null || !_snapshot.Results.Any(x => x.Bib == bib)) { return; }
+        if (bib is null || !_snapshot.Participants.Any(x => x.Bib == bib)) { return; }
         // Bibs repeat across runs: input from before a live run change, and an intermediate or finish that is not after
         // the competitor's own start, can never be this competitor's impulse.
         if (FromPreviousRun(observation) || !AfterStart(observation, bib.Value)) { return; }
@@ -552,7 +603,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private bool AfterStart(TimingObservation observation, int bib)
     {
         if (observation.Channel is 0 or null || observation.DeviceTicks is not { } ticks) { return true; }
-        var startKey = _snapshot!.Results.FirstOrDefault(x => x.Bib == bib)?.StartKey;
+        var startKey = _snapshot!.Participants.FirstOrDefault(x => x.Bib == bib)?.StartKey;
         var start = startKey is null ? null : _snapshot.Observations.FirstOrDefault(x => x.Observation.Key == startKey)?.Observation;
         return start is null || start.ClockId != observation.ClockId || start.DeviceTicks < ticks;
     }
@@ -563,7 +614,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         try
         {
             foreach (var bib in new[] { startBib, finishBib }.OfType<int>())
-            { if (_snapshot is null || !_snapshot.Results.Any(x => x.Bib == bib)) { throw new DomainValidationException("Choose a bib on this start list."); } }
+            { if (_snapshot is null || !_snapshot.Participants.Any(x => x.Bib == bib)) { throw new DomainValidationException("Choose a bib on this start list."); } }
             _expected[0] = startBib ?? 0; _expected[1] = finishBib ?? 0;
         }
         finally { _state.Release(); }
@@ -626,7 +677,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         var changes = new List<TimingAuditChange>();
         foreach (var bib in bibs)
         {
-            var row = _snapshot.Results.SingleOrDefault(x => x.Bib == bib)
+            var row = _snapshot.Participants.SingleOrDefault(x => x.Bib == bib)
                 ?? throw new DomainValidationException($"Bib {bib} is not in this run.");
             var after = new TimingDecision(DecisionKind.Status, CompetitorId: row.CompetitorId, Status: status,
                 Disqualification: status == TimingStatus.DSQ ? disqualification ?? row.Disqualification : disqualification);
@@ -647,7 +698,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         await _state.WaitAsync(ct);
         try
         {
-            var result = _snapshot?.Results.SingleOrDefault(x => x.Bib == bib);
+            var result = _snapshot?.Participants.SingleOrDefault(x => x.Bib == bib);
             if (!RaceFlow.CanReturnToStart(result) || result!.StartKey != startKey)
             { throw new DomainValidationException("Select a competitor on course with only a start impulse. Their timing may have changed; check the current row."); }
             await AppendDecisionAsync(new(DecisionKind.Assignment, startKey, Ignored: true), operatorName,
@@ -668,7 +719,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         try
         {
             if (_snapshot?.ListId != listId) { throw new DomainValidationException("The active run changed. Drag the competitor again."); }
-            var result = _snapshot.Results.SingleOrDefault(x => x.Bib == bib);
+            var result = _snapshot.Participants.SingleOrDefault(x => x.Bib == bib);
             if (result is null || result.StartKey != expectedStart)
             { throw new DomainValidationException("The competitor's start changed. Drag the competitor again."); }
             var assigned = _snapshot.Observations.Where(x => x.Bib == bib && !x.Ignored && x.DuplicateOf is null
@@ -682,11 +733,15 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             if (status.Status is not null) { changes.Add(new(status, status with { Status = null, Disqualification = null })); }
             var time = TimingEngine.CurrentDecision(new(DecisionKind.Time, CompetitorId: result.CompetitorId), _audit);
             if (time.Hundredths is not null) { changes.Add(new(time, time with { Hundredths = null })); }
+            // Forerunners are not in the competitors' start order: a restarted forerunner waits again in its listed place
+            // before the competitors. A restarted competitor goes before the next waiting competitor.
             var order = _snapshot.StartOrder.ToList();
-            order.Remove(bib);
-            var waiting = RaceFlow.Waiting(_snapshot);
-            var next = waiting.Count == 0 ? (int?)null : waiting[0].Bib;
-            order.Insert(next is null ? 0 : order.IndexOf(next.Value), bib);
+            if (!result.IsForerunner)
+            {
+                order.Remove(bib);
+                var next = RaceFlow.Waiting(_snapshot).FirstOrDefault(x => !x.IsForerunner && x.Bib != bib)?.Bib;
+                order.Insert(next is null ? 0 : order.IndexOf(next.Value), bib);
+            }
             if (!order.SequenceEqual(_snapshot.StartOrder))
             {
                 var queue = TimingEngine.CurrentDecision(new(DecisionKind.StartOrder), _audit);
@@ -696,7 +751,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             if (changes.Count > 0)
             {
                 var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName,
-                    $"Restart Bib {bib} at start; prior impulses retained", DateTimeOffset.UtcNow, ct: ct);
+                    $"Restart {(result.IsForerunner ? $"forerunner {result.ForerunnerLetter}" : $"Bib {bib}")} at start; prior impulses retained", DateTimeOffset.UtcNow, ct: ct);
                 _audit.AddRange(saved); Rebuild();
             }
             for (var channel = 1; channel < _expected.Length; channel++)
@@ -822,7 +877,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         {
             if (direction is not (-1 or 1) || _snapshot is null)
             { throw new DomainValidationException("Choose a waiting starter and a direction."); }
-            var waiting = RaceFlow.Waiting(_snapshot).Select(x => x.Bib).ToArray();
+            RejectForerunnerMove(bib);
+            var waiting = RaceFlow.Waiting(_snapshot).Where(x => !x.IsForerunner).Select(x => x.Bib).ToArray();
             var index = Array.IndexOf(waiting, bib);
             var other = index + direction;
             if (index < 0 || other < 0 || other >= waiting.Length) { return; }
@@ -845,9 +901,10 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         {
             if (_snapshot is null || !RaceFlow.Waiting(_snapshot).Any(x => x.Bib == bib))
             { throw new DomainValidationException("Choose a waiting starter."); }
+            RejectForerunnerMove(bib);
             var order = _snapshot.StartOrder.ToList();
             order.Remove(bib);
-            var next = RaceFlow.Waiting(_snapshot).FirstOrDefault(x => x.Bib != bib)?.Bib;
+            var next = RaceFlow.Waiting(_snapshot).FirstOrDefault(x => x.Bib != bib && !x.IsForerunner)?.Bib;
             order.Insert(next is null ? 0 : order.IndexOf(next.Value), bib);
             await AppendDecisionAsync(new(DecisionKind.StartOrder, StartOrder: string.Join(',', order)),
                 operatorName, $"Move Bib {bib} to next start");
@@ -864,6 +921,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         try
         {
             if (_snapshot is null || bib == targetBib) { return; }
+            RejectForerunnerMove(bib); RejectForerunnerMove(targetBib);
             var waiting = RaceFlow.Waiting(_snapshot);
             if (!waiting.Any(x => x.Bib == bib) || !waiting.Any(x => x.Bib == targetBib))
             { throw new DomainValidationException("The start queue changed. Drag the competitor again."); }
@@ -877,6 +935,13 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             AdvanceQueues();
         }
         finally { _state.Release(); }
+    }
+
+    // Forerunners keep their own order ahead of the competitors; they are reordered in the forerunner list.
+    private static void RejectForerunnerMove(int bib)
+    {
+        if (TimingForerunner.IsKey(bib))
+        { throw new DomainValidationException("Forerunners start in their listed order before the competitors. Change their order in Forerunners."); }
     }
 
     public async Task ExpectAsync(int channel, int? bib, bool held = false, CancellationToken ct = default)

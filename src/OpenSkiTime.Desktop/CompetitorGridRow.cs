@@ -14,35 +14,50 @@ public sealed partial class CompetitorGridRow : ObservableObject
     public Guid? Id { get; private set; }
     public CompetitorValues? SavedValues { get; private set; }
     public ObservableCollection<CompetitionEntryChoice> GridEntries { get; } = [];
-    private IReadOnlyDictionary<string, decimal>? _fisPoints;
-    public decimal? FisDh => FisPoint("DH");
-    public decimal? FisSg => FisPoint("SG");
-    public decimal? FisSl => FisPoint("SL");
-    public decimal? FisGs => FisPoint("GS");
-    public decimal? FisAc => FisPoint("AC");
+    // FIS points saved with the competitor and the staged points (from Update from FIS list or a FIS search); a
+    // difference is a pending change like any edited cell.
+    public CompetitorFisPoints? SavedFisPoints { get; private set; }
+    private CompetitorFisPoints? _fisPoints;
+    public CompetitorFisPoints? FisPoints
+    {
+        get => _fisPoints;
+        set => SetFisPoints(value, FederationCode.Trim());
+    }
+
+    // The FIS code the current points belong to (points are an athlete's, not a row's). Recorded even when the value is
+    // unchanged: another athlete can have equal points.
+    public string FisPointsCode { get; private set; } = string.Empty;
+
+    public void SetFisPoints(CompetitorFisPoints? value, string code)
+    {
+        FisPointsCode = code;
+        if (Equals(_fisPoints, value)) { return; }
+        _fisPoints = value;
+        foreach (var name in new[] { nameof(FisPoints), nameof(FisDh), nameof(FisSg), nameof(FisSl), nameof(FisGs), nameof(FisAc),
+                     nameof(FisDhText), nameof(FisSgText), nameof(FisSlText), nameof(FisGsText), nameof(FisAcText) })
+        { OnPropertyChanged(name); }
+        NotifyDraftChanged();
+    }
+
+    // True when the Code differs from the saved Code: the saved points then cannot stay as they are.
+    public bool IsFederationCodeChanged => SavedValues is { } saved
+        && !string.Equals(FederationCode.Trim(), saved.FederationCode ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    public decimal? FisDh => FisPoints?.Dh;
+    public decimal? FisSg => FisPoints?.Sg;
+    public decimal? FisSl => FisPoints?.Sl;
+    public decimal? FisGs => FisPoints?.Gs;
+    public decimal? FisAc => FisPoints?.Ac;
     public string FisDhText => FormatPoint(FisDh);
     public string FisSgText => FormatPoint(FisSg);
     public string FisSlText => FormatPoint(FisSl);
     public string FisGsText => FormatPoint(FisGs);
     public string FisAcText => FormatPoint(FisAc);
-
-    public void SetFisPoints(IReadOnlyDictionary<string, decimal>? points)
-    {
-        _fisPoints = points;
-        OnPropertyChanged(nameof(FisDh));
-        OnPropertyChanged(nameof(FisSg));
-        OnPropertyChanged(nameof(FisSl));
-        OnPropertyChanged(nameof(FisGs));
-        OnPropertyChanged(nameof(FisAc));
-        OnPropertyChanged(nameof(FisDhText));
-        OnPropertyChanged(nameof(FisSgText));
-        OnPropertyChanged(nameof(FisSlText));
-        OnPropertyChanged(nameof(FisGsText));
-        OnPropertyChanged(nameof(FisAcText));
-    }
-
-    private decimal? FisPoint(string discipline) => _fisPoints is not null
-        && _fisPoints.TryGetValue(discipline, out var value) ? value : null;
+    public bool IsFisPointsChanged => !IsPlaceholder && !Equals(FisPoints, SavedFisPoints);
+    public bool IsDhChanged => IsFisPointsChanged && FisDh != SavedFisPoints?.Dh;
+    public bool IsSgChanged => IsFisPointsChanged && FisSg != SavedFisPoints?.Sg;
+    public bool IsSlChanged => IsFisPointsChanged && FisSl != SavedFisPoints?.Sl;
+    public bool IsGsChanged => IsFisPointsChanged && FisGs != SavedFisPoints?.Gs;
+    public bool IsAcChanged => IsFisPointsChanged && FisAc != SavedFisPoints?.Ac;
 
     private static string FormatPoint(decimal? value) => value?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty;
 
@@ -65,7 +80,7 @@ public sealed partial class CompetitorGridRow : ObservableObject
     public bool HasPendingChanges => !IsPlaceholder && (IsPendingDelete || (SavedValues is null
         ? HasTypedContent
         : IsSurnameChanged || IsFirstNameChanged || IsYearChanged || IsGenderChanged
-          || IsNationChanged || IsClubChanged || IsCodeChanged || GridEntries.Any(x => x.IsChanged)));
+          || IsNationChanged || IsClubChanged || IsCodeChanged || IsFisPointsChanged || GridEntries.Any(x => x.IsChanged)));
     public bool NeedsApproval => WarningText.Length > 0 && HasPendingChanges;
     public string ChangeMarker => IsPendingDelete ? "DEL" : IsPlaceholder ? "+" : SavedValues is null ? "NEW" : HasPendingChanges ? "●" : string.Empty;
     public bool IsSurnameChanged => IsFieldChanged(Surname, SavedValues?.Surname);
@@ -79,21 +94,22 @@ public sealed partial class CompetitorGridRow : ObservableObject
     private bool IsFieldChanged(string current, string? saved)
         => !IsPlaceholder && (SavedValues is null ? current.Length > 0 : current != (saved ?? string.Empty));
 
-    public static CompetitorGridRow From(CompetitorDetails details)
+    public static CompetitorGridRow From(CompetitorDetails details, CompetitorFisPoints? fisPoints = null)
     {
         var row = new CompetitorGridRow();
-        row.MarkSaved(details);
+        row.MarkSaved(details, fisPoints);
         return row;
     }
 
     public CompetitorValues Draft() => new(Surname, FirstName,
         OptionalNumber(BirthYearText), FederationCode, Nation, Club, ParseGender(GenderText));
 
-    public void MarkSaved(CompetitorDetails details)
+    public void MarkSaved(CompetitorDetails details, CompetitorFisPoints? fisPoints = null)
     {
         ArgumentNullException.ThrowIfNull(details);
         Id = details.Id;
         SavedValues = details.Values;
+        SavedFisPoints = fisPoints;
         RestoreAll();
     }
 
@@ -109,6 +125,7 @@ public sealed partial class CompetitorGridRow : ObservableObject
             Nation = values.Nation ?? string.Empty;
             Club = values.Club ?? string.Empty;
         }
+        if (SavedValues is not null) { FisPoints = SavedFisPoints; }
         foreach (var choice in GridEntries) { choice.Restore(); }
         IsPendingDelete = false;
         WarningText = string.Empty;
@@ -129,6 +146,7 @@ public sealed partial class CompetitorGridRow : ObservableObject
             case nameof(Nation): Nation = saved.Nation ?? string.Empty; break;
             case nameof(Club): Club = saved.Club ?? string.Empty; break;
             case nameof(FederationCode): FederationCode = saved.FederationCode ?? string.Empty; break;
+            case nameof(FisPoints): SetFisPoints(SavedFisPoints, saved.FederationCode ?? string.Empty); break;
         }
     }
 
@@ -141,6 +159,12 @@ public sealed partial class CompetitorGridRow : ObservableObject
         OnPropertyChanged(nameof(IsNationChanged));
         OnPropertyChanged(nameof(IsClubChanged));
         OnPropertyChanged(nameof(IsCodeChanged));
+        OnPropertyChanged(nameof(IsFisPointsChanged));
+        OnPropertyChanged(nameof(IsDhChanged));
+        OnPropertyChanged(nameof(IsSgChanged));
+        OnPropertyChanged(nameof(IsSlChanged));
+        OnPropertyChanged(nameof(IsGsChanged));
+        OnPropertyChanged(nameof(IsAcChanged));
         OnPropertyChanged(nameof(HasTypedContent));
         OnPropertyChanged(nameof(HasPendingChanges));
         OnPropertyChanged(nameof(ChangeMarker));
@@ -166,6 +190,12 @@ public sealed partial class CompetitorGridRow : ObservableObject
             throw new DomainValidationException("Birth year must be a whole number.");
         }
         return year;
+    }
+
+    // The gender typed in the row, or null while it is empty or not yet valid.
+    public Gender? EnteredGender
+    {
+        get { try { return ParseGender(GenderText); } catch (DomainValidationException) { return null; } }
     }
 
     private static Gender? ParseGender(string text) => text.Trim().ToUpperInvariant() switch

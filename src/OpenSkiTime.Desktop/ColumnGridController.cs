@@ -85,8 +85,12 @@ internal sealed class ColumnGridController<T> where T : class
         { _grid.SelectedItems.Add(row); }
     }
 
+    // A gender label matches only itself: "Men" must not also match "Women" just because it is a substring.
+    private static readonly string[] s_genderLabels = ["Men", "Women", "Mixed"];
     internal static bool Matches(string value, string text) => text.Split((char[]?)null,
-        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).All(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
+        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).All(term =>
+            s_genderLabels.Contains(value, StringComparer.OrdinalIgnoreCase) && s_genderLabels.Contains(term, StringComparer.OrdinalIgnoreCase)
+                ? value.Equals(term, StringComparison.OrdinalIgnoreCase) : value.Contains(term, StringComparison.OrdinalIgnoreCase));
     internal static string Text(object? value) => value switch
     {
         DateOnly date => date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture),

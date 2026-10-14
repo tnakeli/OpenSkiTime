@@ -51,15 +51,15 @@ public partial class MainWindow
         sort.Click += (_, args) => { args.Handled = true; SortCompetitorColumn(grid, column); };
         var filter = Icon("CompetitorFilterButton_", 2);
         var funnel = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M1,1 L11,1 L7,6 L7,10 L5,11 L5,6 Z"), Width = 12, Height = 12,
-            StrokeThickness = 1, Stroke = Brush.Parse("#64748B") };
+            StrokeThickness = 1, Stroke = ThemeBrushes.MutedText };
         filter.Content = funnel;
         void UpdateIndicator()
         {
             var value = _gridViewModel?.CompetitorColumnFilter(key) ?? "";
             var active = !string.IsNullOrWhiteSpace(value);
             title.FontStyle = active ? FontStyle.Italic : FontStyle.Normal;
-            funnel.Fill = active ? Brush.Parse("#008A9B") : Brushes.Transparent;
-            funnel.Stroke = active ? Brush.Parse("#008A9B") : Brush.Parse("#64748B");
+            funnel.Fill = active ? ThemeBrushes.Accent : Brushes.Transparent;
+            funnel.Stroke = active ? ThemeBrushes.Accent : ThemeBrushes.MutedText;
             ToolTip.SetTip(filter, active ? $"Filter: {value} — click to clear" : "Filter " + text.Replace('\n', ' '));
         }
         bool Apply(string value)

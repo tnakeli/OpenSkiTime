@@ -41,7 +41,7 @@ public sealed partial class MainViewModel
             foreach (var item in preview.Rows) { StagePastedRow(item); }
             RefreshVisibleCompetitors();
             RebuildChangeLog();
-            SetStatus($"Pasted {preview.Rows.Count} rows. Review the highlighted cells, then choose Save changes.");
+            SetStatus($"Pasted {preview.Rows.Count} rows. Review the highlighted cells, then choose Save.");
         });
     }
 
@@ -77,6 +77,15 @@ public sealed partial class MainViewModel
         {
             if (patch.Participates is { } state)
             {
+                // A pasted entry in a competition of the other gender is not staged; the warning names it.
+                var competition = Competitions.FirstOrDefault(x => x.Id == patch.CompetitionId);
+                var code = competition?.Values.Calendar?.Gender;
+                if (state && competition is not null && !CompetitionGenderRule.Allows(code, row.EnteredGender))
+                {
+                    ImportWarnings.Add(CompetitionGenderRule.Violation($"{row.Surname} {row.FirstName}".Trim(), row.EnteredGender!.Value,
+                        competition.Values.ShortLabel, CompetitionGenderRule.Required(code)!.Value) + " The entry was not added.");
+                    continue;
+                }
                 row.GridEntries.First(x => x.CompetitionId == patch.CompetitionId).IsParticipating = state;
             }
         }

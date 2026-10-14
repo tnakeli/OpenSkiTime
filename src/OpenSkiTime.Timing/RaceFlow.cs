@@ -11,17 +11,19 @@ public static class RaceFlow
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         var order = snapshot.StartOrder.Select((bib, index) => (bib, index)).ToDictionary(x => x.bib, x => x.index);
-        return snapshot.Results.Where(x => x.Status == TimingStatus.Ready)
-            .OrderBy(x => order.GetValueOrDefault(x.Bib, x.Entry.Position)).ToArray();
+        // Forerunners run first, in their own order; then the competitors in the start order.
+        return snapshot.Forerunners.Where(x => x.Status == TimingStatus.Ready)
+            .Concat(snapshot.Results.Where(x => x.Status == TimingStatus.Ready)
+                .OrderBy(x => order.GetValueOrDefault(x.Bib, x.Entry.Position))).ToArray();
     }
 
     public static IReadOnlyList<TimingResult> OnCourse(TimingSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         var starts = snapshot.Observations.ToDictionary(x => x.Observation.Key, x => x.Observation.DeviceTicks);
-        return snapshot.Results.Where(x => x.StartKey is not null && x.FinishKey is null
+        return snapshot.Participants.Where(x => x.StartKey is not null && x.FinishKey is null
                 && x.Status is TimingStatus.OnCourse or TimingStatus.Review)
-            .OrderBy(x => starts.GetValueOrDefault(x.StartKey!)).ThenBy(x => x.Entry.Position).ToArray();
+            .OrderBy(x => starts.GetValueOrDefault(x.StartKey!)).ThenBy(x => x.IsForerunner ? 0 : 1).ThenBy(x => x.Entry.Position).ToArray();
     }
 
     public static IReadOnlyList<TimingResult> Expected(TimingSnapshot snapshot, int channel) => channel == 0

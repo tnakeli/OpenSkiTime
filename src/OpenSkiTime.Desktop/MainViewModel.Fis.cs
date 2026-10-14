@@ -125,16 +125,32 @@ public sealed partial class MainViewModel
         }
     }
 
+    // FIS lists whose points are staged in the grid; saved with the points so the series keeps their validity and rules.
+    private readonly Dictionary<string, FisPointsListInfo> _stagedPointsLists = new(StringComparer.OrdinalIgnoreCase);
+
+    private CompetitorFisPoints StagePoints(FisPointsList list, FisAthlete? athlete)
+    {
+        _stagedPointsLists[list.ListCode] = new FisPointsListInfo(list.ListCode, list.Name, list.ValidFrom, list.ValidTo, list.PenaltyRules);
+        return CompetitorFisPoints.FromList(list.ListCode, athlete?.Points);
+    }
+
+    // A changed Code takes that athlete's points from the loaded list (a staged change); the saved Code restores the
+    // saved points. Without a loaded list the previous athlete's points must not stay with the new Code: they are cleared.
     private void UpdateFisPoints(CompetitorGridRow row)
     {
         var code = row.FederationCode.Trim();
-        row.SetFisPoints(code.Length > 0 && _fisList?.Athletes.TryGetValue(code, out var athlete) == true
-            ? athlete.Points : null);
-    }
-
-    private void RefreshAllCompetitorFisPoints()
-    {
-        foreach (var row in _allCompetitorRows) { UpdateFisPoints(row); }
+        if (row.SavedValues is { } saved && code == (saved.FederationCode ?? string.Empty)) { row.FisPoints = row.SavedFisPoints; return; }
+        if (_fisList is not { } list || code.Length == 0)
+        {
+            if (row.FisPoints is not null)
+            {
+                row.FisPoints = null;
+                SetStatus(code.Length == 0 ? "FIS code cleared: the competitor's FIS points are cleared too."
+                    : "FIS code changed without a loaded FIS list: the previous points are cleared. Load the list and use Update from FIS list for this athlete's points.");
+            }
+            return;
+        }
+        row.FisPoints = StagePoints(list, list.Athletes.TryGetValue(code, out var athlete) ? athlete : null);
     }
 
     [RelayCommand]
@@ -165,9 +181,9 @@ public sealed partial class MainViewModel
             _fisList = parsed;
             _fisCacheLoaded = true;
             ShowFisListInfo();
-            RefreshAllCompetitorFisPoints();
             RefreshFisSearch();
-            SetStatus($"Downloaded {parsed.DisplayName}. {parsed.Athletes.Count} athletes available offline.");
+            SetStatus($"Downloaded {parsed.DisplayName}. {parsed.Athletes.Count} athletes available offline. "
+                + "Use Update from FIS list to update the competitors' points, then Save.");
         }
         catch (Exception ex) when (ex is DomainValidationException or IOException or HttpRequestException
             or TaskCanceledException or PlatformNotSupportedException)
@@ -214,22 +230,33 @@ public sealed partial class MainViewModel
         var staged = 0;
         var skipped = 0;
         var ambiguous = 0;
+        var notOnList = 0;
         _suspendDeskChangeLog = true;
         try
         {
             foreach (var group in groups)
             {
-                if (!_fisList.Athletes.TryGetValue(group.Key, out var athlete)) { continue; }
                 if (group.Count() != 1) { ambiguous++; continue; }
                 var row = group.Single();
                 if (row.HasPendingChanges && !string.IsNullOrWhiteSpace(row.Surname)) { skipped++; continue; }
-                if (ApplyFisValues(row, athlete)) { staged++; }
+                // Points come from this list; a Code that is not on it has no points on this list.
+                if (!_fisList.Athletes.TryGetValue(group.Key, out var athlete))
+                {
+                    row.FisPoints = StagePoints(_fisList, null);
+                    if (row.IsFisPointsChanged) { notOnList++; }
+                    continue;
+                }
+                var identity = ApplyFisValues(row, athlete);
+                row.FisPoints = StagePoints(_fisList, athlete);
+                if (identity || row.IsFisPointsChanged) { staged++; }
             }
         }
         finally { _suspendDeskChangeLog = false; }
         RefreshVisibleCompetitors();
         RebuildChangeLog();
-        SetStatus($"FIS: {staged} updates ready to save; {skipped} unsaved edits and {ambiguous} duplicate Codes skipped.");
+        SetStatus($"FIS list {_fisList.ListCode}: {staged} competitors updated"
+            + (notOnList > 0 ? $", {notOnList} not on the list (points cleared)" : "")
+            + $"; {skipped} unsaved edits and {ambiguous} duplicate Codes skipped. Review the highlighted cells, then Save.");
     }
 
     [RelayCommand]

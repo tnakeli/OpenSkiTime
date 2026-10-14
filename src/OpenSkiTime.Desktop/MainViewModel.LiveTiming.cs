@@ -134,10 +134,13 @@ public sealed partial class MainViewModel
             .Where(x => x.Plan.RunNumber != activeList.Plan.RunNumber).Append(activeList).OrderBy(x => x.Plan.RunNumber).ToArray();
         var runs = new List<LiveRun>(); var zone = TimeZoneInfo.FindSystemTimeZoneById(LiveTimeZone);
         var current = timing.Snapshot ?? throw new LiveValidationException("Timing snapshot unavailable.");
+        // Other runs are replayed with their saved forerunners, so their progress stays published.
+        var information = await ReadRaceInformationForAsync(race);
         foreach (var list in selected)
         {
             var data = await workspace.ReadTimingAsync(list.Id);
-            var snapshot = list.Id == current.ListId ? current : TimingReplay.Restore(data, new AlgeDecoderFactory());
+            var forerunners = (information.Runs.FirstOrDefault(x => x.Number == list.Plan.RunNumber)?.Forerunners ?? []).Select(ToTiming).ToArray();
+            var snapshot = list.Id == current.ListId ? current : TimingReplay.Restore(data, new AlgeDecoderFactory(), forerunners: forerunners);
             if (data.Sessions.Count == 0 && activeList.Plan.SourceListId == list.Id && activeList.Plan.SourceResults.Count > 0)
             {
                 snapshot = snapshot with { Results = snapshot.Results.Select(r =>

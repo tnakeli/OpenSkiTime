@@ -34,7 +34,14 @@ public sealed partial class TimingView
     }
 
     private void EnableStartRowDrop(object? sender, DataGridRowEventArgs e)
-        => DragDrop.SetAllowDrop(e.Row, true);
+    {
+        DragDrop.SetAllowDrop(e.Row, true);
+        MarkForerunnerRow(sender, e);
+    }
+
+    // Forerunner rows get their own colour so they are never mistaken for competitors (rows are recycled, so set both ways).
+    private void MarkForerunnerRow(object? sender, DataGridRowEventArgs e)
+        => e.Row.Classes.Set("forerunner", e.Row.DataContext is TimingGridRow { IsForerunner: true } or TimingTimestampRow { IsForerunner: true });
 
     private static IEnumerable<Visual> Ancestry(object? source) => source is Visual visual
         ? new[] { visual }.Concat(visual.GetVisualAncestors()) : [];

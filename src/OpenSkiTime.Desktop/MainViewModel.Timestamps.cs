@@ -32,7 +32,7 @@ public sealed partial class MainViewModel
     }
 
     public TimingDragCompetitor? CreateTimingDrag(int bib) => workspace.Timing?.Snapshot is { } snapshot
-        && snapshot.Results.FirstOrDefault(x => x.Bib == bib) is { } result
+        && snapshot.Participants.FirstOrDefault(x => x.Bib == bib) is { } result
         ? new(_timingDragWorkspace, snapshot.ListId, bib, result.Name, result.StartKey,
             snapshot.Observations.Where(x => x.Bib == bib && !x.Ignored && x.DuplicateOf is null && x.Observation.Kind == ObservationKind.Impulse)
                 .Select(x => x.Observation.Key).ToArray()) : null;
@@ -46,7 +46,7 @@ public sealed partial class MainViewModel
         if (!IsCurrentTimingDrag(item)) { return "Choose a competitor in the current run."; }
         if (toStart)
         {
-            var result = workspace.Timing!.Snapshot!.Results.Single(x => x.Bib == item.Bib);
+            var result = workspace.Timing!.Snapshot!.Participants.Single(x => x.Bib == item.Bib);
             return result.StartKey == item.StartKey ? null : "The competitor's start changed. Drag again.";
         }
         if (cell is null || cell.ListId != item.ListId) { return "Drop on a recorded timestamp."; }
@@ -69,15 +69,16 @@ public sealed partial class MainViewModel
         var timing = workspace.Timing!;
         if (toStart)
         {
-            if (timing.Snapshot!.Results.Single(x => x.Bib == item.Bib).Status == TimingStatus.Ready)
+            if (timing.Snapshot!.Participants.Single(x => x.Bib == item.Bib).Status == TimingStatus.Ready)
             { await timing.MoveWaitingToNextAsync(item.Bib, TimingOperator); }
             else { await timing.MoveToStartAsync(item.ListId, item.Bib, item.StartKey, item.AssignedKeys, TimingOperator); }
         }
         else { await timing.MoveTimestampAsync(item.ListId, item.Bib, cell!.Key, cell.Decision, item.AssignedKeys, TimingOperator); }
         SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == item.Bib);
         RefreshTiming();
-        SetStatus(toStart ? $"Bib {item.Bib} restarted at start. Previous impulses retained." + (timing.IsHeld(0) ? " Start remains on hold." : " Next start is ready.")
-            : $"{cell!.Position} {cell.Time} assigned to Bib {item.Bib}. Original timestamp retained.");
+        var who = TimingForerunner.IsKey(item.Bib) ? $"Forerunner {SelectedTimingRow?.Result.ForerunnerLetter}" : $"Bib {item.Bib}";
+        SetStatus(toStart ? $"{who} restarted at start. Previous impulses retained." + (timing.IsHeld(0) ? " Start remains on hold." : " Next start is ready.")
+            : $"{cell!.Position} {cell.Time} assigned to {who}. Original timestamp retained.");
     });
 
     public string? StartQueueDropProblem(TimingDragCompetitor item, int targetBib)

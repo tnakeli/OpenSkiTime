@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using OpenSkiTime.Application;
 using OpenSkiTime.Domain;
+using OpenSkiTime.Timing;
 
 namespace OpenSkiTime.Persistence;
 
@@ -40,6 +41,12 @@ internal sealed partial class SqliteSeriesFileSession : IRaceInformationStore
             var competition = await db.Competitions.SingleOrDefaultAsync(x => x.Id == competitionId, ct)
                 ?? throw new DomainValidationException("The competition no longer exists.");
             values.Validate(competition.RunCount);
+            foreach (var run in values.Runs)
+            {
+                TimingForerunner.Validate((run.Forerunners ?? []).Where(x => x.Letter.Length > 0)
+                    .Select(x => new TimingForerunner(x.Letter, x.Person.FirstName, x.Person.LastName, x.Person.Nation)).ToArray());
+            }
+            await EnsureTimedForerunnersKeptAsync(db, competitionId, competition.RunCount, values, ct);
             var revision = (await db.Set<RaceInformationRow>().Where(x => x.CompetitionId == competitionId)
                 .MaxAsync(x => (int?)x.Revision, ct) ?? 0) + 1;
             db.Add(new RaceInformationRow { CompetitionId = competitionId, Revision = revision,

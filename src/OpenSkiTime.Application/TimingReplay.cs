@@ -8,7 +8,8 @@ public static class TimingReplay
 {
     // Session ownership is explicit: an open connection owned by the caller is not
     // an interrupted capture. Without that context, preserve recovery diagnostics.
-    public static TimingSnapshot Restore(TimingReplayData data, ITimingDecoderFactory factory, IReadOnlySet<Guid>? activeSessionIds = null)
+    public static TimingSnapshot Restore(TimingReplayData data, ITimingDecoderFactory factory, IReadOnlySet<Guid>? activeSessionIds = null,
+        IReadOnlyList<TimingForerunner>? forerunners = null)
     {
         ArgumentNullException.ThrowIfNull(data); ArgumentNullException.ThrowIfNull(factory);
         var observations = new List<TimingObservation>();
@@ -29,7 +30,7 @@ public static class TimingReplay
                     "Capture ended unexpectedly. Recover missing impulses from device memory/backup and review before continuing."));
             }
         }
-        return TimingEngine.Replay(data.List, observations, data.Audit, 0, 1);
+        return TimingEngine.Replay(data.List, observations, data.Audit, 0, 1, forerunners ?? data.Forerunners);
     }
 
     // Consecutive sessions of one multi-device capture (same clock group) replay as one unit, merged in receive order

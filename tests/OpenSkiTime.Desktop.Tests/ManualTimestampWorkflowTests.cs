@@ -61,6 +61,7 @@ public partial class DesktopWorkflowTests
                 revision = (await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Athlete", 2000, $"{123456 + i}", "FIN", "Synthetic club", Gender.Female),
                     competition.Id, true, null, revision)).Revision;
             }
+            await SaveCachedFisPointsAsync(workspace, cache);
             using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" }, fisStore: cache,
                 recentSeriesStore: new RecentSeriesStore(root), timingPreferencesStore: new TimingPreferencesStore(root));
             await vm.OpenSeriesCommand.ExecuteAsync(null);

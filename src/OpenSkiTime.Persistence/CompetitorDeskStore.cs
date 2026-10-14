@@ -19,11 +19,12 @@ internal sealed partial class SqliteSeriesFileSession
             var participations = await db.Participations.AsNoTracking().ToListAsync(ct);
             var categories = await db.CategoryRules.AsNoTracking()
                 .OrderBy(x => x.DisplayOrder).ThenBy(x => x.Label).ToListAsync(ct);
+            var (points, lists) = await FisPointsStore.ReadAsync(db, ct);
             return new CompetitorDeskDetails(series.Id, series.Revision,
                 competitors.Select(x => new CompetitorDetails(x.Id, Values(x))).ToArray(),
                 participations.Select(x => new ParticipationDetails(x.CompetitorId, x.CompetitionId,
                     x.Participates, x.ImportedBib, x.StartOrder)).ToArray(),
-                categories.Select(x => new CategoryRuleDetails(x.Id, Values(x))).ToArray());
+                categories.Select(x => new CategoryRuleDetails(x.Id, Values(x))).ToArray(), points, lists);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SqliteException)
         {
@@ -63,7 +64,23 @@ internal sealed partial class SqliteSeriesFileSession
             {
                 throw new DomainValidationException("Federation code is already assigned in this event series.");
             }
+            var previousGender = row.Gender;
+            var previousCode = row.FederationCodeKey;
             Assign(row, validated);
+            if (id is not null && !string.Equals(previousCode, row.FederationCodeKey, StringComparison.OrdinalIgnoreCase))
+            { await FisPointsStore.ClearAsync(db, [row.Id], ct); }
+            if (id is null || row.Gender != previousGender || (competitionId is not null && participates))
+            {
+                // Same entry rule as the batch and import paths: this row's entries after the change.
+                var mine = await db.Participations.Where(x => x.CompetitorId == row.Id).ToListAsync(ct);
+                if (competitionId is { } target && participates && mine.All(x => x.CompetitionId != target))
+                { mine.Add(new ParticipationRow { CompetitorId = row.Id, CompetitionId = target, Participates = true }); }
+                foreach (var entry in mine.Where(x => x.CompetitionId == competitionId)) { entry.Participates = participates; }
+                var races = await db.Competitions.Where(x => x.SeriesId == series.Id).ToDictionaryAsync(x => x.Id, ct);
+                var regendered = id is null || row.Gender != previousGender ? new HashSet<Guid> { row.Id } : [];
+                var entered = competitionId is { } c && participates ? new HashSet<(Guid, Guid)> { (row.Id, c) } : [];
+                EntryGenderCheck.Ensure(races, new Dictionary<Guid, CompetitorRow> { [row.Id] = row }, mine, regendered, entered);
+            }
 
             if (competitionId is { } raceId)
             {

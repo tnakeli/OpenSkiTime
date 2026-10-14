@@ -62,7 +62,7 @@ public partial class DesktopWorkflowTests
             var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1280, Height = 800 };
             window.Show(); Dispatcher.UIThread.RunJobs();
             Assert.Equal("FIS Slalom", window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
-            Assert.Contains("FIS", window.FindControl<Button>("ActiveRaceButton")!.Content!.ToString(), StringComparison.Ordinal);
+            Assert.Equal("FIS", window.FindControl<TextBlock>("ActiveRaceTitleText")!.Text);
             Assert.Equal(path + " — OpenSkiTime " + ProductInfo.Version + " · FIS rules 2026-27", window.Title);
             window.Close();
         }
@@ -87,6 +87,7 @@ public partial class DesktopWorkflowTests
             series = await workspace.SaveCompetitionAsync(null, new("Men Slalom", "MSL", new(2026, 9, 27), Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);
             var competition = series.Competitions[0];
             await workspace.SaveDeskRowAsync(null, new("TEST", "Athlete", 2000, "555001", "FIN", "Test", Gender.Male), competition.Id, true, null, series.Revision);
+            await SaveCachedFisPointsAsync(workspace, cache);
             using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = path, OpenPath = path, BackupPath = path + ".backup" }, fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
@@ -131,6 +132,7 @@ public partial class DesktopWorkflowTests
             }
             var dialogs = new FileDialogsStub { NewPath = file, OpenPath = file, BackupPath = file + ".backup" };
             var exchange = new EntryExchangeStub();
+            await SaveCachedFisPointsAsync(workspace, cache);
             using var vm = new MainViewModel(workspace, dialogs, exchange, cache, recentSeriesStore: new RecentSeriesStore(root));
             vm.OpenSeriesCommand.Execute(null);
             await vm.OpenSeriesCommand.ExecutionTask!;
@@ -140,10 +142,10 @@ public partial class DesktopWorkflowTests
                 .Single(x => ReferenceEquals(x.ItemsSource, vm.CompetitionView));
             Assert.Contains(competitionGrid.Columns, x => Equals(x.Header, "EVENT NAME"));
             CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "competitions-public-name.png");
-            var activeRaceButton = window.FindControl<Button>("ActiveRaceButton")!;
-            Assert.Equal("Choose competition  ▾", activeRaceButton.Content);
+            // Without an active race the title bar shows only the product name.
+            Assert.False(window.FindControl<TextBlock>("ActiveRaceTitleText")!.IsEffectivelyVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "RACE OFFICE  /  LOCAL WORKSPACE");
-            Assert.Equal("4  Start lists  ▾", window.FindControl<Button>("DrawMenuButton")!.Content);
+            Assert.Equal("Start lists", window.FindControl<Button>("DrawMenuButton")!.Content);
             var drawButton = window.FindControl<Button>("DrawMenuButton")!;
             drawButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await vm.RefreshDrawMenuCommand.ExecutionTask!;
@@ -157,26 +159,25 @@ public partial class DesktopWorkflowTests
             await vm.OpenDrawRunCommand.ExecutionTask!;
             menu.Hide();
             Assert.True(vm.IsDrawSection);
-            Assert.Equal("SL1  /  Run 1  ▾", activeRaceButton.Content);
-            activeRaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var heading = window.FindControl<TextBlock>("ActiveRaceTitleText")!;
+            Assert.Equal("SL1 / Run 1", heading.Text);
+            // The Start lists menu marks the active race and opens it.
+            drawButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await vm.RefreshDrawMenuCommand.ExecutionTask!;
             Dispatcher.UIThread.RunJobs();
-            var activeMenu = Assert.IsType<MenuItem>(Assert.Single(Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Items));
+            var activeMenu = Assert.IsType<MenuItem>(Assert.Single(Assert.IsType<MenuFlyout>(drawButton.Flyout).Items));
             Assert.Equal("SL1  ·  ACTIVE", activeMenu.Header);
             Assert.True(activeMenu.IsSubMenuOpen);
             CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_M4_VISUAL_DIR"), "active-start-menu.png");
-            Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
+            Assert.IsType<MenuFlyout>(drawButton.Flyout).Hide();
             foreach (var navigation in new[] { vm.ShowSeriesCommand, vm.ShowCompetitorsCommand, vm.ShowSettingsCommand, vm.ShowCompetitionsCommand })
             {
                 navigation.Execute(null); Dispatcher.UIThread.RunJobs();
                 Assert.Equal(competition.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
-                Assert.Contains(competition.Values.ShortLabel, activeRaceButton.Content!.ToString(), StringComparison.Ordinal);
+                Assert.Contains(competition.Values.ShortLabel, heading.Text, StringComparison.Ordinal);
             }
-            vm.ShowCompetitionsCommand.Execute(null);
-            activeRaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await vm.OpenDrawRunCommand.ExecutionTask!;
+            await vm.OpenDrawRunCommand.ExecuteAsync(vm.ActiveRaceDestination);
             Assert.True(vm.IsDrawSection);
-            Assert.IsType<MenuFlyout>(activeRaceButton.Flyout).Hide();
             Assert.Equal(vm.FileLabel + " — OpenSkiTime " + ProductInfo.Version + " · FIS rules 2026-27", vm.WindowTitle);
             Assert.Equal(competition.Values.Name, window.FindControl<TextBlock>("ActiveRaceNameText")!.Text);
             Assert.Equal("Waiting for draw", vm.DrawState);
@@ -244,6 +245,22 @@ public partial class DesktopWorkflowTests
                 row.RunOneTime));
             Assert.True(window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "DrawStartListGrid")
                 .Columns.Single(x => Equals(x.Header, "RUN 1 TIME")).IsVisible);
+            // A pending reversal change must be applied or discarded before the start order is edited; nothing is lost.
+            var runTwo = vm.DrawRevision!;
+            vm.DrawReverseCount = 30;
+            Assert.True(vm.HasUnsavedRunInput);
+            vm.SelectedDrawRow = vm.DrawStartListRows[0]; vm.DrawMoveToPosition = "2"; vm.DrawMoveReason = "Synthetic penalty";
+            await vm.MoveDrawEntryCommand.ExecuteAsync(null);
+            Assert.True(vm.IsError);
+            Assert.True(vm.HasUnsavedRunInput);
+            Assert.Equal(30, vm.DrawReverseCount);
+            Assert.Equal(runTwo.Id, vm.DrawRevision!.Id);
+            var confirmDiscard = dialogs.ConfirmDiscardResult;
+            dialogs.ConfirmDiscardResult = true;
+            await vm.DiscardRunInputCommand.ExecuteAsync(null);
+            dialogs.ConfirmDiscardResult = confirmDiscard;
+            Assert.False(vm.HasUnsavedRunInput);
+            Assert.Equal(15, vm.DrawReverseCount);
             vm.IsResultInputOpen = true;
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
@@ -464,7 +481,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Open file");
             await vm.OpenSeriesCommand.ExecutionTask!;
             Assert.Equal(file + " — OpenSkiTime " + ProductInfo.Version + " · FIS rules 2026-27", window.Title);
-            Click(window, "3  Competitors");
+            Click(window, "Competitors");
             window.UpdateLayout();
             var sections = window.GetVisualDescendants().OfType<Expander>()
                 .Where(x => Equals(x.Header, "Update from FIS")
@@ -483,7 +500,9 @@ public partial class DesktopWorkflowTests
             Assert.True(grid.CanUserSortColumns);
             Assert.All(grid.Columns.Skip(1), column => Assert.False(string.IsNullOrWhiteSpace(column.SortMemberPath)));
             Assert.Equal(5, grid.Columns.Count(column => column.SortMemberPath?.StartsWith("Fis", StringComparison.Ordinal) == true));
-            Assert.Equal(12.34m, Assert.Single(vm.VisibleCompetitors, x => !x.IsPlaceholder).FisSl);
+            // Points are saved with the series, not read live from the downloaded list: none are saved yet.
+            var nord = Assert.Single(vm.VisibleCompetitors, x => !x.IsPlaceholder);
+            Assert.Null(nord.FisSl);
             fisSection.IsExpanded = true;
             Dispatcher.UIThread.RunJobs();
             Assert.True(vm.IsFisPanelOpen);
@@ -494,8 +513,13 @@ public partial class DesktopWorkflowTests
             var fisDatePopup = Assert.IsType<StackPanel>(Assert.IsType<Flyout>(fisDateButton.Flyout).Content);
             Assert.IsType<Avalonia.Controls.Calendar>(fisDatePopup.Children[1]).SelectedDate = new DateTime(2026, 10, 2);
             Assert.Equal("2026-10-02", window.FindControl<TextBox>("FisEffectiveDateInput")!.Text);
-            Click(window, "Stage updates for existing competitors");
+            Click(window, "Update from FIS list");
             Assert.Contains(vm.DeskChangeLog, x => x.Field == nameof(CompetitorGridRow.Club));
+            // The list's points are a staged (highlighted) change like the club.
+            Assert.Equal(12.34m, nord.FisSl);
+            Assert.True(nord.IsSlChanged);
+            Assert.Contains(vm.DeskChangeLog, x => x.Field == nameof(CompetitorGridRow.FisPoints) && x.DisplayLabel.Contains("SL 12.34", StringComparison.Ordinal));
+            Assert.Null((await workspace.ReadCompetitorDeskAsync()).FisPoints?.Values.SingleOrDefault());
             Assert.Equal("Old Club", Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors).Values.Club);
             vm.FisSearchText = "654321";
             Click(window, "×");
@@ -513,10 +537,16 @@ public partial class DesktopWorkflowTests
             window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(3, grid.SelectedItems.OfType<CompetitorGridRow>().Count(x => !x.IsPlaceholder));
-            Click(window, "Save changes");
+            Click(window, "Save");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
-            var saved = (await workspace.ReadCompetitorDeskAsync()).Competitors;
+            var savedDesk = await workspace.ReadCompetitorDeskAsync();
+            var saved = savedDesk.Competitors;
             Assert.Equal(3, saved.Count);
+            // Save keeps the points and the list they came from; the row is no longer highlighted.
+            var savedNord = saved.Single(x => x.Values.FederationCode == "123456");
+            Assert.Equal(new CompetitorFisPoints("1327", null, null, 12.34m, null, null), savedDesk.FisPointsOf(savedNord.Id));
+            Assert.Equal("1327", Assert.Single(savedDesk.PointsLists!).Code);
+            Assert.False(vm.VisibleCompetitors.Single(x => x.FederationCode == "123456").IsSlChanged);
             Assert.Equal("North Club", saved.Single(x => x.Values.FederationCode == "123456").Values.Club);
             Assert.Equal("WEST", saved.Single(x => x.Values.FederationCode == "654321").Values.Surname);
             Assert.Equal("SOUTH", saved.Single(x => x.Values.FederationCode == "777777").Values.Surname);
@@ -544,7 +574,7 @@ public partial class DesktopWorkflowTests
             window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(3, vm.DeskChangeLog.Count(x => x.Kind == DeskChangeKind.Delete));
-            Click(window, "Save changes");
+            Click(window, "Save");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.Empty((await workspace.ReadCompetitorDeskAsync()).Competitors);
             window.Close();
@@ -621,7 +651,7 @@ public partial class DesktopWorkflowTests
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.True(File.Exists(file));
 
-            Click(window, "1  Event series");
+            Click(window, "Event series");
             vm.StartDateText = "31.02.2026";
             Click(window, "Save series");
             await vm.SaveSeriesCommand.ExecutionTask!;
@@ -630,7 +660,7 @@ public partial class DesktopWorkflowTests
             Click(window, "Save series");
             await vm.SaveSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
-            Click(window, "2  Competitions");
+            Click(window, "Competitions");
             Click(window, "Add competition");
             vm.CompetitionName = "Slalom";
             vm.CompetitionShortLabel = "3.1 SL";
@@ -650,7 +680,7 @@ public partial class DesktopWorkflowTests
             await vm.SaveCompetitionCommand.ExecutionTask!;
             Assert.Equal(2, vm.Competitions.Count);
 
-            Click(window, "3  Competitors");
+            Click(window, "Competitors");
             var grid = window.FindControl<DataGrid>("CompetitorGrid")!;
             Assert.Contains(grid.Columns, column => Equals(column.Header, "3.1 SL"));
             Assert.Contains(grid.Columns, column => Equals(column.Header, "3.2 GS"));
@@ -698,7 +728,7 @@ public partial class DesktopWorkflowTests
             Assert.Single(vm.DeskChangeLog);
             Assert.Equal(DeskChangeKind.Add, vm.DeskChangeLog.Single().Kind);
             Assert.Empty((await workspace.ReadCompetitorDeskAsync()).Competitors);
-            Click(window, "Save changes");
+            Click(window, "Save");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
@@ -773,7 +803,7 @@ public partial class DesktopWorkflowTests
             Assert.False(row.IsClubChanged);
             Assert.True(row.GridEntries.Single(x => x.Label == "3.2 GS").IsChanged);
             row.Club = "Reviewed club";
-            Click(window, "Save changes");
+            Click(window, "Save");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             var desk = await workspace.ReadCompetitorDeskAsync();
@@ -820,7 +850,7 @@ public partial class DesktopWorkflowTests
             await vm.PasteFromExcelCommand.ExecutionTask!;
             Assert.False(vm.VisibleCompetitors.Single(x => x.FederationCode == "FIN123")
                 .GridEntries.Single(x => x.Label == "3.1 SL").IsParticipating);
-            Click(window, "Save changes");
+            Click(window, "Save");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             var pastedRemoval = await workspace.ReadCompetitorDeskAsync();
             var removedEntryCompetitor = pastedRemoval.Competitors.Single(x => x.Values.FederationCode == "FIN123");
@@ -832,7 +862,7 @@ public partial class DesktopWorkflowTests
             await vm.PasteFromExcelCommand.ExecutionTask!;
             var uncertain = vm.VisibleCompetitors.Single(x => x.Surname == "UNKNOWN");
             Assert.True(uncertain.NeedsApproval);
-            Click(window, "Save changes");
+            Click(window, "Save");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.True(vm.IsError);
             Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
@@ -864,7 +894,7 @@ public partial class DesktopWorkflowTests
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(backup, vm.FileLabel);
             Assert.Equal(2, vm.VisibleCompetitors.Count(x => !x.IsPlaceholder));
-            Click(window, "1  Event series");
+            Click(window, "Event series");
             var startDateInput = window.FindControl<TextBox>("SeriesStartDateInput")!;
             startDateInput.Text = "07.05.2026";
             var pickerButton = window.FindControl<Button>("SeriesStartDatePickerButton")!;
@@ -875,7 +905,7 @@ public partial class DesktopWorkflowTests
             picker.SelectedDate = new DateTime(2026, 5, 6);
             Assert.Equal("06.05.2026", startDateInput.Text);
 
-            Click(window, "3  Competitors");
+            Click(window, "Competitors");
             grid.SelectedItem = vm.VisibleCompetitors.Single(x => x.Surname == "MAKELA");
             grid.CurrentColumn = grid.Columns[2];
             grid.SelectedItem = vm.VisibleCompetitors.Single(x => x.Surname == "LAINE");
@@ -883,14 +913,14 @@ public partial class DesktopWorkflowTests
             grid.SelectedItem = vm.VisibleCompetitors.Single(x => x.IsPlaceholder);
             grid.CurrentColumn = grid.Columns[7];
             window.UpdateLayout();
-            var selectedColor = Color.Parse("#D8ECE9");
+            var selectedColor = ((ISolidColorBrush)Avalonia.Application.Current!.FindResource("SelectionBrush")!).Color;
             var renderedCells = grid.GetVisualDescendants().OfType<DataGridCell>().ToArray();
             Assert.NotEmpty(renderedCells);
             Assert.DoesNotContain(renderedCells, cell =>
                 cell.Background is ISolidColorBrush brush && brush.Color == selectedColor);
             vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "LAINE");
             vm.RemoveCompetitorCommand.Execute(null);
-            Click(window, "Save changes");
+            Click(window, "Save");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
             Assert.Empty(vm.DeskChangeLog);
@@ -901,7 +931,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal("2 unsaved changes", vm.UnsavedChangesText);
             var reviewPanel = window.FindControl<Border>("ChangeReviewPanel")!;
             Assert.False(reviewPanel.IsVisible);
-            Click(window, "Review changes");
+            Click(window, "Undo");
             Assert.True(reviewPanel.IsVisible);
             Click(window, "Discard all changes");
             await vm.DiscardDeskChangesCommand.ExecutionTask!;
@@ -915,8 +945,7 @@ public partial class DesktopWorkflowTests
             Assert.False(reviewPanel.IsVisible);
             Assert.Equal(savedClub, vm.VisibleCompetitors.Single(x => !x.IsPlaceholder).Club);
             Assert.Single((await workspace.ReadCompetitorDeskAsync()).Competitors);
-            var openButton = window.FindControl<SplitButton>("OpenFileButton")!;
-            var recentMenu = Assert.IsType<MenuFlyout>(openButton.Flyout);
+            var recentMenu = FileMenu(window).Items.OfType<MenuItem>().Single(x => x.Name == "RecentFilesMenu");
             Assert.Equal(2, recentMenu.Items.Count);
             var mostRecent = Assert.IsType<MenuItem>(recentMenu.Items[0]);
             Assert.Equal(backup, mostRecent.CommandParameter);
@@ -930,9 +959,18 @@ public partial class DesktopWorkflowTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    private static MenuFlyout FileMenu(Window window) => Assert.IsType<MenuFlyout>(window.FindControl<DropDownButton>("FileMenuButton")!.Flyout);
+
     private static void Click(Window window, string label)
     {
         window.UpdateLayout();
+        // File actions are items of the title bar's File menu.
+        if (FileMenu(window).Items.OfType<MenuItem>().SingleOrDefault(x => Equals(x.Header, label)) is { } fileItem)
+        {
+            Assert.True(fileItem.IsEffectivelyEnabled, $"{label} was disabled");
+            fileItem.Command!.Execute(fileItem.CommandParameter);
+            return;
+        }
         var split = window.GetVisualDescendants().OfType<SplitButton>()
             .SingleOrDefault(button => Equals(button.Content, label) && button.IsVisible);
         if (split is not null)

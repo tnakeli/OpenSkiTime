@@ -88,12 +88,26 @@ public sealed partial class MainViewModel
                 {
                     var current = await workspace.ReadAsync();
                     if (workspace.FilePath != key.Item1) { continue; }
-                    var revision = await workspace.SaveRaceInformationAsync(key.Item2, draft.Values, current.Revision, DateTimeOffset.UtcNow);
+                    // For the timing run, the save and timing's forerunner change happen together under the capture
+                    // state gate (see SaveTimingForerunnersAsync).
+                    var revision = 0L;
+                    async Task Save(CancellationToken token) => revision = await workspace.SaveRaceInformationAsync(key.Item2, draft.Values, current.Revision, DateTimeOffset.UtcNow, token);
+                    if (TimingCompetition?.Id == key.Item2 && workspace.Timing is { ListId: { } listId } timing
+                        && draft.Values.Runs.FirstOrDefault(x => x.Number == TimingRun) is { } runInformation)
+                    { await timing.SetForerunnersAsync(listId, (runInformation.Forerunners ?? []).Select(ToTiming).ToArray(), Save); }
+                    else { await Save(CancellationToken.None); }
                     if (_current is not null && workspace.FilePath == key.Item1) { _current = _current with { Revision = Math.Max(_current.Revision, revision) }; }
                     if (_pendingInformation.TryGetValue(key, out var latest) && latest.Generation == draft.Generation)
                     { _pendingInformation.Remove(key); _informationErrors.Remove(key); }
                     if (_informationKey == key && !_pendingInformation.ContainsKey(key) && !_informationErrors.ContainsKey(key))
                     { RaceInformationStatus = "All changes saved."; }
+                    // Forerunners edited in Results are the timing run's forerunners too.
+                    // Timing always follows the saved list (capture continues in every view); an open Timing editor keeps its draft.
+                    if (TimingCompetition?.Id == key.Item2)
+                    {
+                        try { await LoadTimingForerunnersAsync(keepEditorDraft: ShowForerunnerEditor); }
+                        catch (DomainValidationException ex) { SetStatus("Timing kept its forerunners: " + ex.Message, error: true); }
+                    }
                 }
                 catch (Exception ex) when (ex is DomainValidationException or SeriesFileException or SeriesConflictException or IOException)
                 {

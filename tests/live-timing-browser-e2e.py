@@ -13,6 +13,7 @@ import secrets
 import socket
 import subprocess
 import time
+import datetime
 import urllib.request
 from playwright.sync_api import sync_playwright, expect
 
@@ -94,6 +95,24 @@ def main():
             expect(page.locator('#splitMode')).to_be_hidden()
             expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Finish', 'Difference'])
             expect(page.locator('tr[data-bib="1"] td')).to_have_count(7)
+            # Forerunners show where they are (on course, at start) but never a time and never a results row.
+            expect(page.locator('#forerunners')).to_be_hidden()
+            state['version'] += 1
+            state['runs'][0]['forerunners'] = [{'letter': 'A', 'lastName': 'FORERUNNER', 'firstName': 'Synthetic', 'nation': 'FIN', 'status': 'OnCourse'},
+                                               {'letter': 'B', 'lastName': 'SECOND', 'firstName': 'Synthetic', 'nation': 'FIN', 'status': 'Ready'}]
+            request('PUT', f'/api/sessions/{sid}/state', state, token)
+            expect(page.locator('#forerunners')).to_have_text('Forerunners · A FORERUNNER Synthetic: on course · B SECOND Synthetic: at start')
+            # On course is a list; a forerunner on it shows no running time.
+            expect(page.locator('#course .oncourse .bib')).to_have_text(['F A'])
+            expect(page.locator('#course .oncourse .who')).to_have_text(['FORERUNNER Synthetic'])
+            expect(page.locator('#course .oncourse .clock')).to_have_text(['forerunner'])
+            expect(page.locator('#results tr')).to_have_count(6)
+            state['version'] += 1
+            state['runs'][0]['forerunners'][0]['status'] = 'Finished'
+            state['runs'][0]['forerunners'][1]['status'] = 'Finished'
+            request('PUT', f'/api/sessions/{sid}/state', state, token)
+            expect(page.locator('#forerunners')).to_have_text('Forerunners · A FORERUNNER Synthetic: finished · B SECOND Synthetic: finished')
+            expect(page.locator('#course')).to_have_text('On course · —')
             navigations = []
             page.on('framenavigated', lambda frame: navigations.append(frame.url))
             for bib, status, kind in [(1, 'OnCourse', 'CompetitorStarted'), (1, 'OnCourse', 'IntermediateTime'), (1, 'Finished', 'CompetitorFinished'),
@@ -105,8 +124,34 @@ def main():
                     result['intermediates'] = [{'number': 1, 'hundredths': 2134, 'at': '2026-10-02T09:00:21.340Z'}]
                 if status == 'Finished':
                     result.update(hundredths=6012, rank=1, difference=0)
+                # Each change is published later than the previous one; a started racer carries its start instant.
+                now = datetime.datetime.now(datetime.timezone.utc)
+                result['at'] = now.isoformat().replace('+00:00', 'Z')
+                if kind == 'CompetitorStarted':
+                    # Started 70 s ago, so the 1:00.12 finish lies before the later DNF, as on a real course.
+                    result['startedAt'] = (now - datetime.timedelta(seconds=70)).isoformat().replace('+00:00', 'Z')
                 request('POST', f'/api/sessions/{sid}/events', {'version': state['version'], 'run': 1, 'kind': kind, 'result': result, 'at': state['updatedAt']}, token)
                 expect(page.locator(f'tr[data-bib="{bib}"] td').nth(4)).to_have_text(status)
+                if kind == 'CompetitorStarted':
+                    # The racer is listed on course with a running time that ticks between updates.
+                    expect(page.locator('#course .oncourse .who')).to_have_text(['TEST1 Synthetic'])
+                    clock = page.locator('#course .oncourse .clock')
+                    expect(clock).to_have_text(re.compile(r'^1:1\d\.\d$'))
+                    first = clock.inner_text(); page.wait_for_timeout(400)
+                    assert clock.inner_text() != first, 'running time does not tick'
+                if kind == 'CompetitorFinished':
+                    # The new latest finisher is highlighted for a few seconds, in the banner and in the results.
+                    expect(page.locator('#latest')).to_have_text('Last finish · 1 TEST1 Synthetic · 1:00.12 · Rank 1')
+                    expect(page.locator('#latest')).to_have_class(re.compile('flash'))
+                    expect(page.locator('tr[data-bib="1"]')).to_have_class(re.compile('flash'))
+                    expect(page.locator('#latest')).not_to_have_class(re.compile('flash'), timeout=9000)
+                    expect(page.locator('#course')).to_have_text('On course · —')
+                if kind == 'DNS':
+                    expect(page.locator('#latest')).to_contain_text('1:00.12')
+                if kind == 'DNF':
+                    # A DNF is the latest outcome too, shown with its status and highlighted.
+                    expect(page.locator('#latest')).to_have_text('Last · 3 TEST3 Synthetic · DNF')
+                    expect(page.locator('#latest')).to_have_class(re.compile('out.*flash|flash.*out'))
             expect(page.locator('tr[data-bib="1"] td').nth(5)).to_contain_text('0:21.34')
             expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('1:00.12')
             # The viewer switches between cumulative intermediate times and sector times, each in its own column; the last
@@ -184,7 +229,7 @@ def main():
             assert not navigations, f'Updates caused page navigation: {navigations}'
             assert not failures, f'Browser errors: {failures}'
             browser.close()
-        print('PASS: offline responsive Chromium, live start/intermediate/finish/DNS/DNF/DSQ, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
+        print('PASS: offline responsive Chromium, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
     finally:
         if process and process.poll() is None:
             process.kill()
