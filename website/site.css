@@ -2,4 +2,4 @@
 .screenshot-grid a{display:block}.screenshot-grid img{width:100%;height:auto;aspect-ratio:16/10;object-fit:contain;background:#f1f5f9}.screenshot-grid figcaption{flex-wrap:wrap}.prose figure{margin:24px 0 48px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#fff}.prose figure img{display:block;width:100%;height:auto}.prose figcaption{display:flex;flex-wrap:wrap;gap:8px 20px;padding:14px 18px;font-size:.8rem;border-top:1px solid #cbd5e1}.prose figcaption span{color:#64748b}
 .guide-layout>.prose{min-width:0}
 .faq{max-width:820px;border-top:1px solid #cbd5e1}.faq details{border-bottom:1px solid #cbd5e1}.faq summary{cursor:pointer;padding:18px 0;font-weight:650;font-size:1.05rem}.faq summary:focus-visible{outline:2px solid #1d4ed8;outline-offset:3px}.faq details p{margin:0 0 20px;color:#475569;max-width:700px}
-h1{overflow-wrap:break-word}
+h1{overflow-wrap:break-word}h1 .eyebrow{line-height:1.5}
