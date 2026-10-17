@@ -9,17 +9,21 @@ for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide
   assert.match(html, /<main id="main">/);
   assert(!html.includes('{{'), `Unresolved template in ${page}`);
   assert.match(html, /<meta name="description" content="[^"]{30,}">/, `Missing description in ${page}`);
-  assert.match(html, /<meta property="og:image" content="https:\/\/openskiti\.me\/assets\/[^"]+\.png">/);
+  // Search results cut longer descriptions short.
+  assert(html.match(/<meta name="description" content="([^"]*)">/)[1].replace(/&\w+;|&#\d+;/g, '_').length <= 160, `Description too long in ${page}`);
+  assert.match(html, /<meta property="og:image" content="https:\/\/openskiti\.me\/assets\/og-image\.png">/);
   // Structured data blocks are allowed; executable visitor-side scripts are not.
   const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
   assert.equal(scripts.length, (html.match(/<script\b/gi) ?? []).length);
   for (const [, attrs, body] of scripts) {
     assert.equal(attrs.trim(), 'type="application/ld+json"', 'The static website should not need visitor-side scripts.');
-    const data = JSON.parse(body);
-    assert(data['@graph'].some(node => node['@type'] === 'SoftwareApplication'), `Missing SoftwareApplication in ${page}`);
+    const types = JSON.parse(body)['@graph'].map(node => node['@type']);
+    const landing = page === 'index.html' || page === 'fi/index.html';
+    assert(types.includes(landing ? 'SoftwareApplication' : 'BreadcrumbList'), `Missing structured data type in ${page}`);
+    if (page === 'guide/index.html') assert(types.includes('TechArticle'), 'Missing TechArticle in the guide.');
   }
+  if (page !== '404.html') assert.equal(scripts.length, 1, `Missing structured data in ${page}`);
   if (page === 'index.html' || page === 'fi/index.html') {
-    assert.equal(scripts.length, 1, `Missing structured data in ${page}`);
     assert.match(html, /<link rel="alternate" hreflang="fi" href="https:\/\/openskiti\.me\/fi\/">/);
     assert.match(html, /<link rel="alternate" hreflang="x-default" href="https:\/\/openskiti\.me\/">/);
     // The demo video links out to YouTube; the page itself loads no third-party frame.
@@ -49,12 +53,20 @@ const expires = new Date(security.match(/^Expires: (.+)$/m)[1]);
 assert(expires - Date.now() > 30 * 86400000 && expires - Date.now() <= 366 * 86400000, 'security.txt Expires must be within the next year.');
 const llms = await readFile(path.join(root, 'llms.txt'), 'utf8');
 assert.match(llms, /^# OpenSkiTime\n\n> /);
+assert(!llms.includes('{{'), 'Unresolved template in llms.txt');
+assert.match(llms, /^- Current release: /m);
+const llmsFull = await readFile(path.join(root, 'llms-full.txt'), 'utf8');
+assert(llmsFull.startsWith(llms.trimEnd()), 'llms-full.txt must start with llms.txt.');
+for (const heading of ['## Frequently asked questions', '### Is OpenSkiTime ready for official races?', '## Getting started guide', '### Run from source.']) assert(llmsFull.includes(heading), `llms-full.txt is missing ${heading}`);
+assert(!/<[a-z]/i.test(llmsFull), 'llms-full.txt must not contain HTML.');
+assert.match(await readFile(path.join(root, 'indexnow-key.txt'), 'utf8'), /^[0-9a-f]{32}$/);
 for (const [, url] of llms.matchAll(/\]\((https:\/\/openskiti\.me\/[^)]*)\)/g)) {
   const pathname = new URL(url).pathname;
   assert((await stat(path.join(root, pathname.endsWith('/') ? pathname + 'index.html' : pathname))).isFile(), `llms.txt links to missing ${url}`);
 }
 const sitemap = await readFile(path.join(root, 'sitemap.xml'), 'utf8');
 assert(sitemap.includes('<loc>https://openskiti.me/fi/</loc>'));
+for (const [, date] of sitemap.matchAll(/<lastmod>([^<]*)<\/lastmod>/g)) assert.match(date, /^\d{4}-\d{2}-\d{2}$/);
 const config = JSON.parse(await readFile(path.join(root, 'staticwebapp.config.json'), 'utf8'));
 assert(config.globalHeaders['Content-Security-Policy'].includes("frame-ancestors 'none'"));
 console.log('Website checked: pages, assets, anchors, metadata and security headers.');
