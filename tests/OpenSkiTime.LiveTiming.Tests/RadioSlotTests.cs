@@ -57,6 +57,17 @@ public sealed class RadioSlotTests
         Assert.Equal(problem, RadioSlots.Problem(line, facts, rules));
     }
 
+    [Fact]
+    public void TheBibGoesBeforeTheFirstMentionOfEachRacer()
+    {
+        var lines = RadioSlots.AnnounceBibs([
+            new("Aino", "Radalla nyt {nation:3} {racer:3}, {club:3}.", false),
+            new("Kalle", "{racer:3} on vauhdissa, ja {racer:2} odottaa.", false),
+            new("Aino", "Numero {bib:4:nom} eli {racer:4} on valmiina.", true)]);
+        Assert.Equal(["Radalla nyt numero {bib:3:nom}, {nation:3} {racer:3}, {club:3}.", "{racer:3} on vauhdissa, ja numero {bib:2:nom}, {racer:2} odottaa.",
+            "Numero {bib:4:nom} eli {racer:4} on valmiina."], lines.Select(x => x.Text));
+    }
+
     [Theory]
     [InlineData("Jäljellä {num:remaining:part}.", "Jäljellä {num:remaining:par}.")]
     [InlineData("Numero {bib:3:lle} aukeaa portti.", "Numero {bib:3:all} aukeaa portti.")]

@@ -78,8 +78,9 @@ public static class RadioEventDetector
                         kind == RadioEventKind.NewLeader ? 8 : kind == RadioEventKind.Podium ? 5 : 2, conditions: [Status(result.Bib, LiveStatus.Finished), placed]));
                     break;
                 case LiveStatus.DNF or LiveStatus.DSQ:
-                    events.Add(Make(result.Status == LiveStatus.DNF ? RadioEventKind.DNF : RadioEventKind.DSQ, 3, [result.Bib], 90, 4,
-                        conditions: Status(result.Bib, result.Status)));
+                    // A DNF happens in front of the viewers and is news at once; a DSQ is a decision after the run.
+                    events.Add(Make(result.Status == LiveStatus.DNF ? RadioEventKind.DNF : RadioEventKind.DSQ, result.Status == LiveStatus.DNF ? 2 : 3,
+                        [result.Bib], 90, result.Status == LiveStatus.DNF ? 6 : 4, conditions: Status(result.Bib, result.Status)));
                     break;
                 case LiveStatus.DNS when was == LiveStatus.Ready:
                     events.Add(Make(RadioEventKind.DNS, 4, [result.Bib], 60, 1, conditions: Status(result.Bib, LiveStatus.DNS)));

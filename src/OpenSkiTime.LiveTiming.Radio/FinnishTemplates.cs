@@ -49,7 +49,14 @@ public static class FinnishTemplates
                 else if (result.Rank is { } rank)
                 { yield return Line(rank == 1 ? "Hän on nyt kärjessä." : $"Hän on nyt {Place("rank", bib, rank)}, eroa kärkeen {{diff:{bib}}}."); }
                 break;
-            case RadioEventKind.DNF or RadioEventKind.DNS when racer is not null:
+            // A DNF is the drama of an alpine run: said with feeling, never with a guessed cause.
+            case RadioEventKind.DNF when racer is not null:
+                yield return Line(Pick($"Voi ei! {{racer:{bib}}} on ulkona, {{status:{bib}:noun}}!", $"Ja nyt sattui! {{racer:{bib}}} {{status:{bib}}}!",
+                    $"Voi harmi, {{racer:{bib}}} on ulkona! Lasku päättyy kesken."), false);
+                yield return Line(Pick("Kova paikka, mutta tällaista alppihiihto on.", "Tämä rinne ei anna anteeksi pieniäkään virheitä.",
+                    "Harmillista, mutta seuraava lasku on jo tulossa."));
+                break;
+            case RadioEventKind.DNS when racer is not null:
                 yield return Line($"{{racer:{bib}}} {{status:{bib}}}.");
                 break;
             case RadioEventKind.DSQ when racer is not null:
@@ -63,12 +70,12 @@ public static class FinnishTemplates
                 break;
             case RadioEventKind.TopStart when racer is not null:
                 yield return Line(racer.Previous?.Rank is { } previous && facts.Run == 2
-                    ? $"Matkaan lähtee {Who(facts, bib)}{Club(facts, bib)}. Ensimmäisen laskun jälkeen hän oli {Place("prevrank", bib, previous)}."
-                    : $"Matkaan lähtee {Who(facts, bib)}{Club(facts, bib)}.");
+                    ? $"Radalla nyt {Who(facts, bib)}{Club(facts, bib)}. Ensimmäisen laskun jälkeen hän oli {Place("prevrank", bib, previous)}."
+                    : $"Radalla nyt {Who(facts, bib)}{Club(facts, bib)}.");
                 foreach (var line in Gate(e, facts)) { yield return line; }
                 break;
             case RadioEventKind.Start when racer is not null:
-                yield return Line(Pick($"Matkaan lähti {Who(facts, bib)}{Club(facts, bib)}.", $"Radalle lähti {Who(facts, bib)}{Club(facts, bib)}."));
+                yield return Line(Pick($"Radalla nyt {Who(facts, bib)}{Club(facts, bib)}.", $"Nyt radalla {Who(facts, bib)}{Club(facts, bib)}."));
                 foreach (var line in Gate(e, facts)) { yield return line; }
                 break;
             case RadioEventKind.RunStarted:
@@ -91,6 +98,13 @@ public static class FinnishTemplates
                 foreach (var line in Producer(e, facts)) { yield return line; }
                 break;
         }
+    }
+    /// <summary>The start-gate lines of a batch's start events, with the racer slot each one must contain.</summary>
+    public static IEnumerable<(ScriptLine Line, string Bib)> GateLines(IReadOnlyList<RadioEvent> batch, FactSheet facts)
+    {
+        ArgumentNullException.ThrowIfNull(batch); ArgumentNullException.ThrowIfNull(facts);
+        foreach (var e in batch.Where(x => x.Kind is RadioEventKind.Start or RadioEventKind.TopStart or RadioEventKind.RunStarted))
+        { foreach (var line in Gate(e, facts)) { yield return (line, $"{{racer:{e.Bibs[1]}}}"); } }
     }
     private static IEnumerable<ScriptLine> Gate(RadioEvent e, FactSheet facts)
     {

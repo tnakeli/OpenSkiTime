@@ -117,6 +117,27 @@ public static partial class RadioSlots
     /// <summary>Returns why a line must not be spoken, or null when it is valid.</summary>
     public static string? Problem(string text, FactSheet facts, LineRules rules) => Check(text, facts, rules).Problem;
 
+    [GeneratedRegex(@"(\{nation:(?<n>[0-9]{1,12})\} )?\{racer:(?<r>[0-9]{1,12})\}")]
+    private static partial Regex RacerMention();
+    /// <summary>
+    /// Puts the bib before the first mention of each racer in a conversation ("numero kolme, ruotsalainen Saga Porttila"),
+    /// as alpine commentary does, unless that line already says the bib. Later mentions stay name only.
+    /// </summary>
+    public static IReadOnlyList<ScriptLine> AnnounceBibs(IReadOnlyList<ScriptLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var said = new HashSet<string>(StringComparer.Ordinal);
+        return [.. lines.Select(line => line with
+        {
+            Text = RacerMention().Replace(line.Text, m =>
+            {
+                var bib = m.Groups["r"].Value;
+                if (!said.Add(bib) || line.Text.Contains($"{{bib:{bib}", StringComparison.Ordinal)) { return m.Value; }
+                return $"numero {{bib:{bib}:nom}}, {m.Value}";
+            })
+        })];
+    }
+
     /// <summary>The problem and the word that caused it, for feedback to the model (never logged).</summary>
     public static (string? Problem, string? Word) Check(string text, FactSheet facts, LineRules rules)
     {

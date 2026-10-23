@@ -173,7 +173,21 @@ public sealed class RadioEngine
         if (mode is RadioMode.Full or RadioMode.Lean)
         {
             (lines, topic) = await DialogueAsync(batch, facts, rules, ct);
-            if (lines is not null && mode == RadioMode.Full && _config.Curation) { lines = await CurateAsync(lines, facts, rules, ct); }
+            // A start is announced while the racer is on course and the next one waits in the gate: no time for curation.
+            var starts = batch.Any(x => x.Kind is RadioEventKind.Start or RadioEventKind.TopStart or RadioEventKind.RunStarted);
+            if (lines is not null && mode == RadioMode.Full && _config.Curation && !starts) { lines = await CurateAsync(lines, facts, rules, ct); }
+            // The next racer in the start gate is always said; a model script that leaves it out gets the template line.
+            if (lines is not null)
+            {
+                var missing = FinnishTemplates.GateLines(batch, facts).Where(x => !lines.Any(l => l.Text.Contains(x.Bib, StringComparison.Ordinal))).ToArray();
+                if (missing.Length > 0)
+                {
+                    var script = lines.ToList();
+                    script[^1] = script[^1] with { Interruptible = false };
+                    script.AddRange(missing.Select((x, i) => x.Line with { Host = RadioPersonas.Host(lines.Count + i).Name, Interruptible = i == missing.Length - 1 }));
+                    lines = script;
+                }
+            }
         }
         if (lines is null)
         {
@@ -181,6 +195,8 @@ public sealed class RadioEngine
             topic = string.Join(", ", batch.Select(x => x.Kind.ToString()));
         }
         if (lines.Count == 0) { return; }
+        // In alpine skiing the bib goes with the name: the first mention of each racer in a conversation says it.
+        lines = RadioSlots.AnnounceBibs(lines);
         _topics.Add(topic ?? "", now);
         var batchId = Guid.NewGuid();
         var run = state.CurrentRun;

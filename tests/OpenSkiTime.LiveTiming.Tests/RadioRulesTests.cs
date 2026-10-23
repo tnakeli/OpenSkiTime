@@ -30,9 +30,9 @@ public sealed class RadioRulesTests
         Assert.False(RadioPlayback.Playable(RadioRace.Set(second, 2, LiveStatus.Finished, 4800), now, now.AddSeconds(30), start2.Phases, start2.Conditions));
         var spoken = FinnishTemplates.Lines([start2], FactSheet.Build(second, start2.Bibs), 0);
         // The club introduces the racer; in an international field a racer from abroad also gets the nationality.
-        Assert.Equal(["Matkaan lähti {racer:2}, {club:2}.", "Lähtöportilla seuraavana {nation:3} {racer:3}."], spoken.Select(x => x.Text));
+        Assert.Equal(["Radalla nyt {racer:2}, {club:2}.", "Lähtöportilla seuraavana {nation:3} {racer:3}."], spoken.Select(x => x.Text));
         var sheet = FactSheet.Build(second, start2.Bibs);
-        Assert.Equal("Matkaan lähti Veeti Hankiranta, Rinneseura.", RadioSlots.Render(spoken[0].Text, sheet, new Dictionary<string, string>()));
+        Assert.Equal("Radalla nyt Veeti Hankiranta, Rinneseura.", RadioSlots.Render(spoken[0].Text, sheet, new Dictionary<string, string>()));
         Assert.Equal("Lähtöportilla seuraavana ruotsalainen Saga Porttila.", RadioSlots.Render(spoken[1].Text, sheet, new Dictionary<string, string>()));
         Assert.All(spoken, x => Assert.Null(RadioSlots.Problem(x.Text, sheet, new LineRules(second, RadioPersonas.Hosts.Select(h => h.Name), ""))));
         // Start and finish coalesced into one snapshot: the run start is announced without naming anyone on course.
