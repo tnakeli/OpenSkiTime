@@ -43,6 +43,8 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
     public PublisherKind Channel => _target.Channel;
     public string? Failure { get; private set; }
     private volatile bool _closed;
+    // Status updates go out one at a time, so an enabled heartbeat already under way cannot land after the final disable.
+    private readonly SemaphoreSlim _status = new(1, 1);
     /// <summary>No more uploads or enabled heartbeats; only the final disabled status may still be sent.</summary>
     public void Close() => _closed = true;
     public async Task UploadAsync(RadioClip clip, CancellationToken ct)
@@ -57,8 +59,13 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
     public async Task HeartbeatAsync(RadioStatusUpdate status, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(status);
-        if (_closed && status.Enabled) { throw new RadioProviderException($"{_target.Channel} radio target was removed."); }
-        using var response = await Send(t => _http.PutAsJsonAsync($"api/sessions/{_target.SessionId}/radio/status", status, LiveJson.Options, t), ct);
+        await _status.WaitAsync(ct);
+        try
+        {
+            if (_closed && status.Enabled) { throw new RadioProviderException($"{_target.Channel} radio target was removed."); }
+            using var response = await Send(t => _http.PutAsJsonAsync($"api/sessions/{_target.SessionId}/radio/status", status, LiveJson.Options, t), ct);
+        }
+        finally { _status.Release(); }
     }
     private async Task<HttpResponseMessage> Send(Func<CancellationToken, Task<HttpResponseMessage>> send, CancellationToken ct)
     {
@@ -73,5 +80,5 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
         { Failure = $"{_target.Channel} live timing server rejected the radio (HTTP {(int)status})."; }
         throw new RadioProviderException($"{_target.Channel} live timing server answered HTTP {(int)status} to radio.");
     }
-    public void Dispose() => _http.Dispose();
+    public void Dispose() { _http.Dispose(); _status.Dispose(); }
 }

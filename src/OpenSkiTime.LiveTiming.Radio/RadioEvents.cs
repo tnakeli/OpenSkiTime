@@ -36,7 +36,8 @@ public static class RadioEventDetector
         {
             if (started(run))
             {
-                var first = run.Results.Where(x => x.Status != LiveStatus.Ready && x.StartedAt is not null).OrderBy(x => x.StartedAt).FirstOrDefault();
+                // A racer is named only while on course ("Radalla on nyt ..."); a start already finished is not news.
+                var first = run.Results.Where(x => x.Status == LiveStatus.OnCourse && x.StartedAt is not null).OrderBy(x => x.StartedAt).FirstOrDefault();
                 events.Add(first is null ? Make(RadioEventKind.RunStarted, 3, [], 90, 6, Live)
                     : Make(RadioEventKind.RunStarted, 3, [first.Bib], 90, 6, Live, Status(first.Bib, first.Status)));
             }

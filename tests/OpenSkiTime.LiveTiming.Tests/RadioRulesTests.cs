@@ -18,6 +18,9 @@ public sealed class RadioRulesTests
         Assert.Equal(RadioEventKind.RunStarted, started.Kind);
         // "Radalla on nyt ..." is stale once that racer has left the course.
         Assert.Equal(new RadioCondition(RadioConditionKind.Status, 1, 1, LiveStatus.OnCourse), Assert.Single(started.Conditions));
+        // Start and finish coalesced into one snapshot: the run start is announced without naming anyone on course.
+        var coalesced = Assert.Single(RadioEventDetector.Detect(start, RadioRace.Set(onCourse, 1, LiveStatus.DNF), now), x => x.Kind == RadioEventKind.RunStarted);
+        Assert.Empty(coalesced.Bibs); Assert.Empty(coalesced.Conditions);
         var first = RadioRace.Set(onCourse, 1, LiveStatus.Finished, 4800);
         var podium = Assert.Single(RadioEventDetector.Detect(onCourse, first, now));
         Assert.Equal((RadioEventKind.Podium, 2), (podium.Kind, podium.Priority));

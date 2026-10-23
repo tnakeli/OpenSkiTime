@@ -148,7 +148,18 @@ async Task ReplaceTargets(RadioTarget[] next)
     var removed = active.Where(x => !next.Contains(x.Key)).ToList();
     if (removed.Count == 0 && next.All(active.ContainsKey)) { return; }
     foreach (var (target, _) in removed) { active.Remove(target); }
-    foreach (var target in next.Where(x => !active.ContainsKey(x))) { active[target] = new RadioServerSink(target); }
+    foreach (var target in next.Where(x => !active.ContainsKey(x)))
+    {
+        var sink = new RadioServerSink(target);
+        // A new target is enabled before it receives clips; the server refuses clips for a radio not yet enabled.
+        if (engine is not null)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await sink.HeartbeatAsync(new(true, engine.Exhausted), timeout.Token); }
+            catch (Exception ex) when (ex is RadioProviderException or OperationCanceledException or HttpRequestException or IOException) { }
+        }
+        active[target] = sink;
+    }
     sinks = next.Select(x => active[x]).ToList();
     engine?.SetSinks(sinks);
     // A target that is no longer enabled, or whose session was replaced, is detached and closed first, then hides its
