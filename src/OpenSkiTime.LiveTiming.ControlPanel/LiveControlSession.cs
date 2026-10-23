@@ -41,6 +41,8 @@ public sealed class LiveControlSession : IAsyncDisposable
     public LiveSnapshot? Snapshot => Volatile.Read(ref _snapshot);
     public Guid? CompetitionId => _competitionId;
     public RadioConfiguration? RadioConfiguration => Volatile.Read(ref _radioSettings)?.Configuration;
+    /// <summary>A radio worker start is still connecting; the status loop applies settings saved meanwhile once it has.</summary>
+    public bool RadioStartPending => Volatile.Read(ref _radioStart) is { IsCompleted: false };
     public ControlPanelOutput ReadState(Guid requestId = default) => new(requestId,
         _channels.Select(x => new LiveChannelHealth(x.Kind, x.Process.Health, x.Process.ProcessId)).ToArray(), _error, Radio: RadioHealth());
     private RadioHealth RadioHealth()

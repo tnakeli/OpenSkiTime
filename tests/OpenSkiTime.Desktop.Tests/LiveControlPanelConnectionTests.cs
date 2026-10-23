@@ -105,9 +105,18 @@ public sealed class LiveControlPanelConnectionTests
             Assert.Equal("", await session.SaveRadioAsync(competitionId, simulation));
             await session.SyncRadioAsync();
             Assert.Equal("", await session.SaveRadioAsync(competitionId, simulation with { LocalEnabled = false }));
-            await session.SyncRadioAsync();
-            await ProcessFixture.Until(() => session.ReadState().Radio!.State == RadioState.Stopped);
-            await Task.Delay(1500); await session.SyncRadioAsync();
+            // The panel's status loop syncs about every second; the test does the same while it waits.
+            async Task SyncUntil(Func<bool> condition)
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                while (true) { await session.SyncRadioAsync(); if (condition()) { return; } await Task.Delay(100, timeout.Token); }
+            }
+            async Task SyncFor(TimeSpan duration) { var until = DateTime.UtcNow + duration; while (DateTime.UtcNow < until) { await session.SyncRadioAsync(); await Task.Delay(100); } }
+            await SyncUntil(() => !session.RadioStartPending);
+            // The worker receives the start and then the stop; afterwards the radio is stopped and stays stopped.
+            await SyncFor(TimeSpan.FromSeconds(3));
+            await SyncUntil(() => session.ReadState().Radio!.State == RadioState.Stopped);
+            await SyncFor(TimeSpan.FromSeconds(1.5));
             Assert.Equal(RadioState.Stopped, session.ReadState().Radio!.State);
         }
         finally { if (Directory.Exists(folder)) { Directory.Delete(folder, true); } }
