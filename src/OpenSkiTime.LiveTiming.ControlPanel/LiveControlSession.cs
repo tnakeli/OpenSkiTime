@@ -277,6 +277,8 @@ public sealed class LiveControlSession : IAsyncDisposable
                 // One radio per competition on this computer: two OpenSkiTime windows would otherwise share one budget twice.
                 _radioOwner ??= _radioStore.TryOwn(_competitionId.Value)
                     ?? throw new LiveValidationException("Race radio for this competition is already running in another OpenSkiTime window on this computer.");
+                // Under ownership, the saved spend is current: another window may have spent and saved since this one loaded it.
+                _radioSaved = Math.Max(_radioSaved, _radioStore.Read(_competitionId.Value).SpentUsd);
                 var llmKey = config.LlmProvider == RadioProviders.Simulation ? null : Key(config.LlmProvider);
                 var ttsKey = config.TtsProvider == RadioProviders.Simulation ? null : Key(config.TtsProvider);
                 var radio = _radio; var worker = Artifact("RadioWorker"); var options = new RadioWorkerOptions(config, _radioSaved, llmKey, ttsKey);

@@ -89,6 +89,19 @@ const ahead = { ...clip('skew', 'b6', 0, 1, 3, 8), receivedAt: new Date(now - 30
 radio.update('s', { available: true, clips: [ahead], serverTime: new Date(now - 300000).toISOString() });
 await advance(1200);
 assert.deepEqual(played.slice(-1), ['skew']);
+// A clip withdrawn while it plays stops at once, and the rest of its conversation is dropped.
+await end(); await advance(1200);
+radio.update('s', { available: true, clips: [clip('w1', 'b7', 0, 2, 3, 9, false), clip('w2', 'b7', 1, 2, 3, 10), clip('n1', 'b8', 0, 1, 3, 11)] });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['w1']);
+radio.update('s', { available: true, clips: [clip('n1', 'b8', 0, 1, 3, 11)] });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['n1']);
+// After a reconnect, clips that were already old when they arrived are skipped.
+await end(); await advance(1200);
+radio.update('s', { available: true, clips: [clip('stale-backlog', 'b9', 0, 1, 3, 12, true, 60000)], serverTime: new Date(now).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['n1']);
 // Pause stops at once; an unavailable radio hides the control and stops playback.
 listeners['button:click']();
 assert.equal(button.attributes['aria-pressed'], 'false');

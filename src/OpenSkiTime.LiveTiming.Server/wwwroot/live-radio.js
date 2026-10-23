@@ -67,9 +67,21 @@ const liveRadio = (() => {
       // Clip age on the server's clock, mapped to this browser's clock.
       const now = Date.now();
       offset = announcement && announcement.serverTime ? now - Date.parse(announcement.serverTime) : 0;
-      clips.forEach(c => { if (!seenAt.has(c.clipId)) seenAt.set(c.clipId, c.receivedAt ? Math.min(now, Date.parse(c.receivedAt) + offset) : now); });
+      clips.forEach(c => {
+        if (seenAt.has(c.clipId)) return;
+        const seen = c.receivedAt ? Math.min(now, Date.parse(c.receivedAt) + offset) : now;
+        seenAt.set(c.clipId, seen);
+        // Also after a reconnect: a clip that was already old when it reached this page is not news.
+        if (now - seen > liveEdge) done.add(c.clipId);
+      });
       button.hidden = !available;
       if (!available && playing) pause();
+      // The clip being played was withdrawn (a correction made it false): stop it at once and drop its conversation.
+      if (current && !clips.some(c => c.clipId === current.clipId)) {
+        skippedBatches.add(current.batchId); current = null;
+        audio.pause(); audio.removeAttribute('src');
+        if (playing && !timer) timer = setTimeout(next, lineGap);
+      }
       if (playing && !current && !timer) next();
     }
   };
