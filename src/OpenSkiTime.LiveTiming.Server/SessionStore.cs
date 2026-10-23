@@ -17,6 +17,11 @@ public sealed class SessionStore
         public DateTimeOffset? Heartbeat;
         public long Sequence;
         public readonly List<StoredClip> Clips = [];
+        // Background music: the operator's playlist and the tracks received so far. Kept while the radio is disabled, so
+        // saving radio settings does not upload the music again; removed with the session or by a new playlist.
+        public RadioMusicTrack[] Playlist = [];
+        public readonly Dictionary<string, byte[]> Music = [];
+        public RadioStatusReply Reply() => new(RadioMusic.PlaylistId(Playlist), Playlist.Where(x => !Music.ContainsKey(x.Id)).Select(x => x.Id).ToArray());
     }
     private sealed record StoredClip(RadioClipInfo Info, RacePhase[] Phases, RadioCondition[] Conditions, string ContentType, byte[] Audio);
     private readonly Dictionary<Guid, Entry> _sessions = [];
@@ -27,6 +32,7 @@ public sealed class SessionStore
     private readonly int _capacity;
     private readonly TimeSpan _lifetime;
     private readonly long _radioBytes;
+    private readonly long _musicBytes;
     public SessionStore(IConfiguration config, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(config); ArgumentNullException.ThrowIfNull(time);
@@ -37,6 +43,7 @@ public sealed class SessionStore
         _capacity = Math.Clamp(config.GetValue("LiveTiming:MaxSessions", 100), 1, 10000);
         _lifetime = TimeSpan.FromDays(Math.Clamp(config.GetValue("LiveTiming:TokenDays", 14), 1, 14));
         _radioBytes = Math.Clamp(config.GetValue("LiveTiming:RadioMaxMegabytes", 64), 1, 1024) * 1024L * 1024L;
+        _musicBytes = Math.Clamp(config.GetValue("LiveTiming:RadioMusicMaxMegabytes", 256), 0, 4096) * 1024L * 1024L;
     }
     public LiveSession Create(string publicBase)
     {
@@ -147,7 +154,7 @@ public sealed class SessionStore
         }
     }
     /// <summary>Worker heartbeat with the server's receive time. Disabling removes every clip at once.</summary>
-    public void RadioStatus(Guid id, RadioStatusUpdate update)
+    public RadioStatusReply RadioStatus(Guid id, RadioStatusUpdate update)
     {
         ArgumentNullException.ThrowIfNull(update);
         lock (_gate)
@@ -156,7 +163,48 @@ public sealed class SessionStore
             var room = Room(id);
             room.Enabled = update.Enabled; room.BudgetExhausted = update.BudgetExhausted; room.Heartbeat = _time.GetUtcNow();
             if (!update.Enabled) { room.Clips.Clear(); }
+            return room.Reply();
         }
+    }
+    /// <summary>
+    /// Replaces the session's music playlist after validating it completely. Tracks of the new playlist already received
+    /// are kept; others are dropped. The server-wide music limit refuses a playlist that would exceed it (503).
+    /// </summary>
+    public RadioStatusReply SetMusic(Guid id, RadioMusicPlaylist playlist)
+    {
+        ArgumentNullException.ThrowIfNull(playlist);
+        RadioMusic.Validate(playlist);
+        lock (_gate)
+        {
+            Prune();
+            var room = Room(id);
+            // Limits count declared sizes, so a kept track must be declared with its real size.
+            if (playlist.Tracks.Any(x => room.Music.TryGetValue(x.Id, out var kept) && kept.Length != x.Bytes))
+            { throw new LiveValidationException("Invalid radio music playlist."); }
+            var others = _sessions.Values.Where(x => x.Radio is not null && x.Radio != room).Sum(x => x.Radio!.Playlist.Sum(t => (long)t.Bytes));
+            if (others + playlist.Tracks.Sum(x => (long)x.Bytes) > _musicBytes) { throw new LiveCapacityException(); }
+            room.Playlist = playlist.Tracks;
+            foreach (var stale in room.Music.Keys.Where(x => playlist.Tracks.All(t => t.Id != x)).ToArray()) { room.Music.Remove(stale); }
+            return room.Reply();
+        }
+    }
+    /// <summary>Stores one track of the current playlist; the bytes must be the MP3 the playlist declares.</summary>
+    public RadioStatusReply AddMusic(Guid id, string trackId, byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        lock (_gate)
+        {
+            Prune();
+            var room = Room(id);
+            if (room.Playlist.FirstOrDefault(x => x.Id == trackId) is not { } track) { throw new LiveConflictException(); }
+            if (!RadioMusic.Matches(track, data)) { throw new LiveValidationException("Invalid radio music track."); }
+            room.Music[track.Id] = data;
+            return room.Reply();
+        }
+    }
+    public byte[]? MusicAudio(Guid id, string trackId)
+    {
+        lock (_gate) { Prune(); return _sessions.GetValueOrDefault(id)?.Radio?.Music.GetValueOrDefault(trackId); }
     }
     /// <summary>
     /// Validates the complete clip before mutation, then appends it to the session ring. The oldest clips are evicted per
@@ -196,10 +244,11 @@ public sealed class SessionStore
             Prune();
             var entry = _sessions.GetValueOrDefault(id);
             var now = _time.GetUtcNow();
-            if (entry?.Radio is not { } room || entry.State is not { } state) { return new(false, [], now); }
+            if (entry?.Radio is not { } room || entry.State is not { } state) { return new(false, [], now, []); }
             room.Clips.RemoveAll(x => x.Info.ExpiresAt <= now);
             var available = RadioPlayback.Available(room.Enabled, room.BudgetExhausted, room.Heartbeat, state, now);
-            return new(available, available ? room.Clips.Where(x => RadioPlayback.Playable(state, now, x.Info.ExpiresAt, x.Phases, x.Conditions)).Select(x => x.Info).ToArray() : [], now);
+            return new(available, available ? room.Clips.Where(x => RadioPlayback.Playable(state, now, x.Info.ExpiresAt, x.Phases, x.Conditions)).Select(x => x.Info).ToArray() : [], now,
+                available ? room.Playlist.Where(x => room.Music.ContainsKey(x.Id)).Select(x => x.Id).ToArray() : []);
         }
     }
     public (byte[] Audio, string ContentType)? ClipAudio(Guid id, Guid clipId)

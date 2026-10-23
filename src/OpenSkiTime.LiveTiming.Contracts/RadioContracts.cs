@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace OpenSkiTime.LiveTiming;
 
 /// <summary>Alpine race phase, derived from the live snapshot. Gates producer sources and clip applicability.</summary>
@@ -22,6 +24,16 @@ public sealed record RadioClipUpload(Guid ClipId, Guid BatchId, int Line, int Li
 /// <summary>Worker heartbeat. The server uses its own receive time, never the worker clock, for health.</summary>
 public sealed record RadioStatusUpdate(bool Enabled, bool BudgetExhausted);
 
+/// <summary>One background music track: the SHA-256 of its MP3 bytes (lowercase hex) and its length.</summary>
+public sealed record RadioMusicTrack(string Id, int Bytes);
+/// <summary>The music the operator chose for a session, in playback order. An empty playlist removes the music.</summary>
+public sealed record RadioMusicPlaylist(RadioMusicTrack[] Tracks);
+/// <summary>
+/// Server reply to a status update or a playlist: the playlist the server holds and the tracks it still lacks. A worker
+/// that sees another playlist (for example after a server restart) uploads its music again.
+/// </summary>
+public sealed record RadioStatusReply(string Playlist, string[] Missing);
+
 /// <summary>Public metadata of a clip that is playable now. Audio is fetched from the clip URL. Times are server times.</summary>
 public sealed record RadioClipInfo(Guid ClipId, Guid BatchId, long Sequence, int Line, int LineCount, string Host, int Priority,
     bool Interruptible, DateTimeOffset ReceivedAt, DateTimeOffset ExpiresAt, int DurationMs);
@@ -30,7 +42,7 @@ public sealed record RadioClipInfo(Guid ClipId, Guid BatchId, long Sequence, int
 /// SignalR "Radio" message: whether the play control is shown and which clips are still valid. The server time lets a
 /// viewer judge clip age with its own clock, so joining skips clips that were already old when the page loaded.
 /// </summary>
-public sealed record RadioAnnouncement(bool Available, RadioClipInfo[] Clips, DateTimeOffset ServerTime = default);
+public sealed record RadioAnnouncement(bool Available, RadioClipInfo[] Clips, DateTimeOffset ServerTime = default, string[]? Music = null);
 
 public enum RadioState { Stopped, Starting, Running, BudgetExhausted, Error }
 
@@ -51,6 +63,8 @@ public sealed record RadioConfiguration
     public string CurationNotes { get; init; } = "";
     /// <summary>Lines of "written name = spoken form" applied only when a racer name is rendered for speech.</summary>
     public string Lexicon { get; init; } = "";
+    /// <summary>Local folder of MP3 files played softly under the commentary; empty for none. Never sent to a server.</summary>
+    public string MusicFolder { get; init; } = "";
     public bool Enabled(PublisherKind channel) => channel == PublisherKind.Local ? LocalEnabled : channel == PublisherKind.Cloud && CloudEnabled;
     public void Validate()
     {
@@ -67,6 +81,9 @@ public sealed record RadioConfiguration
             if (text is null || text.Length > max || text.Any(c => char.IsControl(c) && c is not ('\n' or '\r' or '\t')))
             { throw new LiveValidationException("Radio context, notes and lexicon are too long or contain control characters."); }
         }
+        if (MusicFolder is null || MusicFolder.Length > 260 || MusicFolder.Any(char.IsControl)
+            || (MusicFolder.Length > 0 && !Path.IsPathFullyQualified(MusicFolder)))
+        { throw new LiveValidationException("Choose the radio music folder with its full path."); }
     }
 }
 
@@ -87,7 +104,7 @@ public sealed record RadioTarget(PublisherKind Channel, string Endpoint, Guid Se
 public sealed record RadioWorkerOptions(RadioConfiguration Configuration, decimal SpentUsd, string? LlmKey = null, string? TtsKey = null);
 public sealed record RadioWorkerInput(string Command, RadioWorkerOptions? Options = null, LiveSnapshot? Snapshot = null, RadioTarget[]? Targets = null);
 public sealed record RadioHealth(RadioState State, int QueueDepth = 0, DateTimeOffset? LastClipAt = null, string? LastClipHost = null,
-    string? Error = null, decimal SpentUsd = 0m, decimal BudgetUsd = 0m, string Mode = "", RacePhase? Phase = null);
+    string? Error = null, decimal SpentUsd = 0m, decimal BudgetUsd = 0m, string Mode = "", RacePhase? Phase = null, int MusicTracks = 0);
 public sealed record RadioWorkerOutput(RadioHealth Health);
 
 public static class RacePhases
@@ -119,7 +136,8 @@ public static class RacePhases
     public static int PlannedRuns(LiveCompetition competition)
     {
         ArgumentNullException.ThrowIfNull(competition);
-        return competition.Discipline is "DH" or "SG" ? 1 : 2;
+        // The configured run count; a publisher that does not send it (0) gets the discipline's usual count.
+        return competition.RunCount is > 0 ? competition.RunCount : competition.Discipline is "DH" or "SG" ? 1 : 2;
     }
 }
 
@@ -195,7 +213,46 @@ public static class RadioPlayback
         if (audio.Length is 0 or > MaxClipBytes || !Sniff(audio, clip.ContentType)) { throw new LiveValidationException("Invalid radio clip."); }
     }
     // The served bytes must match the declared type, so a clip URL can never deliver another kind of content.
-    private static bool Sniff(byte[] audio, string contentType) => contentType == "audio/wav"
+    internal static bool Sniff(byte[] audio, string contentType) => contentType == "audio/wav"
         ? audio.Length > 44 && audio.AsSpan(0, 4).SequenceEqual("RIFF"u8) && audio.AsSpan(8, 4).SequenceEqual("WAVE"u8)
         : audio.Length > 4 && (audio.AsSpan(0, 3).SequenceEqual("ID3"u8) || (audio[0] == 0xFF && (audio[1] & 0xE0) == 0xE0));
+}
+
+/// <summary>
+/// Background music for the race radio: MP3 files from the operator's folder, uploaded once per session and played softly
+/// by the viewer under the commentary. Tracks are content addressed, so an unchanged folder is not uploaded again.
+/// </summary>
+public static class RadioMusic
+{
+    public const int MaxTracks = 24;
+    public const int MaxTrackBytes = 12 * 1024 * 1024;
+    public const int MaxSessionBytes = 48 * 1024 * 1024;
+    public const string ContentType = "audio/mpeg";
+
+    public static string Id(ReadOnlySpan<byte> data) => Convert.ToHexStringLower(SHA256.HashData(data));
+    /// <summary>Identifies a playlist by its tracks in order; the empty playlist is "".</summary>
+    public static string PlaylistId(IReadOnlyList<RadioMusicTrack> tracks)
+    {
+        ArgumentNullException.ThrowIfNull(tracks);
+        return tracks.Count == 0 ? "" : Id(System.Text.Encoding.ASCII.GetBytes(string.Join('\n', tracks.Select(x => x.Id))));
+    }
+    public static bool IsId(string? id) => id is { Length: 64 } && id.All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+    public static void Validate(RadioMusicPlaylist playlist)
+    {
+        ArgumentNullException.ThrowIfNull(playlist);
+        if (playlist.Tracks is null || playlist.Tracks.Length > MaxTracks || playlist.Tracks.Any(x => x is null || !IsId(x.Id) || x.Bytes is < 1 or > MaxTrackBytes)
+            || playlist.Tracks.Select(x => x.Id).Distinct().Count() != playlist.Tracks.Length || playlist.Tracks.Sum(x => (long)x.Bytes) > MaxSessionBytes)
+        { throw new LiveValidationException("Invalid radio music playlist."); }
+    }
+    public static bool IsMp3(byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        return RadioPlayback.Sniff(data, ContentType);
+    }
+    /// <summary>The bytes are an MP3 of the declared track, so a music URL can never deliver other content.</summary>
+    public static bool Matches(RadioMusicTrack track, byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(track); ArgumentNullException.ThrowIfNull(data);
+        return data.Length == track.Bytes && IsMp3(data) && Id(data) == track.Id;
+    }
 }

@@ -163,7 +163,7 @@ public sealed partial class MainViewModel
     {
         var c = race.Values;
         return new(c.Name, c.Calendar?.Location ?? _current?.Values.Location ?? "", DisciplineCode(c.Discipline),
-            c.Date, c.RaceType == RaceType.Fis, c.FisCode ?? "", activeList.Plan.Gender == Gender.Female ? "L" : "M", c.Calendar?.Category ?? "FIS", c.IntermediateCount, c.CourseName ?? "");
+            c.Date, c.RaceType == RaceType.Fis, c.FisCode ?? "", activeList.Plan.Gender == Gender.Female ? "L" : "M", c.Calendar?.Category ?? "FIS", c.IntermediateCount, c.CourseName ?? "", c.RunCount);
     }
     private void ApplyLivePanelState(ControlPanelOutput state, bool updateError = true)
     {

@@ -45,6 +45,8 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
     [ObservableProperty] private string _radioContext = "";
     [ObservableProperty] private string _radioNotes = "";
     [ObservableProperty] private string _radioLexicon = "";
+    [ObservableProperty] private string _radioMusicFolder = "";
+    [ObservableProperty] private string _radioMusic = "";
     [ObservableProperty] private string _radioStatus = "Off";
     [ObservableProperty] private string _radioDetail = "Enable the radio for Local or Cloud in Race radio settings.";
     [ObservableProperty] private string _radioSpend = "";
@@ -80,7 +82,7 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
         RadioLlm = RadioLlmChoices.FirstOrDefault(x => x.Provider == c.LlmProvider && (x.Model == c.LlmModel || c.LlmProvider == RadioProviders.Simulation)) ?? RadioLlmChoices[0];
         RadioTts = RadioTtsChoices.FirstOrDefault(x => x.Provider == c.TtsProvider) ?? RadioTtsChoices[0];
         RadioRegion = c.TtsRegion; RadioVoiceA = c.VoiceA; RadioVoiceB = c.VoiceB;
-        RadioContext = c.EventContext; RadioNotes = c.CurationNotes; RadioLexicon = c.Lexicon; RadioSaveStatus = "";
+        RadioContext = c.EventContext; RadioNotes = c.CurationNotes; RadioLexicon = c.Lexicon; RadioMusicFolder = c.MusicFolder; RadioSaveStatus = "";
     }
     private void UpdateRadio(RadioHealth health)
     {
@@ -96,6 +98,10 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
             : health.State == RadioState.Stopped ? "Starts when an enabled Local or Cloud channel is running."
             : $"{last} · queue {health.QueueDepth.ToString(CultureInfo.InvariantCulture)}" + (health.Mode.Length > 0 ? " · " + health.Mode : "")
                 + (health.Phase is { } phase ? " · " + phase : "");
+        var folder = session.RadioConfiguration?.MusicFolder ?? "";
+        RadioMusic = !enabled || folder.Length == 0 || health.State == RadioState.Stopped ? ""
+            : health.MusicTracks > 0 ? $"Music: {health.MusicTracks.ToString(CultureInfo.InvariantCulture)} tracks"
+            : "Music: no playable MP3 files in the music folder (see the radio log).";
         RadioSpend = health.BudgetUsd > 0 || health.SpentUsd > 0
             ? $"Spent {health.SpentUsd.ToString("0.000", CultureInfo.InvariantCulture)} of {health.BudgetUsd.ToString("0.00", CultureInfo.InvariantCulture)} USD"
             : "";
@@ -108,7 +114,8 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
             LocalEnabled = RadioLocal, CloudEnabled = RadioCloud, BudgetUsd = RadioBudget ?? 0m, Curation = RadioCuration,
             LlmProvider = RadioLlm?.Provider ?? RadioProviders.Simulation, LlmModel = RadioLlm?.Model ?? "simulation",
             TtsProvider = RadioTts?.Provider ?? RadioProviders.Simulation, TtsRegion = RadioRegion.Trim(),
-            VoiceA = RadioVoiceA.Trim(), VoiceB = RadioVoiceB.Trim(), EventContext = RadioContext, CurationNotes = RadioNotes, Lexicon = RadioLexicon
+            VoiceA = RadioVoiceA.Trim(), VoiceB = RadioVoiceB.Trim(), EventContext = RadioContext, CurationNotes = RadioNotes, Lexicon = RadioLexicon,
+            MusicFolder = RadioMusicFolder.Trim()
         };
         if (_radioCompetition is not { } competition || competition == Guid.Empty) { RadioSaveStatus = "Open a saved timing run in OpenSkiTime first."; return; }
         var error = await Task.Run(() => session.SaveRadioAsync(competition, configuration));

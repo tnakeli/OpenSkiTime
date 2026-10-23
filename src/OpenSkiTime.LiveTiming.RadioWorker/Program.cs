@@ -22,6 +22,7 @@ var sinks = new List<RadioServerSink>();
 var active = new Dictionary<RadioTarget, RadioServerSink>();
 IDisposable?[] providers = [];
 var health = new RadioHealth(RadioState.Stopped);
+var music = RadioMusicLibrary.Empty;
 LiveSnapshot? latest = null;
 log.Write("Radio worker started");
 
@@ -59,6 +60,9 @@ try
                     await Stop();
                     var options = input.Options ?? throw new LiveValidationException("Radio options missing.");
                     options.Configuration.Validate();
+                    // Read once per start; the targets upload it when their server does not hold it yet.
+                    music = RadioMusicLibrary.Load(options.Configuration.MusicFolder, log.Write);
+                    foreach (var sink in active.Values) { sink.SetMusic(music); }
                     try
                     {
                         var llm = RadioProviderFactory.Llm(options.Configuration, options.LlmKey);
@@ -114,7 +118,7 @@ return 0;
 
 async Task SendStatus(CancellationToken ct)
 {
-    var current = engine?.Health ?? health;
+    var current = (engine?.Health ?? health) with { MusicTracks = music.Tracks.Count };
     await writes.WaitAsync(ct);
     try { await writer.WriteLineAsync(JsonSerializer.Serialize(new RadioWorkerOutput(current), LiveJson.Options).AsMemory(), ct); }
     finally { writes.Release(); }
@@ -150,7 +154,8 @@ async Task ReplaceTargets(RadioTarget[] next)
     foreach (var (target, _) in removed) { active.Remove(target); }
     foreach (var target in next.Where(x => !active.ContainsKey(x)))
     {
-        var sink = new RadioServerSink(target);
+        var sink = new RadioServerSink(target, log: log.Write);
+        sink.SetMusic(music);
         // A new target is enabled before it receives clips; the server refuses clips for a radio not yet enabled.
         if (engine is not null)
         {

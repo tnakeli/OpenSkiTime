@@ -111,9 +111,41 @@ app.MapPost("/api/sessions/{id:guid}/pause", async (Guid id, HttpContext context
 app.MapPut("/api/sessions/{id:guid}/radio/status", async (Guid id, RadioStatusUpdate update, HttpContext context, SessionStore store, RadioBroadcaster radio) =>
 {
     if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
-    store.RadioStatus(id, update);
+    var reply = store.RadioStatus(id, update);
     await radio.SendAsync(id);
-    return Results.Ok();
+    return Results.Ok(reply);
+});
+app.MapPut("/api/sessions/{id:guid}/radio/music", async (Guid id, RadioMusicPlaylist playlist, HttpContext context, SessionStore store, RadioBroadcaster radio) =>
+{
+    if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
+    var reply = store.SetMusic(id, playlist);
+    await radio.SendAsync(id);
+    return Results.Ok(reply);
+});
+// One MP3 track as the raw request body. Only an authorized publisher may send the larger body this endpoint allows.
+app.MapPut("/api/sessions/{id:guid}/radio/music/{trackId}", async (Guid id, string trackId, HttpContext context, SessionStore store, RadioBroadcaster radio) =>
+{
+    if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
+    if (!RadioMusic.IsId(trackId) || context.Request.ContentType != RadioMusic.ContentType) { return Results.BadRequest(); }
+    if (context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+    { limit.MaxRequestBodySize = RadioMusic.MaxTrackBytes; }
+    using var body = new MemoryStream();
+    var buffer = new byte[81920]; int count;
+    while ((count = await context.Request.Body.ReadAsync(buffer, context.RequestAborted)) > 0)
+    {
+        if (body.Length + count > RadioMusic.MaxTrackBytes) { return Results.StatusCode(413); }
+        body.Write(buffer, 0, count);
+    }
+    var reply = store.AddMusic(id, trackId, body.ToArray());
+    await radio.SendAsync(id);
+    return Results.Ok(reply);
+});
+// Content addressed and immutable: viewers and proxies may cache a track.
+app.MapGet("/api/sessions/{id:guid}/radio/music/{trackId}", (Guid id, string trackId, HttpContext context, SessionStore store) =>
+{
+    if (!RadioMusic.IsId(trackId) || store.MusicAudio(id, trackId) is not { } music) { return Results.NotFound(); }
+    context.Response.Headers.CacheControl = "public, max-age=86400, immutable";
+    return Results.Bytes(music, RadioMusic.ContentType, enableRangeProcessing: true);
 });
 app.MapPost("/api/sessions/{id:guid}/radio/clips", async (Guid id, RadioClipUpload clip, HttpContext context, SessionStore store, RadioBroadcaster radio) =>
 {

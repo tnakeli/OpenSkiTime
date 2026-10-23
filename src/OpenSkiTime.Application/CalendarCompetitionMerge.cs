@@ -45,7 +45,8 @@ public static class CalendarCompetitionMerge
             && string.Equals(td.FirstName, old.FirstName, StringComparison.OrdinalIgnoreCase)
             && string.Equals(td.Nation, old.Nation, StringComparison.OrdinalIgnoreCase))
         { td = td with { Number = old.Number }; }
-        calendar = calendar with { TechnicalDelegate = td,
+        // A row without a FIS race ID keeps the stored one, so a later import without a codex still finds the competition.
+        calendar = calendar with { TechnicalDelegate = td, RaceId = calendar.RaceId ?? previous?.RaceId,
             Location = calendar.Location.Length == 0 ? previous?.Location ?? "" : calendar.Location,
             Nation = calendar.Nation.Length == 0 ? previous?.Nation ?? "" : calendar.Nation };
         // A codex entered by the operator stays until FIS publishes one.

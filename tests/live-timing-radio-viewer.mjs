@@ -7,19 +7,26 @@ import assert from 'node:assert/strict';
 const source = readFileSync(fileURLToPath(new URL('../src/OpenSkiTime.LiveTiming.Server/wwwroot/live-radio.js', import.meta.url)), 'utf8');
 let now = Date.parse('2026-10-02T09:00:00Z');
 const timers = [];
-const played = [];
+const played = [], musicPlayed = [], audios = [];
 let unlocked = 0;
 const listeners = {};
-const button = { hidden: true, textContent: '', title: '', attributes: {}, setAttribute(n, v) { this.attributes[n] = String(v); }, addEventListener(t, f) { listeners['button:' + t] = f; } };
+const control = name => ({ hidden: true, textContent: '', title: '', attributes: {}, setAttribute(n, v) { this.attributes[n] = String(v); }, addEventListener(t, f) { listeners[name + ':' + t] = f; } });
+const button = control('button'), musicButton = control('music-button');
+// The first element plays speech, the second background music.
 class FakeAudio {
-  constructor() { this.src = ''; }
-  addEventListener(t, f) { listeners['audio:' + t] = f; }
-  play() { if (this.src.startsWith('blob:')) unlocked++; else played.push(this.src.split('/').pop()); return Promise.resolve(); }
-  pause() {}
-  removeAttribute() { this.src = ''; }
+  constructor() { this.src = ''; this.paused = true; this.volume = 1; this.kind = audios.length ? 'music' : 'audio'; audios.push(this); }
+  addEventListener(t, f) { listeners[this.kind + ':' + t] = f; }
+  play() {
+    this.paused = false;
+    if (this.kind === 'music') musicPlayed.push(this.src.split('/').pop());
+    else if (this.src.startsWith('blob:')) unlocked++; else played.push(this.src.split('/').pop());
+    return Promise.resolve();
+  }
+  pause() { this.paused = true; }
+  removeAttribute() { this.src = ''; this.paused = true; }
 }
 const context = {
-  document: { getElementById: () => button }, Audio: FakeAudio, encodeURIComponent, Blob, URL,
+  document: { getElementById: id => (id === 'radio-music' ? musicButton : button) }, Audio: FakeAudio, encodeURIComponent, Blob, URL,
   Date: { now: () => now, parse: Date.parse },
   setTimeout: (f, ms) => { const t = { f, at: now + ms }; timers.push(t); return t; },
   clearTimeout: t => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }
@@ -81,9 +88,21 @@ await advance(1200);
 assert.deepEqual(played.slice(-1), ['c1']);
 radio.update('s', { available: true, clips: [clip('c1', 'b3', 0, 3, 3, 5, false), clip('d1', 'b5', 0, 1, 4, 7)] });
 await end(); await advance(5000);
-assert.deepEqual(played.slice(-1), ['c1'], 'waits briefly for the next line of an unfinished sentence');
-await advance(6000);
+assert.deepEqual(played.slice(-1), ['c1'], 'waits for the next line of an unfinished sentence');
+// The worker may still be synthesizing and uploading the next line for up to 35 s.
+await advance(30000);
+assert.deepEqual(played.slice(-1), ['c1'], 'a slow but successful next line is still awaited');
+await advance(8000);
 assert.deepEqual(played.slice(-1), ['d1']);
+// A conversation whose played line the server withdraws went stale: the next conversation follows at once.
+await end(); await advance(1200);
+radio.update('s', { available: true, clips: [clip('x1', 'b14', 0, 2, 3, 21, false)], serverTime: new Date(now).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['x1']);
+await end();
+radio.update('s', { available: true, clips: [clip('y1', 'b15', 0, 1, 3, 22)], serverTime: new Date(now).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['y1']);
 // Expiry is judged on the server's clock: a browser five minutes ahead still plays a fresh two-minute clip.
 await end(); await advance(1200);
 const ahead = { ...clip('skew', 'b6', 0, 1, 3, 8), receivedAt: new Date(now - 300000).toISOString(), expiresAt: new Date(now - 300000 + 120000).toISOString() };
@@ -132,4 +151,40 @@ listeners['button:click']();
 assert.equal(button.attributes['aria-pressed'], 'false');
 radio.update('s', { available: false, clips: [] });
 assert.equal(button.hidden, true);
+// Background music shows only with tracks and never autoplays.
+const music = audios[1];
+const at = () => new Date(now).toISOString();
+radio.update('s', { available: true, clips: [], music: ['t1', 't2'], serverTime: at() });
+assert.equal(musicButton.hidden, false);
+assert.deepEqual(musicPlayed, []);
+// It starts with the radio, dips under speech and returns after the conversation.
+listeners['button:click']();
+assert.deepEqual(musicPlayed, ['t1']);
+assert.equal(music.volume, 0.35);
+radio.update('s', { available: true, clips: [clip('m1', 'bm', 0, 1, 3, 30)], music: ['t1', 't2'], serverTime: at() });
+await advance(1200);
+assert.equal(played.at(-1), 'm1');
+assert.equal(music.volume, 0.08);
+await end(); await advance(1000);
+assert.equal(music.volume, 0.08, 'another line could still follow');
+await advance(600);
+assert.equal(music.volume, 0.35);
+// Tracks play in the operator's order and loop.
+listeners['music:ended']();
+assert.deepEqual(musicPlayed, ['t1', 't2']);
+// The listener can turn the music off and on.
+listeners['music-button:click']();
+assert.equal(music.paused, true);
+assert.equal(musicButton.attributes['aria-pressed'], 'false');
+listeners['music-button:click']();
+assert.equal(music.paused, false);
+assert.deepEqual(musicPlayed, ['t1', 't2', 't1']);
+// A new playlist without the playing track switches to it.
+radio.update('s', { available: true, clips: [], music: ['t3'], serverTime: at() });
+assert.equal(musicPlayed.at(-1), 't3');
+// Pausing the radio stops the music; an unavailable radio hides its control.
+listeners['button:click']();
+assert.equal(music.paused, true);
+radio.update('s', { available: false, clips: [] });
+assert.equal(musicButton.hidden, true);
 console.log('live-radio viewer checks passed');

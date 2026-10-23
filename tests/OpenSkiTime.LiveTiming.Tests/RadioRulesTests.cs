@@ -103,6 +103,11 @@ public sealed class RadioRulesTests
         var done = Enumerable.Range(2, 4).Aggregate(waiting, (s, bib) => RadioRace.Set(s, bib, LiveStatus.Finished, 4800 + bib));
         Assert.Equal(RacePhase.BetweenRuns, RacePhases.Derive(done, now));
         Assert.Equal(RacePhase.AfterRace, RacePhases.Derive(done with { Competition = done.Competition with { Discipline = "SG" } }, now));
+        // The configured run count wins over the discipline's usual count: a one-run slalom ends after its run,
+        // and a three-run speed race continues.
+        Assert.Equal(RacePhase.AfterRace, RacePhases.Derive(done with { Competition = done.Competition with { RunCount = 1 } }, now));
+        Assert.Equal(RacePhase.BetweenRuns, RacePhases.Derive(done with { Competition = done.Competition with { Discipline = "SG", RunCount = 3 } }, now));
+        Assert.Equal(3, FactSheet.Build(done with { Competition = done.Competition with { RunCount = 3 } }, []).Counts["runs"]);
         var second = done with { CurrentRun = 2, Runs = [.. done.Runs, done.Runs[0] with { Number = 2, Results = start.Runs[0].Results }] };
         Assert.Equal(RacePhase.BetweenRuns, RacePhases.Derive(second, now));
     }

@@ -2,11 +2,59 @@
    autoplays. Clips play one at a time with short pauses; starting or resuming joins at the live edge. */
 const liveRadio = (() => {
   const button = document.getElementById('radio'), audio = new Audio();
-  const lineGap = 350, batchGap = 1200, liveEdge = 15000, lineWait = 8000, wait = {};
+  // lineWait covers the worker's slowest successful next line: speech (15 s) plus an upload to each of two servers (10 s each).
+  const lineGap = 350, batchGap = 1200, liveEdge = 15000, lineWait = 40000, wait = {};
   // offset maps server times to this browser's clock (browser minus server).
   let session = null, clips = [], playing = false, current = null, timer = null, offset = 0;
-  let lastBatch = null, lastInterruptible = true, lastEnded = 0, nextLine = 0;
+  let lastBatch = null, lastClip = null, lastInterruptible = true, lastEnded = 0, nextLine = 0;
   const done = new Set(), skippedBatches = new Set(), seenAt = new Map();
+  // Background music: the operator's tracks play in order while the radio plays and dip under speech. A Web Audio gain
+  // fades also where the media element volume is fixed (iOS); without Web Audio the element volume is used.
+  const musicButton = document.getElementById('radio-music'), music = new Audio();
+  const musicLevel = 0.35, duckLevel = 0.08;
+  let tracks = [], trackIndex = -1, musicOn = musicPreference(), audioContext = null, gain = null, unduckTimer = null;
+  function musicPreference() { try { return localStorage.getItem('ost-radio-music') !== 'off'; } catch { return true; } }
+  function musicLabel() {
+    musicButton.textContent = musicOn ? '♪ Music' : '♪ Music off';
+    musicButton.setAttribute('aria-pressed', musicOn);
+    musicButton.title = musicOn ? 'Turn the background music off' : 'Turn the background music on';
+  }
+  function level(target, seconds) {
+    if (!gain) { music.volume = target; return; }
+    const t = audioContext.currentTime;
+    gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(target, t + seconds);
+  }
+  // Created inside the click that starts the radio, which browsers require before audio may play.
+  function audioGraph() {
+    const Context = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (gain || !Context) return;
+    try {
+      audioContext = new Context(); gain = audioContext.createGain(); gain.gain.value = 0;
+      audioContext.createMediaElementSource(music).connect(gain).connect(audioContext.destination);
+    } catch { audioContext = null; gain = null; }
+  }
+  function playMusic() {
+    if (!playing || !musicOn || !tracks.length) { stopMusic(); return; }
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+    if (music.src && !music.paused) return;
+    trackIndex = (trackIndex + 1) % tracks.length;
+    music.src = `/api/sessions/${encodeURIComponent(session)}/radio/music/${encodeURIComponent(tracks[trackIndex])}`;
+    level(current ? duckLevel : musicLevel, 1.5);
+    music.play().catch(() => {});
+  }
+  function stopMusic() { clearTimeout(unduckTimer); unduckTimer = null; music.pause(); music.removeAttribute('src'); }
+  // Speech starts: the music dips at once. Speech ends: it returns after the pause in which another line could follow.
+  function duck() { clearTimeout(unduckTimer); unduckTimer = null; if (music.src) level(duckLevel, 0.4); }
+  function unduck() { clearTimeout(unduckTimer); unduckTimer = setTimeout(() => { unduckTimer = null; if (!current && music.src) level(musicLevel, 2); }, batchGap + 300); }
+  music.addEventListener('ended', () => { music.removeAttribute('src'); playMusic(); });
+  // A track that cannot be played is skipped after a pause, so a broken file never loops tightly.
+  music.addEventListener('error', () => { music.removeAttribute('src'); setTimeout(playMusic, 5000); });
+  musicButton.addEventListener('click', () => {
+    musicOn = !musicOn; musicLabel();
+    try { localStorage.setItem('ost-radio-music', musicOn ? 'on' : 'off'); } catch { /* Remembered for this page only. */ }
+    if (musicOn) { audioGraph(); playMusic(); } else stopMusic();
+  });
+  musicLabel();
   function label() {
     button.textContent = playing ? '❚❚ Radio' : '▶ Radio';
     button.setAttribute('aria-pressed', playing);
@@ -21,8 +69,10 @@ const liveRadio = (() => {
     const expected = sameBatch.find(c => c.line === nextLine);
     if (!lastInterruptible) {
       if (expected) return expected;
-      // The next line of an unfinished sentence pair may still be on its way; a batch dropped as stale never finishes.
-      if (now - lastEnded < lineWait) return wait;
+      // The next line of an unfinished sentence pair may still be on its way. A batch whose played line the server no
+      // longer lists went stale (the worker drops it by the same rules) and never finishes.
+      const alive = clips.some(c => c.clipId === lastClip && Date.parse(c.expiresAt) + offset > now);
+      if (alive && now - lastEnded < lineWait) return wait;
       skippedBatches.add(lastBatch);
     } else if (sameBatch.length && !expected) { skippedBatches.add(lastBatch); }
     // A new conversation starts only at its opening line: a reply whose opening never arrived is not played alone.
@@ -40,7 +90,7 @@ const liveRadio = (() => {
     if (clip === wait) { timer = setTimeout(next, 1000); return; }
     if (!clip) return;
     if (!waited && lastBatch !== null && clip.batchId !== lastBatch) { timer = setTimeout(() => next(true), batchGap - lineGap); return; }
-    current = clip; done.add(clip.clipId);
+    current = clip; done.add(clip.clipId); duck();
     audio.src = `/api/sessions/${encodeURIComponent(session)}/radio/clips/${encodeURIComponent(clip.clipId)}`;
     // A browser that refuses playback outside a click shows the control paused again instead of silently dropping clips.
     audio.play().catch(e => { if (e && e.name === 'NotAllowedError') { current = null; pause(); } else fail(); });
@@ -49,20 +99,22 @@ const liveRadio = (() => {
   function fail() {
     const failed = current; current = null;
     if (!failed) return;
+    unduck();
     skippedBatches.add(failed.batchId);
     if (playing) timer = setTimeout(next, lineGap);
   }
   function finish() {
     const ended = current; current = null;
     if (!ended) return;
-    lastBatch = ended.batchId; lastInterruptible = ended.interruptible || ended.line === ended.lineCount - 1; lastEnded = Date.now(); nextLine = ended.line + 1;
+    unduck();
+    lastBatch = ended.batchId; lastClip = ended.clipId; lastInterruptible = ended.interruptible || ended.line === ended.lineCount - 1; lastEnded = Date.now(); nextLine = ended.line + 1;
     if (playing) timer = setTimeout(next, lineGap);
   }
   audio.addEventListener('ended', finish);
   audio.addEventListener('error', fail);
   function pause() {
     playing = false; clearTimeout(timer); timer = null; current = null;
-    audio.pause(); audio.removeAttribute('src'); label();
+    audio.pause(); audio.removeAttribute('src'); stopMusic(); label();
   }
   // Joining or resuming skips clips announced more than a few seconds ago.
   // A short silent sound played inside the click unlocks audio for later clips on browsers that require a user
@@ -82,14 +134,21 @@ const liveRadio = (() => {
     clips.forEach(c => { if (now - (seenAt.get(c.clipId) || now) > liveEdge) { done.add(c.clipId); skippedBatches.add(c.batchId); } });
     playing = true; lastBatch = null; lastInterruptible = true; label();
     if (!pick()) unlock();
+    audioGraph(); playMusic();
     next();
   }
   button.addEventListener('click', () => (playing ? pause() : play()));
   return {
     update(id, announcement) {
-      if (id !== session) { pause(); done.clear(); skippedBatches.clear(); seenAt.clear(); session = id; }
+      if (id !== session) { pause(); done.clear(); skippedBatches.clear(); seenAt.clear(); session = id; trackIndex = -1; }
       const available = !!announcement && announcement.available;
       clips = available ? announcement.clips || [] : [];
+      const previous = tracks;
+      tracks = available ? announcement.music || [] : [];
+      musicButton.hidden = !tracks.length;
+      // A track the operator removed stops; the next one in the new playlist follows.
+      if (music.src && !tracks.some(t => music.src.endsWith('/' + t))) { stopMusic(); trackIndex = -1; }
+      if (playing && tracks.length && tracks.join() !== previous.join()) playMusic();
       // Clip age on the server's clock, mapped to this browser's clock.
       const now = Date.now();
       offset = announcement && announcement.serverTime ? now - Date.parse(announcement.serverTime) : 0;

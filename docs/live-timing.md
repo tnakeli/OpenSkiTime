@@ -69,8 +69,8 @@ The latest snapshot is bounded by the contract (2,000 competitors, nine runs, tw
 | `/r/{id}` | Responsive public view. No credential in the path or query. |
 | `/` | Lists all active published races with links to their `/r/{id}` views. |
 | `/.well-known/security.txt` | RFC 9116 security contact. |
-| `PUT /api/sessions/{id}/radio/status`, `POST /api/sessions/{id}/radio/clips` | Session token. Optional race radio heartbeat and clip upload; see [race radio](race-radio.md#live-timing-server-api-protocol-2). |
-| `GET /api/sessions/{id}/radio/clips/{clipId}` | Public audio of a valid radio clip. SignalR additionally sends `Radio` announcements. |
+| `PUT /api/sessions/{id}/radio/status`, `POST /api/sessions/{id}/radio/clips`, `PUT /api/sessions/{id}/radio/music`, `PUT /api/sessions/{id}/radio/music/{trackId}` | Session token. Optional race radio heartbeat, clip upload and background music; see [race radio](race-radio.md#live-timing-server-api-protocol-2). |
+| `GET /api/sessions/{id}/radio/clips/{clipId}`, `GET /api/sessions/{id}/radio/music/{trackId}` | Public audio of a valid radio clip or a music track. SignalR additionally sends `Radio` announcements. |
 
 Every response carries the server's live protocol version in `X-OpenSkiTime-Live-Protocol`. The current version is 2 (version 2 added the race radio API); a protocol-1 desktop must be updated before it can publish to a protocol-2 server. The publisher sends its `LiveProtocol.Version` in the same header on every request. A request declaring a different version is refused with HTTP 426 before routing or mutation; the worker reports an incompatible server and stops rather than retrying. Requests without the header, such as browsers and diagnostic tools, are treated as the current version. Application and server release versions are independent; see [release process](release-process.md#versioning).
 

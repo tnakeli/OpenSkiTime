@@ -29,14 +29,14 @@ public sealed record LiveForerunner(string Letter, string LastName, string First
 public sealed record LiveRun(int Number, DateTimeOffset ListCreatedAt, int[] StartOrder, LiveResult[] Results,
     LiveForerunner[]? Forerunners = null);
 public sealed record LiveCompetition(string Name, string Place, string Discipline, DateOnly Date,
-    bool IsFis, string Codex, string Gender, string Category, int IntermediateCount, string Slope = "");
+    bool IsFis, string Codex, string Gender, string Category, int IntermediateCount, string Slope = "", int RunCount = 0);
 public sealed record LiveSnapshot(long Version, LiveCompetition Competition, LiveCompetitor[] Competitors,
     int CurrentRun, LiveRun[] Runs, DateTimeOffset UpdatedAt, bool Paused = false)
 {
     public void Validate(int maxCompetitors = 2000)
     {
         if (Version < 0 || Competition is null || Competitors is null || Runs is null
-            || string.IsNullOrWhiteSpace(Competition.Name) || Competition.IntermediateCount is < 0 or > 20
+            || string.IsNullOrWhiteSpace(Competition.Name) || Competition.IntermediateCount is < 0 or > 20 || Competition.RunCount is < 0 or > 9
             || Competitors.Length > maxCompetitors || Runs.Length is < 1 or > 9 || CurrentRun is < 1 or > 9
             || Runs.Any(x => x is null) || UpdatedAt == default
             || !Runs.Any(x => x.Number == CurrentRun) || Runs.Select(x => x.Number).Distinct().Count() != Runs.Length)

@@ -153,6 +153,10 @@ public sealed class SeriesCalendarTests
             var updated = await workspace.ApplyCalendarAsync(s_series, published, again.Revision);
             Assert.Equal(7, updated.Competitions.Count);
             Assert.Equal("0906", updated.Competitions.Single(x => x.Id == first.Id).Values.FisCode);
+            // A row that lacks the FIS race ID keeps the stored one for later imports.
+            var withoutId = CalendarCompetitionMerge.Merge(updated.Competitions.Single(x => x.Id == first.Id).Values,
+                published.Single(x => x.Calendar!.RaceId == 131) with { Calendar = published.Single(x => x.Calendar!.RaceId == 131).Calendar! with { RaceId = null } });
+            Assert.Equal(131, withoutId.Calendar!.RaceId);
             // Codex and FIS race ID pointing to different competitions (a mistyped codex) are rejected, not guessed.
             var conflicting = published.Select(x => x.Calendar!.RaceId == 132 ? x with { FisCode = "0906" } : x.Calendar!.RaceId == 131 ? x with { FisCode = null } : x).ToArray();
             await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApplyCalendarAsync(s_series, conflicting, updated.Revision));

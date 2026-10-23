@@ -25,13 +25,23 @@ public interface IRadioClipSink
 /// </summary>
 public sealed class RadioServerSink : IRadioClipSink, IDisposable
 {
+    /// <summary>Pause after a failed music upload before the next heartbeat tries again.</summary>
+    public static readonly TimeSpan MusicRetry = TimeSpan.FromMinutes(1);
+    public static readonly TimeSpan MusicTrackTimeout = TimeSpan.FromMinutes(2);
     private readonly HttpClient _http;
     private readonly RadioTarget _target;
     private readonly TimeProvider _time;
-    public RadioServerSink(RadioTarget target, TimeProvider? time = null)
+    private readonly Action<string> _log;
+    private readonly CancellationTokenSource _stop = new();
+    private RadioMusicLibrary _music = RadioMusicLibrary.Empty;
+    private Task _musicSync = Task.CompletedTask;
+    // UTC ticks; written by the background upload, read by the heartbeat.
+    private long _musicRetryTicks;
+    public RadioServerSink(RadioTarget target, TimeProvider? time = null, Action<string>? log = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         _time = time ?? TimeProvider.System;
+        _log = log ?? (_ => { });
         var uri = new Uri(target.Endpoint.TrimEnd('/') + "/");
         if (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback))
         { throw new LiveValidationException("Radio clips require HTTPS (HTTP only on loopback)."); }
@@ -46,7 +56,15 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
     // Status updates go out one at a time, so an enabled heartbeat already under way cannot land after the final disable.
     private readonly SemaphoreSlim _status = new(1, 1);
     /// <summary>No more uploads or enabled heartbeats; only the final disabled status may still be sent.</summary>
-    public void Close() => _closed = true;
+    public void Close() { _closed = true; _stop.Cancel(); }
+    /// <summary>The music this target should hold; the next heartbeat uploads it when the server reports another playlist.</summary>
+    public void SetMusic(RadioMusicLibrary music)
+    {
+        ArgumentNullException.ThrowIfNull(music);
+        Volatile.Write(ref _music, music); Interlocked.Exchange(ref _musicRetryTicks, 0);
+    }
+    /// <summary>The music upload under way, for tests and an orderly shutdown.</summary>
+    public Task MusicSync => _musicSync;
     public async Task UploadAsync(RadioClip clip, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(clip);
@@ -64,8 +82,50 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
         {
             if (_closed && status.Enabled) { throw new RadioProviderException($"{_target.Channel} radio target was removed."); }
             using var response = await Send(t => _http.PutAsJsonAsync($"api/sessions/{_target.SessionId}/radio/status", status, LiveJson.Options, t), ct);
+            if (status.Enabled && !_closed && await Reply(response, ct) is { } reply) { StartMusic(reply); }
         }
         finally { _status.Release(); }
+    }
+    private static async Task<RadioStatusReply?> Reply(HttpResponseMessage response, CancellationToken ct)
+    {
+        try { return await response.Content.ReadFromJsonAsync<RadioStatusReply>(LiveJson.Options, ct); }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException) { return null; }
+    }
+    // Music goes up in the background, one track at a time, so clips and heartbeats never wait for it.
+    private void StartMusic(RadioStatusReply reply)
+    {
+        var music = Volatile.Read(ref _music);
+        if ((reply.Playlist == music.Id && reply.Missing.Length == 0) || !_musicSync.IsCompleted || _time.GetUtcNow().UtcTicks < Interlocked.Read(ref _musicRetryTicks)) { return; }
+        _musicSync = Task.Run(() => UploadMusicAsync(music, _stop.Token));
+    }
+    private async Task UploadMusicAsync(RadioMusicLibrary music, CancellationToken ct)
+    {
+        try
+        {
+            string[] missing;
+            // Bounded like every request: an unanswered playlist must not block later retries.
+            using (var limit = new CancellationTokenSource(MusicTrackTimeout, _time))
+            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, limit.Token))
+            {
+                using var playlist = await Send(t => _http.PutAsJsonAsync($"api/sessions/{_target.SessionId}/radio/music", music.Playlist, LiveJson.Options, t), linked.Token);
+                missing = (await Reply(playlist, linked.Token))?.Missing ?? [];
+            }
+            foreach (var track in music.Tracks.Where(x => missing.Contains(x.Id)))
+            {
+                using var limit = new CancellationTokenSource(MusicTrackTimeout, _time);
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, limit.Token);
+                using var content = new ByteArrayContent(track.Data);
+                content.Headers.ContentType = new MediaTypeHeaderValue(RadioMusic.ContentType);
+                using var uploaded = await Send(t => _http.PutAsync($"api/sessions/{_target.SessionId}/radio/music/{track.Id}", content, t), linked.Token);
+            }
+            _log(string.Create(CultureInfo.InvariantCulture, $"Radio music on {_target.Channel}: {music.Tracks.Count} tracks, {missing.Length} uploaded"));
+        }
+        catch (Exception ex) when (ex is RadioProviderException or OperationCanceledException or HttpRequestException or IOException)
+        {
+            if (ct.IsCancellationRequested) { return; }
+            Interlocked.Exchange(ref _musicRetryTicks, (_time.GetUtcNow() + MusicRetry).UtcTicks);
+            _log($"Radio music upload to {_target.Channel} failed: {(ex is RadioProviderException ? ex.Message : "no answer in time")}");
+        }
     }
     private async Task<HttpResponseMessage> Send(Func<CancellationToken, Task<HttpResponseMessage>> send, CancellationToken ct)
     {
@@ -80,5 +140,5 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
         { Failure = $"{_target.Channel} live timing server rejected the radio (HTTP {(int)status})."; }
         throw new RadioProviderException($"{_target.Channel} live timing server answered HTTP {(int)status} to radio.");
     }
-    public void Dispose() { _http.Dispose(); _status.Dispose(); }
+    public void Dispose() { _stop.Cancel(); _http.Dispose(); _status.Dispose(); _stop.Dispose(); }
 }

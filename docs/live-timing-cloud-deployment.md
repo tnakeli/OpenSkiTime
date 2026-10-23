@@ -52,6 +52,7 @@ All application settings use ASP.NET Core configuration. Environment uses `__` f
 | `LiveTiming__ConnectionsPerClient` | `200`; clamped 1–`MaxConnections` | Concurrent viewer (SignalR) connections per client address, allowing a shared venue network while stopping one source from taking every slot. |
 | `LiveTiming__TrustForwardedFor` | `false` | Set `true` only behind exactly one trusted ingress proxy that appends the client address to `X-Forwarded-For` (Azure Container Apps). The last entry is then used as the client address for limits. The Bicep template sets it. |
 | `LiveTiming__RadioMaxMegabytes` | `64`; clamped 1–1,024 | RAM for race radio clips across all sessions; the oldest clips are evicted first. Each session also keeps at most 32 clips and 8 MiB. Include it in memory sizing. |
+| `LiveTiming__RadioMusicMaxMegabytes` | `256`; clamped 0–4,096 | RAM for race radio background music across all sessions (at most 48 MB per session). A playlist beyond it is refused with 503; `0` disables music. Include it in memory sizing. |
 | `LiveTiming__SecurityContact` | GitHub private vulnerability reporting | `https:` or `mailto:` contact published in `/.well-known/security.txt`. |
 | `Logging__LogLevel__Default` | Image: `Warning` | Operational verbosity; never enable body/Authorization logging. |
 

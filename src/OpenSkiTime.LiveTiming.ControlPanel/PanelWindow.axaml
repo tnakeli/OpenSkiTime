@@ -59,7 +59,8 @@
         </StackPanel>
        </Grid>
        <TextBlock Name="RadioDetailText" Text="{Binding RadioDetail}" Classes="muted" />
-       <TextBlock Text="{Binding RadioSpend}" Classes="muted" FontSize="11" />
+       <TextBlock Text="{Binding RadioMusic}" Classes="muted" FontSize="11" IsVisible="{Binding RadioMusic, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <TextBlock Text="{Binding RadioSpend}" Classes="muted" FontSize="11" />
       </StackPanel>
      </Border>
     </StackPanel>
@@ -99,6 +100,13 @@
       <StackPanel Classes="field"><TextBlock Text="Event background for the hosts" /><TextBox Text="{Binding RadioContext}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54" MaxLength="2000" /></StackPanel>
       <StackPanel Classes="field"><TextBlock Text="Curation notes (habits to avoid)" /><TextBox Text="{Binding RadioNotes}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxLength="1000" /></StackPanel>
       <StackPanel Classes="field"><TextBlock Text="Pronunciation (one per line: written = spoken)" /><TextBox Text="{Binding RadioLexicon}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxLength="4000" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="Background music folder (MP3, optional)" />
+       <Grid ColumnDefinitions="*,8,Auto">
+        <TextBox Name="RadioMusicFolderBox" Text="{Binding RadioMusicFolder}" Watermark="No music" />
+        <Button Grid.Column="2" Name="BrowseMusicButton" Content="Browse…" Click="BrowseMusic" />
+       </Grid>
+      </StackPanel>
+      <TextBlock Text="Played softly under the commentary for viewers who listen. Use music you may stream publicly, such as royalty-free tracks; the files are sent to the live timing server. Up to 24 files, 12 MB each and 48 MB in total." Classes="muted" FontSize="11" TextWrapping="Wrap" />
       <Button Name="SaveRadioButton" Content="Save radio settings" Classes="primary" Command="{Binding SaveRadioCommand}" HorizontalAlignment="Left" />
       <TextBlock Text="{Binding RadioSaveStatus}" Classes="muted" FontSize="11" />
      </StackPanel></Border>
