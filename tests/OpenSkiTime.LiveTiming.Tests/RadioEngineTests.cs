@@ -122,6 +122,23 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task AnEventTheModelLeavesOutGetsItsTemplateLines()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) || FakeLlm.IsProducer(r) ? Echo(r) : Script(("Aino", "Radalla nyt {racer:3}.", true))))
+        };
+        rig.State = RadioRace.Set(RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow()), 2, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        // Bib 1 goes out and bib 3 starts in the same moment; the model writes only about the start.
+        rig.State = RadioRace.Set(RadioRace.Set(rig.State, 1, LiveStatus.DNF, at: rig.Time.GetUtcNow()), 3, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Contains(rig.Sink.Clips, x => x.Transcript.Contains("Aada Lumivaara", StringComparison.Ordinal));
+        Assert.Contains(rig.Sink.Clips, x => x.Transcript.StartsWith("Radalla nyt numero kolme", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task AStartScriptWithoutTheNextRacerGetsTheStartGateLine()
     {
         var rig = new Rig

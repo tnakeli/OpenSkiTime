@@ -176,6 +176,20 @@ public sealed class RadioEngine
             // A start is announced while the racer is on course and the next one waits in the gate: no time for curation.
             var starts = batch.Any(x => x.Kind is RadioEventKind.Start or RadioEventKind.TopStart or RadioEventKind.RunStarted);
             if (lines is not null && mode == RadioMode.Full && _config.Curation && !starts) { lines = await CurateAsync(lines, facts, rules, ct); }
+            // Every event is said: one the model script leaves out (a DNF beside a start, a line cut by validation) gets its
+            // template lines at the end of the conversation.
+            if (lines is not null)
+            {
+                var left = batch.Where(x => x.Kind != RadioEventKind.Producer && x.Bibs.Length > 0
+                    && !lines.Any(l => l.Text.Contains($"{{racer:{x.Bibs[0]}}}", StringComparison.Ordinal))).ToArray();
+                var added = left.Length == 0 ? [] : FinnishTemplates.Lines(left, facts, _seed++).Where(x => RadioSlots.Problem(x.Text, facts, rules) is null).ToArray();
+                if (added.Length > 0)
+                {
+                    var script = lines.ToList();
+                    script.AddRange(added.Select((x, i) => x with { Host = RadioPersonas.Host(lines.Count + i).Name }));
+                    lines = script;
+                }
+            }
             // The next racer in the start gate is always said; a model script that leaves it out gets the template line.
             if (lines is not null)
             {
