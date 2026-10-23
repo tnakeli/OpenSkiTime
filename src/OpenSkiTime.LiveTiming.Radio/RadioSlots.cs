@@ -112,6 +112,9 @@ public static partial class RadioSlots
             var parts = value.Split('-', StringSplitOptions.RemoveEmptyEntries);
             // Counts, places and times come only from slots; "yksi", "ensimmäinen" and "toinen" stay usable as ordinary words.
             if (NumberWords.Any(n => value.StartsWith(n, StringComparison.OrdinalIgnoreCase))) { return "number words outside slots"; }
+            // Eleven in any form (yksitoista, yhdentoista, yhdestoista), without rejecting "yhdessä" (together).
+            if (value.StartsWith('y') || value.StartsWith('Y'))
+            { if (value.Contains("toist", StringComparison.OrdinalIgnoreCase)) { return "number words outside slots"; } }
             // Racer names come only from slots. Lower-case common words (mäki, kivi) are not names.
             if (parts.Any(p => rules.RacerNames.Contains(p) && char.IsUpper(p[0]))) { return "racer name outside slots"; }
             if (!char.IsUpper(value[0]) || SentenceStart(stripped, word.Index)) { continue; }

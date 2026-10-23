@@ -142,10 +142,19 @@ public static class RadioPlayback
         if (condition.Kind == RadioConditionKind.Starters) { return run is not null && run.StartOrder.Length == condition.Value; }
         // The racer is still the first one waiting in the current start order (a reordered queue makes it false).
         if (condition.Kind == RadioConditionKind.NextStarter)
-        { return run is not null && run.StartOrder.FirstOrDefault(bib => (run.Results.FirstOrDefault(x => x.Bib == bib)?.Status ?? LiveStatus.Ready) == LiveStatus.Ready) == condition.Bib; }
+        {
+            if (run is null) { return false; }
+            var statuses = run.Results.ToDictionary(x => x.Bib, x => x.Status);
+            return run.StartOrder.FirstOrDefault(bib => statuses.GetValueOrDefault(bib, LiveStatus.Ready) == LiveStatus.Ready) == condition.Bib;
+        }
         // The number of racers of the run with a status, counted like the fact sheet counts them (no result is Ready).
         if (condition.Kind == RadioConditionKind.StatusCount)
-        { return run is not null && run.StartOrder.Count(bib => (run.Results.FirstOrDefault(x => x.Bib == bib)?.Status ?? LiveStatus.Ready) == condition.Status) == condition.Value; }
+        {
+            if (run is null) { return false; }
+            // Linear: large runs (2,000 starters) are evaluated under the server's session lock.
+            var statuses = run.Results.ToDictionary(x => x.Bib, x => x.Status);
+            return run.StartOrder.Count(bib => statuses.GetValueOrDefault(bib, LiveStatus.Ready) == condition.Status) == condition.Value;
+        }
         if (run is null || !run.StartOrder.Contains(condition.Bib)) { return false; }
         var result = run.Results.FirstOrDefault(x => x.Bib == condition.Bib);
         return condition.Kind switch

@@ -40,6 +40,8 @@ public sealed class RadioSlotTests
     [InlineData("Hankiranta johtaa nyt.", "racer name outside slots")]
     [InlineData("Maalissa VEETI {racer:1}.", "racer name outside slots")]
     [InlineData("Hän on kolmas.", "number words outside slots")]
+    [InlineData("Hän on yhdestoista.", "number words outside slots")]
+    [InlineData("Yksitoista laskijaa on maalissa.", "number words outside slots")]
     [InlineData("Eroa on sekunnin verran.", "number words outside slots")]
     [InlineData("Hän voitti Matti Virtasen.", "unknown proper name")]
     [InlineData("{racer:2} ja Pekka tuulettavat.", "unknown proper name")]
@@ -57,6 +59,7 @@ public sealed class RadioSlotTests
     [InlineData("Hän tulee Ruotsista, ja Suomen laskijat seuraavat perässä.")]
     [InlineData("FIS-kilpailuissa ja SM-tasolla tämä on tuttua, Lumiklubin väki kertoo.")]
     [InlineData("Mäki on jyrkkä, ja kivi ei ole tiellä.")]
+    [InlineData("Seurataan laskua yhdessä.")]
     public void OrdinaryWordsAndAllowedNamesPass(string line)
     {
         var (facts, rules) = Race();

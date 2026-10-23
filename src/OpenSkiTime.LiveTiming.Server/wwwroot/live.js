@@ -128,6 +128,8 @@
   function drop(closing) {
     if (socket !== closing) return; // Late events from an abandoned socket never start a second connection.
     socket = null; clearInterval(closing.keepAlive);
+    // Without a connection there are no corrections or deletions: the radio stops until a fresh announcement arrives.
+    liveRadio.update(id, null);
     closing.onopen = closing.onmessage = closing.onclose = closing.onerror = null;
     try { closing.close(); } catch { /* Already closed. */ }
     schedule();
