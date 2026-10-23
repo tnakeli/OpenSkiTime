@@ -114,7 +114,9 @@ public static class FinnishTemplates
                 yield return new("", $"Seuraavana lähtövuorossa on {{racer:{bib}}}.", true);
                 break;
             case ProducerSources.OnCourse when facts.Racers.ContainsKey(bib):
-                yield return new("", $"Radalla on nyt {{racer:{bib}}}.", true);
+                yield return new("", $"Radalla on nyt {Who(facts, bib)}{Club(facts, bib)}.", true);
+                if (facts.Racers[bib].Previous?.Rank is { } before)
+                { yield return new("", $"Ensimmäisen laskun jälkeen hän oli {Place("prevrank", bib, before)}.", true); }
                 break;
             case ProducerSources.Standings:
                 var leaders = e.Bibs.Where(facts.Racers.ContainsKey).Take(3).ToArray();

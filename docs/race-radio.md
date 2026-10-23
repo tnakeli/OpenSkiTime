@@ -32,7 +32,7 @@ flowchart LR
 1. **Detection** (deterministic, from consecutive snapshots of the current run; events of a run that is no longer current are dropped): first start of a run, every start (a top-three racer starting a later run as a top start), finish (new leader, podium place or other), DNF, DSQ, DNS, result correction, run complete, and an interruption (a run in progress with nobody on course and no update for four minutes). The first snapshot is history and is not announced. A run lasts 45-80 s with one or two racers on course, so each start names the racer who left and the next racer in the start gate (the first still waiting in the start order); the clip is stale once that racer leaves the course or the next racer is no longer next.
 2. **Priority batcher.** Events of another run or of a phase that no longer applies are dropped, so a batch never mixes incompatible phases. Delays by the highest priority in the batch: 2 s (P1), 5 s (P2: new leader, podium, run complete, start, top start), 12 s (P3: finish, DNF/DSQ, correction, run start), 25 s (P4: DNS), 40 s (P5: producer). A higher priority shortens the delay from its arrival; six events flush at once. Events that went stale while waiting are dropped.
 3. **Dialogue** by the language model (JSON lines `{host, text, interruptible}`), or by templates (see 6).
-4. **Validation** of every line before speech (see [Finnish verbalization](#finnish-verbalization-and-guardrails)). Common alternative case codes (`part`, `lle`, `ssa` …) are first mapped to the listed ones, and inflected forms of allowed names (Harjoitusrinteellä) pass. A script with invalid lines gets one **repair** call: the model receives its script, each rejected line, the reason and the offending word (never a racer name) and returns it fixed. If the repaired script still has an invalid line, templates are used. In a synthetic test with `gpt-4.1-mini` (2026-10-23) about a third of first scripts had an invalid line, mostly number words for places and counts.
+4. **Validation** of every line before speech (see [Finnish verbalization](#finnish-verbalization-and-guardrails)). Common alternative case codes (`part`, `lle`, `ssa` …) are first mapped to the listed ones, and inflected forms of allowed names (Harjoitusrinteellä) pass. A script with invalid lines gets one **repair** call: the model receives its script, each rejected line, the reason and the offending word (never a racer name) and returns it fixed. If the repaired script still has an invalid line, its valid lines before the first invalid one are spoken as a shorter conversation; only a script whose first line is invalid falls back to templates. In a synthetic test with `gpt-4.1-mini` (2026-10-23) about a third of first scripts had an invalid line, mostly number words for places and counts.
 5. **Curation** (optional second model pass): style only; the line count, hosts and every slot must stay identical and each line must still validate, otherwise the original script is used. Detected style patterns feed the style memory.
 6. **Templates.** Deterministic Finnish phrases for every core event when the model fails, times out, returns invalid output, or the budget allows speech only.
 7. **Rendering** of slots to Finnish, then **speech** per line with the host's voice.
@@ -45,6 +45,8 @@ flowchart LR
 The phase is derived from the snapshot of the current run: **BeforeStart** (run 1 not started), **RunInProgress**, **Interrupted** (started, nobody on course, no update for four minutes), **BetweenRuns** (a run complete with another planned, or the next run not started) and **AfterRace** (the last planned run complete). DH and SG have one planned run, other disciplines two, because the snapshot does not carry a planned run count. Inactivity uses the snapshot update time stamped by the publisher, never device timestamps, which may be set to another time of day. The phase gates producer sources and clip applicability (a run summary clip is dropped once the next run starts).
 
 ### Producer (idle moments)
+
+During a run, a racer on course who has not been featured in that run is talked about after about 8 s of silence (club, nationality in an international field, earlier result), once per racer and run; a run of 45-80 s with one or two racers on course leaves room for it. The clip is stale once the racer leaves the course.
 
 When nothing is waiting and the last speech ended long enough ago, the producer picks at most one source: **standings** (unofficial top three), **next_starter**, **on_course**, **run_summary**, **event_context** (operator background) or **general**. A hard code gate checks the phase allowlist and that a named racer is a participant in the right state (waiting to start, on course); a rejected choice is retried once with the failed source named, then the code picks a valid source deterministically. The minimum interval is budget-aware: 60 s at the start, rising to 240 s as the budget is used. The producer stops 30 minutes after the race ends.
 
@@ -272,6 +274,17 @@ dotnet src/OpenSkiTime.LiveTiming.Harness/bin/Debug/net10.0/OpenSkiTime.LiveTimi
 ```
 
 Use `templates` as the model to hear only the deterministic phrases, and `simulation` for offline tones. The tool writes numbered clips and `transcript.txt` from a synthetic race with fictional names.
+
+Live listening test with real viewers (real time, about 30 minutes; fictional field of 30, 60 % Finnish, runs of 45-50 s, about two racers on course, a quarter DNF; publisher and radio keys from Credential Manager; billed):
+
+```powershell
+dotnet build OpenSkiTime.LiveTiming.slnx
+$bin = "bin/Debug/net10.0"
+dotnet src/OpenSkiTime.LiveTiming.Harness/$bin/OpenSkiTime.LiveTiming.Harness.dll radio-race openai gpt-4.1-mini google https://live.openskiti.me `
+  src/OpenSkiTime.LiveTiming.Worker/$bin/OpenSkiTime.LiveTiming.Worker.dll src/OpenSkiTime.LiveTiming.RadioWorker/$bin/OpenSkiTime.LiveTiming.RadioWorker.dll 30 C:\Music\radio
+```
+
+It prints the public race view to share. A first run with Google Chirp 3: HD spent about $0.15 in five minutes, well above the modelled hourly cost; measure before relying on the cost table.
 
 ## Tests
 
