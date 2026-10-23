@@ -171,9 +171,10 @@ public sealed class SessionStore
         {
             Prune();
             var room = Room(id);
+            // A disabled radio stays disabled: a late upload after the worker disabled this target is refused.
+            if (!room.Enabled) { throw new LiveConflictException(); }
             if (room.Clips.Any(x => x.Info.ClipId == clip.ClipId)) { return; }
-            // An upload proves the worker is alive; the budget flag stays as last reported.
-            room.Enabled = true; room.Heartbeat = now;
+            room.Heartbeat = now; // An upload proves the worker is alive; the budget flag stays as last reported.
             room.Clips.Add(new(new(clip.ClipId, clip.BatchId, ++room.Sequence, clip.Line, clip.LineCount, clip.Host, clip.Priority, clip.Interruptible,
                 now, now.AddSeconds(clip.LifetimeSeconds), clip.DurationMs), clip.Phases, clip.Conditions, clip.ContentType, audio));
             room.Clips.RemoveAll(x => x.Info.ExpiresAt <= now);

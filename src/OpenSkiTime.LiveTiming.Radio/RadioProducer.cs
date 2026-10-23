@@ -38,7 +38,8 @@ public static class ProducerGate
         LiveStatus Status(int bib) => run.Results.FirstOrDefault(x => x.Bib == bib)?.Status ?? LiveStatus.Ready;
         return decision.Source switch
         {
-            ProducerSources.NextStarter => decision.Bib is { } next && run.StartOrder.Contains(next) && Status(next) == LiveStatus.Ready ? null : "racer is not waiting to start",
+            ProducerSources.NextStarter => decision.Bib is { } next && run.StartOrder.FirstOrDefault(x => Status(x) == LiveStatus.Ready) == next && next != 0
+                ? null : "racer is not the next to start",
             ProducerSources.OnCourse => decision.Bib is { } racer && run.StartOrder.Contains(racer) && Status(racer) == LiveStatus.OnCourse ? null : "racer is not on course",
             ProducerSources.Standings => Leaders(state).Length > 0 ? null : "no standings yet",
             ProducerSources.RunSummary => run.Results.Any(x => x.Status != LiveStatus.Ready) ? null : "run has not started",

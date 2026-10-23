@@ -117,7 +117,7 @@ public static class RadioPrompts
         You are the producer of a Finnish alpine ski race radio. No new race event is waiting; choose what the hosts talk about next.
         Choose exactly ONE source from allowed_sources:
         - standings: the current unofficial top three.
-        - next_starter: introduce a racer waiting to start. bib required, from the waiting list.
+        - next_starter: introduce the next racer to start. bib required: the first bib of the waiting list.
         - on_course: follow a racer on course now. bib required, from the on_course list.
         - run_summary: how many have finished and how many are still to start.
         - event_context: something from the event background text.

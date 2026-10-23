@@ -25,14 +25,14 @@ var health = new RadioHealth(RadioState.Stopped);
 LiveSnapshot? latest = null;
 log.Write("Radio worker started");
 
+var writes = new SemaphoreSlim(1, 1);
 var status = Task.Run(async () =>
 {
     try
     {
         while (!lifetime.IsCancellationRequested)
         {
-            var current = engine?.Health ?? health;
-            await writer.WriteLineAsync(JsonSerializer.Serialize(new RadioWorkerOutput(current), LiveJson.Options).AsMemory(), lifetime.Token);
+            await SendStatus(lifetime.Token);
             await Task.Delay(1000, lifetime.Token);
         }
     }
@@ -89,6 +89,9 @@ try
                 case "state" or "targets": break;
                 case "shutdown":
                     await Stop();
+                    // The panel persists this final spend, including reservations of calls cut short by the stop.
+                    try { await SendStatus(CancellationToken.None); }
+                    catch (Exception ex) when (ex is IOException or ObjectDisposedException) { }
                     lifetime.Cancel();
                     break;
                 default: throw new LiveValidationException("Unknown radio command.");
@@ -109,6 +112,13 @@ finally
 }
 return 0;
 
+async Task SendStatus(CancellationToken ct)
+{
+    var current = engine?.Health ?? health;
+    await writes.WaitAsync(ct);
+    try { await writer.WriteLineAsync(JsonSerializer.Serialize(new RadioWorkerOutput(current), LiveJson.Options).AsMemory(), ct); }
+    finally { writes.Release(); }
+}
 async Task Stop()
 {
     if (running is null) { return; }
@@ -137,12 +147,15 @@ async Task ReplaceTargets(RadioTarget[] next)
     if (next.Length > 2 || next.Any(x => x is null)) { throw new LiveValidationException("Invalid radio targets."); }
     var removed = active.Where(x => !next.Contains(x.Key)).ToList();
     if (removed.Count == 0 && next.All(active.ContainsKey)) { return; }
-    // A target that is no longer enabled, or whose session was replaced, hides its viewer control before it is dropped.
-    await Disable(removed.Select(x => x.Value));
-    foreach (var (target, sink) in removed) { sink.Dispose(); active.Remove(target); }
+    foreach (var (target, _) in removed) { active.Remove(target); }
     foreach (var target in next.Where(x => !active.ContainsKey(x))) { active[target] = new RadioServerSink(target); }
     sinks = next.Select(x => active[x]).ToList();
     engine?.SetSinks(sinks);
+    // A target that is no longer enabled, or whose session was replaced, is detached and closed first, then hides its
+    // viewer control; the server refuses clips for a disabled radio, so a late upload cannot bring it back.
+    foreach (var (_, sink) in removed) { sink.Close(); }
+    await Disable(removed.Select(x => x.Value));
+    foreach (var (_, sink) in removed) { sink.Dispose(); }
     log.Write($"Radio targets: {sinks.Count}");
 }
 

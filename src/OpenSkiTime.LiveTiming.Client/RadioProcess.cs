@@ -117,6 +117,8 @@ public sealed class RadioProcess : IAsyncDisposable
             {
                 await _commands.Writer.WriteAsync(new("shutdown"));
                 await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(4));
+                // The last status line carries the final spend; let the receiver read it before anything is cancelled.
+                if (_receive is not null) { await _receive.WaitAsync(TimeSpan.FromSeconds(2)); }
             }
         }
         catch (Exception ex) when (ex is ChannelClosedException or OperationCanceledException or TimeoutException or InvalidOperationException) { }

@@ -142,8 +142,9 @@ public sealed class RadioRulesTests
     {
         var state = RadioRace.Set(RadioRace.Create(), 1, LiveStatus.OnCourse);
         Assert.Null(ProducerGate.Problem(new(ProducerSources.NextStarter, 2, "Esittele"), state, RacePhase.RunInProgress, false));
-        Assert.Equal("racer is not waiting to start", ProducerGate.Problem(new(ProducerSources.NextStarter, 1, ""), state, RacePhase.RunInProgress, false));
-        Assert.Equal("racer is not waiting to start", ProducerGate.Problem(new(ProducerSources.NextStarter, 42, ""), state, RacePhase.RunInProgress, false));
+        Assert.Equal("racer is not the next to start", ProducerGate.Problem(new(ProducerSources.NextStarter, 1, ""), state, RacePhase.RunInProgress, false));
+        Assert.Equal("racer is not the next to start", ProducerGate.Problem(new(ProducerSources.NextStarter, 3, ""), state, RacePhase.RunInProgress, false));
+        Assert.Equal("racer is not the next to start", ProducerGate.Problem(new(ProducerSources.NextStarter, 42, ""), state, RacePhase.RunInProgress, false));
         Assert.Null(ProducerGate.Problem(new(ProducerSources.OnCourse, 1, ""), state, RacePhase.RunInProgress, false));
         Assert.Equal("source not allowed in this phase", ProducerGate.Problem(new(ProducerSources.OnCourse, 1, ""), state, RacePhase.BetweenRuns, false));
         Assert.Equal("no standings yet", ProducerGate.Problem(new(ProducerSources.Standings, null, ""), state, RacePhase.RunInProgress, false));
@@ -157,6 +158,15 @@ public sealed class RadioRulesTests
         var guarded = RadioSlots.Conditions(summary[0].Text, FactSheet.Build(RadioRace.Set(state, 1, LiveStatus.Finished, 4800), [])).ToArray();
         Assert.Contains(new RadioCondition(RadioConditionKind.StatusCount, 1, Status: LiveStatus.Finished, Value: 1), guarded);
         Assert.Contains(new RadioCondition(RadioConditionKind.StatusCount, 1, Status: LiveStatus.Ready, Value: 4), guarded);
+        // Between runs the standings are the previous run's, spoken with its ranks.
+        var done = Enumerable.Range(1, 5).Aggregate(RadioRace.Create(), (s, bib) => RadioRace.Set(s, bib, LiveStatus.Finished, 4800 - bib));
+        var between = done with { CurrentRun = 2, Runs = [.. done.Runs, RadioRace.Create().Runs[0] with { Number = 2 }] };
+        var standings = ProducerGate.Event(new(ProducerSources.Standings, null, ""), between, RadioRace.Start);
+        var betweenFacts = FactSheet.Build(between, standings.Bibs);
+        var line = Assert.Single(FinnishTemplates.Lines([standings], betweenFacts, 0));
+        Assert.Null(RadioSlots.Problem(line.Text, betweenFacts, new LineRules(between, ["Aino", "Kalle"], "")));
+        Assert.Equal("Epävirallinen tilanne: ensimmäisenä on Onni Viistola, toisena Ilona Kurvinen, kolmantena Saga Porttila.",
+            RadioSlots.Render(line.Text, betweenFacts, FinnishVerbalizer.Lexicon("")));
         var e = ProducerGate.Event(new(ProducerSources.NextStarter, 2, ""), state, RadioRace.Start);
         Assert.Equal(new RadioCondition(RadioConditionKind.Status, 1, 2, LiveStatus.Ready), Assert.Single(e.Conditions));
     }

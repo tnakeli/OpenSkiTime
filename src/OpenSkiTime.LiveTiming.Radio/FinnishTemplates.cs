@@ -100,7 +100,8 @@ public static class FinnishTemplates
             case ProducerSources.Standings:
                 var leaders = e.Bibs.Where(facts.Racers.ContainsKey).Take(3).ToArray();
                 if (leaders.Length == 0) { yield break; }
-                var kind = facts.Run > 1 && facts.Racers[leaders[0]].Result?.TotalRank is not null ? "totalrank" : "rank";
+                var first = facts.Racers[leaders[0]];
+                var kind = first.Result?.TotalRank is not null ? "totalrank" : first.Result?.Rank is not null ? "rank" : "prevrank";
                 yield return new("", "Epävirallinen tilanne: " + string.Join(", ", leaders.Select((x, i) => $"{{{kind}:{x}:ess}} {(i == 0 ? "on " : "")}{{racer:{x}}}")) + ".", true);
                 break;
             case ProducerSources.RunSummary:

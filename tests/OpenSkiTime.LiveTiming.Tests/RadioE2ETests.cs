@@ -73,7 +73,11 @@ public sealed class RadioE2ETests
         Assert.False((await ReceiveRadio(socket, x => !x.Available)).Available);
         (await http.PutAsJsonAsync(radio + "/status", new RadioStatusUpdate(false, false), LiveJson.Options)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync($"{radio}/clips/{ring[^1].ClipId}")).StatusCode);
+        // A late upload cannot re-enable a radio the worker has disabled.
+        using (var late = await http.PostAsJsonAsync(radio + "/clips", ring[^1], LiveJson.Options)) { Assert.Equal(HttpStatusCode.Conflict, late.StatusCode); }
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync($"{radio}/clips/{ring[^1].ClipId}")).StatusCode);
 
+        (await http.PutAsJsonAsync(radio + "/status", new RadioStatusUpdate(true, false), LiveJson.Options)).EnsureSuccessStatusCode();
         (await http.PostAsJsonAsync(radio + "/clips", ring[^1], LiveJson.Options)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync($"{radio}/clips/{ring[^1].ClipId}")).StatusCode);
         // Delete All Data removes radio clips with the session.

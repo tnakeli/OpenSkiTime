@@ -42,9 +42,13 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
     }
     public PublisherKind Channel => _target.Channel;
     public string? Failure { get; private set; }
+    private volatile bool _closed;
+    /// <summary>No more uploads or enabled heartbeats; only the final disabled status may still be sent.</summary>
+    public void Close() => _closed = true;
     public async Task UploadAsync(RadioClip clip, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(clip);
+        if (_closed) { throw new RadioProviderException($"{_target.Channel} radio target was removed."); }
         var lifetime = (int)Math.Clamp(Math.Ceiling((clip.ExpiresAt - _time.GetUtcNow()).TotalSeconds), 1, RadioPlayback.MaxClipLifetime.TotalSeconds);
         var upload = new RadioClipUpload(clip.ClipId, clip.BatchId, clip.Line, clip.LineCount, clip.Host, clip.Priority, clip.Interruptible,
             lifetime, clip.Phases, clip.Conditions, clip.Audio.ContentType, clip.Audio.DurationMs, Convert.ToBase64String(clip.Audio.Data));
@@ -52,6 +56,8 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
     }
     public async Task HeartbeatAsync(RadioStatusUpdate status, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(status);
+        if (_closed && status.Enabled) { throw new RadioProviderException($"{_target.Channel} radio target was removed."); }
         using var response = await Send(t => _http.PutAsJsonAsync($"api/sessions/{_target.SessionId}/radio/status", status, LiveJson.Options, t), ct);
     }
     private async Task<HttpResponseMessage> Send(Func<CancellationToken, Task<HttpResponseMessage>> send, CancellationToken ct)
