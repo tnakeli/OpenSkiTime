@@ -22,12 +22,15 @@ public sealed record RadioClipUpload(Guid ClipId, Guid BatchId, int Line, int Li
 /// <summary>Worker heartbeat. The server uses its own receive time, never the worker clock, for health.</summary>
 public sealed record RadioStatusUpdate(bool Enabled, bool BudgetExhausted);
 
-/// <summary>Public metadata of a clip that is playable now. Audio is fetched from the clip URL.</summary>
+/// <summary>Public metadata of a clip that is playable now. Audio is fetched from the clip URL. Times are server times.</summary>
 public sealed record RadioClipInfo(Guid ClipId, Guid BatchId, long Sequence, int Line, int LineCount, string Host, int Priority,
-    bool Interruptible, DateTimeOffset ExpiresAt, int DurationMs);
+    bool Interruptible, DateTimeOffset ReceivedAt, DateTimeOffset ExpiresAt, int DurationMs);
 
-/// <summary>SignalR "Radio" message: whether the play control is shown and which clips are still valid.</summary>
-public sealed record RadioAnnouncement(bool Available, RadioClipInfo[] Clips);
+/// <summary>
+/// SignalR "Radio" message: whether the play control is shown and which clips are still valid. The server time lets a
+/// viewer judge clip age with its own clock, so joining skips clips that were already old when the page loaded.
+/// </summary>
+public sealed record RadioAnnouncement(bool Available, RadioClipInfo[] Clips, DateTimeOffset ServerTime = default);
 
 public enum RadioState { Stopped, Starting, Running, BudgetExhausted, Error }
 

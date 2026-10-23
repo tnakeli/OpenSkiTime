@@ -38,12 +38,20 @@ async function advance(ms) {
   now = until;
 }
 const end = async () => { listeners['audio:ended'](); await Promise.resolve(); };
-const clip = (id, batch, line, lineCount, priority, sequence, interruptible = line === lineCount - 1) =>
-  ({ clipId: id, batchId: batch, line, lineCount, priority, sequence, interruptible, expiresAt: new Date(now + 120000).toISOString(), host: 'Aino', durationMs: 1000 });
+const clip = (id, batch, line, lineCount, priority, sequence, interruptible = line === lineCount - 1, age = 0) =>
+  ({ clipId: id, batchId: batch, line, lineCount, priority, sequence, interruptible, receivedAt: new Date(now - age).toISOString(),
+     expiresAt: new Date(now + 120000).toISOString(), host: 'Aino', durationMs: 1000 });
+const serverTime = () => new Date(now + 3600000).toISOString(); // The server clock runs an hour ahead of this browser.
 
 // Hidden until a healthy radio is announced; paused by default and never autoplays.
 radio.update('s', { available: false, clips: [] });
 assert.equal(button.hidden, true);
+// A clip already 30 s old on the server when this page loads is not news, even though the page sees it for the first time.
+const backlog = { ...clip('backlog', 'bx', 0, 1, 3, 0), receivedAt: new Date(now + 3600000 - 30000).toISOString() };
+radio.update('s', { available: true, clips: [backlog], serverTime: serverTime() });
+listeners['button:click']();
+assert.deepEqual(played, []);
+listeners['button:click']();
 const old = clip('old', 'b0', 0, 1, 3, 1);
 radio.update('s', { available: true, clips: [old] });
 assert.equal(button.hidden, false);

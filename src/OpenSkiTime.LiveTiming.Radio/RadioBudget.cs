@@ -62,6 +62,8 @@ public sealed class RadioBudget(decimal limit, decimal spent)
     public decimal Remaining => Math.Max(0m, Limit - Spent);
     public bool CanAfford(decimal estimate) => Spent + estimate <= Limit;
     public void Charge(decimal amount) { if (amount > 0m) { lock (_gate) { _spent += amount; } } }
+    /// <summary>Replaces a reservation made with <see cref="Charge"/> by the provider-reported (or counted) cost.</summary>
+    public void Settle(decimal reserved, decimal actual) { lock (_gate) { _spent += Math.Max(0m, actual) - reserved; } }
 
     /// <summary>
     /// Full: dialogue, curation and producer. Lean (under 20 % left): no curation or producer model calls. TemplatesOnly

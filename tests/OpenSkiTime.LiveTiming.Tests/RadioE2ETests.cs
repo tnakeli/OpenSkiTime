@@ -143,11 +143,12 @@ public sealed class RadioE2ETests
         Assert.Contains("\"kind\":\"Rank\"", clipJson, StringComparison.Ordinal);
         Assert.DoesNotContain("transcript", clipJson, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(clip.Conditions, JsonSerializer.Deserialize<RadioClipUpload>(clipJson, LiveJson.Options)!.Conditions);
-        var announcement = new RadioAnnouncement(true, [new(Guid.NewGuid(), Guid.NewGuid(), 7, 0, 2, "Kalle", 2, false, RadioRace.Start, 1200)]);
+        var announcement = new RadioAnnouncement(true, [new(Guid.NewGuid(), Guid.NewGuid(), 7, 0, 2, "Kalle", 2, false, RadioRace.Start, RadioRace.Start.AddMinutes(1), 1200)], RadioRace.Start);
         using var parsed = JsonDocument.Parse(JsonSerializer.Serialize(announcement, LiveJson.Options));
         // The viewer reads these exact camelCase names.
-        foreach (var name in new[] { "clipId", "batchId", "sequence", "line", "lineCount", "host", "priority", "interruptible", "expiresAt", "durationMs" })
+        foreach (var name in new[] { "clipId", "batchId", "sequence", "line", "lineCount", "host", "priority", "interruptible", "receivedAt", "expiresAt", "durationMs" })
         { Assert.True(parsed.RootElement.GetProperty("clips")[0].TryGetProperty(name, out _), name); }
+        Assert.True(parsed.RootElement.TryGetProperty("serverTime", out _));
         Assert.Equal(2, LiveProtocol.Version);
     }
 

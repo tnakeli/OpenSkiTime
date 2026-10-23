@@ -258,6 +258,39 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task ACallCancelledByShutdownKeepsItsReservedCost()
+    {
+        var called = new TaskCompletionSource();
+        var rig = new Rig { Llm = new(async (_, ct) => { called.TrySetResult(); await Task.Delay(Timeout.Infinite, ct); return ""; }) };
+        await rig.FirstFinishAsync();
+        using var stop = new CancellationTokenSource();
+        var step = rig.Engine.StepAsync(stop.Token);
+        await called.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await stop.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => step);
+        Assert.True(rig.Budget.Spent > 0m);
+    }
+
+    [Fact]
+    public async Task EveryClipKeepsTheCurrentRunGuardAndItsFullConditionSet()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) ? Echo(r) : Script(("Aino", "Maalissa {racer:2}, aika {time:2}.", false), ("Kalle", "Hän on {rank:2:ess}.", true))))
+        };
+        rig.State = RadioRace.Set(RadioRace.Set(RadioRace.Create(), 1, LiveStatus.Finished, 4700, RadioRace.Start), 3, LiveStatus.OnCourse, at: RadioRace.Start);
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.State = RadioRace.Set(rig.State, 2, LiveStatus.Finished, 4790, RadioRace.Start);
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.Time.Advance(TimeSpan.FromSeconds(6));
+        await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Equal(2, rig.Sink.Clips.Count);
+        Assert.All(rig.Sink.Clips, x => Assert.Equal(new RadioCondition(RadioConditionKind.CurrentRun, 1), x.Conditions[0]));
+        Assert.All(rig.Sink.Clips, x => Assert.Contains(new RadioCondition(RadioConditionKind.Rank, 1, 2, Value: 2), x.Conditions));
+        Assert.All(rig.Sink.Clips, x => Assert.True(x.Conditions.Length <= RadioPlayback.MaxConditions));
+    }
+
+    [Fact]
     public async Task NothingIsGeneratedOrPaidWhileNoServerAcceptsTheClips()
     {
         var rig = new Rig { Llm = new((_, _) => Task.FromResult(Script(("Aino", "Maalissa {racer:1}.", true)))) };

@@ -162,10 +162,22 @@ public sealed class RadioEngine
         _topics.Add(topic ?? "", now);
         var batchId = Guid.NewGuid();
         var run = state.CurrentRun;
-        var conditions = batch.SelectMany(x => x.Conditions).Concat(lines.SelectMany(x => RadioSlots.Conditions(x.Text, facts)))
-            .Append(new RadioCondition(RadioConditionKind.CurrentRun, run)).Distinct().Take(RadioPlayback.MaxConditions).ToArray();
+        // Conditions are never truncated: lines whose facts would not fit the limit are left unsaid instead.
+        var conditions = new List<RadioCondition> { new(RadioConditionKind.CurrentRun, run) };
+        foreach (var condition in batch.SelectMany(x => x.Conditions)) { if (!conditions.Contains(condition)) { conditions.Add(condition); } }
+        var kept = new List<ScriptLine>();
+        foreach (var line in lines)
+        {
+            var added = RadioSlots.Conditions(line.Text, facts).Where(x => !conditions.Contains(x)).Distinct().ToArray();
+            if (conditions.Count + added.Length > RadioPlayback.MaxConditions) { break; }
+            conditions.AddRange(added); kept.Add(line);
+        }
+        if (kept.Count == 0) { _log("Radio batch states too many facts for one clip"); return; }
+        lines = kept.Count == lines.Count ? lines : [.. kept[..^1], kept[^1] with { Interruptible = true }];
+        // Phases: only events valid now were batched (see Prune), so the intersection contains the current phase.
         var phaseSets = batch.Where(x => x.Phases.Length > 0).Select(x => x.Phases).ToArray();
-        var phases = phaseSets.Length == 0 ? [] : phaseSets.Aggregate((a, b) => [.. a.Intersect(b)]);
+        RacePhase[] phases = phaseSets.Length == 0 ? [] : phaseSets.Aggregate((a, b) => [.. a.Intersect(b)]);
+        if (phaseSets.Length > 0 && phases.Length == 0) { _log("Radio batch has no common phase"); return; }
         var expires = batch.Min(x => x.At + x.Lifetime);
         var priority = batch.Min(x => x.Priority);
         var spoken = 0;
@@ -183,20 +195,17 @@ public sealed class RadioEngine
                 var host = RadioPersonas.Find(line.Host) ?? RadioPersonas.Host(i);
                 var voice = RadioPersonas.Voice(host, _tts.Provider, Array.IndexOf(RadioPersonas.Hosts, host) == 0 ? _config.VoiceA : _config.VoiceB);
                 TtsAudio audio;
+                // Reserved before the call, like model calls: a failed or cancelled request may still be billed.
+                Budget.Charge(estimate);
                 try { audio = await WithTimeout(SpeechTimeout, t => _tts.SynthesizeAsync(text, voice, t), ct); }
-                catch (Exception ex) when (Recoverable(ex, ct))
-                {
-                    // The provider may have billed a request whose answer failed or timed out: charge the estimate.
-                    Budget.Charge(estimate);
-                    Report(error: Describe(ex)); break;
-                }
-                Budget.Charge(RadioPrices.Cost(_ttsPrice, text.Length, audio.DurationMs));
+                catch (Exception ex) when (Recoverable(ex, ct)) { Report(error: Describe(ex)); break; }
+                Budget.Settle(estimate, RadioPrices.Cost(_ttsPrice, text.Length, audio.DurationMs));
                 now = _time.GetUtcNow();
                 var latest = Volatile.Read(ref _latest)!;
                 // The race moved on while this line was generated: drop it and the rest of the batch.
                 if (!RadioPlayback.Playable(latest, now, expires, phases, conditions)) { _log("Radio batch dropped as stale before upload"); break; }
                 var clip = new RadioClip(Guid.NewGuid(), batchId, i, lines.Count, host.Name, priority, line.Interruptible || i == lines.Count - 1,
-                    expires, phases, conditions, audio, text);
+                    expires, phases, [.. conditions], audio, text);
                 await UploadAsync(clip, ct);
                 spoken++; _remainingLines = lines.Count - i - 1;
                 _speechEnds = (now > _speechEnds ? now : _speechEnds) + TimeSpan.FromMilliseconds(audio.DurationMs);
@@ -297,17 +306,17 @@ public sealed class RadioEngine
     {
         var estimate = RadioPrices.Cost(_llmPrice, (request.System.Length + request.User.Length) / 3, request.MaxOutputTokens);
         if (!Budget.CanAfford(estimate + SpeechEstimate)) { return null; }
+        // Reserved before the call: a failed, timed-out or cancelled request may still be billed, so it keeps the estimate.
+        Budget.Charge(estimate);
         try
         {
             var reply = await WithTimeout(timeout, t => _llm.CompleteAsync(request, t), ct);
-            Budget.Charge(RadioPrices.Cost(_llmPrice, reply.InputTokens, reply.OutputTokens));
+            Budget.Settle(estimate, RadioPrices.Cost(_llmPrice, reply.InputTokens, reply.OutputTokens));
             Report();
             return reply;
         }
         catch (Exception ex) when (Recoverable(ex, ct))
         {
-            // A timed-out or failed call may still be billed; charge the estimate so the hard stop stays conservative.
-            Budget.Charge(estimate);
             Report(error: Describe(ex) + " Templates used.");
             return null;
         }

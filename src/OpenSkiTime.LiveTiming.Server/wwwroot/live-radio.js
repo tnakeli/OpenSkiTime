@@ -63,8 +63,9 @@ const liveRadio = (() => {
       if (id !== session) { pause(); done.clear(); skippedBatches.clear(); seenAt.clear(); session = id; }
       const available = !!announcement && announcement.available;
       clips = available ? announcement.clips || [] : [];
-      const now = Date.now();
-      clips.forEach(c => { if (!seenAt.has(c.clipId)) seenAt.set(c.clipId, now); });
+      // Clip age on the server's clock, mapped to this browser's clock.
+      const now = Date.now(), offset = announcement && announcement.serverTime ? now - Date.parse(announcement.serverTime) : 0;
+      clips.forEach(c => { if (!seenAt.has(c.clipId)) seenAt.set(c.clipId, c.receivedAt ? Math.min(now, Date.parse(c.receivedAt) + offset) : now); });
       button.hidden = !available;
       if (!available && playing) pause();
       if (playing && !current && !timer) next();

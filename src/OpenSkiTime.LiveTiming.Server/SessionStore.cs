@@ -175,7 +175,7 @@ public sealed class SessionStore
             // An upload proves the worker is alive; the budget flag stays as last reported.
             room.Enabled = true; room.Heartbeat = now;
             room.Clips.Add(new(new(clip.ClipId, clip.BatchId, ++room.Sequence, clip.Line, clip.LineCount, clip.Host, clip.Priority, clip.Interruptible,
-                now.AddSeconds(clip.LifetimeSeconds), clip.DurationMs), clip.Phases, clip.Conditions, clip.ContentType, audio));
+                now, now.AddSeconds(clip.LifetimeSeconds), clip.DurationMs), clip.Phases, clip.Conditions, clip.ContentType, audio));
             room.Clips.RemoveAll(x => x.Info.ExpiresAt <= now);
             while (room.Clips.Count > RadioPlayback.MaxClipsPerSession || room.Clips.Sum(x => (long)x.Audio.Length) > RadioPlayback.MaxSessionBytes)
             { room.Clips.RemoveAt(0); }
@@ -193,11 +193,11 @@ public sealed class SessionStore
         {
             Prune();
             var entry = _sessions.GetValueOrDefault(id);
-            if (entry?.Radio is not { } room || entry.State is not { } state) { return new(false, []); }
             var now = _time.GetUtcNow();
+            if (entry?.Radio is not { } room || entry.State is not { } state) { return new(false, [], now); }
             room.Clips.RemoveAll(x => x.Info.ExpiresAt <= now);
             var available = RadioPlayback.Available(room.Enabled, room.BudgetExhausted, room.Heartbeat, state, now);
-            return new(available, available ? room.Clips.Where(x => RadioPlayback.Playable(state, now, x.Info.ExpiresAt, x.Phases, x.Conditions)).Select(x => x.Info).ToArray() : []);
+            return new(available, available ? room.Clips.Where(x => RadioPlayback.Playable(state, now, x.Info.ExpiresAt, x.Phases, x.Conditions)).Select(x => x.Info).ToArray() : [], now);
         }
     }
     public (byte[] Audio, string ContentType)? ClipAudio(Guid id, Guid clipId)

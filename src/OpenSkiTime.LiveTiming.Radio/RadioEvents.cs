@@ -37,7 +37,8 @@ public static class RadioEventDetector
             if (started(run))
             {
                 var first = run.Results.Where(x => x.Status != LiveStatus.Ready && x.StartedAt is not null).OrderBy(x => x.StartedAt).FirstOrDefault();
-                events.Add(Make(RadioEventKind.RunStarted, 3, first is null ? [] : [first.Bib], 90, 6, Live));
+                events.Add(first is null ? Make(RadioEventKind.RunStarted, 3, [], 90, 6, Live)
+                    : Make(RadioEventKind.RunStarted, 3, [first.Bib], 90, 6, Live, Status(first.Bib, first.Status)));
             }
             if (before is null) { return events; }
         }
@@ -132,7 +133,9 @@ public sealed class EventBatcher
     /// <summary>Drops events that are already stale, so a slow generation never narrates outdated news.</summary>
     public void Prune(LiveSnapshot state, DateTimeOffset now)
     {
-        _pending.RemoveAll(x => x.Run != state.CurrentRun || now >= x.At + x.Lifetime || x.Conditions.Any(c => !RadioPlayback.Holds(state, c)));
+        var phase = RacePhases.Derive(state, now);
+        _pending.RemoveAll(x => x.Run != state.CurrentRun || now >= x.At + x.Lifetime || (x.Phases.Length > 0 && !x.Phases.Contains(phase))
+            || x.Conditions.Any(c => !RadioPlayback.Holds(state, c)));
         if (_pending.Count == 0) { _highest = 6; }
     }
 }

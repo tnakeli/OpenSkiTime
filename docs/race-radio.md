@@ -30,7 +30,7 @@ flowchart LR
 ### Pipeline
 
 1. **Detection** (deterministic, from consecutive snapshots of the current run; events of a run that is no longer current are dropped): first start of a run, finish (new leader, podium place or other), DNF, DSQ, DNS, result correction, a top-three racer starting a later run, run complete, and an interruption (a run in progress with nobody on course and no update for four minutes). The first snapshot is history and is not announced.
-2. **Priority batcher.** Delays by the highest priority in the batch: 2 s (P1), 5 s (P2: new leader, podium, run complete, top start), 12 s (P3: finish, DNF/DSQ, correction, run start), 25 s (P4: DNS), 40 s (P5: producer). A higher priority shortens the delay from its arrival; six events flush at once. Events that went stale while waiting are dropped.
+2. **Priority batcher.** Events of another run or of a phase that no longer applies are dropped, so a batch never mixes incompatible phases. Delays by the highest priority in the batch: 2 s (P1), 5 s (P2: new leader, podium, run complete, top start), 12 s (P3: finish, DNF/DSQ, correction, run start), 25 s (P4: DNS), 40 s (P5: producer). A higher priority shortens the delay from its arrival; six events flush at once. Events that went stale while waiting are dropped.
 3. **Dialogue** by the language model (JSON lines `{host, text, interruptible}`), or by templates (see 6).
 4. **Validation** of every line before speech (see [Finnish verbalization](#finnish-verbalization-and-guardrails)). One invalid line rejects the whole script.
 5. **Curation** (optional second model pass): style only; the line count, hosts and every slot must stay identical and each line must still validate, otherwise the original script is used. Detected style patterns feed the style memory.
@@ -38,7 +38,7 @@ flowchart LR
 7. **Rendering** of slots to Finnish, then **speech** per line with the host's voice.
 8. **Stale check before upload.** If the latest snapshot contradicts the batch (a racer is no longer on course, a stated leader was beaten, a time was corrected, the run changed) or the batch expired, the rest of the batch is dropped. A low-priority conversation stops at its next interruptible line when urgent news is waiting.
 9. **Server.** The ring keeps at most 32 clips and 8 MiB per session, and `LiveTiming__RadioMaxMegabytes` (default 64) across sessions. On every state change, upload and heartbeat, and every two seconds, the server sends a `Radio` announcement with only the clips that are still playable: before expiry, in an applicable race phase and with every stated fact still true.
-10. **Viewer.** Plays announced clips one at a time (0.35 s between lines of a conversation, 1.2 s between conversations); the most urgent conversation goes next, but a conversation is not cut mid-sentence pair. Starting or resuming joins at the live edge: clips announced more than 15 s earlier are skipped.
+10. **Viewer.** Plays announced clips one at a time (0.35 s between lines of a conversation, 1.2 s between conversations); the most urgent conversation goes next, but a conversation is not cut mid-sentence pair. Starting or resuming joins at the live edge: clips older than 15 s are skipped, measured with the server's clock (each announcement carries the server time and each clip its receive time), so a page opened later does not replay the backlog.
 
 ### Race phase model
 
@@ -192,7 +192,7 @@ Radio is configured only in the timing application.
 
 ### Budget
 
-Spend comes from provider-reported token usage for language models and from counted characters (or estimated audio tokens for token-billed speech) multiplied by the dated price table. Before every billable call the engine checks that the estimated cost fits; a failed or timed-out model or speech call is charged at its estimate, because the provider may have billed it. Modes: **Full** (dialogue, curation, producer), **Lean** below 20 % left (no curation, deterministic producer), **TemplatesOnly** below 5 % left or when one more dialogue would not fit (templates and speech only), **Exhausted** when one more line cannot be spoken: generation stops, the heartbeat reports the budget as exhausted and the viewer control disappears. Spend can pass the limit only by the estimation error of the last call. Raise the limit to continue.
+Spend comes from provider-reported token usage for language models and from counted characters (or estimated audio tokens for token-billed speech) multiplied by the dated price table. Before every billable call the engine checks that the estimated cost fits and reserves it; afterwards the reservation is replaced by the reported or counted cost. A failed, timed-out or cancelled call keeps its reservation, because the provider may have billed it. Modes: **Full** (dialogue, curation, producer), **Lean** below 20 % left (no curation, deterministic producer), **TemplatesOnly** below 5 % left or when one more dialogue would not fit (templates and speech only), **Exhausted** when one more line cannot be spoken: generation stops, the heartbeat reports the budget as exhausted and the viewer control disappears. Spend can pass the limit only by the estimation error of the last call. Raise the limit to continue.
 
 ## Live Timing Server API (protocol 2)
 

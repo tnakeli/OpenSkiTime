@@ -14,7 +14,10 @@ public sealed class RadioRulesTests
         var now = RadioRace.Start.AddMinutes(10);
         Assert.Empty(RadioEventDetector.Detect(null, RadioRace.Set(start, 1, LiveStatus.Finished, 4800), now));
         var onCourse = RadioRace.Set(start, 1, LiveStatus.OnCourse);
-        Assert.Equal(RadioEventKind.RunStarted, Assert.Single(RadioEventDetector.Detect(start, onCourse, now)).Kind);
+        var started = Assert.Single(RadioEventDetector.Detect(start, onCourse, now));
+        Assert.Equal(RadioEventKind.RunStarted, started.Kind);
+        // "Radalla on nyt ..." is stale once that racer has left the course.
+        Assert.Equal(new RadioCondition(RadioConditionKind.Status, 1, 1, LiveStatus.OnCourse), Assert.Single(started.Conditions));
         var first = RadioRace.Set(onCourse, 1, LiveStatus.Finished, 4800);
         var podium = Assert.Single(RadioEventDetector.Detect(onCourse, first, now));
         Assert.Equal((RadioEventKind.Podium, 2), (podium.Kind, podium.Priority));
@@ -54,6 +57,10 @@ public sealed class RadioRulesTests
         Assert.Equal(EventBatcher.MaxBatch, batcher.TakeDue(t0)!.Count);
         // Events that went stale while waiting are dropped instead of narrated late.
         batcher.Add(Event(4, t0) with { Conditions = [new(RadioConditionKind.Status, 1, 1, LiveStatus.OnCourse)] }, t0);
+        batcher.Prune(RadioRace.Create(), t0);
+        Assert.Equal(0, batcher.Count);
+        // News for another phase is dropped, so one batch never mixes disjoint phase restrictions.
+        batcher.Add(Event(2, t0) with { Phases = [RacePhase.AfterRace] }, t0);
         batcher.Prune(RadioRace.Create(), t0);
         Assert.Equal(0, batcher.Count);
         // Run 1 news is dropped once the race has moved on to Run 2.
@@ -172,7 +179,7 @@ public sealed class RadioRulesTests
     {
         var budget = new RadioBudget(1m, 0m);
         Assert.Equal(RadioMode.Full, budget.Mode(0.01m, 0.003m));
-        budget.Charge(0.85m);
+        budget.Charge(0.90m); budget.Settle(0.90m, 0.85m);
         Assert.Equal(RadioMode.Lean, budget.Mode(0.01m, 0.003m));
         budget.Charge(0.14m);
         Assert.Equal(RadioMode.TemplatesOnly, budget.Mode(0.01m, 0.003m));

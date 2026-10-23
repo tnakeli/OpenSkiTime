@@ -14,7 +14,8 @@ public sealed class RadioBroadcaster(SessionStore store, IHubContext<LiveHub> hu
     public async Task SendAsync(Guid id, bool force = false)
     {
         var announcement = store.Announce(id);
-        var key = JsonSerializer.Serialize(announcement, LiveJson.Options);
+        // The server time changes on every call; only availability and clips decide whether viewers need a message.
+        var key = JsonSerializer.Serialize(announcement with { ServerTime = default }, LiveJson.Options);
         if (!force && _sent.TryGetValue(id, out var previous) && previous == key) { return; }
         _sent[id] = key;
         await hub.Clients.Group(id.ToString()).SendAsync("Radio", announcement);
