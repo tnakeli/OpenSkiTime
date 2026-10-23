@@ -33,6 +33,12 @@ public sealed partial class LineRules
     public IReadOnlySet<string> Hosts { get; }
     public IReadOnlySet<string> RacerNames { get; }
     public IReadOnlySet<string> Allowed { get; }
+    /// <summary>
+    /// An inflected form of an allowed capitalized name (Harjoitusrinne → Harjoitusrinteellä): it shares all but the last
+    /// three letters of the name, so consonant gradation and case endings are covered.
+    /// </summary>
+    public bool Inflects(string word) => Allowed.Any(x => x.Length >= 5 && char.IsUpper(x[0]) && word.Length >= x.Length - 3
+        && word.AsSpan().CommonPrefixLength(x.AsSpan()) >= Math.Max(4, x.Length - 3));
     public IReadOnlyList<string> Stems { get; }
     internal static Regex WordPattern => Words();
     [GeneratedRegex(@"\p{L}[\p{L}\-']*")]
@@ -72,6 +78,9 @@ public static partial class RadioSlots
     private static partial Regex Pattern();
     [GeneratedRegex(@"[\{\}]")]
     private static partial Regex Braces();
+    // "{racer:4}:lta" or "{racer:4}n": an ending glued to a slot, which code never inflects.
+    [GeneratedRegex(@"\}[:\p{L}]")]
+    private static partial Regex GluedSuffix();
 
     public static IReadOnlyList<SlotToken> Parse(string text) => Pattern().Matches(text ?? "")
         .Select(m => new SlotToken(m.Groups["kind"].Value, m.Groups["ref"].Value, m.Groups["case"].Success ? m.Groups["case"].Value : null, m.Value)).ToArray();
@@ -91,39 +100,56 @@ public static partial class RadioSlots
         return [.. list];
     }
 
+    // Case codes models write instead of the listed ones ("part", "lle", "ssa"); mapped before validation.
+    private static readonly Dictionary<string, string> CaseAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["part"] = "par", ["partitive"] = "par", ["n"] = "gen", ["lle"] = "all", ["ssa"] = "ine", ["ssä"] = "ine", ["sta"] = "ela", ["stä"] = "ela",
+        ["lla"] = "ade", ["llä"] = "ade", ["lta"] = "abl", ["ltä"] = "abl", ["na"] = "ess", ["nä"] = "ess", ["ksi"] = "tra", ["nom"] = "nom"
+    };
+    [GeneratedRegex(@"\{(?<kind>[a-z]+):(?<ref>[a-z0-9]{1,12}):(?<case>\p{L}{1,10})\}")]
+    private static partial Regex LooseCase();
+    /// <summary>Rewrites known alternative case codes to the listed ones; anything else is left for validation to reject.</summary>
+    public static string Normalize(string text) => LooseCase().Replace(text ?? "", m => CaseAliases.TryGetValue(m.Groups["case"].Value, out var code)
+        ? $"{{{m.Groups["kind"].Value}:{m.Groups["ref"].Value}:{code}}}" : m.Value.ToLowerInvariant());
+
     /// <summary>Returns why a line must not be spoken, or null when it is valid.</summary>
-    public static string? Problem(string text, FactSheet facts, LineRules rules)
+    public static string? Problem(string text, FactSheet facts, LineRules rules) => Check(text, facts, rules).Problem;
+
+    /// <summary>The problem and the word that caused it, for feedback to the model (never logged).</summary>
+    public static (string? Problem, string? Word) Check(string text, FactSheet facts, LineRules rules)
     {
         ArgumentNullException.ThrowIfNull(facts); ArgumentNullException.ThrowIfNull(rules);
-        if (string.IsNullOrWhiteSpace(text) || text.Length > MaxLineLength || text.Any(char.IsControl)) { return "empty or oversized line"; }
+        if (string.IsNullOrWhiteSpace(text) || text.Length > MaxLineLength || text.Any(char.IsControl)) { return ("empty or oversized line", null); }
         foreach (var slot in Parse(text))
         {
-            if (!CasesByKind.TryGetValue(slot.Kind, out var cases)) { return "unknown slot"; }
-            if (!cases.Contains(slot.Case ?? cases[0])) { return "disallowed case"; }
-            if (Value(slot, facts) is null) { return "unknown slot"; }
+            if (!CasesByKind.TryGetValue(slot.Kind, out var cases)) { return ("unknown slot", slot.Text); }
+            if (!cases.Contains(slot.Case ?? cases[0])) { return ("disallowed case", slot.Text); }
+            if (Value(slot, facts) is null) { return ("unknown slot", slot.Text); }
         }
+        if (GluedSuffix().IsMatch(text)) { return ("ending attached to a slot", null); }
         var stripped = Pattern().Replace(text, "§");
-        if (Braces().IsMatch(stripped)) { return "malformed slot"; }
-        if (stripped.Any(char.IsDigit)) { return "digits outside slots"; }
+        if (Braces().IsMatch(stripped)) { return ("malformed slot", null); }
+        if (stripped.Any(char.IsDigit)) { return ("digits outside slots", null); }
         var words = LineRules.WordPattern.Matches(stripped);
         foreach (Match word in words)
         {
             var value = word.Value;
             var parts = value.Split('-', StringSplitOptions.RemoveEmptyEntries);
             // Counts, places and times come only from slots; "yksi", "ensimmäinen" and "toinen" stay usable as ordinary words.
-            if (NumberWords.Any(n => value.StartsWith(n, StringComparison.OrdinalIgnoreCase))) { return "number words outside slots"; }
+            if (NumberWords.Any(n => value.StartsWith(n, StringComparison.OrdinalIgnoreCase))) { return ("number words outside slots", value); }
             // Eleven in any form (yksitoista, yhdentoista, yhdestoista), without rejecting "yhdessä" (together).
             if (value.StartsWith('y') || value.StartsWith('Y'))
-            { if (value.Contains("toist", StringComparison.OrdinalIgnoreCase)) { return "number words outside slots"; } }
+            { if (value.Contains("toist", StringComparison.OrdinalIgnoreCase)) { return ("number words outside slots", value); } }
             // Racer names come only from slots. Lower-case common words (mäki, kivi) are not names.
-            if (parts.Any(p => rules.RacerNames.Contains(p) && char.IsUpper(p[0]))) { return "racer name outside slots"; }
+            if (parts.Any(p => rules.RacerNames.Contains(p) && char.IsUpper(p[0]))) { return ("racer name outside slots", null); }
             if (!char.IsUpper(value[0]) || SentenceStart(stripped, word.Index)) { continue; }
             var head = parts[0];
-            if (rules.Allowed.Contains(value) || rules.Allowed.Contains(head) || rules.Stems.Any(s => value.StartsWith(s, StringComparison.OrdinalIgnoreCase))) { continue; }
+            if (rules.Allowed.Contains(value) || rules.Allowed.Contains(head) || rules.Stems.Any(s => value.StartsWith(s, StringComparison.OrdinalIgnoreCase))
+                || rules.Inflects(value)) { continue; }
             if (head.Length <= 4 && head.All(char.IsUpper)) { continue; } // Abbreviations such as FIS or SM-kisat.
-            return "unknown proper name";
+            return ("unknown proper name", value);
         }
-        return null;
+        return (null, null);
     }
     private static bool SentenceStart(string text, int index)
     {

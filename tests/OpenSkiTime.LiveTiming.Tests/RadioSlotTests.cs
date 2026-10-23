@@ -42,6 +42,8 @@ public sealed class RadioSlotTests
     [InlineData("Hankiranta johtaa nyt.", "racer name outside slots")]
     [InlineData("Maalissa VEETI {racer:1}.", "racer name outside slots")]
     [InlineData("Hän on kolmas.", "number words outside slots")]
+    [InlineData("Hieno lasku {racer:2}:lta.", "ending attached to a slot")]
+    [InlineData("Kolmantena on {racer:2}.", "number words outside slots")]
     [InlineData("Hän on yhdestoista.", "number words outside slots")]
     [InlineData("Yksitoista laskijaa on maalissa.", "number words outside slots")]
     [InlineData("Eroa on sekunnin verran.", "number words outside slots")]
@@ -56,12 +58,21 @@ public sealed class RadioSlotTests
     }
 
     [Theory]
+    [InlineData("Jäljellä {num:remaining:part}.", "Jäljellä {num:remaining:par}.")]
+    [InlineData("Numero {bib:3:lle} aukeaa portti.", "Numero {bib:3:all} aukeaa portti.")]
+    [InlineData("{rank:2:ESS} on {racer:2}.", "{rank:2:ess} on {racer:2}.")]
+    [InlineData("{rank:2:xyz} pysyy.", "{rank:2:xyz} pysyy.")]
+    public void CommonAlternativeCaseCodesAreNormalizedBeforeValidation(string line, string normalized)
+        => Assert.Equal(normalized, RadioSlots.Normalize(line));
+
+    [Theory]
     [InlineData("Kiitos, Kalle. Täällä Testitunturilla riittää jännitystä.")]
     [InlineData("Rinneseuran laskija {racer:2} on nyt maalissa.")]
     [InlineData("Hän tulee Ruotsista, ja Suomen laskijat seuraavat perässä.")]
     [InlineData("FIS-kilpailuissa ja SM-tasolla tämä on tuttua, Lumiklubin väki kertoo.")]
     [InlineData("Mäki on jyrkkä, ja kivi ei ole tiellä.")]
     [InlineData("Seurataan laskua yhdessä.")]
+    [InlineData("Täällä Harjoitusrinteellä riittää vauhtia, ja Testitunturilla on hyvä keli.")] // Inflected allowed names.
     public void OrdinaryWordsAndAllowedNamesPass(string line)
     {
         var (facts, rules) = Race();

@@ -227,23 +227,43 @@ public sealed class RadioEngine
         var request = new LlmRequest(RadioPrompts.DialogueSystem(maxLines),
             RadioPrompts.DialogueUser(batch, facts, _phase ?? RacePhase.RunInProgress, _config.EventContext, _topics.Recent(now), _diary.Entries), DialogueTokens, 0.8);
         if (await CompleteAsync(request, DialogueTimeout, ct) is not { } reply) { return (null, null); }
+        var (lines, topic, problems) = ReadScript(reply.Text, facts, rules);
+        // One repair round: the model gets its own script back with each broken line and why, and returns it fixed.
+        if (problems is { Count: > 0 } && Budget.CanAfford(DialogueEstimate))
+        {
+            _log($"Radio script repaired: {problems[0].Problem}");
+            var repair = request with { User = RadioPrompts.RepairUser(request.User, reply.Text, problems) };
+            if (await CompleteAsync(repair, DialogueTimeout, ct) is not { } fixedReply) { return (null, null); }
+            (lines, topic, problems) = ReadScript(fixedReply.Text, facts, rules);
+        }
+        if (problems is { Count: > 0 })
+        {
+            Report(error: $"Language model script rejected: {problems[0].Problem}. Templates used.");
+            _log($"Radio script rejected: {problems[0].Problem}");
+            return (null, null);
+        }
+        if (lines is null) { return (null, null); }
+        return (lines, topic is { } summary && !summary.Any(char.IsDigit) ? summary : null);
+    }
+
+    /// <summary>The script's lines and topic, or the problems of the lines that may not be spoken (null lines: unusable JSON).</summary>
+    private (ScriptLine[]? Lines, string? Topic, List<RadioPrompts.LineProblem>? Problems) ReadScript(string text, FactSheet facts, LineRules rules)
+    {
         try
         {
-            using var json = JsonDocument.Parse(reply.Text);
+            using var json = JsonDocument.Parse(text);
             var lines = json.RootElement.GetProperty("lines").EnumerateArray().Select(x => new ScriptLine(
-                RadioPersonas.Find(x.GetProperty("host").GetString() ?? "")?.Name ?? "", x.GetProperty("text").GetString() ?? "",
+                RadioPersonas.Find(x.GetProperty("host").GetString() ?? "")?.Name ?? "", RadioSlots.Normalize(x.GetProperty("text").GetString() ?? ""),
                 x.TryGetProperty("interruptible", out var cut) && cut.ValueKind == JsonValueKind.True)).ToArray();
-            if (lines.Length is 0 or > RadioPrompts.MaxLines || lines.Any(x => x.Host.Length == 0)) { Report(error: "Language model script rejected: no lines or unknown host. Templates used."); return (null, null); }
-            foreach (var line in lines)
-            {
-                if (RadioSlots.Problem(line.Text, facts, rules) is { } problem)
-                { Report(error: $"Language model script rejected: {problem}. Templates used."); _log($"Radio script rejected: {problem}"); return (null, null); }
-            }
+            if (lines.Length is 0 or > RadioPrompts.MaxLines || lines.Any(x => x.Host.Length == 0))
+            { Report(error: "Language model script rejected: no lines or unknown host. Templates used."); return (null, null, null); }
+            var problems = lines.Select((x, i) => (Check: RadioSlots.Check(x.Text, facts, rules), Line: i))
+                .Where(x => x.Check.Problem is not null).Select(x => new RadioPrompts.LineProblem(x.Line, x.Check.Problem!, x.Check.Word)).ToList();
             var topic = json.RootElement.TryGetProperty("topic", out var t) ? t.GetString() : null;
-            return (lines, topic is { } summary && !summary.Any(char.IsDigit) ? summary : null);
+            return (lines, topic, problems.Count > 0 ? problems : null);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
-        { Report(error: "Language model returned invalid JSON. Templates used."); return (null, null); }
+        { Report(error: "Language model returned invalid JSON. Templates used."); return (null, null, null); }
     }
 
     /// <summary>Style-only second pass. Any change to line count, hosts or slots, or an invalid line, keeps the original.</summary>
@@ -259,7 +279,7 @@ public sealed class RadioEngine
             var curated = new List<ScriptLine>();
             for (var i = 0; i < lines.Length; i++)
             {
-                var text = lines[i].GetProperty("text").GetString() ?? "";
+                var text = RadioSlots.Normalize(lines[i].GetProperty("text").GetString() ?? "");
                 var host = lines[i].TryGetProperty("host", out var h) ? h.GetString() : original[i].Host;
                 if (!string.Equals(host, original[i].Host, StringComparison.OrdinalIgnoreCase)
                     || !RadioSlots.Parse(text).Select(x => x.Text).SequenceEqual(RadioSlots.Parse(original[i].Text).Select(x => x.Text))

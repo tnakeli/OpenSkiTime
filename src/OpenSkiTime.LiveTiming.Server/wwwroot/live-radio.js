@@ -162,12 +162,10 @@ const liveRadio = (() => {
       });
       button.hidden = !available;
       if (!available && playing) pause();
-      // The clip being played was withdrawn (a correction made it false): stop it at once and drop its conversation.
-      if (current && !clips.some(c => c.clipId === current.clipId)) {
-        skippedBatches.add(current.batchId); current = null;
-        audio.pause(); audio.removeAttribute('src');
-        if (playing && !timer) timer = setTimeout(next, lineGap);
-      }
+      // The clip being played was withdrawn because the results moved on (a finish changes places and counts): the
+      // sentence already playing ends normally, but the rest of its conversation is dropped. Cutting speech mid-word
+      // would sound like a fault.
+      if (current && !clips.some(c => c.clipId === current.clipId)) skippedBatches.add(current.batchId);
       if (playing && !current && !timer) next();
     }
   };

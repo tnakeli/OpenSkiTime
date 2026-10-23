@@ -103,6 +103,25 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task ARejectedScriptGetsOneRepairRoundWithTheReasonsBeforeTemplates()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) || FakeLlm.IsProducer(r) ? Echo(r)
+                : r.User.Contains("your_script", StringComparison.Ordinal) ? Script(("Aino", "Maalissa {racer:1}, {rank:1:ess}.", true))
+                : Script(("Aino", "Kolmantena maalissa {racer:1}.", true))))
+        };
+        await rig.FirstFinishAsync();
+        await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Contains("Maalissa Aada Lumivaara, ensimmäisenä.", rig.Sink.Clips.Select(x => x.Transcript));
+        var repair = Assert.Single(rig.Llm.Requests, x => x.User.Contains("your_script", StringComparison.Ordinal));
+        Assert.Contains("number words outside slots", repair.User, StringComparison.Ordinal);
+        Assert.Contains("Kolmantena", repair.User, StringComparison.Ordinal);
+        Assert.DoesNotContain("Lumivaara", repair.User, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(rig.Engine.Health.Error);
+    }
+
+    [Fact]
     public async Task HangingModelTimesOutOnTheInjectedClockAndTemplatesSpeak()
     {
         var called = new TaskCompletionSource();
