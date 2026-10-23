@@ -7,7 +7,7 @@ const liveRadio = (() => {
   // offset maps server times to this browser's clock (browser minus server).
   let session = null, clips = [], playing = false, current = null, timer = null, offset = 0;
   let lastBatch = null, lastClip = null, lastInterruptible = true, lastEnded = 0, nextLine = 0;
-  const done = new Set(), skippedBatches = new Set(), seenAt = new Map();
+  const done = new Set(), skippedBatches = new Set(), seenAt = new Map(), seenLines = new Set();
   // Background music: the operator's tracks play in order while the radio plays and dip under speech. A Web Audio gain
   // fades also where the media element volume is fixed (iOS); without Web Audio the element volume is used.
   const musicButton = document.getElementById('radio-music'), music = new Audio();
@@ -71,7 +71,8 @@ const liveRadio = (() => {
       if (expected) return expected;
       // The next line of an unfinished sentence pair may still be on its way. A batch whose played line the server no
       // longer lists went stale (the worker drops it by the same rules) and never finishes.
-      const alive = clips.some(c => c.clipId === lastClip && Date.parse(c.expiresAt) + offset > now);
+      // A next line that was announced and is gone again was withdrawn (its facts changed): it will not come back.
+      const alive = clips.some(c => c.clipId === lastClip && Date.parse(c.expiresAt) + offset > now) && !seenLines.has(lastBatch + ':' + nextLine);
       if (alive && now - lastEnded < lineWait) return wait;
       skippedBatches.add(lastBatch);
     } else if (sameBatch.length && !expected) { skippedBatches.add(lastBatch); }
@@ -140,7 +141,7 @@ const liveRadio = (() => {
   button.addEventListener('click', () => (playing ? pause() : play()));
   return {
     update(id, announcement) {
-      if (id !== session) { pause(); done.clear(); skippedBatches.clear(); seenAt.clear(); session = id; trackIndex = -1; }
+      if (id !== session) { pause(); done.clear(); skippedBatches.clear(); seenAt.clear(); seenLines.clear(); session = id; trackIndex = -1; }
       const available = !!announcement && announcement.available;
       clips = available ? announcement.clips || [] : [];
       const previous = tracks;
@@ -153,6 +154,7 @@ const liveRadio = (() => {
       const now = Date.now();
       offset = announcement && announcement.serverTime ? now - Date.parse(announcement.serverTime) : 0;
       clips.forEach(c => {
+        seenLines.add(c.batchId + ':' + c.line);
         if (seenAt.has(c.clipId)) return;
         const seen = c.receivedAt ? Math.min(now, Date.parse(c.receivedAt) + offset) : now;
         seenAt.set(c.clipId, seen);

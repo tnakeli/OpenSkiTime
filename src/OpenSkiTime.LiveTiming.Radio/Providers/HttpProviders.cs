@@ -159,7 +159,17 @@ public sealed class GeminiCloudTts : IRadioTts, IDisposable
         else { _key = RadioHttp.RequireKey(apiKey, "Google Gemini"); }
     }
     public string Provider => RadioProviders.GoogleGemini;
+    // Vertex AI quotas for speech models are low; one short retry absorbs a burst of parallel lines.
     public async Task<TtsAudio> SynthesizeAsync(string text, RadioVoice voice, CancellationToken ct)
+    {
+        try { return await SynthesizeOnceAsync(text, voice, ct); }
+        catch (RadioProviderException ex) when (ex.Message.EndsWith("rate limit or quota reached.", StringComparison.Ordinal))
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1.5), ct);
+            return await SynthesizeOnceAsync(text, voice, ct);
+        }
+    }
+    private async Task<TtsAudio> SynthesizeOnceAsync(string text, RadioVoice voice, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(voice);
         var path = _account is null ? "" : $"projects/{Uri.EscapeDataString(_account.ProjectId)}/locations/global/";

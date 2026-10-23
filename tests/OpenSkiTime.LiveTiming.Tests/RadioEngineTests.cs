@@ -224,7 +224,8 @@ public sealed class RadioEngineTests
         var rig = new Rig
         {
             Llm = new((_, _) => throw new RadioProviderException("down")),
-            Tts = new(async (_, ct) => { if (Interlocked.Increment(ref calls) <= 2) { await Task.Delay(Timeout.Infinite, ct); } })
+            // The lines of a conversation are synthesized together; the first two conversations hang, the third speaks.
+            Tts = new(async (_, ct) => { if (Interlocked.Increment(ref calls) <= 4) { await Task.Delay(Timeout.Infinite, ct); } })
         };
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         rig.State = RadioRace.Set(RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow()), 1, LiveStatus.Finished, 4701, rig.Time.GetUtcNow());
@@ -242,7 +243,7 @@ public sealed class RadioEngineTests
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         rig.Time.Advance(TimeSpan.FromSeconds(13));
         var second = rig.Engine.StepAsync(CancellationToken.None);
-        await Until(() => Volatile.Read(ref calls) >= 2);
+        await Until(() => Volatile.Read(ref calls) >= 3);
         rig.Time.Advance(RadioEngine.SpeechTimeout);
         await second.WaitAsync(TimeSpan.FromSeconds(5));
         rig.State = RadioRace.Set(RadioRace.Set(rig.State, 3, LiveStatus.OnCourse, at: rig.Time.GetUtcNow()), 3, LiveStatus.DNF, at: rig.Time.GetUtcNow());
@@ -344,7 +345,9 @@ public sealed class RadioEngineTests
         await rig.FirstFinishAsync();
         await rig.Engine.StepAsync(CancellationToken.None);
         Assert.Empty(rig.Llm.Requests);
-        Assert.Single(rig.Tts.Texts);
+        // The conversation's lines are requested together, and each failed request keeps its reservation.
+        Assert.Equal(2, rig.Tts.Texts.Count);
+        Assert.Empty(rig.Sink.Clips);
         Assert.True(rig.Budget.Spent > 0m);
     }
 

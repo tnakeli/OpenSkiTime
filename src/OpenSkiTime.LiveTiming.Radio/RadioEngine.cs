@@ -182,8 +182,8 @@ public sealed class RadioEngine
                 var missing = FinnishTemplates.GateLines(batch, facts).Where(x => !lines.Any(l => l.Text.Contains(x.Bib, StringComparison.Ordinal))).ToArray();
                 if (missing.Length > 0)
                 {
+                    // The gate line is an addition: the conversation before it still ends where it did.
                     var script = lines.ToList();
-                    script[^1] = script[^1] with { Interruptible = false };
                     script.AddRange(missing.Select((x, i) => x.Line with { Host = RadioPersonas.Host(lines.Count + i).Name, Interruptible = i == missing.Length - 1 }));
                     lines = script;
                 }
@@ -200,61 +200,88 @@ public sealed class RadioEngine
         _topics.Add(topic ?? "", now);
         var batchId = Guid.NewGuid();
         var run = state.CurrentRun;
-        // Conditions are never truncated: lines whose facts would not fit the limit are left unsaid instead.
-        var conditions = new List<RadioCondition> { new(RadioConditionKind.CurrentRun, run) };
-        foreach (var condition in batch.SelectMany(x => x.Conditions)) { if (!conditions.Contains(condition)) { conditions.Add(condition); } }
-        var kept = new List<ScriptLine>();
+        // Each line carries the facts it depends on: the batch's events (the news itself), the start-gate racer only on a
+        // line that names that racer, and the facts its own slots state. A line that goes stale drops only itself and the
+        // lines after it, so "the next racer has started" no longer silences "Radalla nyt …" before it. Conditions are
+        // never truncated: lines whose facts would not fit the limit are left unsaid instead.
+        var gate = batch.SelectMany(x => x.Conditions).Where(x => x.Kind == RadioConditionKind.NextStarter).Distinct().ToArray();
+        var shared = new List<RadioCondition> { new(RadioConditionKind.CurrentRun, run) };
+        foreach (var condition in batch.SelectMany(x => x.Conditions).Where(x => x.Kind != RadioConditionKind.NextStarter))
+        { if (!shared.Contains(condition)) { shared.Add(condition); } }
+        var lineConditions = new List<RadioCondition[]>();
         foreach (var line in lines)
         {
-            var added = RadioSlots.Conditions(line.Text, facts).Where(x => !conditions.Contains(x)).Distinct().ToArray();
-            if (conditions.Count + added.Length > RadioPlayback.MaxConditions) { break; }
-            conditions.AddRange(added); kept.Add(line);
+            var own = shared.Concat(gate.Where(x => line.Text.Contains($"{{racer:{x.Bib}}}", StringComparison.Ordinal)))
+                .Concat(RadioSlots.Conditions(line.Text, facts)).Distinct().ToArray();
+            if (own.Length > RadioPlayback.MaxConditions) { break; }
+            lineConditions.Add(own);
         }
-        if (kept.Count == 0) { _log("Radio batch states too many facts for one clip"); return; }
-        lines = kept.Count == lines.Count ? lines : [.. kept[..^1], kept[^1] with { Interruptible = true }];
+        if (lineConditions.Count == 0) { _log("Radio batch states too many facts for one clip"); return; }
+        lines = lineConditions.Count == lines.Count ? lines : [.. lines.Take(lineConditions.Count - 1), lines[lineConditions.Count - 1] with { Interruptible = true }];
         // Phases: only events valid now were batched (see Prune), so the intersection contains the current phase.
         var phaseSets = batch.Where(x => x.Phases.Length > 0).Select(x => x.Phases).ToArray();
         RacePhase[] phases = phaseSets.Length == 0 ? [] : phaseSets.Aggregate((a, b) => [.. a.Intersect(b)]);
         if (phaseSets.Length > 0 && phases.Length == 0) { _log("Radio batch has no common phase"); return; }
         var expires = batch.Min(x => x.At + x.Lifetime);
         var priority = batch.Min(x => x.Priority);
+        // Lines already stale, or beyond the budget, are not paid for.
+        var count = 0;
+        var texts = new List<(string Text, decimal Estimate, RadioPersona Host, RadioVoice Voice)>();
+        foreach (var line in lines)
+        {
+            if (!RadioPlayback.Playable(Volatile.Read(ref _latest)!, _time.GetUtcNow(), expires, phases, lineConditions[count])) { _log("Radio batch dropped as stale before speech"); break; }
+            var text = RadioSlots.Render(line.Text, facts, _lexicon);
+            var estimate = RadioPrices.Cost(_ttsPrice, text.Length, RadioPrices.EstimatedDurationMs(text.Length));
+            if (!Budget.CanAfford(estimate + texts.Sum(x => x.Estimate))) { Report(RadioState.BudgetExhausted, error: "Radio budget reached; generation stopped."); break; }
+            var host = RadioPersonas.Find(line.Host) ?? RadioPersonas.Host(count);
+            texts.Add((text, estimate, host, RadioPersonas.Voice(host, _tts.Provider, Array.IndexOf(RadioPersonas.Hosts, host) == 0 ? _config.VoiceA : _config.VoiceB)));
+            count++;
+        }
+        if (count == 0) { return; }
+        // All lines are synthesized at once, so a conversation is ready in the time of its slowest line, not the sum of
+        // them; they are still uploaded in order. Reserved before the calls: a failed or cancelled request may be billed.
+        foreach (var x in texts) { Budget.Charge(x.Estimate); }
+        var speech = texts.Select(x => WithTimeout(SpeechTimeout, t => _tts.SynthesizeAsync(x.Text, x.Voice, t), ct)).ToArray();
         var spoken = 0;
-        _remainingLines = lines.Count;
+        _remainingLines = count;
         try
         {
-            for (var i = 0; i < lines.Count; i++)
+            for (var i = 0; i < count; i++)
             {
                 var line = lines[i];
-                // Checked before paying for speech as well as before upload.
-                if (!RadioPlayback.Playable(Volatile.Read(ref _latest)!, _time.GetUtcNow(), expires, phases, conditions)) { _log("Radio batch dropped as stale before speech"); break; }
-                var text = RadioSlots.Render(line.Text, facts, _lexicon);
-                var estimate = RadioPrices.Cost(_ttsPrice, text.Length, RadioPrices.EstimatedDurationMs(text.Length));
-                if (!Budget.CanAfford(estimate)) { Report(RadioState.BudgetExhausted, error: "Radio budget reached; generation stopped."); break; }
-                var host = RadioPersonas.Find(line.Host) ?? RadioPersonas.Host(i);
-                var voice = RadioPersonas.Voice(host, _tts.Provider, Array.IndexOf(RadioPersonas.Hosts, host) == 0 ? _config.VoiceA : _config.VoiceB);
                 TtsAudio audio;
-                // Reserved before the call, like model calls: a failed or cancelled request may still be billed.
-                Budget.Charge(estimate);
-                try { audio = await WithTimeout(SpeechTimeout, t => _tts.SynthesizeAsync(text, voice, t), ct); }
+                try { audio = await speech[i]; }
                 catch (Exception ex) when (Recoverable(ex, ct)) { Report(error: Describe(ex)); break; }
-                Budget.Settle(estimate, RadioPrices.Cost(_ttsPrice, text.Length, audio.DurationMs));
                 now = _time.GetUtcNow();
                 var latest = Volatile.Read(ref _latest)!;
                 // The race moved on while this line was generated: drop it and the rest of the batch.
-                if (!RadioPlayback.Playable(latest, now, expires, phases, conditions)) { _log("Radio batch dropped as stale before upload"); break; }
-                var clip = new RadioClip(Guid.NewGuid(), batchId, i, lines.Count, host.Name, priority, line.Interruptible || i == lines.Count - 1,
-                    expires, phases, [.. conditions], audio, text);
+                if (!RadioPlayback.Playable(latest, now, expires, phases, lineConditions[i])) { _log("Radio batch dropped as stale before upload"); break; }
+                // When the next line is already stale this one ends the conversation, so viewers do not wait for a line that
+                // will never come.
+                var last = i == count - 1 || !RadioPlayback.Playable(latest, now, expires, phases, lineConditions[i + 1]);
+                var clip = new RadioClip(Guid.NewGuid(), batchId, i, count, texts[i].Host.Name, priority, line.Interruptible || last,
+                    expires, phases, lineConditions[i], audio, texts[i].Text);
                 await UploadAsync(clip, ct);
-                spoken++; _remainingLines = lines.Count - i - 1;
+                spoken++; _remainingLines = count - i - 1;
                 _speechEnds = (now > _speechEnds ? now : _speechEnds) + TimeSpan.FromMilliseconds(audio.DurationMs);
-                Report(lastClip: (now, host.Name));
+                Report(lastClip: (now, texts[i].Host.Name));
                 Detect(now);
+                if (last && i < count - 1) { _log("Radio batch dropped as stale before upload"); break; }
                 // Urgent news waits for a natural break, not for the end of a long low-priority conversation.
-                if (priority >= 3 && clip.Interruptible && i < lines.Count - 1 && _batcher.Highest <= 2)
+                if (priority >= 3 && clip.Interruptible && i < count - 1 && _batcher.Highest <= 2)
                 { _log("Radio batch cut at an interruptible line for urgent news"); break; }
             }
         }
-        finally { _remainingLines = 0; Report(); }
+        finally
+        {
+            _remainingLines = 0; Report();
+            // Every reservation is settled with what the provider produced; failed calls keep their reservation.
+            for (var i = 0; i < speech.Length; i++)
+            {
+                try { var audio = await speech[i]; Budget.Settle(texts[i].Estimate, RadioPrices.Cost(_ttsPrice, texts[i].Text.Length, audio.DurationMs)); }
+                catch (Exception ex) when (Recoverable(ex, ct) || ex is OperationCanceledException) { }
+            }
+        }
         if (spoken > 0) { foreach (var value in batch) { _diary.Add(value); } }
     }
 
