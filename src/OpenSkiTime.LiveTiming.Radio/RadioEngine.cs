@@ -413,15 +413,16 @@ public sealed class RadioEngine
     // so the panel never saves an estimate that the settled cost then undercuts.
     private async Task<TtsAudio> SpeakAsync(string text, RadioVoice voice, decimal estimate, CancellationToken ct)
     {
-        Budget.Charge(estimate);
-        lock (_reservations) { _outstanding += estimate; }
+        // Charge and reservation change together, so a report never sees one without the other.
+        lock (_reservations) { Budget.Charge(estimate); _outstanding += estimate; }
+        var settled = false;
         try
         {
             var audio = await WithTimeout(SpeechTimeout, t => _tts.SynthesizeAsync(text, voice, t), ct);
-            Budget.Settle(estimate, RadioPrices.Cost(_ttsPrice, text.Length, audio.DurationMs));
+            lock (_reservations) { Budget.Settle(estimate, RadioPrices.Cost(_ttsPrice, text.Length, audio.DurationMs)); _outstanding -= estimate; settled = true; }
             return audio;
         }
-        finally { lock (_reservations) { _outstanding -= estimate; } }
+        finally { if (!settled) { lock (_reservations) { _outstanding -= estimate; } } }
     }
     private readonly Lock _reservations = new();
     private decimal _outstanding;
