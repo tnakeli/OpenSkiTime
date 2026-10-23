@@ -139,38 +139,99 @@ public sealed class AzureTts(string? apiKey, string region) : IRadioTts, IDispos
 }
 
 /// <summary>
-/// Gemini speech models through Google Cloud Text-to-Speech (fi-FI is in preview). A language-model voice: the style
-/// prompt asks it to read the text exactly, but it may still vary words. The key's project needs the Vertex AI
-/// (Agent Platform) API enabled.
+/// Gemini speech models through Vertex AI (Agent Platform) generateContent. A language-model voice: the style prefix asks
+/// it to read the text exactly, but it may still vary words. Vertex AI needs an identity with Vertex AI User: an API key
+/// bound to a service account (restricted to the Agent Platform API) or a service account JSON key (OAuth). The PCM
+/// output is resampled to 16 kHz mono WAV, which keeps a long line well within the clip size limit.
 /// </summary>
-public sealed class GeminiCloudTts(string? apiKey, string model) : IRadioTts, IDisposable
+public sealed class GeminiCloudTts : IRadioTts, IDisposable
 {
+    private const int Rate = 16000;
+    private static readonly string[] Audio = ["AUDIO"];
     private readonly HttpClient _http = RadioHttp.Create();
-    private readonly string _key = RadioHttp.RequireKey(apiKey, "Google Cloud Text-to-Speech");
+    private readonly string? _key;
+    private readonly GoogleServiceAccount? _account;
+    private readonly string _model;
+    public GeminiCloudTts(string? apiKey, string model)
+    {
+        _model = model;
+        if (GoogleServiceAccount.IsJson(apiKey)) { _account = GoogleServiceAccount.Parse(apiKey!); }
+        else { _key = RadioHttp.RequireKey(apiKey, "Google Gemini"); }
+    }
     public string Provider => RadioProviders.GoogleGemini;
     public async Task<TtsAudio> SynthesizeAsync(string text, RadioVoice voice, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(voice);
-        using var message = new HttpRequestMessage(HttpMethod.Post, "https://texttospeech.googleapis.com/v1/text:synthesize")
+        var path = _account is null ? "" : $"projects/{Uri.EscapeDataString(_account.ProjectId)}/locations/global/";
+        using var message = new HttpRequestMessage(HttpMethod.Post,
+            $"https://aiplatform.googleapis.com/v1/{path}publishers/google/models/{Uri.EscapeDataString(_model)}:generateContent")
         {
             Content = JsonContent.Create(new
             {
-                input = new { prompt = (voice.Style + " Speak Finnish. Read the text exactly as written; do not add, drop or change words.").Trim(), text },
-                voice = new { languageCode = "fi-FI", name = voice.Name, modelName = model },
-                audioConfig = new { audioEncoding = "MP3" }
+                // "Style: text" is the documented way to steer Gemini speech without the instruction being read aloud.
+                contents = new[] { new { role = "user", parts = new[] { new { text = $"{voice.Style}: {text}" } } } },
+                generationConfig = new
+                {
+                    responseModalities = Audio,
+                    speechConfig = new { voiceConfig = new { prebuiltVoiceConfig = new { voiceName = voice.Name } } }
+                }
             })
         };
-        message.Headers.Add("X-Goog-Api-Key", _key);
+        if (_account is not null) { message.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", await _account.TokenAsync(ct)); }
+        else { message.Headers.Add("X-Goog-Api-Key", _key); }
         using var response = await RadioHttp.SendAsync(_http, message, "Google Gemini speech", ct,
-            "Google Gemini speech was refused. Enable the Vertex AI (Agent Platform) API in the Google Cloud project of the key, and check the key in Settings → Live timing.");
+            "Google Gemini speech was refused. Use an API key bound to a service account with the Vertex AI User role (Agent Platform API), saved as the Google Gemini key in Settings → Live timing.");
         var json = await RadioHttp.JsonAsync(response, "Google Gemini speech", ct);
-        byte[] data;
-        try { data = Convert.FromBase64String(json.GetProperty("audioContent").GetString() ?? ""); }
-        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or FormatException)
+        try
+        {
+            var audio = json.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts").EnumerateArray()
+                .Select(x => x.TryGetProperty("inlineData", out var data) ? data : default).First(x => x.ValueKind == JsonValueKind.Object);
+            var type = audio.GetProperty("mimeType").GetString() ?? "";
+            var rate = type.Split(';').Select(x => x.Trim()).FirstOrDefault(x => x.StartsWith("rate=", StringComparison.Ordinal)) is { } r
+                && int.TryParse(r[5..], NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : 24000;
+            if (!type.StartsWith("audio/L16", StringComparison.OrdinalIgnoreCase) || rate is < 8000 or > 48000)
+            { throw new RadioProviderException("Google Gemini speech returned an unexpected audio format."); }
+            var wav = Pcm16.Wav(Pcm16.Resample(Convert.FromBase64String(audio.GetProperty("data").GetString() ?? ""), rate, Rate), Rate);
+            return new(wav, "audio/wav", AudioDuration.Milliseconds(wav, "audio/wav"));
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or FormatException or IndexOutOfRangeException)
         { throw new RadioProviderException("Google Gemini speech returned an unexpected response."); }
-        return new(data, "audio/mpeg", AudioDuration.Milliseconds(data, "audio/mpeg"));
     }
-    public void Dispose() => _http.Dispose();
+    public void Dispose() { _http.Dispose(); _account?.Dispose(); }
+}
+
+/// <summary>16-bit little-endian mono PCM helpers.</summary>
+public static class Pcm16
+{
+    /// <summary>Linear-interpolation resampling; speech above 8 kHz carries little, so 16 kHz keeps it clear.</summary>
+    public static byte[] Resample(byte[] pcm, int from, int to)
+    {
+        ArgumentNullException.ThrowIfNull(pcm);
+        if (from == to || pcm.Length < 4) { return pcm; }
+        var input = pcm.Length / 2;
+        var output = (int)((long)input * to / from);
+        var result = new byte[output * 2];
+        short Sample(int i) => (short)(pcm[i * 2] | pcm[i * 2 + 1] << 8);
+        for (var i = 0; i < output; i++)
+        {
+            var position = (double)i * from / to;
+            var left = Math.Min((int)position, input - 1); var right = Math.Min(left + 1, input - 1);
+            var value = (short)Math.Round(Sample(left) + (Sample(right) - Sample(left)) * (position - left));
+            result[i * 2] = (byte)value; result[i * 2 + 1] = (byte)(value >> 8);
+        }
+        return result;
+    }
+    public static byte[] Wav(byte[] pcm, int rate)
+    {
+        ArgumentNullException.ThrowIfNull(pcm);
+        var data = new byte[44 + pcm.Length];
+        void Write(int offset, int value, int bytes) { for (var i = 0; i < bytes; i++) { data[offset + i] = (byte)(value >> (8 * i)); } }
+        "RIFF"u8.CopyTo(data); Write(4, 36 + pcm.Length, 4); "WAVEfmt "u8.CopyTo(data.AsSpan(8));
+        Write(16, 16, 4); Write(20, 1, 2); Write(22, 1, 2); Write(24, rate, 4); Write(28, rate * 2, 4); Write(32, 2, 2); Write(34, 16, 2);
+        "data"u8.CopyTo(data.AsSpan(36)); Write(40, pcm.Length, 4);
+        pcm.CopyTo(data, 44);
+        return data;
+    }
 }
 
 /// <summary>Google Cloud Text-to-Speech, Chirp 3: HD voices (fi-FI). Finnish has no custom pronunciation support there.</summary>
