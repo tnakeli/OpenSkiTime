@@ -40,7 +40,8 @@ const liveRadio = (() => {
     if (!waited && lastBatch !== null && clip.batchId !== lastBatch) { timer = setTimeout(() => next(true), batchGap - lineGap); return; }
     current = clip; done.add(clip.clipId);
     audio.src = `/api/sessions/${encodeURIComponent(session)}/radio/clips/${encodeURIComponent(clip.clipId)}`;
-    audio.play().catch(finish);
+    // A browser that refuses playback outside a click shows the control paused again instead of silently dropping clips.
+    audio.play().catch(e => { if (e && e.name === 'NotAllowedError') { current = null; pause(); } else finish(); });
   }
   function finish() {
     const ended = current; current = null;
@@ -55,10 +56,24 @@ const liveRadio = (() => {
     audio.pause(); audio.removeAttribute('src'); label();
   }
   // Joining or resuming skips clips announced more than a few seconds ago.
+  // A short silent sound played inside the click unlocks audio for later clips on browsers that require a user
+  // gesture for every media element (iOS Safari), also when nothing is queued yet.
+  function unlock() {
+    try {
+      const n = 80, bytes = new Uint8Array(44 + n), view = new DataView(bytes.buffer), text = (o, s) => [...s].forEach((c, i) => { bytes[o + i] = c.charCodeAt(0); });
+      text(0, 'RIFF'); view.setUint32(4, 36 + n, true); text(8, 'WAVEfmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+      view.setUint32(24, 8000, true); view.setUint32(28, 8000, true); view.setUint16(32, 1, true); view.setUint16(34, 8, true); text(36, 'data'); view.setUint32(40, n, true);
+      bytes.fill(128, 44);
+      audio.src = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+      audio.play().catch(() => {});
+    } catch { /* Playback is unlocked by the first clip instead. */ }
+  }
   function play() {
     const now = Date.now();
     clips.forEach(c => { if (now - (seenAt.get(c.clipId) || now) > liveEdge) { done.add(c.clipId); skippedBatches.add(c.batchId); } });
-    playing = true; lastBatch = null; lastInterruptible = true; label(); next();
+    playing = true; lastBatch = null; lastInterruptible = true; label();
+    if (!pick()) unlock();
+    next();
   }
   button.addEventListener('click', () => (playing ? pause() : play()));
   return {

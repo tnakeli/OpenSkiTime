@@ -8,17 +8,18 @@ const source = readFileSync(fileURLToPath(new URL('../src/OpenSkiTime.LiveTiming
 let now = Date.parse('2026-10-02T09:00:00Z');
 const timers = [];
 const played = [];
+let unlocked = 0;
 const listeners = {};
 const button = { hidden: true, textContent: '', title: '', attributes: {}, setAttribute(n, v) { this.attributes[n] = String(v); }, addEventListener(t, f) { listeners['button:' + t] = f; } };
 class FakeAudio {
   constructor() { this.src = ''; }
   addEventListener(t, f) { listeners['audio:' + t] = f; }
-  play() { played.push(this.src.split('/').pop()); return Promise.resolve(); }
+  play() { if (this.src.startsWith('blob:')) unlocked++; else played.push(this.src.split('/').pop()); return Promise.resolve(); }
   pause() {}
   removeAttribute() { this.src = ''; }
 }
 const context = {
-  document: { getElementById: () => button }, Audio: FakeAudio, encodeURIComponent,
+  document: { getElementById: () => button }, Audio: FakeAudio, encodeURIComponent, Blob, URL,
   Date: { now: () => now, parse: Date.parse },
   setTimeout: (f, ms) => { const t = { f, at: now + ms }; timers.push(t); return t; },
   clearTimeout: t => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }
@@ -110,6 +111,10 @@ assert.deepEqual(played.slice(-1), ['n1']);
 radio.update('s', { available: true, clips: [clip('orphan', 'b11', 1, 2, 3, 15)], serverTime: new Date(now).toISOString() });
 await advance(1500);
 assert.deepEqual(played.slice(-1), ['n1']);
+// Pressing Radio with nothing queued plays a short silent sound inside the click (iOS Safari audio unlock).
+const before = unlocked;
+listeners['button:click'](); listeners['button:click']();
+assert.equal(unlocked, before + 1);
 // Pause stops at once; an unavailable radio hides the control and stops playback.
 listeners['button:click']();
 assert.equal(button.attributes['aria-pressed'], 'false');

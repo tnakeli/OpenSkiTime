@@ -80,6 +80,9 @@ public sealed class RadioSlotTests
             new RadioCondition(RadioConditionKind.StatusCount, 1, Status: LiveStatus.Ready, Value: 1)], counts);
         Assert.All(counts, x => Assert.True(RadioPlayback.Holds(facts.State, x)));
         Assert.False(RadioPlayback.Holds(RadioRace.Set(facts.State, 5, LiveStatus.OnCourse), counts[1]));
+        var field = Assert.Single(RadioSlots.Conditions("Lähtölistalla on {num:starters} laskijaa.", facts));
+        Assert.Equal(new RadioCondition(RadioConditionKind.Starters, 1, Value: 5), field);
+        Assert.False(RadioPlayback.Holds(facts.State with { Runs = [facts.State.Runs[0] with { StartOrder = [1, 2, 3, 4] }] }, field));
         var leaderBeaten = RadioRace.Set(RadioRace.Set(facts.State, 5, LiveStatus.OnCourse), 5, LiveStatus.Finished, 4600);
         Assert.False(RadioPlayback.Holds(leaderBeaten, new RadioCondition(RadioConditionKind.Rank, 1, 1, Value: 1)));
     }

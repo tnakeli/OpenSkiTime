@@ -67,7 +67,9 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
             : state.Error.Length > 0 ? state.Error : _operationError;
         Competition = session.Snapshot is { } snapshot ? $"{snapshot.Competition.Name}  /  Run {snapshot.CurrentRun}" : "Waiting for a timing run";
         foreach (var channel in Channels) { channel.Update(state.Channels.Single(x => x.Kind == channel.Kind)); }
-        if (session.CompetitionId != _radioCompetition) { _radioCompetition = session.CompetitionId; LoadRadio(session.RadioConfiguration); }
+        // Identity and settings are taken together: a competition whose settings are still loading is retried next tick.
+        if (session.CompetitionId != _radioCompetition && (session.CompetitionId is null || session.RadioConfiguration is not null))
+        { _radioCompetition = session.CompetitionId; LoadRadio(session.RadioConfiguration); }
         UpdateRadio(state.Radio ?? new RadioHealth(RadioState.Stopped));
     }
     private void LoadRadio(RadioConfiguration? configuration)

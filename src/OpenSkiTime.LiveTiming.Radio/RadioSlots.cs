@@ -180,6 +180,7 @@ public static partial class RadioSlots
             {
                 // Counts by status change as the race goes on; the run number is covered by the current-run condition.
                 if (CountStatus(slot.Reference) is { } counted) { yield return new(RadioConditionKind.StatusCount, run, Status: counted, Value: value.Number); }
+                else if (slot.Reference == "starters") { yield return new(RadioConditionKind.Starters, run, Value: value.Number); }
                 continue;
             }
             var bib = int.Parse(slot.Reference, CultureInfo.InvariantCulture);
