@@ -122,11 +122,11 @@ async Task SendStatus(CancellationToken ct)
 async Task Stop()
 {
     if (running is null) { return; }
-    var spent = engine!.Budget.Spent;
     running.Cancel();
     try { if (loop is not null) { await loop.WaitAsync(TimeSpan.FromSeconds(5)); } }
     catch (Exception ex) when (ex is OperationCanceledException or TimeoutException) { }
-    health = engine.Health with { State = RadioState.Stopped, SpentUsd = spent };
+    // Read after the engine has stopped, so reservations and settlements made while stopping are included.
+    health = engine!.Health with { State = RadioState.Stopped, SpentUsd = engine.Budget.Spent };
     running.Dispose(); running = null; loop = null; engine = null;
     foreach (var provider in providers) { provider?.Dispose(); }
     providers = [];

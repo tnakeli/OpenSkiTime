@@ -3,7 +3,7 @@ namespace OpenSkiTime.LiveTiming;
 /// <summary>Alpine race phase, derived from the live snapshot. Gates producer sources and clip applicability.</summary>
 public enum RacePhase { BeforeStart, RunInProgress, BetweenRuns, Interrupted, AfterRace }
 
-public enum RadioConditionKind { Status, Rank, TotalRank, Time, Total, CurrentRun, StatusCount }
+public enum RadioConditionKind { Status, Rank, TotalRank, Time, Total, CurrentRun, StatusCount, NextStarter }
 
 /// <summary>
 /// One fact a radio clip states. A clip is stale once the latest snapshot no longer satisfies every condition of its
@@ -139,6 +139,9 @@ public static class RadioPlayback
         ArgumentNullException.ThrowIfNull(state); ArgumentNullException.ThrowIfNull(condition);
         if (condition.Kind == RadioConditionKind.CurrentRun) { return state.CurrentRun == condition.Run; }
         var run = state.Runs.FirstOrDefault(x => x.Number == condition.Run);
+        // The racer is still the first one waiting in the current start order (a reordered queue makes it false).
+        if (condition.Kind == RadioConditionKind.NextStarter)
+        { return run is not null && run.StartOrder.FirstOrDefault(bib => (run.Results.FirstOrDefault(x => x.Bib == bib)?.Status ?? LiveStatus.Ready) == LiveStatus.Ready) == condition.Bib; }
         // The number of racers of the run with a status, counted like the fact sheet counts them (no result is Ready).
         if (condition.Kind == RadioConditionKind.StatusCount)
         { return run is not null && run.StartOrder.Count(bib => (run.Results.FirstOrDefault(x => x.Bib == bib)?.Status ?? LiveStatus.Ready) == condition.Status) == condition.Value; }

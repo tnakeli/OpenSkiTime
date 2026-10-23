@@ -106,6 +106,10 @@ assert.deepEqual(played.slice(-1), ['n1']);
 radio.update('s', { available: true, clips: [clip('open', 'b10', 0, 2, 3, 13, false, 20000), clip('reply', 'b10', 1, 2, 3, 14)], serverTime: new Date(now).toISOString() });
 await advance(1200);
 assert.deepEqual(played.slice(-1), ['n1']);
+// A reply whose opening line never arrived is not played.
+radio.update('s', { available: true, clips: [clip('orphan', 'b11', 1, 2, 3, 15)], serverTime: new Date(now).toISOString() });
+await advance(1500);
+assert.deepEqual(played.slice(-1), ['n1']);
 // Pause stops at once; an unavailable radio hides the control and stops playback.
 listeners['button:click']();
 assert.equal(button.attributes['aria-pressed'], 'false');

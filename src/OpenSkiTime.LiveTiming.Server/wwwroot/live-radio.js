@@ -23,8 +23,10 @@ const liveRadio = (() => {
       if (now - lastEnded < lineWait) return wait;
       skippedBatches.add(lastBatch);
     }
-    if (!open.length) return null;
-    const next = open.sort((a, b) => a.priority - b.priority || a.sequence - b.sequence)[0];
+    // A new conversation starts only at its opening line: a reply whose opening never arrived is not played alone.
+    const startable = open.filter(c => c.batchId === lastBatch || open.some(o => o.batchId === c.batchId && o.line === 0));
+    if (!startable.length) return null;
+    const next = startable.sort((a, b) => a.priority - b.priority || a.sequence - b.sequence)[0];
     if (lastBatch && next.batchId !== lastBatch && sameBatch.length) skippedBatches.add(lastBatch);
     return next;
   }

@@ -224,7 +224,7 @@ public sealed class RadioEngineTests
         Assert.Equal(2, producerCalls);
         Assert.Equal("Seuraavana lähtövuorossa on Aada Lumivaara.", Assert.Single(rig.Sink.Clips).Transcript);
         Assert.Equal(5, rig.Sink.Clips.Single().Priority);
-        Assert.Contains(new RadioCondition(RadioConditionKind.Status, 1, 1, LiveStatus.Ready), rig.Sink.Clips.Single().Conditions);
+        Assert.Contains(new RadioCondition(RadioConditionKind.NextStarter, 1, 1), rig.Sink.Clips.Single().Conditions);
     }
 
     [Fact]

@@ -56,7 +56,7 @@ public static class ProducerGate
         var current = state.Runs.First(x => x.Number == run);
         RadioCondition[] conditions = decision.Source switch
         {
-            ProducerSources.NextStarter => [new(RadioConditionKind.Status, run, bibs[0], LiveStatus.Ready)],
+            ProducerSources.NextStarter => [new(RadioConditionKind.NextStarter, run, bibs[0])],
             ProducerSources.OnCourse => [new(RadioConditionKind.Status, run, bibs[0], LiveStatus.OnCourse)],
             // Standings of the previous run hold only until the first finish of this run changes them.
             ProducerSources.Standings when !current.Results.Any(x => x.Rank is not null || x.TotalRank is not null)

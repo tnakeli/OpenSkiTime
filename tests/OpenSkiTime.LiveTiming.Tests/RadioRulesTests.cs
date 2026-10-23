@@ -173,7 +173,11 @@ public sealed class RadioRulesTests
         Assert.Equal("Epävirallinen tilanne: ensimmäisenä on Onni Viistola, toisena Ilona Kurvinen, kolmantena Saga Porttila.",
             RadioSlots.Render(line.Text, betweenFacts, FinnishVerbalizer.Lexicon("")));
         var e = ProducerGate.Event(new(ProducerSources.NextStarter, 2, ""), state, RadioRace.Start);
-        Assert.Equal(new RadioCondition(RadioConditionKind.Status, 1, 2, LiveStatus.Ready), Assert.Single(e.Conditions));
+        Assert.Equal(new RadioCondition(RadioConditionKind.NextStarter, 1, 2), Assert.Single(e.Conditions));
+        Assert.True(RadioPlayback.Holds(state, e.Conditions[0]));
+        // Bib 3 moved ahead of bib 2 in the start queue: bib 2 is still waiting but no longer next.
+        var reordered = state with { Runs = [state.Runs[0] with { StartOrder = [1, 3, 2, 4, 5] }] };
+        Assert.False(RadioPlayback.Holds(reordered, e.Conditions[0]));
     }
 
     [Fact]
