@@ -57,10 +57,11 @@ public sealed class RadioE2ETests
             Assert.Equal("audio/wav", audio.Content.Headers.ContentType!.MediaType);
             Assert.Equal(Convert.FromBase64String(clip.Audio), await audio.Content.ReadAsByteArrayAsync());
         }
-        // Bib 1 starts: the clip is no longer true and disappears from the announcement.
+        // Bib 1 starts: the clip is no longer true; it disappears from the announcement and its audio is no longer served.
         state = SyntheticRace.Update(state, 1, LiveStatus.OnCourse);
         (await http.PutAsJsonAsync($"api/sessions/{session.SessionId}/state", state, LiveJson.Options)).EnsureSuccessStatusCode();
         Assert.Empty((await ReceiveRadio(socket, x => x.Clips.Length == 0)).Clips);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync($"{radio}/clips/{clip.ClipId}")).StatusCode);
 
         var ring = Enumerable.Range(0, RadioPlayback.MaxClipsPerSession + 2).Select(_ => Clip()).ToArray();
         foreach (var each in ring) { (await http.PostAsJsonAsync(radio + "/clips", each, LiveJson.Options)).EnsureSuccessStatusCode(); }

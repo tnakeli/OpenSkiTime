@@ -81,26 +81,30 @@ public sealed class LiveControlPanelConnectionTests
             await session.SyncRadioAsync();
             Assert.Equal(RadioState.Stopped, session.ReadState().Radio!.State); // Off by default.
 
-            Assert.Equal("", await session.SaveRadioAsync(new RadioConfiguration { LocalEnabled = true }));
+            Assert.Contains("competition changed", await session.SaveRadioAsync(Guid.NewGuid(), new RadioConfiguration { LocalEnabled = true }), StringComparison.Ordinal);
+            Assert.False(session.RadioConfiguration!.LocalEnabled);
+            Assert.Equal("", await session.SaveRadioAsync(competitionId, new RadioConfiguration { LocalEnabled = true }));
             await session.SyncRadioAsync();
             Assert.Contains("Save the OpenAI key", session.ReadState().Radio!.Error, StringComparison.Ordinal);
             Assert.Null(session.ReadState().Radio!.LastClipAt);
 
-            Assert.Equal("", await session.SaveRadioAsync(new RadioConfiguration { LocalEnabled = true, LlmProvider = RadioProviders.Simulation, TtsProvider = RadioProviders.Simulation }));
+            Assert.Equal("", await session.SaveRadioAsync(competitionId, new RadioConfiguration { LocalEnabled = true, LlmProvider = RadioProviders.Simulation, TtsProvider = RadioProviders.Simulation }));
             await session.SyncRadioAsync();
             await ProcessFixture.Until(() => session.ReadState().Radio!.State == RadioState.Running);
             Assert.Null(session.ReadState().Radio!.Error);
+            // A second OpenSkiTime window cannot run the same competition's radio (and budget) at the same time.
+            Assert.Null(new OpenSkiTime.LiveTiming.Client.RadioSettingsStore(Path.Combine(folder, "live-radio.json")).TryOwn(competitionId));
             // Cloud-only radio: the running Local channel no longer qualifies and the radio stops.
-            Assert.Equal("", await session.SaveRadioAsync(new RadioConfiguration { CloudEnabled = true, LlmProvider = RadioProviders.Simulation, TtsProvider = RadioProviders.Simulation }));
+            Assert.Equal("", await session.SaveRadioAsync(competitionId, new RadioConfiguration { CloudEnabled = true, LlmProvider = RadioProviders.Simulation, TtsProvider = RadioProviders.Simulation }));
             await session.SyncRadioAsync();
             await ProcessFixture.Until(() => session.ReadState().Radio!.State == RadioState.Stopped);
             Assert.Equal(PublisherState.Running, session.ReadState().Channels[0].Health.State);
             Assert.True(new OpenSkiTime.LiveTiming.Client.RadioSettingsStore(Path.Combine(folder, "live-radio.json")).Read(competitionId).Configuration.CloudEnabled);
             // Disabling while a start is still connecting: the start completes first and is then stopped, never left generating.
             var simulation = new RadioConfiguration { LocalEnabled = true, LlmProvider = RadioProviders.Simulation, TtsProvider = RadioProviders.Simulation };
-            Assert.Equal("", await session.SaveRadioAsync(simulation));
+            Assert.Equal("", await session.SaveRadioAsync(competitionId, simulation));
             await session.SyncRadioAsync();
-            Assert.Equal("", await session.SaveRadioAsync(simulation with { LocalEnabled = false }));
+            Assert.Equal("", await session.SaveRadioAsync(competitionId, simulation with { LocalEnabled = false }));
             await session.SyncRadioAsync();
             await ProcessFixture.Until(() => session.ReadState().Radio!.State == RadioState.Stopped);
             await Task.Delay(1500); await session.SyncRadioAsync();

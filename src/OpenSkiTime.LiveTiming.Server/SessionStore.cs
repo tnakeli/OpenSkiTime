@@ -206,8 +206,11 @@ public sealed class SessionStore
         lock (_gate)
         {
             Prune();
-            var clip = _sessions.GetValueOrDefault(id)?.Radio?.Clips.FirstOrDefault(x => x.Info.ClipId == clipId);
-            return clip is null || clip.Info.ExpiresAt <= _time.GetUtcNow() ? null : (clip.Audio, clip.ContentType);
+            var entry = _sessions.GetValueOrDefault(id);
+            var clip = entry?.Radio?.Clips.FirstOrDefault(x => x.Info.ClipId == clipId);
+            // Served only while still true: a correction after the announcement makes the audio unavailable at once.
+            return clip is null || entry!.State is not { } state || !RadioPlayback.Playable(state, _time.GetUtcNow(), clip.Info.ExpiresAt, clip.Phases, clip.Conditions)
+                ? null : (clip.Audio, clip.ContentType);
         }
     }
     public IReadOnlyList<Guid> RadioSessions()

@@ -57,6 +57,21 @@ public sealed class RadioSettingsStore(string path)
             finally { File.Delete(temporary); }
         }
     }
+    /// <summary>
+    /// Exclusive radio ownership of one competition for this Windows user, held while its radio runs. Returns null when
+    /// another OpenSkiTime window already runs that competition's radio.
+    /// </summary>
+    public IDisposable? TryOwn(Guid competitionId)
+    {
+        var folder = System.IO.Path.GetDirectoryName(Path)!;
+        Directory.CreateDirectory(folder);
+        try
+        {
+            return new FileStream(System.IO.Path.Combine(folder, $"live-radio-{competitionId:N}.owner"), FileMode.OpenOrCreate, FileAccess.ReadWrite,
+                FileShare.None, 1, FileOptions.DeleteOnClose);
+        }
+        catch (IOException) { return null; }
+    }
     private FileStream Lock()
     {
         for (var attempt = 0; ; attempt++)

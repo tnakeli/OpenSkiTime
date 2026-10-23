@@ -29,6 +29,8 @@ public sealed class LiveControlSession : IAsyncDisposable
     private RadioTarget[] _radioTargets = [];
     private bool _radioStarted;
     private Task? _radioStart;
+    private bool _radioRestart;
+    private IDisposable? _radioOwner;
     private string _radioError = "";
     private DateTimeOffset _radioRetry;
     private decimal _radioSaved;
@@ -186,7 +188,8 @@ public sealed class LiveControlSession : IAsyncDisposable
         SaveSpend(force: true);
         await _radio.DisposeAsync().ConfigureAwait(false);
         SaveSpend(force: true);
-        _radio = new(); _radioStarted = false; _radioStart = null; _radioTargets = []; _radioError = "";
+        _radio = new(); _radioStarted = false; _radioStart = null; _radioRestart = false; _radioTargets = []; _radioError = "";
+        _radioOwner?.Dispose(); _radioOwner = null;
     }
     // Spend survives panel restarts, so the hard budget stop cannot be bypassed by reopening the panel.
     private void SaveSpend(bool force)
@@ -201,26 +204,24 @@ public sealed class LiveControlSession : IAsyncDisposable
 
     /// <summary>Saves this competition's radio settings and restarts the radio with them.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Optional radio settings report a redacted error instead of crashing.")]
-    public async Task<string> SaveRadioAsync(RadioConfiguration configuration)
+    public async Task<string> SaveRadioAsync(Guid competitionId, RadioConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_competitionId is not { } id) { return "Open a saved timing run in OpenSkiTime first."; }
+            // The form belongs to the competition it was loaded for; the race may have changed meanwhile.
+            if (id != competitionId) { return "The competition changed. Check the radio settings of the current competition and save again."; }
             configuration.Validate();
             _radioStore.Save(id, configuration);
             SaveSpend(force: true);
             Volatile.Write(ref _radioSettings, new RadioCompetitionSettings(configuration, _radioSaved));
-            // A start still connecting would otherwise begin with the old settings after this stop.
-            if (_radioStart is { IsCompleted: false } pending)
-            {
-                try { await pending.ConfigureAwait(false); }
-                catch (Exception) { _radioStarted = false; }
-            }
-            _radioStart = null;
+            _radioError = ""; _radioRetry = default;
+            // A start still connecting is stopped by the status loop once it has connected, never awaited under the lock.
+            if (_radioStart is { IsCompleted: false }) { _radioRestart = true; return ""; }
             if (_radio.IsConnected) { await _radio.StopAsync().ConfigureAwait(false); }
-            _radioStarted = false; _radioTargets = []; _radioError = ""; _radioRetry = default;
+            _radioStarted = false; _radioTargets = [];
             return "";
         }
         catch (LiveValidationException ex) { return ex.Message; }
@@ -251,6 +252,13 @@ public sealed class LiveControlSession : IAsyncDisposable
                 _radioStart = null;
                 if (started.Exception is not null) { _radioStarted = false; _radioError = "Race radio could not start. Check installed components; timing capture and live publishing continue."; }
             }
+            if (_radioRestart)
+            {
+                // Settings were saved while this start was connecting: stop it, then start again with the saved settings.
+                _radioRestart = false;
+                if (_radio.IsConnected) { await _radio.StopAsync().ConfigureAwait(false); }
+                _radioStarted = false; _radioTargets = [];
+            }
             if (_radioStarted && !_radio.IsConnected) { _radioStarted = false; }
             if (targets.Length == 0)
             {
@@ -258,6 +266,7 @@ public sealed class LiveControlSession : IAsyncDisposable
                 if (_radioStarted || (_radio.IsConnected && _radio.Health.State is RadioState.Running or RadioState.Starting))
                 { await _radio.StopAsync().ConfigureAwait(false); _radioStarted = false; }
                 _radioTargets = [];
+                _radioOwner?.Dispose(); _radioOwner = null;
                 return;
             }
             if (!_radioStarted)
@@ -265,6 +274,9 @@ public sealed class LiveControlSession : IAsyncDisposable
                 if (now < _radioRetry) { return; }
                 _radioRetry = now + TimeSpan.FromSeconds(30);
                 var config = settings.Configuration;
+                // One radio per competition on this computer: two OpenSkiTime windows would otherwise share one budget twice.
+                _radioOwner ??= _radioStore.TryOwn(_competitionId.Value)
+                    ?? throw new LiveValidationException("Race radio for this competition is already running in another OpenSkiTime window on this computer.");
                 var llmKey = config.LlmProvider == RadioProviders.Simulation ? null : Key(config.LlmProvider);
                 var ttsKey = config.TtsProvider == RadioProviders.Simulation ? null : Key(config.TtsProvider);
                 var radio = _radio; var worker = Artifact("RadioWorker"); var options = new RadioWorkerOptions(config, _radioSaved, llmKey, ttsKey);

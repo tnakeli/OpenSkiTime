@@ -108,7 +108,8 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
             TtsProvider = RadioTts?.Provider ?? RadioProviders.Simulation, TtsRegion = RadioRegion.Trim(),
             VoiceA = RadioVoiceA.Trim(), VoiceB = RadioVoiceB.Trim(), EventContext = RadioContext, CurationNotes = RadioNotes, Lexicon = RadioLexicon
         };
-        var error = await Task.Run(() => session.SaveRadioAsync(configuration));
+        if (_radioCompetition is not { } competition || competition == Guid.Empty) { RadioSaveStatus = "Open a saved timing run in OpenSkiTime first."; return; }
+        var error = await Task.Run(() => session.SaveRadioAsync(competition, configuration));
         RadioSaveStatus = error.Length == 0 ? "Radio settings saved for this competition." : error;
     }
     [RelayCommand]
