@@ -107,7 +107,8 @@ public sealed record WorkerOutput(PublisherHealth Health, LiveSession? Session);
 /// </summary>
 public static class LiveProtocol
 {
-    public const int Version = 1;
+    // 2: race radio clip upload, radio status and the SignalR "Radio" announcement.
+    public const int Version = 2;
     public const string Header = "X-OpenSkiTime-Live-Protocol";
 }
 public static class LiveJson

@@ -1,0 +1,109 @@
+using OpenSkiTime.LiveTiming.Radio;
+using Xunit;
+
+namespace OpenSkiTime.LiveTiming.Tests;
+
+// The language model may refer to facts only through slots; code validates every line before speech.
+public sealed class RadioSlotTests
+{
+    private static readonly IReadOnlyDictionary<string, string> NoLexicon = FinnishVerbalizer.Lexicon("");
+
+    private static (FactSheet Facts, LineRules Rules) Race()
+    {
+        var state = RadioRace.Set(RadioRace.Create(), 1, LiveStatus.Finished, 4701);
+        state = RadioRace.Set(state, 2, LiveStatus.Finished, 4790);
+        state = RadioRace.Set(state, 3, LiveStatus.OnCourse);
+        state = RadioRace.Set(state, 4, LiveStatus.DNF);
+        return (FactSheet.Build(state, [2, 3, 4]), new LineRules(state, ["Aino", "Kalle"], "Sponsorina Lumiklubi."));
+    }
+
+    [Fact]
+    public void ValidLineRendersFinnishFromTheTimingValues()
+    {
+        var (facts, rules) = Race();
+        const string line = "Maalissa {racer:2}, aika {time:2}. Hän on nyt {rank:2:ess}, eroa kärkeen {diff:2}.";
+        Assert.Null(RadioSlots.Problem(line, facts, rules));
+        Assert.Equal("Maalissa Veeti Hankiranta, aika neljäkymmentäseitsemän pilkku yhdeksänkymmentä sekuntia. Hän on nyt toisena, eroa kärkeen nolla pilkku kahdeksankymmentäyhdeksän sekuntia.",
+            RadioSlots.Render(line, facts, NoLexicon));
+        Assert.Equal("Ilona Kurvinen keskeytti.", RadioSlots.Render("{racer:4} {status:4}.", facts, NoLexicon));
+        Assert.Equal("Keskeytys.", RadioSlots.Render("{status:4:noun}.", facts, NoLexicon));
+        Assert.Equal("Ensimmäinen lasku, ja vuoroaan odottaa yksi.", RadioSlots.Render("{ord:run:nom} lasku, ja vuoroaan odottaa {num:remaining}.", facts, NoLexicon));
+        Assert.Equal("Sijalla kaksi.", RadioSlots.Render("Sijalla {rank:2:card}.", facts, NoLexicon));
+    }
+
+    [Theory]
+    [InlineData("Aika on 47,90 sekuntia.", "digits outside slots")]
+    [InlineData("Radalla {time:3}.", "unknown slot")]          // Bib 3 has no time yet.
+    [InlineData("Matkassa {racer:9}.", "unknown slot")]        // Bib 9 is not in the fact sheet.
+    [InlineData("{racer:2:gen} lasku.", "disallowed case")]    // Names are never inflected by code.
+    [InlineData("{name:2} maalissa.", "unknown slot")]
+    [InlineData("Hankiranta johtaa nyt.", "racer name outside slots")]
+    [InlineData("Maalissa VEETI {racer:1}.", "racer name outside slots")]
+    [InlineData("Hän on kolmas.", "number words outside slots")]
+    [InlineData("Eroa on sekunnin verran.", "number words outside slots")]
+    [InlineData("Hän voitti Matti Virtasen.", "unknown proper name")]
+    [InlineData("{racer:2} ja Pekka tuulettavat.", "unknown proper name")]
+    [InlineData("Puuttuva {racer:2 lopetus.", "malformed slot")]
+    [InlineData("", "empty or oversized line")]
+    public void InvalidLinesAreRejectedBeforeSpeech(string line, string problem)
+    {
+        var (facts, rules) = Race();
+        Assert.Equal(problem, RadioSlots.Problem(line, facts, rules));
+    }
+
+    [Theory]
+    [InlineData("Kiitos, Kalle. Täällä Testitunturilla riittää jännitystä.")]
+    [InlineData("Rinneseuran laskija {racer:2} on nyt maalissa.")]
+    [InlineData("Hän tulee Ruotsista, ja Suomen laskijat seuraavat perässä.")]
+    [InlineData("FIS-kilpailuissa ja SM-tasolla tämä on tuttua, Lumiklubin väki kertoo.")]
+    [InlineData("Mäki on jyrkkä, ja kivi ei ole tiellä.")]
+    public void OrdinaryWordsAndAllowedNamesPass(string line)
+    {
+        var (facts, rules) = Race();
+        Assert.Null(RadioSlots.Problem(line, facts, rules));
+    }
+
+    [Fact]
+    public void ConditionsCoverEveryStatedFactIncludingTheLeaderBehindAGap()
+    {
+        var (facts, _) = Race();
+        var conditions = RadioSlots.Conditions("{rank:2:ess}, eroa {diff:2}, {racer:4} {status:4}.", facts).ToArray();
+        Assert.Contains(new RadioCondition(RadioConditionKind.Rank, 1, 2, Value: 2), conditions);
+        Assert.Contains(new RadioCondition(RadioConditionKind.Time, 1, 2, Value: 4790), conditions);
+        Assert.Contains(new RadioCondition(RadioConditionKind.Time, 1, 1, Value: 4701), conditions);
+        Assert.Contains(new RadioCondition(RadioConditionKind.Status, 1, 4, LiveStatus.DNF), conditions);
+        Assert.Equal(4, conditions.Length);
+    }
+
+    [Fact]
+    public void FactSheetForTheModelHasNoNames()
+    {
+        var (facts, _) = Race();
+        var prompt = System.Text.Json.JsonSerializer.Serialize(facts.ToPrompt());
+        Assert.DoesNotContain("Hankiranta", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Veeti", prompt, StringComparison.Ordinal);
+        Assert.Contains("{racer:2}", prompt, StringComparison.Ordinal);
+        Assert.Contains("Rinneseura", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TemplatesSpeakEveryCoreEventAndPassValidation()
+    {
+        var (facts, rules) = Race();
+        var at = RadioRace.Start;
+        RadioEvent Event(RadioEventKind kind, params int[] bibs) => new(kind, 2, 1, bibs, at, TimeSpan.FromMinutes(1), [], [], 1);
+        foreach (var e in new[] { Event(RadioEventKind.NewLeader, 2), Event(RadioEventKind.Finish, 2), Event(RadioEventKind.DNF, 4), Event(RadioEventKind.DSQ, 4),
+            Event(RadioEventKind.RunStarted, 1), Event(RadioEventKind.RunComplete, 1, 2), Event(RadioEventKind.Interrupted), Event(RadioEventKind.Correction, 2) })
+        {
+            var lines = FinnishTemplates.Lines([e], facts, 0);
+            Assert.NotEmpty(lines);
+            Assert.All(lines, x => Assert.Null(RadioSlots.Problem(x.Text, facts, rules)));
+            Assert.True(lines[^1].Interruptible);
+        }
+        var finish = FinnishTemplates.Lines([Event(RadioEventKind.Finish, 2)], facts, 0);
+        Assert.Equal(["Aino", "Kalle"], finish.Select(x => x.Host));
+        Assert.Equal("Hän on nyt toisena, eroa kärkeen nolla pilkku kahdeksankymmentäyhdeksän sekuntia.", RadioSlots.Render(finish[1].Text, facts, NoLexicon));
+        var complete = FinnishTemplates.Lines([Event(RadioEventKind.RunComplete, 1, 2)], facts, 0);
+        Assert.Equal("Epävirallisten tulosten mukaan ensimmäisenä on Aada Lumivaara, toisena Veeti Hankiranta.", RadioSlots.Render(complete[1].Text, facts, NoLexicon));
+    }
+}

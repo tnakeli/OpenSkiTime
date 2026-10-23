@@ -7,7 +7,18 @@ namespace OpenSkiTime.LiveTiming.Server;
 public sealed class SessionStore
 {
     private sealed record Claims(Guid SessionId, long Expires);
-    private sealed record Entry(DateTimeOffset Expires, LiveSnapshot? State);
+    private sealed record Entry(DateTimeOffset Expires, LiveSnapshot? State, RadioRoom? Radio = null);
+    // Race radio of one session: worker health and a RAM-only ring of clips. Removed with the session (delete, Delete All
+    // Data, expiry); nothing is written to disk. Mutated only under the store lock.
+    private sealed class RadioRoom
+    {
+        public bool Enabled;
+        public bool BudgetExhausted;
+        public DateTimeOffset? Heartbeat;
+        public long Sequence;
+        public readonly List<StoredClip> Clips = [];
+    }
+    private sealed record StoredClip(RadioClipInfo Info, RacePhase[] Phases, RadioCondition[] Conditions, string ContentType, byte[] Audio);
     private readonly Dictionary<Guid, Entry> _sessions = [];
     private readonly Dictionary<Guid, DateTimeOffset> _deleted = [];
     private readonly Lock _gate = new();
@@ -15,6 +26,7 @@ public sealed class SessionStore
     private readonly TimeProvider _time;
     private readonly int _capacity;
     private readonly TimeSpan _lifetime;
+    private readonly long _radioBytes;
     public SessionStore(IConfiguration config, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(config); ArgumentNullException.ThrowIfNull(time);
@@ -24,6 +36,7 @@ public sealed class SessionStore
         if (_key.Length < 32) { throw new InvalidOperationException("LiveTiming signing key needs at least 32 bytes."); }
         _capacity = Math.Clamp(config.GetValue("LiveTiming:MaxSessions", 100), 1, 10000);
         _lifetime = TimeSpan.FromDays(Math.Clamp(config.GetValue("LiveTiming:TokenDays", 14), 1, 14));
+        _radioBytes = Math.Clamp(config.GetValue("LiveTiming:RadioMaxMegabytes", 64), 1, 1024) * 1024L * 1024L;
     }
     public LiveSession Create(string publicBase)
     {
@@ -79,7 +92,8 @@ public sealed class SessionStore
             Prune();
             if (_deleted.ContainsKey(id)) { throw new LiveValidationException("Session was deleted."); }
             if (!_sessions.ContainsKey(id) && _sessions.Count + _deleted.Count >= _capacity) { throw new LiveCapacityException(); }
-            _sessions[id] = new(expires, state);
+            // A full replacement keeps the session's radio, so a publisher resync never silences it.
+            _sessions[id] = _sessions.TryGetValue(id, out var existing) ? existing with { Expires = expires, State = state } : new(expires, state);
         }
     }
     public LiveSnapshot Apply(Guid id, LiveEvent update)
@@ -131,6 +145,82 @@ public sealed class SessionStore
             if (!_sessions.ContainsKey(id) && _deleted.Count + _sessions.Count >= _capacity) { throw new LiveCapacityException(); }
             _sessions.Remove(id); _deleted[id] = expires;
         }
+    }
+    /// <summary>Worker heartbeat with the server's receive time. Disabling removes every clip at once.</summary>
+    public void RadioStatus(Guid id, RadioStatusUpdate update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        lock (_gate)
+        {
+            Prune();
+            var room = Room(id);
+            room.Enabled = update.Enabled; room.BudgetExhausted = update.BudgetExhausted; room.Heartbeat = _time.GetUtcNow();
+            if (!update.Enabled) { room.Clips.Clear(); }
+        }
+    }
+    /// <summary>
+    /// Validates the complete clip before mutation, then appends it to the session ring. The oldest clips are evicted per
+    /// session (count and bytes) and across sessions (server-wide bytes). Repeated uploads of one clip are ignored.
+    /// </summary>
+    public void AddClip(Guid id, RadioClipUpload clip)
+    {
+        ArgumentNullException.ThrowIfNull(clip);
+        var now = _time.GetUtcNow();
+        RadioPlayback.Validate(clip, now, out var audio);
+        lock (_gate)
+        {
+            Prune();
+            var room = Room(id);
+            if (room.Clips.Any(x => x.Info.ClipId == clip.ClipId)) { return; }
+            // An upload proves the worker is alive; the budget flag stays as last reported.
+            room.Enabled = true; room.Heartbeat = now;
+            room.Clips.Add(new(new(clip.ClipId, clip.BatchId, ++room.Sequence, clip.Line, clip.LineCount, clip.Host, clip.Priority, clip.Interruptible,
+                clip.ExpiresAt, clip.DurationMs), clip.Phases, clip.Conditions, clip.ContentType, audio));
+            room.Clips.RemoveAll(x => x.Info.ExpiresAt <= now);
+            while (room.Clips.Count > RadioPlayback.MaxClipsPerSession || room.Clips.Sum(x => (long)x.Audio.Length) > RadioPlayback.MaxSessionBytes)
+            { room.Clips.RemoveAt(0); }
+            while (_sessions.Values.Sum(x => x.Radio?.Clips.Sum(c => (long)c.Audio.Length) ?? 0) > _radioBytes)
+            {
+                var oldest = _sessions.Values.Where(x => x.Radio?.Clips.Count > 0).Select(x => x.Radio!).MinBy(x => x.Clips[0].Info.ExpiresAt)!;
+                oldest.Clips.RemoveAt(0);
+            }
+        }
+    }
+    /// <summary>Whether the play control shows, and the clips still valid for the latest state, phase and time.</summary>
+    public RadioAnnouncement Announce(Guid id)
+    {
+        lock (_gate)
+        {
+            Prune();
+            var entry = _sessions.GetValueOrDefault(id);
+            if (entry?.Radio is not { } room || entry.State is not { } state) { return new(false, []); }
+            var now = _time.GetUtcNow();
+            room.Clips.RemoveAll(x => x.Info.ExpiresAt <= now);
+            var available = RadioPlayback.Available(room.Enabled, room.BudgetExhausted, room.Heartbeat, state, now);
+            return new(available, available ? room.Clips.Where(x => RadioPlayback.Playable(state, now, x.Info.ExpiresAt, x.Phases, x.Conditions)).Select(x => x.Info).ToArray() : []);
+        }
+    }
+    public (byte[] Audio, string ContentType)? ClipAudio(Guid id, Guid clipId)
+    {
+        lock (_gate)
+        {
+            Prune();
+            var clip = _sessions.GetValueOrDefault(id)?.Radio?.Clips.FirstOrDefault(x => x.Info.ClipId == clipId);
+            return clip is null || clip.Info.ExpiresAt <= _time.GetUtcNow() ? null : (clip.Audio, clip.ContentType);
+        }
+    }
+    public IReadOnlyList<Guid> RadioSessions()
+    {
+        lock (_gate) { Prune(); return _sessions.Where(x => x.Value.Radio is not null).Select(x => x.Key).ToArray(); }
+    }
+    // Radio needs published state; a session the publisher has not restored after a restart answers 409 until it has.
+    private RadioRoom Room(Guid id)
+    {
+        if (_sessions.GetValueOrDefault(id) is not { State: not null } entry) { throw new LiveConflictException(); }
+        if (entry.Radio is { } room) { return room; }
+        room = new RadioRoom();
+        _sessions[id] = entry with { Radio = room };
+        return room;
     }
     private void Prune()
     {

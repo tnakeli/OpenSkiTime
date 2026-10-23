@@ -209,6 +209,40 @@ public partial class DesktopWorkflowTests
         }
         finally { Directory.Delete(root, true); }
     }
+    [AvaloniaFact]
+    public async Task LiveTimingTabSavesRaceRadioProviderKeysInTheCredentialStore()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-radio-keys-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = "", OpenPath = "", BackupPath = "" },
+                fisStore: new FisLocalStore(root, new ReportSettingsCredential()), recentSeriesStore: new(root));
+            var stores = new Dictionary<string, ReportSettingsCredential>();
+            vm.LiveCredentialStore = target => stores.TryGetValue(target, out var store) ? store : stores[target] = new();
+            vm.ShowSettingsCommand.Execute(null);
+            var window = new Window { Content = new ScrollViewer { Content = new SettingsView { DataContext = vm } }, Width = 1100, Height = 900 };
+            window.Show();
+            var tabs = window.GetVisualDescendants().OfType<TabControl>().Single();
+            tabs.SelectedIndex = 3; window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("OpenAI", vm.LiveRadioKeyProvider!.Label);
+            Assert.Equal("No OpenAI key saved.", vm.LiveRadioKeyStatus);
+            vm.LiveRadioKeyInput = "short";
+            PressSettingsControl(window, window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save radio key")));
+            Assert.True(vm.IsError);
+            vm.LiveRadioKeyProvider = vm.LiveRadioKeyChoices.Single(x => x.Provider == "azure");
+            vm.LiveRadioKeyInput = "synthetic-azure-speech-key-0123456789";
+            PressSettingsControl(window, window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save radio key")));
+            Assert.False(vm.IsError, vm.StatusMessage); Assert.Equal("", vm.LiveRadioKeyInput);
+            Assert.Equal("synthetic-azure-speech-key-0123456789", stores["OpenSkiTime.LiveTiming.Radio:azure"].Read());
+            Assert.Equal("Azure AI Speech key saved for this Windows user.", vm.LiveRadioKeyStatus);
+            Assert.False(stores.ContainsKey("OpenSkiTime.LiveTiming.Radio:openai") && stores["OpenSkiTime.LiveTiming.Radio:openai"].Exists());
+            PressSettingsControl(window, window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Remove radio key")));
+            Assert.Null(stores["OpenSkiTime.LiveTiming.Radio:azure"].Read());
+            window.Close();
+        }
+        finally { Directory.Delete(root, true); }
+    }
     private sealed class ReportSettingsCredential : ICredentialStore
     {
         private string? _key;

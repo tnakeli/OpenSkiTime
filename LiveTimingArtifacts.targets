@@ -3,9 +3,11 @@
     <ItemGroup>
       <LiveWorkerFiles Include="$(MSBuildThisFileDirectory)src/OpenSkiTime.LiveTiming.Worker/bin/$(Configuration)/$(TargetFramework)/**/*" />
       <LiveServerFiles Include="$(MSBuildThisFileDirectory)src/OpenSkiTime.LiveTiming.Server/bin/$(Configuration)/$(TargetFramework)/**/*" />
+      <LiveRadioFiles Include="$(MSBuildThisFileDirectory)src/OpenSkiTime.LiveTiming.RadioWorker/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(LiveWorkerFiles)" DestinationFiles="@(LiveWorkerFiles->'$(OutDir)LiveTiming/Worker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(LiveServerFiles)" DestinationFiles="@(LiveServerFiles->'$(OutDir)LiveTiming/Server/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(LiveRadioFiles)" DestinationFiles="@(LiveRadioFiles->'$(OutDir)LiveTiming/RadioWorker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <ItemGroup Condition="'$(MSBuildProjectName)' != 'OpenSkiTime.LiveTiming.ControlPanel'">
       <LivePanelFiles Include="$(MSBuildThisFileDirectory)src/OpenSkiTime.LiveTiming.ControlPanel/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
@@ -14,6 +16,7 @@
   <Target Name="PublishLiveTimingProcesses" AfterTargets="Publish" DependsOnTargets="CopyLiveTimingProcesses" Condition="'$(SkipLiveTimingArtifacts)' != 'true'">
     <Copy SourceFiles="@(LiveWorkerFiles)" DestinationFiles="@(LiveWorkerFiles->'$(PublishDir)LiveTiming/Worker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(LiveServerFiles)" DestinationFiles="@(LiveServerFiles->'$(PublishDir)LiveTiming/Server/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(LiveRadioFiles)" DestinationFiles="@(LiveRadioFiles->'$(PublishDir)LiveTiming/RadioWorker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(LivePanelFiles)" DestinationFiles="@(LivePanelFiles->'$(PublishDir)LiveTiming/ControlPanel/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 </Project>

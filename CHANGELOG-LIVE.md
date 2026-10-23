@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+Live protocol: 2
+
+### Added
+
+- Optional race radio: viewers can press ▶ Radio on the race page to hear short Finnish AI commentary when the organizer has enabled it. The control appears only while the radio is healthy and never starts playing by itself. Clips are kept only in memory, expire within minutes, are dropped when the results contradict them and are deleted with the session.
+
+### Changed
+
+- Live protocol 2: adds the radio status and clip endpoints and the `Radio` announcement. Publishers using protocol 1 are refused with HTTP 426; update OpenSkiTime to publish to this server.
+
 ## [0.3.0] - 2026-10-14
 
 Live protocol: 1

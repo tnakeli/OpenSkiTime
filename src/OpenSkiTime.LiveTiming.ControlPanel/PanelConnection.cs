@@ -51,6 +51,7 @@ public sealed class PanelConnection(string pipeName, LiveControlSession session)
             while (!_stop.IsCancellationRequested)
             {
                 session.RetainCredentials();
+                await session.SyncRadioAsync();
                 await SendAsync(session.ReadState());
                 await Task.Delay(250, _stop.Token);
             }

@@ -48,6 +48,8 @@ All project names below have the `OpenSkiTime.` prefix. Source is under `src/`; 
 | `LiveTiming.ControlPanel` | Separate Avalonia UI for channels, worker lifecycle and publishing status. |
 | `LiveTiming.Publishing` | Publishing logic/adapters, independent of the operator database. |
 | `LiveTiming.Worker` | Separate process hosting publishing work. |
+| `LiveTiming.Radio` | Optional race radio: Finnish verbalization, slot validation, event detection, batching, producer, budget, prompts, engine and provider adapters. No timing, persistence or device dependency. See [race radio](race-radio.md). |
+| `LiveTiming.RadioWorker` | Separate process hosting the race radio, owned by the control panel like the publisher workers. |
 | `LiveTiming.Server` | ASP.NET Core REST/SignalR server, browser assets and bounded in-memory sessions. Runs locally or in a container. |
 | `LiveTiming.Harness` | Synthetic live integration/acceptance tooling. |
 
@@ -71,11 +73,15 @@ flowchart TB
     Worker[LiveTiming.Worker] --> Publishing[LiveTiming.Publishing]
     Publishing --> Contracts
     Server[LiveTiming.Server] --> Contracts
+    Panel --> Radio[LiveTiming.Radio]
+    RadioWorker[LiveTiming.RadioWorker] --> Radio
+    Radio --> Contracts
     Harness[LiveTiming.Harness] --> Client
     Harness --> Publishing
+    Harness --> Radio
 ```
 
-Arrows show compile-time project dependencies. Build-only references with `ReferenceOutputAssembly="false"` additionally package companion executables: Desktop includes the live panel/worker/server, the panel includes worker/server, and Devices includes TimyUsbHost. These are process boundaries rather than executable assembly references. `LiveTimingArtifacts.targets` copies companion output into desktop build/publish output.
+Arrows show compile-time project dependencies. Build-only references with `ReferenceOutputAssembly="false"` additionally package companion executables: Desktop includes the live panel/worker/radio worker/server, the panel includes worker/radio worker/server, and Devices includes TimyUsbHost. These are process boundaries rather than executable assembly references. `LiveTimingArtifacts.targets` copies companion output into desktop build/publish output.
 
 `OpenSkiTime.slnx` builds the full application and tests; `OpenSkiTime.LiveTiming.slnx` builds the live subset. Windows-specific USB and credential integration is isolated from portable domain/timing code. This supports a path toward Linux without implying that every desktop/device feature already works there.
 

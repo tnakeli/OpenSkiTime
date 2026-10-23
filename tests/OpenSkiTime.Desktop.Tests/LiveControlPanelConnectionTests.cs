@@ -59,4 +59,51 @@ public sealed class LiveControlPanelConnectionTests
         await connectionTask.WaitAsync(TimeSpan.FromSeconds(5));
         await worker.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
     }
+
+    [Fact]
+    public async Task RadioStartsOnlyForAnEnabledRunningChannelWithSavedKeysAndStopsWhenDisabled()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-radio-panel-" + Guid.NewGuid().ToString("N"));
+        var keys = new Dictionary<string, string>();
+        try
+        {
+            await using var session = new LiveControlSession(new OpenSkiTime.LiveTiming.Client.RadioSettingsStore(Path.Combine(folder, "live-radio.json")))
+            { CredentialStore = target => new MemoryCredential(keys, target) };
+            var competitionId = Guid.NewGuid();
+            var time = DateTimeOffset.UnixEpoch;
+            var snapshot = new LiveSnapshot(1, new("Synthetic SL", "Test slope", "SL", new(2026, 10, 3), false, "", "L", "", 0),
+                [new(1, "TEST", "Synthetic", "FIN", "Test club", "")], 1, [new(1, time, [1], [new(1, LiveStatus.Ready, null, null, null, time)])], time);
+            await session.ApplyAsync(new(Guid.NewGuid(), ControlPanelAction.State, competitionId, snapshot));
+            Assert.False(session.RadioConfiguration!.LocalEnabled || session.RadioConfiguration.CloudEnabled);
+            var settings = new LiveConnectionSettings($"http://localhost:{ProcessFixture.Port()}", "http://localhost:5079", "https://livedata.fis-ski.com/al/", "live.fis-ski.com", 1550, "", false, "Europe/Helsinki");
+            await session.ApplyAsync(new(Guid.NewGuid(), ControlPanelAction.Start, competitionId, snapshot, PublisherKind.Local, settings));
+            await ProcessFixture.Until(() => session.ReadState().Channels[0].Health.State == PublisherState.Running && session.ReadState().Channels[0].Health.PublicUrl is not null);
+            await session.SyncRadioAsync();
+            Assert.Equal(RadioState.Stopped, session.ReadState().Radio!.State); // Off by default.
+
+            Assert.Equal("", await session.SaveRadioAsync(new RadioConfiguration { LocalEnabled = true }));
+            await session.SyncRadioAsync();
+            Assert.Contains("Save the OpenAI key", session.ReadState().Radio!.Error, StringComparison.Ordinal);
+            Assert.Null(session.ReadState().Radio!.LastClipAt);
+
+            Assert.Equal("", await session.SaveRadioAsync(new RadioConfiguration { LocalEnabled = true, LlmProvider = RadioProviders.Simulation, TtsProvider = RadioProviders.Simulation }));
+            await session.SyncRadioAsync();
+            await ProcessFixture.Until(() => session.ReadState().Radio!.State == RadioState.Running);
+            Assert.Null(session.ReadState().Radio!.Error);
+            // Cloud-only radio: the running Local channel no longer qualifies and the radio stops.
+            Assert.Equal("", await session.SaveRadioAsync(new RadioConfiguration { CloudEnabled = true, LlmProvider = RadioProviders.Simulation, TtsProvider = RadioProviders.Simulation }));
+            await session.SyncRadioAsync();
+            await ProcessFixture.Until(() => session.ReadState().Radio!.State == RadioState.Stopped);
+            Assert.Equal(PublisherState.Running, session.ReadState().Channels[0].Health.State);
+            Assert.True(new OpenSkiTime.LiveTiming.Client.RadioSettingsStore(Path.Combine(folder, "live-radio.json")).Read(competitionId).Configuration.CloudEnabled);
+        }
+        finally { if (Directory.Exists(folder)) { Directory.Delete(folder, true); } }
+    }
+    private sealed class MemoryCredential(Dictionary<string, string> keys, string target) : OpenSkiTime.LiveTiming.Client.ICredentialStore
+    {
+        public bool Exists() => keys.ContainsKey(target);
+        public string? Read() => keys.GetValueOrDefault(target);
+        public void Save(string key) => keys[target] = key;
+        public void Remove() => keys.Remove(target);
+    }
 }

@@ -13,5 +13,6 @@ public sealed class LiveHub(SessionStore store) : Hub
         var group = id.ToString(); Context.Items["session"] = group;
         await Groups.AddToGroupAsync(Context.ConnectionId, group);
         await Clients.Caller.SendAsync("State", store.Read(id));
+        await Clients.Caller.SendAsync("Radio", store.Announce(id));
     }
 }

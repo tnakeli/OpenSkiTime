@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" /><ProjectReference Include="../OpenSkiTime.LiveTiming.Publishing/OpenSkiTime.LiveTiming.Publishing.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" /><ProjectReference Include="../OpenSkiTime.LiveTiming.Publishing/OpenSkiTime.LiveTiming.Publishing.csproj" /><ProjectReference Include="../OpenSkiTime.LiveTiming.Radio/OpenSkiTime.LiveTiming.Radio.csproj" /></ItemGroup>
 </Project>

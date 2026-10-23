@@ -12,6 +12,8 @@
     <Project Path="src/OpenSkiTime.LiveTiming.Contracts/OpenSkiTime.LiveTiming.Contracts.csproj" />
     <Project Path="src/OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" />
     <Project Path="src/OpenSkiTime.LiveTiming.Publishing/OpenSkiTime.LiveTiming.Publishing.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.Radio/OpenSkiTime.LiveTiming.Radio.csproj" />
+    <Project Path="src/OpenSkiTime.LiveTiming.RadioWorker/OpenSkiTime.LiveTiming.RadioWorker.csproj" />
     <Project Path="src/OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" />
     <Project Path="src/OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" />
     <Project Path="src/OpenSkiTime.LiveTiming.ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.csproj" />

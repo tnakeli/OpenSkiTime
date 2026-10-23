@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 function Get-OpenSkiTimeBinaries([Parameter(Mandatory)][string] $AppDirectory) {
     $files = @(Get-ChildItem -LiteralPath $AppDirectory -Recurse -File -Include '*.exe','*.dll' |
         Where-Object { $_.Name -like 'OpenSkiTime.*' -or $_.Name -eq 'TimyUsbHost.exe' } | Sort-Object FullName)
-    foreach ($required in 'OpenSkiTime.Desktop.exe','OpenSkiTime.LiveTiming.ControlPanel.exe','OpenSkiTime.LiveTiming.Worker.exe',
+    foreach ($required in 'OpenSkiTime.Desktop.exe','OpenSkiTime.LiveTiming.ControlPanel.exe','OpenSkiTime.LiveTiming.Worker.exe','OpenSkiTime.LiveTiming.RadioWorker.exe',
         'OpenSkiTime.LiveTiming.Server.exe','TimyUsbHost.exe') {
         if (!($files | Where-Object Name -eq $required)) { throw "Missing release binary: $required" }
     }

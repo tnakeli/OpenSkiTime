@@ -11,7 +11,9 @@
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <ProjectReference Include="../OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.Radio/OpenSkiTime.LiveTiming.Radio.csproj" />
     <ProjectReference Include="../OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../OpenSkiTime.LiveTiming.RadioWorker/OpenSkiTime.LiveTiming.RadioWorker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <Import Project="../../LiveTimingArtifacts.targets" />

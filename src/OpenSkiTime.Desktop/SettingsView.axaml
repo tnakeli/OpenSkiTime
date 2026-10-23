@@ -79,6 +79,16 @@
      </Grid>
      <TextBlock Name="LivePublisherKeyStatusText" Text="{Binding LivePublisherKeyStatus}" Classes="supportingText"/>
      <TextBlock Text="The key is saved per server in this Windows account's credential store, never in the event file. To publish on live.openskiti.me, contact the OpenSkiTime maintainer for a key. You can also run your own live timing server." TextWrapping="Wrap" Classes="supportingText"/>
+     <Separator/>
+     <TextBlock Text="Race radio provider keys" FontWeight="SemiBold"/>
+     <TextBlock Text="The optional race radio in the live timing panel uses your own accounts at a language model and a speech provider. Each key is saved in this Windows account's credential store, never in the event file. Spending is limited per competition in the panel." TextWrapping="Wrap" Classes="supportingText"/>
+     <Grid ColumnDefinitions="240,8,300,8,Auto,8,Auto" HorizontalAlignment="Left">
+      <ComboBox Name="LiveRadioKeyProviderBox" ItemsSource="{Binding LiveRadioKeyChoices}" SelectedItem="{Binding LiveRadioKeyProvider}" HorizontalAlignment="Stretch"/>
+      <TextBox Grid.Column="2" Name="LiveRadioKeyInputBox" PasswordChar="•" Text="{Binding LiveRadioKeyInput}" Watermark="API key" MaxLength="512"/>
+      <Button Grid.Column="4" Content="Save radio key" Command="{Binding SaveLiveRadioKeyCommand}" Classes="primaryAction"/>
+      <Button Grid.Column="6" Content="Remove radio key" Command="{Binding RemoveLiveRadioKeyCommand}" Classes="secondaryAction"/>
+     </Grid>
+     <TextBlock Name="LiveRadioKeyStatusText" Text="{Binding LiveRadioKeyStatus}" Classes="supportingText"/>
     </StackPanel>
    </TabItem>
    <TabItem Header="About">

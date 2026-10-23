@@ -52,6 +52,8 @@ Verification uses synthetic equipment and contacts. Tests cover endpoint authent
 
 Enter the Cloud server address and save its **publisher key**. A Cloud live timing server creates race sessions only for publishers holding a key issued by its operator; Local publishing needs no key. The key is saved per server origin in this Windows user's Credential Manager, never in the event file or preferences, and the status line shows whether a key is saved for the current address. Restart Cloud publishing after saving a new key. To publish on `live.openskiti.me`, contact the OpenSkiTime maintainer for a key; self-hosted servers issue their own. See [publisher keys](live-timing-cloud-deployment.md#publisher-keys).
 
+**Race radio provider keys** stores the API keys of the optional [race radio](race-radio.md): choose OpenAI, Google Gemini API, Azure AI Speech or Google Cloud Text-to-Speech, paste the key and press **Save radio key**. Each key is saved for this Windows user in Credential Manager (`OpenSkiTime.LiveTiming.Radio:<provider>`), never in the event file, preferences or logs; **Remove radio key** deletes it. The radio itself, its budget and the providers it uses are chosen per competition in the live timing control panel.
+
 ## About
 
 Shows the software version (Semantic Versioning `MAJOR.MINOR.PATCH`) and the FIS rule season the application implements (currently 2026-27), with links to the source code, MIT license, third-party notices, issue reporting, private vulnerability reporting and the privacy statement. The window title shows the same version and rule season.
