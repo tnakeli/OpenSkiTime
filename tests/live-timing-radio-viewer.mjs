@@ -102,6 +102,10 @@ await end(); await advance(1200);
 radio.update('s', { available: true, clips: [clip('stale-backlog', 'b9', 0, 1, 3, 12, true, 60000)], serverTime: new Date(now).toISOString() });
 await advance(1200);
 assert.deepEqual(played.slice(-1), ['n1']);
+// An old opening line takes its fresh reply with it: no result is heard without the racer's name.
+radio.update('s', { available: true, clips: [clip('open', 'b10', 0, 2, 3, 13, false, 20000), clip('reply', 'b10', 1, 2, 3, 14)], serverTime: new Date(now).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['n1']);
 // Pause stops at once; an unavailable radio hides the control and stops playback.
 listeners['button:click']();
 assert.equal(button.attributes['aria-pressed'], 'false');

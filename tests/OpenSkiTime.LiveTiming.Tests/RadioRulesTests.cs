@@ -166,6 +166,8 @@ public sealed class RadioRulesTests
         var between = done with { CurrentRun = 2, Runs = [.. done.Runs, RadioRace.Create().Runs[0] with { Number = 2 }] };
         var standings = ProducerGate.Event(new(ProducerSources.Standings, null, ""), between, RadioRace.Start);
         var betweenFacts = FactSheet.Build(between, standings.Bibs);
+        Assert.Equal(new RadioCondition(RadioConditionKind.StatusCount, 2, Status: LiveStatus.Finished, Value: 0), Assert.Single(standings.Conditions));
+        Assert.False(RadioPlayback.Holds(RadioRace.Set(RadioRace.Set(between, 1, LiveStatus.OnCourse), 1, LiveStatus.Finished, 4700), standings.Conditions[0]));
         var line = Assert.Single(FinnishTemplates.Lines([standings], betweenFacts, 0));
         Assert.Null(RadioSlots.Problem(line.Text, betweenFacts, new LineRules(between, ["Aino", "Kalle"], "")));
         Assert.Equal("Epävirallinen tilanne: ensimmäisenä on Onni Viistola, toisena Ilona Kurvinen, kolmantena Saga Porttila.",

@@ -266,7 +266,10 @@ public sealed class LiveControlSession : IAsyncDisposable
                 if (_radioStarted || (_radio.IsConnected && _radio.Health.State is RadioState.Running or RadioState.Starting))
                 { await _radio.StopAsync().ConfigureAwait(false); _radioStarted = false; }
                 _radioTargets = [];
-                _radioOwner?.Dispose(); _radioOwner = null;
+                // Ownership is released only after the worker reported its stop and that final spend is saved, so another
+                // window taking over starts from the full spend.
+                if (_radioOwner is not null && (!_radio.IsConnected || _radio.Health.State is RadioState.Stopped or RadioState.Error))
+                { SaveSpend(force: true); _radioOwner.Dispose(); _radioOwner = null; }
                 return;
             }
             if (!_radioStarted)

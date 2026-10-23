@@ -53,10 +53,14 @@ public static class ProducerGate
         ArgumentNullException.ThrowIfNull(decision); ArgumentNullException.ThrowIfNull(state);
         var run = state.CurrentRun;
         int[] bibs = decision.Source == ProducerSources.Standings ? Leaders(state) : decision.Bib is { } bib ? [bib] : [];
+        var current = state.Runs.First(x => x.Number == run);
         RadioCondition[] conditions = decision.Source switch
         {
             ProducerSources.NextStarter => [new(RadioConditionKind.Status, run, bibs[0], LiveStatus.Ready)],
             ProducerSources.OnCourse => [new(RadioConditionKind.Status, run, bibs[0], LiveStatus.OnCourse)],
+            // Standings of the previous run hold only until the first finish of this run changes them.
+            ProducerSources.Standings when !current.Results.Any(x => x.Rank is not null || x.TotalRank is not null)
+                => [new(RadioConditionKind.StatusCount, run, Status: LiveStatus.Finished, Value: 0)],
             _ => []
         };
         return new(RadioEventKind.Producer, 5, run, bibs, now, TimeSpan.FromSeconds(120), ProducerSources.Phases[decision.Source], conditions, 0)

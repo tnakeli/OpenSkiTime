@@ -55,7 +55,7 @@ const liveRadio = (() => {
   // Joining or resuming skips clips announced more than a few seconds ago.
   function play() {
     const now = Date.now();
-    clips.forEach(c => { if (now - (seenAt.get(c.clipId) || now) > liveEdge) done.add(c.clipId); });
+    clips.forEach(c => { if (now - (seenAt.get(c.clipId) || now) > liveEdge) { done.add(c.clipId); skippedBatches.add(c.batchId); } });
     playing = true; lastBatch = null; lastInterruptible = true; label(); next();
   }
   button.addEventListener('click', () => (playing ? pause() : play()));
@@ -71,8 +71,9 @@ const liveRadio = (() => {
         if (seenAt.has(c.clipId)) return;
         const seen = c.receivedAt ? Math.min(now, Date.parse(c.receivedAt) + offset) : now;
         seenAt.set(c.clipId, seen);
-        // Also after a reconnect: a clip that was already old when it reached this page is not news.
-        if (now - seen > liveEdge) done.add(c.clipId);
+        // Also after a reconnect: a clip that was already old when it reached this page is not news. Its whole
+        // conversation goes with it, so a reply ("Hän on nyt toisena") never plays without its opening line.
+        if (now - seen > liveEdge) { done.add(c.clipId); skippedBatches.add(c.batchId); }
       });
       button.hidden = !available;
       if (!available && playing) pause();
