@@ -225,7 +225,7 @@ public sealed class RadioEngine
         var lineConditions = new List<RadioCondition[]>();
         foreach (var line in lines)
         {
-            var own = shared.Concat(gate.Where(x => RadioSlots.Names(line.Text, x.Bib)))
+            var own = shared.Concat(gate.Where(x => RadioSlots.Mentions(line.Text, x.Bib)))
                 .Concat(RadioSlots.Conditions(line.Text, facts)).Distinct().ToArray();
             if (own.Length > RadioPlayback.MaxConditions) { break; }
             lineConditions.Add(own);

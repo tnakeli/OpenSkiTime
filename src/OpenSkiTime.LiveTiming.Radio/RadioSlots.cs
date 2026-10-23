@@ -120,6 +120,9 @@ public static partial class RadioSlots
     /// <summary>Whether a line names this racer through a racer slot (with or without a case code).</summary>
     public static bool Names(string text, int bib) =>
         Parse(text).Any(x => x.Kind == "racer" && x.Reference == bib.ToString(CultureInfo.InvariantCulture));
+    /// <summary>Whether a line refers to this racer at all: name, bib, club or nationality.</summary>
+    public static bool Mentions(string text, int bib) =>
+        Parse(text).Any(x => x.Kind is "racer" or "bib" or "club" or "nation" && x.Reference == bib.ToString(CultureInfo.InvariantCulture));
 
     [GeneratedRegex(@"(\{nation:(?<n>[0-9]{1,12})(:nom)?\} )?\{racer:(?<r>[0-9]{1,12})(:nom)?\}")]
     private static partial Regex RacerMention();

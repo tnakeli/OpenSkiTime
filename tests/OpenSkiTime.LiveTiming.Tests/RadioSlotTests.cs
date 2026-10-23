@@ -72,6 +72,8 @@ public sealed class RadioSlotTests
         Assert.Equal(["Nyt numero {bib:3:nom}, {nation:3:nom} {racer:3:nom}.", "{racer:3} jatkaa."],
             RadioSlots.AnnounceBibs([new("Aino", "Nyt {nation:3:nom} {racer:3:nom}.", false), new("Kalle", "{racer:3} jatkaa.", true)]).Select(x => x.Text));
         Assert.False(RadioSlots.Names("Numero {bib:3:nom} odottaa.", 3));
+        // A start-gate line that gives only the bib still depends on that racer being next.
+        Assert.True(RadioSlots.Mentions("Lähtöportilla seuraavana numero {bib:3:nom}.", 3));
     }
 
     [Theory]
