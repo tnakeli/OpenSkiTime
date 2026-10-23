@@ -23,9 +23,33 @@ public sealed class LiveControlSession : IAsyncDisposable
     private long _lastSnapshotVersion = -1;
     private string _error = "";
     private bool _disposed;
+    private readonly RadioSettingsStore _radioStore;
+    private RadioProcess _radio = new();
+    private RadioCompetitionSettings? _radioSettings;
+    private RadioTarget[] _radioTargets = [];
+    private bool _radioStarted;
+    private Task? _radioStart;
+    private bool _radioRestart;
+    private IDisposable? _radioOwner;
+    private string _radioError = "";
+    private DateTimeOffset _radioRetry;
+    private decimal _radioSaved;
+    private DateTimeOffset _radioSavedAt;
+    public LiveControlSession(RadioSettingsStore? radioStore = null) => _radioStore = radioStore ?? new(RadioSettingsStore.DefaultPath);
+    /// <summary>Radio provider keys; Windows Credential Manager unless a test supplies another store.</summary>
+    public Func<string, ICredentialStore> CredentialStore { get; init; } = target => new WindowsCredentialStore(target);
     public LiveSnapshot? Snapshot => Volatile.Read(ref _snapshot);
+    public Guid? CompetitionId => _competitionId;
+    public RadioConfiguration? RadioConfiguration => Volatile.Read(ref _radioSettings)?.Configuration;
+    /// <summary>A radio worker start is still connecting; the status loop applies settings saved meanwhile once it has.</summary>
+    public bool RadioStartPending => Volatile.Read(ref _radioStart) is { IsCompleted: false };
     public ControlPanelOutput ReadState(Guid requestId = default) => new(requestId,
-        _channels.Select(x => new LiveChannelHealth(x.Kind, x.Process.Health, x.Process.ProcessId)).ToArray(), _error);
+        _channels.Select(x => new LiveChannelHealth(x.Kind, x.Process.Health, x.Process.ProcessId)).ToArray(), _error, Radio: RadioHealth());
+    private RadioHealth RadioHealth()
+    {
+        var health = _radio.Health;
+        return _radioError.Length > 0 ? health with { Error = _radioError } : health;
+    }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Optional live controls return a redacted error instead of crashing or exposing credentials.")]
     public async Task<ControlPanelOutput> ApplyAsync(ControlPanelInput input)
@@ -40,10 +64,14 @@ public sealed class LiveControlSession : IAsyncDisposable
                 snapshot.Validate();
                 if (input.CompetitionId is null) { throw new LiveValidationException("Competition identity missing."); }
                 if (_competitionId != input.CompetitionId)
-                { await ResetAsync().ConfigureAwait(false); _competitionId = input.CompetitionId; }
+                {
+                    await ResetAsync().ConfigureAwait(false); _competitionId = input.CompetitionId;
+                    LoadRadio(input.CompetitionId.Value);
+                }
                 _snapshot = snapshot;
                 _lastSnapshotVersion = snapshot.Version;
                 foreach (var channel in _channels) { channel.Process.Offer(snapshot); }
+                _radio.Offer(snapshot);
             }
             if (input.Action == ControlPanelAction.Reset) { await ResetAsync().ConfigureAwait(false); _competitionId = null; _snapshot = null; _error = ""; }
             if (input.Action is ControlPanelAction.State or ControlPanelAction.Activate or ControlPanelAction.Reset) { return ReadState(input.RequestId); }
@@ -131,6 +159,8 @@ public sealed class LiveControlSession : IAsyncDisposable
     }
     private async Task ResetAsync()
     {
+        await ResetRadioAsync().ConfigureAwait(false);
+        Volatile.Write(ref _radioSettings, null);
         foreach (var channel in _channels)
         {
             await channel.Process.DisposeAsync().ConfigureAwait(false);
@@ -144,10 +174,132 @@ public sealed class LiveControlSession : IAsyncDisposable
         {
             if (_disposed) { return; }
             _disposed = true;
+            await ResetRadioAsync().ConfigureAwait(false);
             foreach (var channel in _channels) { await channel.Process.DisposeAsync().ConfigureAwait(false); }
         }
         finally { _gate.Release(); }
     }
+    private void LoadRadio(Guid competitionId)
+    {
+        var settings = _radioStore.Read(competitionId);
+        Volatile.Write(ref _radioSettings, settings);
+        _radioSaved = settings.SpentUsd; _radioError = ""; _radioRetry = default;
+    }
+    private async Task ResetRadioAsync()
+    {
+        SaveSpend(force: true);
+        await _radio.DisposeAsync().ConfigureAwait(false);
+        SaveSpend(force: true);
+        _radio = new(); _radioStarted = false; _radioStart = null; _radioRestart = false; _radioTargets = []; _radioError = "";
+        _radioOwner?.Dispose(); _radioOwner = null;
+    }
+    // Spend survives panel restarts, so the hard budget stop cannot be bypassed by reopening the panel.
+    private void SaveSpend(bool force)
+    {
+        var spent = _radio.Health.SpentUsd;
+        if (_competitionId is not { } id || spent <= _radioSaved) { return; }
+        var now = DateTimeOffset.UtcNow;
+        if (!force && now - _radioSavedAt < TimeSpan.FromSeconds(5) && _radio.Health.State != RadioState.BudgetExhausted) { return; }
+        try { _radioStore.SaveSpend(id, spent); _radioSaved = spent; _radioSavedAt = now; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _radioError = "Radio spend could not be saved. " + ex.Message; }
+    }
+
+    /// <summary>Saves this competition's radio settings and restarts the radio with them.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Optional radio settings report a redacted error instead of crashing.")]
+    public async Task<string> SaveRadioAsync(Guid competitionId, RadioConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_competitionId is not { } id) { return "Open a saved timing run in OpenSkiTime first."; }
+            // The form belongs to the competition it was loaded for; the race may have changed meanwhile.
+            if (id != competitionId) { return "The competition changed. Check the radio settings of the current competition and save again."; }
+            configuration.Validate();
+            _radioStore.Save(id, configuration);
+            SaveSpend(force: true);
+            Volatile.Write(ref _radioSettings, new RadioCompetitionSettings(configuration, _radioSaved));
+            _radioError = ""; _radioRetry = default;
+            // A start still connecting is stopped by the status loop once it has connected, never awaited under the lock.
+            if (_radioStart is { IsCompleted: false }) { _radioRestart = true; return ""; }
+            if (_radio.IsConnected) { await _radio.StopAsync().ConfigureAwait(false); }
+            _radioStarted = false; _radioTargets = [];
+            return "";
+        }
+        catch (LiveValidationException ex) { return ex.Message; }
+        catch (IOException ex) { return ex.Message; }
+        catch (Exception) { return "Radio settings could not be saved. Timing capture and live publishing continue."; }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>
+    /// Runs on the panel status loop. Radio runs while it is enabled for a channel whose publisher is running with a
+    /// session. It never delays the publishers, and its failure leaves them untouched.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Optional radio control reports a redacted error instead of crashing.")]
+    public async Task SyncRadioAsync()
+    {
+        if (!await _gate.WaitAsync(0).ConfigureAwait(false)) { return; }
+        try
+        {
+            if (_disposed || _competitionId is null || _snapshot is null || Volatile.Read(ref _radioSettings) is not { } settings) { return; }
+            SaveSpend(force: false);
+            var now = DateTimeOffset.UtcNow;
+            var targets = RadioTargets.Select(settings.Configuration,
+                _channels.Select(x => (x.Kind, x.Process.Health, x.Options?.Endpoint, x.Process.ResumeSession)), now);
+            // Starting a worker can take seconds; it runs outside the panel lock so channel commands are never delayed.
+            if (_radioStart is { IsCompleted: false }) { return; }
+            if (_radioStart is { } started)
+            {
+                _radioStart = null;
+                if (started.Exception is not null) { _radioStarted = false; _radioError = "Race radio could not start. Check installed components; timing capture and live publishing continue."; }
+            }
+            if (_radioRestart)
+            {
+                // Settings were saved while this start was connecting: stop it, then start again with the saved settings.
+                _radioRestart = false;
+                if (_radio.IsConnected) { await _radio.StopAsync().ConfigureAwait(false); }
+                _radioStarted = false; _radioTargets = [];
+            }
+            if (_radioStarted && !_radio.IsConnected) { _radioStarted = false; }
+            if (targets.Length == 0)
+            {
+                // Also stops a worker that is still generating although no flag says so (for example after a failed save).
+                if (_radioStarted || (_radio.IsConnected && _radio.Health.State is RadioState.Running or RadioState.Starting))
+                { await _radio.StopAsync().ConfigureAwait(false); _radioStarted = false; }
+                _radioTargets = [];
+                // Ownership is released only after the worker reported its stop and that final spend is saved, so another
+                // window taking over starts from the full spend.
+                if (_radioOwner is not null && (!_radio.IsConnected || _radio.Health.State is RadioState.Stopped or RadioState.Error))
+                { SaveSpend(force: true); _radioOwner.Dispose(); _radioOwner = null; }
+                return;
+            }
+            if (!_radioStarted)
+            {
+                if (now < _radioRetry) { return; }
+                _radioRetry = now + TimeSpan.FromSeconds(30);
+                var config = settings.Configuration;
+                // One radio per competition on this computer: two OpenSkiTime windows would otherwise share one budget twice.
+                _radioOwner ??= _radioStore.TryOwn(_competitionId.Value)
+                    ?? throw new LiveValidationException("Race radio for this competition is already running in another OpenSkiTime window on this computer.");
+                // Under ownership, the saved spend is current: another window may have spent and saved since this one loaded it.
+                _radioSaved = Math.Max(_radioSaved, _radioStore.Read(_competitionId.Value).SpentUsd);
+                var llmKey = config.LlmProvider == RadioProviders.Simulation ? null : Key(config.LlmProvider);
+                var ttsKey = config.TtsProvider == RadioProviders.Simulation ? null : Key(config.TtsProvider);
+                var radio = _radio; var worker = Artifact("RadioWorker"); var options = new RadioWorkerOptions(config, _radioSaved, llmKey, ttsKey);
+                _radioStart = Task.Run(() => radio.StartAsync(worker, options, targets));
+                _radioStarted = true; _radioTargets = targets; _radioError = "";
+            }
+            else if (!targets.SequenceEqual(_radioTargets)) { await _radio.TargetsAsync(targets).ConfigureAwait(false); _radioTargets = targets; }
+        }
+        catch (LiveValidationException ex) { _radioError = ex.Message; }
+        catch (PlatformNotSupportedException) { _radioError = "Race radio keys need Windows Credential Manager."; }
+        catch (Exception) { _radioError = "Race radio could not start. Check installed components; timing capture and live publishing continue."; }
+        finally { _gate.Release(); }
+    }
+    private string Key(string provider) => CredentialStore(RadioKeyCredential.Target(provider)).Read() is { Length: > 0 } key ? key
+        : throw new LiveValidationException($"Save the {RadioKeyCredential.Label(provider)} key in OpenSkiTime Settings → Live timing to use the race radio.");
+
     private static string Artifact(string name)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "LiveTiming", name, $"OpenSkiTime.LiveTiming.{name}.dll");

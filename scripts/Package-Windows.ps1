@@ -37,16 +37,18 @@ if ($Stage -ne 'Assemble') {
     Publish-Project 'OpenSkiTime.Desktop' $app
     Publish-Project 'OpenSkiTime.LiveTiming.ControlPanel' (Join-Path $app 'LiveTiming/ControlPanel')
     Publish-Project 'OpenSkiTime.LiveTiming.Worker' (Join-Path $app 'LiveTiming/Worker')
+    Publish-Project 'OpenSkiTime.LiveTiming.RadioWorker' (Join-Path $app 'LiveTiming/RadioWorker')
     Publish-Project 'OpenSkiTime.LiveTiming.Server' (Join-Path $app 'LiveTiming/Server')
     Copy-Item -LiteralPath (Join-Path $repository 'LICENSE') -Destination (Join-Path $app 'LICENSE.txt')
     Copy-Item -LiteralPath (Join-Path $repository 'deploy/windows/NOTICE.txt') -Destination (Join-Path $app 'NOTICE.txt')
 }
 foreach ($relative in @('OpenSkiTime.Desktop.exe','TimyUsbHost.exe','tessdata/eng.traineddata',
     'LiveTiming/ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.exe','LiveTiming/Worker/OpenSkiTime.LiveTiming.Worker.exe',
+    'LiveTiming/RadioWorker/OpenSkiTime.LiveTiming.RadioWorker.exe','LiveTiming/Server/wwwroot/live-radio.js',
     'LiveTiming/Server/OpenSkiTime.LiveTiming.Server.exe','LiveTiming/Server/wwwroot/live.js')) {
     if (!(Test-Path -LiteralPath (Join-Path $app $relative))) { throw "Missing package component: $relative" }
 }
-foreach ($directory in @($app,(Join-Path $app 'LiveTiming/ControlPanel'),(Join-Path $app 'LiveTiming/Worker'),(Join-Path $app 'LiveTiming/Server'))) {
+foreach ($directory in @($app,(Join-Path $app 'LiveTiming/ControlPanel'),(Join-Path $app 'LiveTiming/Worker'),(Join-Path $app 'LiveTiming/RadioWorker'),(Join-Path $app 'LiveTiming/Server'))) {
     if (!(Test-Path -LiteralPath (Join-Path $directory 'coreclr.dll'))) { throw "Missing self-contained runtime in $directory" }
 }
 if ($Stage -ne 'Assemble' -and !(Test-Path -LiteralPath (Join-Path $app 'LiveTiming/ControlPanel/LiveTiming/Worker'))) {
@@ -54,6 +56,7 @@ if ($Stage -ne 'Assemble' -and !(Test-Path -LiteralPath (Join-Path $app 'LiveTim
     New-Item -ItemType Directory -Path (Join-Path $app 'LiveTiming/ControlPanel/LiveTiming') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $app 'LiveTiming/Worker') -Destination (Join-Path $app 'LiveTiming/ControlPanel/LiveTiming/Worker') -Recurse
     Copy-Item -LiteralPath (Join-Path $app 'LiveTiming/Server') -Destination (Join-Path $app 'LiveTiming/ControlPanel/LiveTiming/Server') -Recurse
+    Copy-Item -LiteralPath (Join-Path $app 'LiveTiming/RadioWorker') -Destination (Join-Path $app 'LiveTiming/ControlPanel/LiveTiming/RadioWorker') -Recurse
 }
 if ($Stage -eq 'Publish') {
     Write-Host "Unsigned Windows application published in $app"

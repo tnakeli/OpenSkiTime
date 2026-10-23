@@ -6,6 +6,8 @@
     <Compile Include="../../src/OpenSkiTime.LiveTiming.Harness/SyntheticRace.cs" Link="SyntheticRace.cs" />
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Client/OpenSkiTime.LiveTiming.Client.csproj" />
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Publishing/OpenSkiTime.LiveTiming.Publishing.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Radio/OpenSkiTime.LiveTiming.Radio.csproj" />
+    <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.RadioWorker/OpenSkiTime.LiveTiming.RadioWorker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>

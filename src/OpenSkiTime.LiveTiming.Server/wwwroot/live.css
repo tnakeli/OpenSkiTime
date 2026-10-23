@@ -40,6 +40,9 @@ button:hover { border-color: var(--accent-text); position: relative; }
 button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); position: relative; }
 button[aria-pressed=true]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .status { display: flex; align-items: center; gap: 2px 10px; }
+/* Race radio: shown only while a healthy radio is announced; starts paused. */
+button.radio { border-radius: 4px; margin-left: 0; }
+button.radio[hidden] { display: none; }
 #updated { margin: 0; color: var(--text-2); font-size: 12px; white-space: nowrap; }
 .connection { color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .connection::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--waiting); }

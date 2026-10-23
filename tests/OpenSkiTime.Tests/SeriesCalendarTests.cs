@@ -45,7 +45,8 @@ public sealed class SeriesCalendarTests
             return new(HttpStatusCode.OK) { Content = new ByteArrayContent(Archive()) };
         });
         using var http = new HttpClient(handler);
-        var item = Assert.Single(await new FisRaceInformationClient(http).GetCalendarAsync(2026, "synthetic-key"));
+        var calendar = await new FisRaceInformationClient(http).GetCalendarAsync(2026, "synthetic-key");
+        var item = Assert.Single(calendar.Events); Assert.Equal(0, calendar.SkippedRaces); Assert.Equal(123, item.Competitions[0].Calendar!.RaceId);
         Assert.Equal(1, calls); Assert.Equal(s_series.Name, item.Name); Assert.Equal(s_series.Organizer, item.Organizer);
         Assert.Equal(s_series.Location, item.Location); Assert.Equal(s_series.Nation, item.Nation);
         Assert.Equal(s_series.StartDate, item.StartDate); Assert.Equal(s_series.EndDate, item.EndDate);
@@ -59,8 +60,10 @@ public sealed class SeriesCalendarTests
         Assert.Equal("123/10/26", item.Competitions[0].HomologationNumber);
         Assert.Equal(Discipline.Downhill, item.Competitions[1].Discipline); Assert.Equal(1, item.Competitions[1].RunCount);
         Assert.Equal("MAS", item.Competitions[1].Calendar!.Category);
-        Assert.Empty(FisRaceInformationClient.ReadCalendarEvents(Archive(), 2027, "synthetic"));
-        Assert.Throws<DomainValidationException>(() => FisRaceInformationClient.ReadCalendarEvents(Archive(true), 2026, "synthetic"));
+        Assert.Empty(FisRaceInformationClient.ReadCalendarEvents(Archive(), 2027, "synthetic").Events);
+        // A repeated row of the same FIS race is one race.
+        var repeated = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(Archive(true), 2026, "synthetic").Events);
+        Assert.Equal(["0034", "0035"], repeated.Competitions.Select(x => x.FisCode));
     }
 
     [Fact]
@@ -72,7 +75,7 @@ public sealed class SeriesCalendarTests
             + "128\t456\t2026\t0796\tSL\tFIS\tW\t2026-01-05\tTest place\tFIN\t\t\t\t\n"
             + "129\t456\t2026\t0799\tSL\tFIS\tM\t2026-01-04\tTest place\tFIN\t\t\t\t\n"
             + "130\t456\t2026\t0800\tGS\tFIS\tW\t2026-01-04\tTest place\tFIN\t\t\t\t\n");
-        var races = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(archive, 2026, "synthetic")).Competitions;
+        var races = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(archive, 2026, "synthetic").Events).Competitions;
         Assert.Equal("SL1 W 4.1", races.Single(x => x.FisCode == "0797").ShortLabel);
         Assert.Equal("Synthetic weekend - SL Women 0797", races.Single(x => x.FisCode == "0797").Name);
         Assert.Equal("SL2 W 5.1", races.Single(x => x.FisCode == "0796").ShortLabel);
@@ -82,10 +85,92 @@ public sealed class SeriesCalendarTests
         Assert.Equal("GS1 W 4.1", races.Single(x => x.FisCode == "0800").ShortLabel);
     }
 
+    // Race IDs 131-137 and codices 0901-0904 are synthetic.
+    private const string IncompleteRaces =
+        "131\t456\t2026\t\tSG\tFIS\tM\t2026-03-22\tTest place\tFIN\t\t\t\t\n"
+        + "132\t456\t2026\t\tSG\tFIS\tM\t2026-03-22\tTest place\tFIN\t\t\t\t\n"
+        + "133\t456\t2026\t0901\tGS\tFIS\tW\t2026-03-22\tTest place\tFIN\t\t\t\t\n"
+        + "134\t456\t2026\t0901\tGS\tFIS\tM\t2026-03-22\tTest place\tFIN\t\t\t\t\n"
+        + "135\t456\t2026\t0902\tGS\tFIS\tW\tnot a date\tTest place\tFIN\t\t\t\t\n"
+        + "136\t456\t2026\t0903\tSL\tFIS\tM\t2026-03-22\tTest place\tFIN\tTestlast Testfirst (FIN)\tFIN\tX12\t\n"
+        + "137\t457\t2026\t0904\tSL\tFIS\tW\t2026-03-22\tTest place\tFIN\t\t\t\t\n"
+        + "\t456\t2026\t\tGS\tFIS\tW\t2026-03-22\tTest place\tFIN\t\t\t\t\n"
+        + "too\tfew\tfields\n";
+
+    [Fact]
+    public void IncompleteCalendarRowsNeverRejectTheCalendarAndRacesWithoutCodexAreKept()
+    {
+        var calendar = FisRaceInformationClient.ReadCalendarEvents(Archive(additionalRaces: IncompleteRaces), 2026, "synthetic");
+        var races = Assert.Single(calendar.Events).Competitions;
+        // Skipped: the race without a valid date, the race whose event row is missing, the race with neither codex nor
+        // FIS race ID (a later import could not find it again) and the malformed row.
+        Assert.Equal(4, calendar.SkippedRaces);
+        Assert.Equal(7, races.Count);
+        // No codex, or a codex shared by two races: imported without one for the operator to enter.
+        Assert.Equal(4, Assert.Single(calendar.Events).MissingCodexCount);
+        Assert.All(races.Where(x => x.Calendar!.RaceId is 131 or 132 or 133 or 134), x => Assert.Null(x.FisCode));
+        Assert.Equal("Synthetic weekend - SG Men", races.First(x => x.Calendar!.RaceId == 131).Name);
+        Assert.Equal(["SG1 M 22.3", "SG2 M 22.3"], races.Where(x => x.Discipline == Discipline.SuperG).Select(x => x.ShortLabel).Order());
+        // A malformed TD number is left empty; the race and TD name are kept.
+        var td = races.Single(x => x.FisCode == "0903").Calendar!.TechnicalDelegate!;
+        Assert.Equal(("TESTLAST", ""), (td.LastName, td.Number));
+    }
+
+    [Fact]
+    public async Task RacesWithoutCodexImportAndLaterMatchByFisRaceId()
+    {
+        var item = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(Archive(additionalRaces: IncompleteRaces), 2026, "synthetic").Events);
+        var looked = new List<string>();
+        using var handler = new Handler(request =>
+        {
+            looked.Add(request.RequestUri!.AbsolutePath);
+            var race = item.Competitions.Single(x => x.FisCode is { } c && request.RequestUri.AbsolutePath.EndsWith("/" + int.Parse(c, System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
+            return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new FisCompetitionInformation(race.Calendar!.RaceId!.Value,
+                int.Parse(race.FisCode!, System.Globalization.CultureInfo.InvariantCulture), 2026, race.Date, race.Discipline switch
+                { Discipline.Slalom => "SL", Discipline.Downhill => "DH", _ => "GS" }, race.Calendar.Category, "FIN", false, "Test place", race.Calendar.Gender, 456))) };
+        });
+        using var http = new HttpClient(handler);
+        await new FisRaceInformationClient(http).ValidateCalendarEventAsync(item, "synthetic-key");
+        // Only races with a codex are looked up.
+        Assert.Equal(3, looked.Count);
+
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-calendar-codex-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder);
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var created = await workspace.CreateAsync(Path.Combine(folder, "test.ost"), s_series, item.Competitions);
+            Assert.Equal(7, created.Competitions.Count);
+            var first = created.Competitions.Single(x => x.Values.Calendar!.RaceId == 131);
+            var second = created.Competitions.Single(x => x.Values.Calendar!.RaceId == 132);
+            Assert.Null(first.Values.FisCode);
+            // The operator enters a codex for one race; a reimport without FIS codices keeps it and creates nothing new.
+            var entered = await workspace.SaveCompetitionAsync(second.Id, second.Values with { FisCode = "0905" }, created.Revision);
+            var again = await workspace.ApplyCalendarAsync(s_series, item.Competitions, entered.Revision);
+            Assert.Equal(7, again.Competitions.Count);
+            Assert.Equal("0905", again.Competitions.Single(x => x.Id == second.Id).Values.FisCode);
+            // FIS publishes the codex later: the same competition receives it.
+            var published = item.Competitions.Select(x => x.Calendar!.RaceId == 131 ? x with { FisCode = "0906" } : x).ToArray();
+            var updated = await workspace.ApplyCalendarAsync(s_series, published, again.Revision);
+            Assert.Equal(7, updated.Competitions.Count);
+            Assert.Equal("0906", updated.Competitions.Single(x => x.Id == first.Id).Values.FisCode);
+            // A row that lacks the FIS race ID keeps the stored one for later imports.
+            var withoutId = CalendarCompetitionMerge.Merge(updated.Competitions.Single(x => x.Id == first.Id).Values,
+                published.Single(x => x.Calendar!.RaceId == 131) with { Calendar = published.Single(x => x.Calendar!.RaceId == 131).Calendar! with { RaceId = null } });
+            Assert.Equal(131, withoutId.Calendar!.RaceId);
+            // Codex and FIS race ID pointing to different competitions (a mistyped codex) are rejected, not guessed.
+            var conflicting = published.Select(x => x.Calendar!.RaceId == 132 ? x with { FisCode = "0906" } : x.Calendar!.RaceId == 131 ? x with { FisCode = null } : x).ToArray();
+            await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApplyCalendarAsync(s_series, conflicting, updated.Revision));
+            Assert.Equal(updated.Competitions, (await workspace.ReadAsync()).Competitions);
+            CalendarCompetitionMerge.Match(updated.Competitions.Select(x => x.Values).ToArray(), conflicting, out var ambiguous);
+            Assert.True(ambiguous);
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     [Fact]
     public async Task CancelledRaceAllowsEventButChangedIdentityStillRejectsIt()
     {
-        var item = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(Archive(), 2026, "synthetic"));
+        var item = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(Archive(), 2026, "synthetic").Events);
         var changed = false;
         using var handler = new Handler(request => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(
             request.RequestUri!.AbsolutePath.EndsWith("/34", StringComparison.Ordinal)
@@ -105,7 +190,7 @@ public sealed class SeriesCalendarTests
         {
             var file = Path.Combine(folder, "calendar.ost");
             await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
-            var item = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(Archive(), 2026, "synthetic"));
+            var item = Assert.Single(FisRaceInformationClient.ReadCalendarEvents(Archive(), 2026, "synthetic").Events);
             var created = await workspace.CreateAsync(file, s_series, item.Competitions);
             Assert.Equal(2, created.Competitions.Count);
             await workspace.CloseAsync(); var reopened = await workspace.OpenAsync(file);

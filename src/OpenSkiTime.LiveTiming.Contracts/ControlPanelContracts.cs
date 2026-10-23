@@ -7,4 +7,4 @@ public sealed record ControlPanelInput(Guid RequestId, ControlPanelAction Action
     LiveSnapshot? Snapshot = null, PublisherKind? Channel = null, LiveConnectionSettings? Settings = null, string? PreparationError = null);
 public sealed record LiveChannelHealth(PublisherKind Kind, PublisherHealth Health, int? ProcessId);
 public sealed record ControlPanelOutput(Guid RequestId, LiveChannelHealth[] Channels, string Error = "",
-    Guid? SnapshotRequestId = null, LiveConnectionSettings? RequestedSettings = null);
+    Guid? SnapshotRequestId = null, LiveConnectionSettings? RequestedSettings = null, RadioHealth? Radio = null);

@@ -181,10 +181,11 @@ public sealed class StartListTests
         var desk = await workspace.SaveStartListAsync(new(plan, series.Revision, "Operator", "Club draw", s_at));
         var first = Assert.Single(desk.Revisions);
         desk = await workspace.MarkRunStartedAsync(first.Id, desk.SeriesRevision, "Starter", s_at);
-        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SaveCompetitionAsync(plan.CompetitionId,
-            club with { RaceType = RaceType.Fis }, desk.SeriesRevision));
+        // A FIS competition may wait for its codex; the operator enters it when FIS publishes it.
+        series = await workspace.SaveCompetitionAsync(plan.CompetitionId, club with { RaceType = RaceType.Fis }, desk.SeriesRevision);
+        Assert.Null(Assert.Single(series.Competitions).Values.FisCode);
         var fis = club with { RaceType = RaceType.Fis, FisCode = "5678" };
-        series = await workspace.SaveCompetitionAsync(plan.CompetitionId, fis, desk.SeriesRevision);
+        series = await workspace.SaveCompetitionAsync(plan.CompetitionId, fis, series.Revision);
         Assert.Equal(fis, Assert.Single(series.Competitions).Values);
         var preserved = Assert.Single((await workspace.ReadStartListsAsync(plan.CompetitionId)).Revisions);
         Assert.Equal(JsonSerializer.Serialize(plan), JsonSerializer.Serialize(preserved.Plan));

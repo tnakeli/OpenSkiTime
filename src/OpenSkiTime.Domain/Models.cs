@@ -14,12 +14,14 @@ public enum RaceType { Club = 0, Fis = 2 }
 
 public sealed record CompetitionTechnicalDelegateInfo(string LastName, string FirstName, string Nation,
     string Number, string OriginalName = "");
+// RaceId: the FIS calendar race ID; it identifies a race whose codex is not assigned yet.
 public sealed record CompetitionCalendarData(int Season, string Location, string Nation, string Category,
-    string Gender, CompetitionTechnicalDelegateInfo? TechnicalDelegate = null, string Source = "")
+    string Gender, CompetitionTechnicalDelegateInfo? TechnicalDelegate = null, string Source = "", int? RaceId = null)
 {
     public CompetitionCalendarData Validated()
     {
         if (Season is < 1900 or > 2999) { throw new DomainValidationException("FIS season must be a year between 1900 and 2999."); }
+        if (RaceId is <= 0) { throw new DomainValidationException("FIS race ID must be positive."); }
         static string Text(string value, int maximum)
         {
             var clean = value.Trim();
@@ -109,11 +111,8 @@ public sealed record CompetitionValues(
             throw new DomainValidationException("Runs must be 1–9 and intermediates 0–20.");
         }
 
+        // A FIS competition may wait for its codex (FIS assigns it late); FIS exports require it.
         var fisCode = Optional(FisCode, 50);
-        if (RaceType == RaceType.Fis && fisCode is null)
-        {
-            throw new DomainValidationException("A FIS competition needs a FIS race code.");
-        }
 
         foreach (var altitude in new[] { StartAltitudeMeters, FinishAltitudeMeters, VerticalDropMeters, CourseLengthMeters })
         {

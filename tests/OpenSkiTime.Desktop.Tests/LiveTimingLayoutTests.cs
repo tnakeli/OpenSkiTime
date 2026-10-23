@@ -71,6 +71,7 @@ public sealed class LiveTimingLayoutTests
     {
         await using var session = new LiveControlSession();
         var vm = new PanelViewModel(session);
+        vm.Update(); // Radio defaults before any competition is open.
         vm.Channels[0].Update(new(PublisherKind.Local, new(PublisherState.Running, "http://localhost:5078", PublicUrl: "http://localhost:5078/r/00000000-0000-0000-0000-000000000001"), 100));
         vm.Channels[1].Update(new(PublisherKind.Cloud, new(PublisherState.Error, Error: "Connection unavailable. Check the cloud URL and network, then press Start."), 101));
         vm.Competition = "Synthetic slalom / Run 1";
@@ -89,9 +90,14 @@ public sealed class LiveTimingLayoutTests
             var starts = window.GetVisualDescendants().OfType<Button>().Where(x => Equals(x.Content, "Start")).ToArray();
             Assert.Equal(3, starts.Length);
             foreach (var start in starts) { Assert.Same(vm.ControlCommand, start.Command); Assert.IsType<PanelChannelAction>(start.CommandParameter); Assert.True(start.Bounds.Width > 0); }
-            var port = window.GetVisualDescendants().OfType<NumericUpDown>().Single();
-            Assert.Equal(1550, port.Value);
+            var port = window.GetVisualDescendants().OfType<NumericUpDown>().Single(x => x.Value == 1550);
             Assert.True(port.Bounds.Width > 150);
+            // Race radio: off and disabled until a competition is open; its status card sits under the channels.
+            Assert.Equal("Off", window.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Name == "RadioStatusText").Text);
+            var budget = window.GetVisualDescendants().OfType<NumericUpDown>().Single(x => x.Value == 5m);
+            Assert.True(budget.Bounds.Width > 150);
+            Assert.False(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SaveRadioButton").IsEffectivelyEnabled);
+            Assert.Equal(2, window.GetVisualDescendants().OfType<ComboBox>().Count(x => x.SelectedItem is RadioChoice));
             Save(window, $"live-control-panel-{width}.png");
             foreach (var scroll in window.GetVisualDescendants().OfType<ScrollViewer>().Where(x => x.Extent.Height > x.Viewport.Height))
             { scroll.Offset = new Vector(0, scroll.Extent.Height); }

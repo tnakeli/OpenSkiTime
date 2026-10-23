@@ -117,7 +117,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [RelayCommand] private void ShowSettings()
     {
         SwitchSection(WorkspaceSection.Settings);
-        if (IsSettingsSection) { RefreshFisSettingsStatus(); RefreshLivePublisherKeyStatus(); }
+        if (IsSettingsSection) { RefreshFisSettingsStatus(); RefreshLivePublisherKeyStatus(); LiveRadioKeyProvider ??= LiveRadioKeyChoices[0]; RefreshLiveRadioKeyStatus(); }
     }
 
     private void SwitchSection(WorkspaceSection section)

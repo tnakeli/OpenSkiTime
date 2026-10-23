@@ -24,6 +24,7 @@ public sealed partial class MainViewModel
     public bool HasCompetitionCalendarStatus => !string.IsNullOrWhiteSpace(CompetitionCalendarStatus);
     [ObservableProperty] private bool _isCompetitionDataBusy;
     private string _competitionCalendarSource = "";
+    private int? _competitionCalendarRaceId;
     // Shown as Women / Men / Mixed; the series file and FIS messages keep the calendar codes W / M / A.
     public IReadOnlyList<string> CompetitionGenders { get; } = CompetitionGenderLabels.Choices;
 
@@ -44,6 +45,7 @@ public sealed partial class MainViewModel
         CompetitionTdNumber = c?.TechnicalDelegate?.Number ?? "";
         CompetitionTdOriginalName = c?.TechnicalDelegate?.OriginalName ?? "";
         _competitionCalendarSource = c?.Source ?? "";
+        _competitionCalendarRaceId = c?.RaceId;
         CompetitionCalendarStatus = "";
     }
 
@@ -54,7 +56,7 @@ public sealed partial class MainViewModel
         return new CompetitionCalendarData(season, CompetitionLocation, CompetitionNation, CompetitionCalendarCategory,
             CompetitionGenderLabels.ToCode(CompetitionGender), new(CompetitionTdLastName, CompetitionTdFirstName, CompetitionTdNation, CompetitionTdNumber,
                 string.IsNullOrWhiteSpace(CompetitionTdFirstName) || string.IsNullOrWhiteSpace(CompetitionTdLastName) ? CompetitionTdOriginalName : ""),
-            _competitionCalendarSource).Validated();
+            _competitionCalendarSource, _competitionCalendarRaceId).Validated();
     }
 
     [RelayCommand]
@@ -85,7 +87,7 @@ public sealed partial class MainViewModel
                 && string.Equals(importedTd.Nation, previousTd.Nation, StringComparison.OrdinalIgnoreCase))
             { importedTd = importedTd with { Number = previousTd.Number }; }
             var calendar = new CompetitionCalendarData(season, race.PlaceName ?? CompetitionLocation, race.PlaceNationCode ?? CompetitionNation,
-                race.CategoryCode, race.GenderCode ?? "", importedTd ?? previousTd, data.Source).Validated();
+                race.CategoryCode, race.GenderCode ?? "", importedTd ?? previousTd, data.Source, race.Id > 0 ? race.Id : null).Validated();
             var values = new CompetitionValues(data.EventName ?? (string.IsNullOrWhiteSpace(CompetitionName)
                     ? $"{calendar.Location} {race.EventCode}" : CompetitionName),
                 string.IsNullOrWhiteSpace(CompetitionShortLabel) ? $"{race.EventCode} {calendar.Gender} {codex}" : CompetitionShortLabel,

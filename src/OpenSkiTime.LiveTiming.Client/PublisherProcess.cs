@@ -48,13 +48,7 @@ public sealed class PublisherProcess : IAsyncDisposable
             var pipeName = "OpenSkiTime-live-" + Guid.NewGuid().ToString("N");
             _pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
                 PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-            var executable = Path.ChangeExtension(workerAssembly, OperatingSystem.IsWindows() ? ".exe" : null);
-            var useAppHost = dotnetHost is null && File.Exists(executable);
-            var host = dotnetHost ?? ResolveDotnetHost();
-            var start = new ProcessStartInfo(useAppHost ? executable : host)
-            { UseShellExecute = false, CreateNoWindow = true };
-            if (!useAppHost) { start.ArgumentList.Add(workerAssembly); start.Environment["DOTNET_HOST_PATH"] = host; }
-            start.ArgumentList.Add("--pipe"); start.ArgumentList.Add(pipeName);
+            var start = WorkerLaunch.Create(workerAssembly, pipeName, dotnetHost);
             _health = new(PublisherState.Starting, options.Endpoint);
             try
             {
@@ -122,14 +116,5 @@ public sealed class PublisherProcess : IAsyncDisposable
         try { if (_receive is not null) { await _receive; } }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException) { }
         _connectionStop?.Dispose(); _stop.Dispose();
-    }
-    private static string ResolveDotnetHost()
-    {
-        var explicitHost = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
-        if (!string.IsNullOrWhiteSpace(explicitHost)) { return explicitHost; }
-        var runtime = new DirectoryInfo(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory());
-        var root = runtime.Parent?.Parent?.Parent;
-        var path = root is null ? "" : Path.Combine(root.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
-        return File.Exists(path) ? path : "dotnet";
     }
 }

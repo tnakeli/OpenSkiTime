@@ -8,6 +8,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
+Live protocol: 2
+
+### Added
+
+- Optional race radio: viewers can press ▶ Radio on the race page to hear short Finnish AI commentary when the organizer has enabled it. The control appears only while the radio is healthy and never starts playing by itself. Clips are kept only in memory, expire within minutes, are dropped when the results contradict them and are deleted with the session. Optional background music chosen by the organizer plays softly under the commentary and can be turned off with ♪ Music; it is kept in memory (`LiveTiming__RadioMusicMaxMegabytes`, default 256) and deleted with the session.
+
+### Changed
+
+- Live protocol 2: adds the radio status, clip and music endpoints, the `Radio` announcement and the competition's optional run count. Publishers using protocol 1 are refused with HTTP 426; update OpenSkiTime to publish to this server.
+
 ## [0.3.0] - 2026-10-14
 
 Live protocol: 1
@@ -68,7 +80,8 @@ Live protocol: 1 (implicit)
 
 - First hosted deployment: public race list, responsive race view, publisher keys for session creation and `security.txt`.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.3.0...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.4.0...HEAD
+[0.4.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.3.0...live-v0.4.0
 [0.3.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.2.0...live-v0.3.0
 [0.2.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.1.3...live-v0.2.0
 [0.1.3]: https://github.com/tnakeli/OpenSkiTime/releases/tag/live-v0.1.3

@@ -35,7 +35,7 @@
   function render(next) {
     state = next;
     get('results').replaceChildren(); get('runs').replaceChildren();
-    if (!next) { get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('latest').hidden = true; get('forerunners').hidden = true; get('updated').textContent = ''; title(); return; }
+    if (!next) { liveRadio.update(id, null); get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('latest').hidden = true; get('forerunners').hidden = true; get('updated').textContent = ''; title(); return; }
     get('name').textContent = next.competition.name; title(next.competition.name);
     get('metadata').textContent = `${next.competition.place} · ${next.competition.discipline} · ${next.competition.date}`;
     // A viewer may look at another run; when the race moves on to a new current run, every viewer follows it.
@@ -128,6 +128,8 @@
   function drop(closing) {
     if (socket !== closing) return; // Late events from an abandoned socket never start a second connection.
     socket = null; clearInterval(closing.keepAlive);
+    // Without a connection there are no corrections or deletions: the radio stops until a fresh announcement arrives.
+    liveRadio.update(id, null);
     closing.onopen = closing.onmessage = closing.onclose = closing.onerror = null;
     try { closing.close(); } catch { /* Already closed. */ }
     schedule();
@@ -147,6 +149,7 @@
         for (const raw of messages) {
           if (!raw) continue; const message = JSON.parse(raw);
           if (!handshaken) { if (message.error) { drop(current); return; } handshaken = true; attempt = 0; watchPending = true; connection('Live'); current.send(JSON.stringify({type:1,target:'Watch',arguments:[id],invocationId:'1'}) + '\u001e'); }
+          else if (message.type === 1 && message.target === 'Radio') liveRadio.update(id, message.arguments[0]);
           else if (message.type === 1 && message.target === 'State') {
             // After a service restart the server is empty until the publisher restores it; keep showing the last results meanwhile.
             const next = message.arguments[0]; stale = watchPending && !next && !!state; watchPending = false;

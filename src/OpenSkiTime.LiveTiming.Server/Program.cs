@@ -23,6 +23,8 @@ builder.Services.Configure<JsonOptions>(o => { foreach (var c in LiveJson.Option
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<PublisherKeys>();
+builder.Services.AddSingleton<RadioBroadcaster>();
+builder.Services.AddHostedService<RadioMonitor>();
 builder.Services.AddSignalR(o => { o.MaximumReceiveMessageSize = 4096; o.MaximumParallelInvocationsPerClient = 1; })
     .AddJsonProtocol(o => { foreach (var c in LiveJson.Options.Converters) { o.PayloadSerializerOptions.Converters.Add(c); } });
 builder.Services.AddRateLimiter(o =>
@@ -82,26 +84,78 @@ app.MapPost("/api/sessions", (HttpContext context, SessionStore store, Publisher
     return Results.Ok(session);
 }).RequireRateLimiting("creation");
 app.MapGet("/api/sessions/{id:guid}/state", (Guid id, SessionStore store) => store.Read(id) is { } state ? Results.Ok(state) : Results.NotFound());
-app.MapPut("/api/sessions/{id:guid}/state", async (Guid id, LiveSnapshot state, HttpContext context, SessionStore store, IHubContext<LiveHub> hub) =>
+app.MapPut("/api/sessions/{id:guid}/state", async (Guid id, LiveSnapshot state, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio) =>
 {
     if (Authorize(context, store, id) is not { } expires) { return Results.Unauthorized(); }
     store.Replace(id, expires, state);
     await hub.Clients.Group(id.ToString()).SendAsync("State", state);
+    await radio.SendAsync(id); // A new state can make queued radio clips stale.
     return Results.Ok();
 });
-app.MapPost("/api/sessions/{id:guid}/events", async (Guid id, LiveEvent update, HttpContext context, SessionStore store, IHubContext<LiveHub> hub) =>
+app.MapPost("/api/sessions/{id:guid}/events", async (Guid id, LiveEvent update, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio) =>
 {
     if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
     var state = store.Apply(id, update);
     await hub.Clients.Group(id.ToString()).SendAsync("State", state);
+    await radio.SendAsync(id);
     return Results.Ok();
 });
-app.MapPost("/api/sessions/{id:guid}/pause", async (Guid id, HttpContext context, SessionStore store, IHubContext<LiveHub> hub) =>
+app.MapPost("/api/sessions/{id:guid}/pause", async (Guid id, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio) =>
 {
     if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
     await hub.Clients.Group(id.ToString()).SendAsync("State", store.Pause(id));
+    await radio.SendAsync(id);
     return Results.Ok();
 });
+// Optional race radio. Uploads and status need the session's publisher token; clip audio is public like the race view.
+app.MapPut("/api/sessions/{id:guid}/radio/status", async (Guid id, RadioStatusUpdate update, HttpContext context, SessionStore store, RadioBroadcaster radio) =>
+{
+    if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
+    var reply = store.RadioStatus(id, update);
+    await radio.SendAsync(id);
+    return Results.Ok(reply);
+});
+app.MapPut("/api/sessions/{id:guid}/radio/music", async (Guid id, RadioMusicPlaylist playlist, HttpContext context, SessionStore store, RadioBroadcaster radio) =>
+{
+    if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
+    var reply = store.SetMusic(id, playlist);
+    await radio.SendAsync(id);
+    return Results.Ok(reply);
+});
+// One MP3 track as the raw request body. Only an authorized publisher may send the larger body this endpoint allows.
+app.MapPut("/api/sessions/{id:guid}/radio/music/{trackId}", async (Guid id, string trackId, HttpContext context, SessionStore store, RadioBroadcaster radio) =>
+{
+    if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
+    if (!RadioMusic.IsId(trackId) || context.Request.ContentType != RadioMusic.ContentType) { return Results.BadRequest(); }
+    if (context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+    { limit.MaxRequestBodySize = RadioMusic.MaxTrackBytes; }
+    using var body = new MemoryStream();
+    var buffer = new byte[81920]; int count;
+    while ((count = await context.Request.Body.ReadAsync(buffer, context.RequestAborted)) > 0)
+    {
+        if (body.Length + count > RadioMusic.MaxTrackBytes) { return Results.StatusCode(413); }
+        body.Write(buffer, 0, count);
+    }
+    var reply = store.AddMusic(id, trackId, body.ToArray());
+    await radio.SendAsync(id);
+    return Results.Ok(reply);
+});
+// Content addressed and immutable: viewers and proxies may cache a track.
+app.MapGet("/api/sessions/{id:guid}/radio/music/{trackId}", (Guid id, string trackId, HttpContext context, SessionStore store) =>
+{
+    if (!RadioMusic.IsId(trackId) || store.MusicAudio(id, trackId) is not { } music) { return Results.NotFound(); }
+    context.Response.Headers.CacheControl = "public, max-age=86400, immutable";
+    return Results.Bytes(music, RadioMusic.ContentType, enableRangeProcessing: true);
+});
+app.MapPost("/api/sessions/{id:guid}/radio/clips", async (Guid id, RadioClipUpload clip, HttpContext context, SessionStore store, RadioBroadcaster radio) =>
+{
+    if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
+    store.AddClip(id, clip);
+    await radio.SendAsync(id);
+    return Results.Ok();
+});
+app.MapGet("/api/sessions/{id:guid}/radio/clips/{clipId:guid}", (Guid id, Guid clipId, SessionStore store) =>
+    store.ClipAudio(id, clipId) is { } clip ? Results.Bytes(clip.Audio, clip.ContentType) : Results.NotFound());
 app.MapDelete("/api/sessions/{id:guid}", Delete);
 app.MapDelete("/api/sessions/{id:guid}/data", Delete);
 app.MapHub<LiveHub>("/live").RequireRateLimiting("viewers");
@@ -116,10 +170,11 @@ static DateTimeOffset? Authorize(HttpContext context, SessionStore store, Guid i
     var header = context.Request.Headers.Authorization.ToString();
     return header.StartsWith("Bearer ", StringComparison.Ordinal) ? store.Authorize(id, header[7..]) : null;
 }
-static async Task<IResult> Delete(Guid id, HttpContext context, SessionStore store, IHubContext<LiveHub> hub)
+static async Task<IResult> Delete(Guid id, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio)
 {
     if (Authorize(context, store, id) is not { } expires) { return Results.Unauthorized(); }
-    store.Delete(id, expires);
+    store.Delete(id, expires); // Radio clips are part of the session and are removed with it.
     await hub.Clients.Group(id.ToString()).SendAsync("State", (LiveSnapshot?)null);
+    await radio.SendAsync(id, force: true);
     return Results.NoContent();
 }

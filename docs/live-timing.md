@@ -35,6 +35,9 @@ flowchart LR
   Panel --> FIS[FIS worker / TCP or HTTPS]
   Panel --> Local[Local publisher worker]
   Panel --> Cloud[Cloud publisher worker]
+  Panel --> Radio[Optional race radio worker]
+  Radio --> Server
+  Radio --> Remote
   Local --> Server[Same ASP.NET Core Live Timing Server]
   Cloud --> Remote[Same server / remote origin]
   Server --> Browser[REST + SignalR browser]
@@ -66,8 +69,10 @@ The latest snapshot is bounded by the contract (2,000 competitors, nine runs, tw
 | `/r/{id}` | Responsive public view. No credential in the path or query. |
 | `/` | Lists all active published races with links to their `/r/{id}` views. |
 | `/.well-known/security.txt` | RFC 9116 security contact. |
+| `PUT /api/sessions/{id}/radio/status`, `POST /api/sessions/{id}/radio/clips`, `PUT /api/sessions/{id}/radio/music`, `PUT /api/sessions/{id}/radio/music/{trackId}` | Session token. Optional race radio heartbeat, clip upload and background music; see [race radio](race-radio.md#live-timing-server-api-protocol-2). |
+| `GET /api/sessions/{id}/radio/clips/{clipId}`, `GET /api/sessions/{id}/radio/music/{trackId}` | Public audio of a valid radio clip or a music track. SignalR additionally sends `Radio` announcements. |
 
-Every response carries the server's live protocol version in `X-OpenSkiTime-Live-Protocol`. The publisher sends its `LiveProtocol.Version` in the same header on every request. A request declaring a different version is refused with HTTP 426 before routing or mutation; the worker reports an incompatible server and stops rather than retrying. Requests without the header, such as browsers and diagnostic tools, are treated as the current version. Application and server release versions are independent; see [release process](release-process.md#versioning).
+Every response carries the server's live protocol version in `X-OpenSkiTime-Live-Protocol`. The current version is 2 (version 2 added the race radio API); a protocol-1 desktop must be updated before it can publish to a protocol-2 server. The publisher sends its `LiveProtocol.Version` in the same header on every request. A request declaring a different version is refused with HTTP 426 before routing or mutation; the worker reports an incompatible server and stops rather than retrying. Requests without the header, such as browsers and diagnostic tools, are treated as the current version. Application and server release versions are independent; see [release process](release-process.md#versioning).
 
 Normally the publisher compares latest snapshots. When exactly one result row changed, it sends that row as an event with the next contiguous wire revision. When several rows changed (a new leader changes every finisher's rank and difference), it replaces the state with one full snapshot, so viewers never see a partly applied ranking and the server broadcasts once rather than once per row. Competitor/order/metadata/run topology changes and any forerunner change also use a snapshot. Each run may carry its forerunners (identifier, name, nation and status: at start, on course, finished, DNS, DNF or checking); there is deliberately no time field. The race page lists them under the banner and includes forerunners on course in the On course list as `F A` with no running time. If session creation is answered with something other than a session (for example a captive portal page), the worker retries it as a network failure. IPC may coalesce intermediate snapshots; it cannot lose final authoritative state. A failed partial publish, version conflict, health 404 or restart triggers replacement with the latest full snapshot. A health 404 for an existing session means the server lost its RAM state (restart, new revision or scale-to-zero) while the stateless session token remains valid; the worker republishes every run on its next pass without entering Reconnecting or error backoff. There is one writer per session; multiple competing authoritative publishers are not supported.
 
@@ -84,6 +89,10 @@ Deletion wipes the cached snapshot and all race content immediately. A bounded R
 Session creation requires an operator-issued publisher key (stored only as a SHA-256 hash on the server; see [publisher keys](live-timing-cloud-deployment.md#publisher-keys)) and has a per-client fixed-window limit (five/minute). Every client also has its own request budget and concurrent viewer-connection limit, so one source cannot exhaust the service for others. Session/revocation capacity, payload and connection limits, no queued rate-limited requests and a fourteen-day maximum lifetime still apply. Session expiry is pruned during requests. Deleted-ID markers consume capacity until expiry; adjust capacity for the expected event calendar.
 
 The viewer's front page lists every active published race. Viewer pages hide the split columns and the intermediate/sector choice while the selected run has no intermediate times, and link to the [privacy statement](https://openskiti.me/privacy/) and the server's `security.txt`.
+
+## Race radio
+
+An optional Finnish AI commentary for Local and Cloud viewers, configured per competition in the control panel's *Race radio* card and off by default. A separate radio worker owned by the panel turns the live snapshot into short spoken clips, uploads them to the running sessions and never affects capture or publishing. Viewers see **▶ Radio** only while the radio is healthy; it never autoplays. Clips are RAM-only and are removed with the session. See [race radio](race-radio.md) for architecture, providers, costs, privacy and limits.
 
 ## FIS TCP and HTTPS
 

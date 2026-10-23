@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><ProjectReference Include="../OpenSkiTime.LiveTiming.Contracts/OpenSkiTime.LiveTiming.Contracts.csproj" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="OpenSkiTime.LiveTiming.Tests" /></ItemGroup>
+</Project>

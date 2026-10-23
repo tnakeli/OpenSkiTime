@@ -49,6 +49,20 @@
       </Border>
      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
      <TextBlock Text="Stop pauses publishing. Delete removes the public session; the next Start creates a new URL." Classes="muted" FontSize="11" />
+     <Border Classes="card" Name="RadioStatusCard">
+      <StackPanel Spacing="4">
+       <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="RACE RADIO" FontSize="12" FontWeight="Bold" LetterSpacing="1" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+         <Border Width="8" Height="8" CornerRadius="4" Background="{Binding RadioIndicator}" VerticalAlignment="Center" />
+         <TextBlock Name="RadioStatusText" Text="{Binding RadioStatus}" FontWeight="SemiBold" />
+        </StackPanel>
+       </Grid>
+       <TextBlock Name="RadioDetailText" Text="{Binding RadioDetail}" Classes="muted" />
+       <TextBlock Text="{Binding RadioMusic}" Classes="muted" FontSize="11" IsVisible="{Binding RadioMusic, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <TextBlock Text="{Binding RadioSpend}" Classes="muted" FontSize="11" />
+      </StackPanel>
+     </Border>
     </StackPanel>
    </ScrollViewer>
    <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -66,6 +80,35 @@
       <StackPanel Classes="field"><TextBlock Text="TCP host" /><TextBox Text="{Binding FisTcpHost}" /></StackPanel>
       <StackPanel Classes="field"><TextBlock Text="TCP port" /><NumericUpDown Minimum="1" Maximum="65535" Value="{Binding FisTcpPort}" HorizontalAlignment="Stretch" /></StackPanel>
       <StackPanel Classes="field"><TextBlock Text="Password" /><TextBox PasswordChar="●" Text="{Binding FisPassword}" /></StackPanel>
+     </StackPanel></Border>
+     <Border Classes="card" Name="RadioSettingsCard"><StackPanel Spacing="8" IsEnabled="{Binding RadioReady}">
+      <TextBlock Text="Race radio (optional)" Classes="heading" />
+      <TextBlock Text="AI commentary in Finnish for viewers of this competition. Off by default; needs provider keys in OpenSkiTime Settings → Live timing and sends race data to the chosen providers." Classes="muted" FontSize="11" />
+      <WrapPanel>
+       <CheckBox Name="RadioLocalBox" Content="Local" IsChecked="{Binding RadioLocal}" Margin="0,0,16,0" />
+       <CheckBox Name="RadioCloudBox" Content="Cloud" IsChecked="{Binding RadioCloud}" />
+      </WrapPanel>
+      <StackPanel Classes="field"><TextBlock Text="Budget limit (USD, hard stop)" /><NumericUpDown Value="{Binding RadioBudget}" Minimum="0" Maximum="1000" Increment="1" FormatString="0.00" HorizontalAlignment="Stretch" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="Language model" /><ComboBox ItemsSource="{Binding RadioLlmChoices}" SelectedItem="{Binding RadioLlm}" HorizontalAlignment="Stretch" /></StackPanel>
+      <CheckBox Content="Style curation pass (second model call)" IsChecked="{Binding RadioCuration}" />
+      <StackPanel Classes="field"><TextBlock Text="Speech" /><ComboBox ItemsSource="{Binding RadioTtsChoices}" SelectedItem="{Binding RadioTts}" HorizontalAlignment="Stretch" /></StackPanel>
+      <Grid ColumnDefinitions="*,8,*,8,*">
+       <StackPanel Classes="field"><TextBlock Text="Azure region" /><TextBox Text="{Binding RadioRegion}" /></StackPanel>
+       <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="Voice, Aino" /><TextBox Text="{Binding RadioVoiceA}" Watermark="Default" /></StackPanel>
+       <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="Voice, Kalle" /><TextBox Text="{Binding RadioVoiceB}" Watermark="Default" /></StackPanel>
+      </Grid>
+      <StackPanel Classes="field"><TextBlock Text="Event background for the hosts" /><TextBox Text="{Binding RadioContext}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54" MaxLength="2000" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="Curation notes (habits to avoid)" /><TextBox Text="{Binding RadioNotes}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxLength="1000" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="Pronunciation (one per line: written = spoken)" /><TextBox Text="{Binding RadioLexicon}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxLength="4000" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="Background music folder (MP3, optional)" />
+       <Grid ColumnDefinitions="*,8,Auto">
+        <TextBox Name="RadioMusicFolderBox" Text="{Binding RadioMusicFolder}" Watermark="No music" />
+        <Button Grid.Column="2" Name="BrowseMusicButton" Content="Browse…" Click="BrowseMusic" />
+       </Grid>
+      </StackPanel>
+      <TextBlock Text="Played softly under the commentary for viewers who listen. Use music you may stream publicly, such as royalty-free tracks; the files are sent to the live timing server. Up to 24 files, 12 MB each and 48 MB in total." Classes="muted" FontSize="11" TextWrapping="Wrap" />
+      <Button Name="SaveRadioButton" Content="Save radio settings" Classes="primary" Command="{Binding SaveRadioCommand}" HorizontalAlignment="Left" />
+      <TextBlock Text="{Binding RadioSaveStatus}" Classes="muted" FontSize="11" />
      </StackPanel></Border>
      <Border Classes="card"><StackPanel Spacing="8">
       <TextBlock Text="Race clock" Classes="heading" />

@@ -94,7 +94,9 @@ public sealed class ControlPanelProcess : IAsyncDisposable
         finally
         {
             _stop.Cancel();
-            _job?.Dispose();
+            // A panel that disconnected on its own (crash, forced exit) takes its descendants down at once. During a
+            // deliberate shutdown DisposeAsync first gives the panel time to stop its radio and save the final spend.
+            if (Volatile.Read(ref _disposed) == 0) { _job?.Dispose(); }
             Volatile.Write(ref _state, new(Guid.Empty, State.Channels.Select(x => x with { Health = x.Health with { State = PublisherState.Stopped }, ProcessId = null }).ToArray()));
             foreach (var request in _requests.Values) { request.TrySetException(new IOException("Live timing control panel closed.")); }
         }
@@ -115,8 +117,15 @@ public sealed class ControlPanelProcess : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) { return; }
-        _stop.Cancel(); _pipe?.Dispose(); _job?.Dispose();
+        // Closing the pipe asks the panel to shut down: it stops its workers and saves the radio's final spend, then exits.
+        _stop.Cancel(); _pipe?.Dispose();
         _commands.Writer.TryComplete();
+        if (_process is { HasExited: false } panel)
+        {
+            try { await panel.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(8)); }
+            catch (TimeoutException) { }
+        }
+        _job?.Dispose();
         if (_process is { HasExited: false }) { _process.Kill(true); }
         try { if (_pump is not null) { await _pump; } }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException) { }

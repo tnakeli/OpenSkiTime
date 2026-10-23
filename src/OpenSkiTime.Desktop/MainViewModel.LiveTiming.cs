@@ -163,7 +163,7 @@ public sealed partial class MainViewModel
     {
         var c = race.Values;
         return new(c.Name, c.Calendar?.Location ?? _current?.Values.Location ?? "", DisciplineCode(c.Discipline),
-            c.Date, c.RaceType == RaceType.Fis, c.FisCode ?? "", activeList.Plan.Gender == Gender.Female ? "L" : "M", c.Calendar?.Category ?? "FIS", c.IntermediateCount, c.CourseName ?? "");
+            c.Date, c.RaceType == RaceType.Fis, c.FisCode ?? "", activeList.Plan.Gender == Gender.Female ? "L" : "M", c.Calendar?.Category ?? "FIS", c.IntermediateCount, c.CourseName ?? "", c.RunCount);
     }
     private void ApplyLivePanelState(ControlPanelOutput state, bool updateError = true)
     {
@@ -213,7 +213,9 @@ public sealed partial class MainViewModel
     private void DisposeLiveTiming()
     {
         _liveDisposed = true; _liveTimer?.Stop();
-        if (_livePanel is not null) { _ = _livePanel.DisposeAsync().AsTask(); }
+        // Waits briefly (off the UI thread's context) so the panel can stop the race radio and save its final spend
+        // before the desktop's exit closes the job that owns the live timing processes.
+        if (_livePanel is { } panel) { Task.Run(() => panel.DisposeAsync().AsTask()).Wait(TimeSpan.FromSeconds(10)); }
     }
     private static string DisciplineCode(Discipline value) => value switch
     { Discipline.Slalom => "SL", Discipline.GiantSlalom => "GS", Discipline.SuperG => "SG", Discipline.Downhill => "DH", Discipline.AlpineCombined => "SC", _ => "Other" };

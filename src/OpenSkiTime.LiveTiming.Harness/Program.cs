@@ -7,10 +7,16 @@ var mode = args.Length > 0 ? args[0] : "help";
 if (mode == "help")
 {
     Console.WriteLine("Modes: local|cloud <worker.dll> <endpoint> [server.dll]; fis-tcp|fis-https <endpoint> [count]. FIS password: OST_FIS_PASSWORD environment variable, never command line. Codex: OST_FIS_CODEX (default 9754). Press Ctrl+C to stop simulation.");
+    Console.WriteLine("radio-sample <openai|gemini|simulation|templates> <model> <azure|google|openai|simulation> <output-folder-outside-repository> [azure-region]: listening-test clips from a synthetic race. Keys come from Windows Credential Manager (Settings → Live timing); real providers are billed.");
     return 0;
 }
 using var stop = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
+if (mode == "radio-sample")
+{
+    if (args.Length < 5) { Console.Error.WriteLine("radio-sample needs <llm> <model> <tts> <output-folder>."); return 2; }
+    return await RadioSample.RunAsync(args[1], args[2], args[3], args[4], args.Length > 5 ? args[5] : "westeurope", stop.Token);
+}
 var initial = SyntheticRace.Create(mode.StartsWith("fis-", StringComparison.Ordinal) && args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 50,
     Environment.GetEnvironmentVariable("OST_FIS_CODEX") ?? "9754");
 try
