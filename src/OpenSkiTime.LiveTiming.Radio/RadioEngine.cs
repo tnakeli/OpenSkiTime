@@ -181,7 +181,7 @@ public sealed class RadioEngine
             if (lines is not null)
             {
                 var left = batch.Where(x => x.Kind != RadioEventKind.Producer && x.Bibs.Length > 0
-                    && !lines.Any(l => l.Text.Contains($"{{racer:{x.Bibs[0]}}}", StringComparison.Ordinal))).ToArray();
+                    && !lines.Any(l => RadioSlots.Names(l.Text, x.Bibs[0]))).ToArray();
                 var added = left.Length == 0 ? [] : FinnishTemplates.Lines(left, facts, _seed++).Where(x => RadioSlots.Problem(x.Text, facts, rules) is null).ToArray();
                 if (added.Length > 0)
                 {
@@ -193,7 +193,7 @@ public sealed class RadioEngine
             // The next racer in the start gate is always said; a model script that leaves it out gets the template line.
             if (lines is not null)
             {
-                var missing = FinnishTemplates.GateLines(batch, facts).Where(x => !lines.Any(l => l.Text.Contains(x.Bib, StringComparison.Ordinal))).ToArray();
+                var missing = FinnishTemplates.GateLines(batch, facts).Where(x => !lines.Any(l => RadioSlots.Names(l.Text, x.Bib))).ToArray();
                 if (missing.Length > 0)
                 {
                     // The gate line is an addition: the conversation before it still ends where it did.
@@ -225,7 +225,7 @@ public sealed class RadioEngine
         var lineConditions = new List<RadioCondition[]>();
         foreach (var line in lines)
         {
-            var own = shared.Concat(gate.Where(x => line.Text.Contains($"{{racer:{x.Bib}}}", StringComparison.Ordinal)))
+            var own = shared.Concat(gate.Where(x => RadioSlots.Names(line.Text, x.Bib)))
                 .Concat(RadioSlots.Conditions(line.Text, facts)).Distinct().ToArray();
             if (own.Length > RadioPlayback.MaxConditions) { break; }
             lineConditions.Add(own);
@@ -254,8 +254,7 @@ public sealed class RadioEngine
         if (count == 0) { return; }
         // All lines are synthesized at once, so a conversation is ready in the time of its slowest line, not the sum of
         // them; they are still uploaded in order. Reserved before the calls: a failed or cancelled request may be billed.
-        foreach (var x in texts) { Budget.Charge(x.Estimate); }
-        var speech = texts.Select(x => WithTimeout(SpeechTimeout, t => _tts.SynthesizeAsync(x.Text, x.Voice, t), ct)).ToArray();
+        var speech = texts.Select(x => SpeakAsync(x.Text, x.Voice, x.Estimate, ct)).ToArray();
         var spoken = 0;
         _remainingLines = count;
         try
@@ -288,13 +287,13 @@ public sealed class RadioEngine
         }
         finally
         {
-            _remainingLines = 0; Report();
-            // Every reservation is settled with what the provider produced; failed calls keep their reservation.
-            for (var i = 0; i < speech.Length; i++)
+            // Lines not used still finish and settle before the final report.
+            foreach (var pending in speech)
             {
-                try { var audio = await speech[i]; Budget.Settle(texts[i].Estimate, RadioPrices.Cost(_ttsPrice, texts[i].Text.Length, audio.DurationMs)); }
+                try { await pending; }
                 catch (Exception ex) when (Recoverable(ex, ct) || ex is OperationCanceledException) { }
             }
+            _remainingLines = 0; Report();
         }
         if (spoken > 0) { foreach (var value in batch) { _diary.Add(value); } }
     }
@@ -409,6 +408,25 @@ public sealed class RadioEngine
         return null;
     }
 
+    // Speech is reserved before the call and settled as soon as it returns; a failed, timed-out or cancelled call keeps its
+    // reservation as spend, because the provider may have billed it. Reservations still in flight are not reported as spend,
+    // so the panel never saves an estimate that the settled cost then undercuts.
+    private async Task<TtsAudio> SpeakAsync(string text, RadioVoice voice, decimal estimate, CancellationToken ct)
+    {
+        Budget.Charge(estimate);
+        lock (_reservations) { _outstanding += estimate; }
+        try
+        {
+            var audio = await WithTimeout(SpeechTimeout, t => _tts.SynthesizeAsync(text, voice, t), ct);
+            Budget.Settle(estimate, RadioPrices.Cost(_ttsPrice, text.Length, audio.DurationMs));
+            return audio;
+        }
+        finally { lock (_reservations) { _outstanding -= estimate; } }
+    }
+    private readonly Lock _reservations = new();
+    private decimal _outstanding;
+    private decimal SettledSpend { get { lock (_reservations) { return Budget.Spent - _outstanding; } } }
+
     private async Task<LlmReply?> CompleteAsync(LlmRequest request, TimeSpan timeout, CancellationToken ct)
     {
         var estimate = RadioPrices.Cost(_llmPrice, (request.System.Length + request.User.Length) / 3, request.MaxOutputTokens);
@@ -472,7 +490,7 @@ public sealed class RadioEngine
         {
             State = state ?? current.State, Error = error ?? current.Error, Mode = mode?.ToString() ?? current.Mode,
             LastClipAt = lastClip?.At ?? current.LastClipAt, LastClipHost = lastClip?.Host ?? current.LastClipHost,
-            SpentUsd = Budget.Spent, BudgetUsd = Budget.Limit, Phase = _phase, QueueDepth = _batcher.Count + _remainingLines
+            SpentUsd = SettledSpend, BudgetUsd = Budget.Limit, Phase = _phase, QueueDepth = _batcher.Count + _remainingLines
         });
     }
 }

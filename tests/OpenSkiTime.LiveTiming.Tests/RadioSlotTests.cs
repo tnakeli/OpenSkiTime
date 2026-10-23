@@ -66,6 +66,9 @@ public sealed class RadioSlotTests
             new("Aino", "Numero {bib:4:nom} eli {racer:4} on valmiina.", true)]);
         Assert.Equal(["Radalla nyt numero {bib:3:nom}, {nation:3} {racer:3}, {club:3}.", "{racer:3} on vauhdissa, ja numero {bib:2:nom}, {racer:2} odottaa.",
             "Numero {bib:4:nom} eli {racer:4} on valmiina."], lines.Select(x => x.Text));
+        // A racer slot names the racer with or without a case code, so gate and coverage checks see it.
+        Assert.True(RadioSlots.Names("Lähtöportilla seuraavana {racer:3:nom}.", 3));
+        Assert.False(RadioSlots.Names("Numero {bib:3:nom} odottaa.", 3));
     }
 
     [Theory]

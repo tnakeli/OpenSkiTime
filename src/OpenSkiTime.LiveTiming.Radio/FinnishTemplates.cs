@@ -99,12 +99,12 @@ public static class FinnishTemplates
                 break;
         }
     }
-    /// <summary>The start-gate lines of a batch's start events, with the racer slot each one must contain.</summary>
-    public static IEnumerable<(ScriptLine Line, string Bib)> GateLines(IReadOnlyList<RadioEvent> batch, FactSheet facts)
+    /// <summary>The start-gate lines of a batch's start events, with the racer each one names.</summary>
+    public static IEnumerable<(ScriptLine Line, int Bib)> GateLines(IReadOnlyList<RadioEvent> batch, FactSheet facts)
     {
         ArgumentNullException.ThrowIfNull(batch); ArgumentNullException.ThrowIfNull(facts);
         foreach (var e in batch.Where(x => x.Kind is RadioEventKind.Start or RadioEventKind.TopStart or RadioEventKind.RunStarted))
-        { foreach (var line in Gate(e, facts)) { yield return (line, $"{{racer:{e.Bibs[1]}}}"); } }
+        { foreach (var line in Gate(e, facts)) { yield return (line, e.Bibs[1]); } }
     }
     private static IEnumerable<ScriptLine> Gate(RadioEvent e, FactSheet facts)
     {

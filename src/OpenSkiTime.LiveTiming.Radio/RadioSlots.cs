@@ -117,6 +117,10 @@ public static partial class RadioSlots
     /// <summary>Returns why a line must not be spoken, or null when it is valid.</summary>
     public static string? Problem(string text, FactSheet facts, LineRules rules) => Check(text, facts, rules).Problem;
 
+    /// <summary>Whether a line names this racer through a racer slot (with or without a case code).</summary>
+    public static bool Names(string text, int bib) =>
+        Parse(text).Any(x => x.Kind == "racer" && x.Reference == bib.ToString(CultureInfo.InvariantCulture));
+
     [GeneratedRegex(@"(\{nation:(?<n>[0-9]{1,12})\} )?\{racer:(?<r>[0-9]{1,12})\}")]
     private static partial Regex RacerMention();
     /// <summary>
