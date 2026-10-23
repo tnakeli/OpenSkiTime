@@ -40,12 +40,23 @@ public static class RadioPrompts
             - "{racer:12} {status:12:verb}." says for example "... keskeytti." {status:N:noun} is a noun such as "keskeytys".
             - {num:key} and {ord:key} use the counts in the fact sheet: "{ord:run:nom} lasku", "{num:remaining:nom} laskijaa".
             - Other proper nouns only from the competition, place, slope, clubs, the racers' countries and the event background.
+            - Places and counts are slots too. Wrong: "Kolmantena on {racer:4}." Right: "{rank:4:ess} on {racer:4}."
+              Wrong: "Kolme laskijaa on maalissa." Right: "Maalissa on {num:finished:nom} laskijaa" (with a count of one:
+              "Maalissa on {num:finished:nom} laskija"; with zero, say "kaikki" or nothing). Wrong: "ero on alle sekunnin".
+              Right: "eroa on {diff:4}" or no figure at all. Avoid number words in compounds too (kärkikolmikko, kaksikko): say "kärki".
+            - Case codes are exactly nom, gen, par, ine, ela, ill, ade, abl, all, ess or tra (never "part", "lle" or "ssa").
 
             === FACTUAL DISCIPLINE ===
             - State only facts present in the events, fact sheet or background. Never speculate about causes, injuries, equipment,
               feelings or the future. Handle falls, DNF and DSQ neutrally and briefly without guessing why.
             - Results are unofficial until approved: when you describe standings say "epävirallisesti" or "epävirallisten tulosten mukaan".
             - If the data is thin, say less. Better short than invented.
+
+            === INTRODUCING RACERS ===
+            - {club:N} says the racer's club and {nation:N} the nationality as an adjective ("ruotsalainen"). When a racer starts,
+              introduce them with the club: "Matkaan lähti {racer:12}, {club:12}." In an international field (international: true)
+              put the nationality of a racer from another country than home_nation before the name: "{nation:12} {racer:12}".
+              Mention a racer's club once per run, not in every line. Never write club or country names yourself.
 
             === EVENTS ===
             - Start, TopStart and RunStarted: bibs[0] has just left the start gate; bibs[1], when present, is the next racer in the
@@ -86,6 +97,34 @@ public static class RadioPrompts
             event_background = context,
             recent_topics = topics,
             diary = diary.TakeLast(12).Select(x => new { at = x.At.ToString("HH:mm", CultureInfo.InvariantCulture), kind = x.Kind.ToString(), run = x.Run, bibs = x.Bibs })
+        }, Json);
+    }
+
+    /// <summary>A line the validator rejected: its index, the reason and the word that caused it, if any.</summary>
+    public sealed record LineProblem(int Line, string Problem, string? Word);
+
+    /// <summary>Asks for the same conversation again with every rejected line fixed. Names never appear: slots only.</summary>
+    public static string RepairUser(string user, string script, IReadOnlyList<LineProblem> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        static string Hint(LineProblem p) => p.Problem switch
+        {
+            "number words outside slots" => "write places and counts only with slots ({rank:N:ess}, {num:finished:nom}) or leave the figure out",
+            "digits outside slots" => "write no digits; use slots",
+            "disallowed case" => "use only the case codes nom gen par ine ela ill ade abl all ess tra (card for places)",
+            "unknown slot" => "use only the slots listed in the fact sheet",
+            "unknown proper name" => "leave out proper names that are not in the competition, place, slope, clubs, countries or background",
+            "racer name outside slots" => "refer to racers only with {racer:N}",
+            "ending attached to a slot" => "never attach an ending to a slot; build the sentence so the slot stands alone ({racer:N} stays nominative)",
+            _ => "rewrite the line within the rules"
+        };
+        using var original = JsonDocument.Parse(user);
+        return JsonSerializer.Serialize(new
+        {
+            task = "Your script broke the rules in the lines listed. Return the whole conversation again in the same JSON format, with the same hosts and facts, fixing those lines.",
+            original_request = original.RootElement,
+            your_script = script,
+            problems = problems.Select(x => new { line = x.Line + 1, problem = x.Problem, word = x.Word, fix = Hint(x) })
         }, Json);
     }
 

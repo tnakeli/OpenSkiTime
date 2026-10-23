@@ -51,16 +51,33 @@ public static class FinnishVerbalizer
     };
 
     /// <summary>
-    /// "First Last" exactly as published. Only an all-capital surname (the timing list convention) is title-cased, because
-    /// speech engines may spell capitals letter by letter. An operator lexicon entry replaces the spoken form.
+    /// "First Last" as published. Only an all-capital surname (the timing list convention) is title-cased, because speech
+    /// engines may spell capitals letter by letter. A foreign racer's name is respelled for a Finnish voice by the racer's
+    /// nation (<see cref="FinnishPronunciation"/>). An operator lexicon entry (whole name or one word) always wins.
     /// </summary>
     public static string Name(LiveCompetitor competitor, IReadOnlyDictionary<string, string> lexicon)
     {
         ArgumentNullException.ThrowIfNull(competitor); ArgumentNullException.ThrowIfNull(lexicon);
         var written = Written(competitor);
         if (lexicon.TryGetValue(written, out var spoken)) { return spoken; }
-        return string.Join(' ', written.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(x => lexicon.TryGetValue(x, out var word) ? word : x));
+        return string.Join(' ', written.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => lexicon.TryGetValue(x, out var word) ? word : FinnishPronunciation.Spoken(x, competitor.Nation)));
     }
+
+    // Finnish adjectives of nationality, spoken before the name in an international field ("ruotsalainen Saga Porttila").
+    private static readonly Dictionary<string, string> Demonyms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["FIN"] = "suomalainen", ["SWE"] = "ruotsalainen", ["NOR"] = "norjalainen", ["DEN"] = "tanskalainen", ["ISL"] = "islantilainen",
+        ["EST"] = "virolainen", ["LAT"] = "latvialainen", ["LTU"] = "liettualainen", ["GER"] = "saksalainen", ["AUT"] = "itävaltalainen",
+        ["SUI"] = "sveitsiläinen", ["LIE"] = "liechtensteinilainen", ["FRA"] = "ranskalainen", ["ITA"] = "italialainen", ["ESP"] = "espanjalainen",
+        ["AND"] = "andorralainen", ["MON"] = "monacolainen", ["BEL"] = "belgialainen", ["NED"] = "hollantilainen", ["GBR"] = "brittiläinen",
+        ["IRL"] = "irlantilainen", ["POL"] = "puolalainen", ["CZE"] = "tšekkiläinen", ["SVK"] = "slovakialainen", ["SLO"] = "slovenialainen",
+        ["CRO"] = "kroatialainen", ["BIH"] = "bosnialainen", ["SRB"] = "serbialainen", ["MNE"] = "montenegrolainen", ["HUN"] = "unkarilainen",
+        ["ROU"] = "romanialainen", ["BUL"] = "bulgarialainen", ["GRE"] = "kreikkalainen", ["TUR"] = "turkkilainen", ["UKR"] = "ukrainalainen",
+        ["USA"] = "yhdysvaltalainen", ["CAN"] = "kanadalainen", ["ARG"] = "argentiinalainen", ["CHI"] = "chileläinen", ["AUS"] = "australialainen",
+        ["NZL"] = "uusiseelantilainen", ["JPN"] = "japanilainen", ["KOR"] = "korealainen", ["CHN"] = "kiinalainen"
+    };
+    public static string? Demonym(string nation) => Demonyms.GetValueOrDefault((nation ?? "").Trim());
     public static string Written(LiveCompetitor competitor)
     {
         ArgumentNullException.ThrowIfNull(competitor);

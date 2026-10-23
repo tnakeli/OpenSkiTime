@@ -17,6 +17,10 @@ public sealed class FactSheet
     public int Run => State.CurrentRun;
     public IReadOnlyDictionary<int, RadioRacer> Racers { get; }
     public IReadOnlyDictionary<string, int> Counts { get; }
+    /// <summary>The most common nation of the field; racers from elsewhere are introduced with their nationality.</summary>
+    public string HomeNation => State.Competitors.GroupBy(x => x.Nation, StringComparer.OrdinalIgnoreCase)
+        .OrderByDescending(x => x.Count()).ThenBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key).FirstOrDefault() ?? "";
+    public bool International => State.Competitors.Select(x => x.Nation.Trim()).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
     public const int MaxRacers = 16;
 
     public static FactSheet Build(LiveSnapshot state, IEnumerable<int> bibs)
@@ -55,6 +59,8 @@ public sealed class FactSheet
         {
             current_run = Run,
             counts = Counts,
+            international = International,
+            home_nation = HomeNation,
             racers = Racers.Values.Select(x => new
             {
                 bib = x.Bib, nation = x.Competitor.Nation, club = x.Competitor.Club,

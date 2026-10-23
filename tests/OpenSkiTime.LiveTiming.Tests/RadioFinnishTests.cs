@@ -78,15 +78,30 @@ public sealed class RadioFinnishTests
     }
 
     [Fact]
-    public void NamesAreVerbatimExceptAllCapitalSurnamesAndTheOperatorLexicon()
+    public void NamesAreVerbatimExceptAllCapitalSurnamesForeignSpellingAndTheOperatorLexicon()
     {
         var none = FinnishVerbalizer.Lexicon("");
         Assert.Equal("Aino-Liisa Mäki-Kuusela", FinnishVerbalizer.Name(new(1, "MÄKI-KUUSELA", "Aino-Liisa", "FIN", "", ""), none));
-        Assert.Equal("Jan von Berg", FinnishVerbalizer.Name(new(2, "von Berg", "Jan", "GER", "", ""), none));
+        Assert.Equal("Jan fon Berg", FinnishVerbalizer.Name(new(2, "von Berg", "Jan", "GER", "", ""), none));
         var lexicon = FinnishVerbalizer.Lexicon("Snøheim = Snööheim\nbroken line\nX = 12");
         Assert.Equal("Maja Snööheim", FinnishVerbalizer.Name(new(3, "SNØHEIM", "Maja", "NOR", "", ""), lexicon));
         Assert.Single(lexicon); // Lines without '=' and spoken forms with digits are ignored.
         var whole = FinnishVerbalizer.Lexicon("Maja Snøheim = Maija Snööhaim");
         Assert.Equal("Maija Snööhaim", FinnishVerbalizer.Name(new(3, "SNØHEIM", "Maja", "NOR", "", ""), whole));
     }
+
+    // Fictional names. Finnish voices read Finnish spelling, so foreign names are respelled by the racer's nation.
+    [Theory]
+    [InlineData("SCHNEIDER", "Johann", "AUT", "Johann Šnaider")]
+    [InlineData("STEINWEGER", "Volker", "GER", "Folker Štainveger")]
+    [InlineData("SJÖBERG", "Göran", "SWE", "Jöran Šöberj")]
+    [InlineData("LJUNGQVIST", "Kerstin", "SWE", "Šerstin Jungkvist")]
+    [InlineData("SNØHEIM", "Maja", "NOR", "Maja Snöhäim")]
+    [InlineData("CECCHINATO", "Giacomo", "ITA", "Džakomo Tšekkinato")]
+    [InlineData("SZCZEPAŃSKI", "Michał", "POL", "Mihau Štšepanjski")]
+    [InlineData("JIMÉNEZ", "Guillermo", "ESP", "Gijermo Himenes")]
+    [InlineData("HANKIRANTA", "Veeti", "FIN", "Veeti Hankiranta")]
+    [InlineData("WHITWORTH", "George", "GBR", "George Whitworth")]
+    public void ForeignNamesAreRespelledForAFinnishVoice(string last, string first, string nation, string spoken)
+        => Assert.Equal(spoken, FinnishVerbalizer.Name(new(1, last, first, nation, "", ""), FinnishVerbalizer.Lexicon("")));
 }

@@ -103,6 +103,56 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task ARejectedScriptGetsOneRepairRoundWithTheReasonsBeforeTemplates()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) || FakeLlm.IsProducer(r) ? Echo(r)
+                : r.User.Contains("your_script", StringComparison.Ordinal) ? Script(("Aino", "Maalissa {racer:1}, {rank:1:ess}.", true))
+                : Script(("Aino", "Kolmantena maalissa {racer:1}.", true))))
+        };
+        await rig.FirstFinishAsync();
+        await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Contains("Maalissa Aada Lumivaara, ensimmäisenä.", rig.Sink.Clips.Select(x => x.Transcript));
+        var repair = Assert.Single(rig.Llm.Requests, x => x.User.Contains("your_script", StringComparison.Ordinal));
+        Assert.Contains("number words outside slots", repair.User, StringComparison.Ordinal);
+        Assert.Contains("Kolmantena", repair.User, StringComparison.Ordinal);
+        Assert.DoesNotContain("Lumivaara", repair.User, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(rig.Engine.Health.Error);
+    }
+
+    [Fact]
+    public async Task AScriptStillBrokenAfterRepairKeepsItsValidOpening()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) || FakeLlm.IsProducer(r) ? Echo(r)
+                : Script(("Aino", "Maalissa {racer:1}.", false), ("Kalle", "Hän on kolmas.", true))))
+        };
+        await rig.FirstFinishAsync();
+        await rig.Engine.StepAsync(CancellationToken.None);
+        var clip = Assert.Single(rig.Sink.Clips);
+        Assert.Equal(("Maalissa Aada Lumivaara.", true), (clip.Transcript, clip.Interruptible));
+        Assert.Null(rig.Engine.Health.Error);
+    }
+
+    [Fact]
+    public async Task ARacerOnCourseIsFeaturedOnceAfterAShortSilence()
+    {
+        var rig = new Rig { Llm = new((_, _) => throw new RadioProviderException("down")) };
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.State = RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        // The run start is announced first; after a short silence the racer on course is featured.
+        for (var i = 0; i < 6; i++) { rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None); }
+        Assert.StartsWith("Ensimmäinen lasku on alkanut.", rig.Sink.Clips.First().Transcript, StringComparison.Ordinal);
+        Assert.Contains("Radalla on nyt Aada Lumivaara, Rinneseura.", rig.Sink.Clips.Select(x => x.Transcript));
+        var featured = rig.Sink.Clips.Count;
+        for (var i = 0; i < 4; i++) { rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None); }
+        Assert.DoesNotContain(rig.Sink.Clips.Skip(featured), x => x.Transcript.StartsWith("Radalla on nyt Aada", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task HangingModelTimesOutOnTheInjectedClockAndTemplatesSpeak()
     {
         var called = new TaskCompletionSource();
