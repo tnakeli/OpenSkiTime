@@ -291,6 +291,20 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task ASinkDisposedByATargetChangeDoesNotStopTheOthers()
+    {
+        var other = new FakeSink();
+        var rig = new Rig { Llm = new((_, _) => throw new RadioProviderException("down")), Sink = new FakeSink { OnUpload = _ => throw new ObjectDisposedException("HttpClient") } };
+        rig.Engine.SetSinks([rig.Sink, other]);
+        await rig.FirstFinishAsync();
+        await rig.Engine.StepAsync(CancellationToken.None);
+        await rig.Engine.HeartbeatAsync(CancellationToken.None);
+        Assert.NotEmpty(other.Clips);
+        Assert.NotEmpty(other.Heartbeats);
+        Assert.Equal(RadioState.Running, rig.Engine.Health.State);
+    }
+
+    [Fact]
     public async Task NothingIsGeneratedOrPaidWhileNoServerAcceptsTheClips()
     {
         var rig = new Rig { Llm = new((_, _) => Task.FromResult(Script(("Aino", "Maalissa {racer:1}.", true)))) };

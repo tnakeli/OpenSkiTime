@@ -54,6 +54,23 @@ public sealed class RadioSettingsTests
     }
 
     [Fact]
+    public async Task TwoInstancesSavingDifferentCompetitionsKeepBoth()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-radio-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var path = Path.Combine(folder, RadioSettingsStore.FileName);
+            var ids = Enumerable.Range(0, 20).Select(_ => Guid.NewGuid()).ToArray();
+            // Separate store instances stand for two OpenSkiTime processes of one Windows user.
+            await Task.WhenAll(ids.Select((id, i) => Task.Run(() => new RadioSettingsStore(path).SaveSpend(id, i + 1m))));
+            var store = new RadioSettingsStore(path);
+            Assert.All(ids.Select((id, i) => (id, i)), x => Assert.Equal(x.i + 1m, store.Read(x.id).SpentUsd));
+            Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
+        }
+        finally { if (Directory.Exists(folder)) { Directory.Delete(folder, true); } }
+    }
+
+    [Fact]
     public void ProviderKeysHaveTheirOwnCredentialTargets()
     {
         Assert.Equal("OpenSkiTime.LiveTiming.Radio:azure", RadioKeyCredential.Target(RadioProviders.Azure));

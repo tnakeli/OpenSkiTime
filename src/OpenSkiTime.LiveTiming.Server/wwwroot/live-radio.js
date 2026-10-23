@@ -3,7 +3,8 @@
 const liveRadio = (() => {
   const button = document.getElementById('radio'), audio = new Audio();
   const lineGap = 350, batchGap = 1200, liveEdge = 15000, lineWait = 8000, wait = {};
-  let session = null, clips = [], playing = false, current = null, timer = null;
+  // offset maps server times to this browser's clock (browser minus server).
+  let session = null, clips = [], playing = false, current = null, timer = null, offset = 0;
   let lastBatch = null, lastInterruptible = true, lastEnded = 0;
   const done = new Set(), skippedBatches = new Set(), seenAt = new Map();
   function label() {
@@ -14,7 +15,7 @@ const liveRadio = (() => {
   // Clips the server still lists are valid for the latest results; a batch interrupted by urgent news is not resumed.
   function pick() {
     const now = Date.now();
-    const open = clips.filter(c => !done.has(c.clipId) && !skippedBatches.has(c.batchId) && Date.parse(c.expiresAt) > now);
+    const open = clips.filter(c => !done.has(c.clipId) && !skippedBatches.has(c.batchId) && Date.parse(c.expiresAt) + offset > now);
     const sameBatch = open.filter(c => c.batchId === lastBatch).sort((a, b) => a.line - b.line);
     if (!lastInterruptible) {
       if (sameBatch.length) return sameBatch[0];
@@ -64,7 +65,8 @@ const liveRadio = (() => {
       const available = !!announcement && announcement.available;
       clips = available ? announcement.clips || [] : [];
       // Clip age on the server's clock, mapped to this browser's clock.
-      const now = Date.now(), offset = announcement && announcement.serverTime ? now - Date.parse(announcement.serverTime) : 0;
+      const now = Date.now();
+      offset = announcement && announcement.serverTime ? now - Date.parse(announcement.serverTime) : 0;
       clips.forEach(c => { if (!seenAt.has(c.clipId)) seenAt.set(c.clipId, c.receivedAt ? Math.min(now, Date.parse(c.receivedAt) + offset) : now); });
       button.hidden = !available;
       if (!available && playing) pause();

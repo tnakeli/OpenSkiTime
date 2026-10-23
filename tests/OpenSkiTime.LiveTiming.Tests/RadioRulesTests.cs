@@ -151,6 +151,12 @@ public sealed class RadioRulesTests
         Assert.Equal("unknown source", ProducerGate.Problem(new("weather", null, ""), state, RacePhase.BeforeStart, true));
         var next = ProducerGate.Deterministic(state, RacePhase.RunInProgress, 0);
         Assert.NotNull(next); Assert.Null(ProducerGate.Problem(next, state, RacePhase.RunInProgress, false));
+        // A run summary speaks every count through a slot, also "yksi", so each count guards the clip.
+        var summary = FinnishTemplates.Lines([ProducerGate.Event(new(ProducerSources.RunSummary, null, ""), RadioRace.Set(state, 1, LiveStatus.Finished, 4800), RadioRace.Start)],
+            FactSheet.Build(RadioRace.Set(state, 1, LiveStatus.Finished, 4800), []), 0);
+        var guarded = RadioSlots.Conditions(summary[0].Text, FactSheet.Build(RadioRace.Set(state, 1, LiveStatus.Finished, 4800), [])).ToArray();
+        Assert.Contains(new RadioCondition(RadioConditionKind.StatusCount, 1, Status: LiveStatus.Finished, Value: 1), guarded);
+        Assert.Contains(new RadioCondition(RadioConditionKind.StatusCount, 1, Status: LiveStatus.Ready, Value: 4), guarded);
         var e = ProducerGate.Event(new(ProducerSources.NextStarter, 2, ""), state, RadioRace.Start);
         Assert.Equal(new RadioCondition(RadioConditionKind.Status, 1, 2, LiveStatus.Ready), Assert.Single(e.Conditions));
     }

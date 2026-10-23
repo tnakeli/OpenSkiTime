@@ -83,6 +83,12 @@ await end(); await advance(5000);
 assert.deepEqual(played.slice(-1), ['c1'], 'waits briefly for the next line of an unfinished sentence');
 await advance(6000);
 assert.deepEqual(played.slice(-1), ['d1']);
+// Expiry is judged on the server's clock: a browser five minutes ahead still plays a fresh two-minute clip.
+await end(); await advance(1200);
+const ahead = { ...clip('skew', 'b6', 0, 1, 3, 8), receivedAt: new Date(now - 300000).toISOString(), expiresAt: new Date(now - 300000 + 120000).toISOString() };
+radio.update('s', { available: true, clips: [ahead], serverTime: new Date(now - 300000).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['skew']);
 // Pause stops at once; an unavailable radio hides the control and stops playback.
 listeners['button:click']();
 assert.equal(button.attributes['aria-pressed'], 'false');

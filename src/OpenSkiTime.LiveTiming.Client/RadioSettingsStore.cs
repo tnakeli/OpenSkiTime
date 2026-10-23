@@ -41,14 +41,28 @@ public sealed class RadioSettingsStore(string path)
     {
         lock (_gate)
         {
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
+            // Two OpenSkiTime instances of one Windows user share the file: read, change and replace under a file lock.
+            using var exclusive = Lock();
             Dictionary<Guid, RadioCompetitionSettings> all;
             try { all = Load(); }
             catch (JsonException) { throw new IOException($"Radio settings in {Path} are unreadable. Rename the file to start again."); }
             all[competitionId] = change(all.GetValueOrDefault(competitionId) ?? new(new RadioConfiguration(), 0m));
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
-            var temporary = Path + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(all, LiveJson.Options));
-            File.Move(temporary, Path, overwrite: true);
+            var temporary = Path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporary, JsonSerializer.Serialize(all, LiveJson.Options));
+                File.Move(temporary, Path, overwrite: true);
+            }
+            finally { File.Delete(temporary); }
+        }
+    }
+    private FileStream Lock()
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try { return new FileStream(Path + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+            catch (IOException) when (attempt < 40) { Thread.Sleep(50); }
         }
     }
     private Dictionary<Guid, RadioCompetitionSettings> Load() => File.Exists(Path)

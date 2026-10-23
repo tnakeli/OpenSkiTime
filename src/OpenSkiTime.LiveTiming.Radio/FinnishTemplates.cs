@@ -105,8 +105,9 @@ public static class FinnishTemplates
                 break;
             case ProducerSources.RunSummary:
                 var finished = facts.Counts["finished"]; var remaining = facts.Counts["remaining"];
-                yield return new("", (finished == 1 ? "Maaliin on tullut yksi laskija" : "Maaliin on tullut {num:finished} laskijaa")
-                    + (remaining == 0 ? "." : remaining == 1 ? ", ja lähtövuoroa odottaa vielä yksi." : ", ja lähtövuoroa odottaa vielä {num:remaining}."), true);
+                // Every count is a slot, also the singular ones, so the clip is stale as soon as a count changes.
+                yield return new("", (finished == 1 ? "Maaliin on tullut {num:finished} laskija" : "Maaliin on tullut {num:finished} laskijaa")
+                    + (remaining == 0 ? "." : ", ja lähtövuoroa odottaa vielä {num:remaining}."), true);
                 break;
         }
     }

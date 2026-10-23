@@ -342,9 +342,10 @@ public sealed class RadioEngine
     }
     private Task<bool> WithTimeout(TimeSpan timeout, Func<CancellationToken, Task> call, CancellationToken ct)
         => WithTimeout(timeout, async t => { await call(t); return true; }, ct);
+    // ObjectDisposedException covers a sink removed (and disposed) by a target change while a call was under way.
     private static bool Recoverable(Exception ex, CancellationToken ct) => !ct.IsCancellationRequested
         && ex is TimeoutException or RadioProviderException or HttpRequestException or IOException or JsonException or LiveValidationException
-            or InvalidOperationException or OperationCanceledException;
+            or ObjectDisposedException or InvalidOperationException or OperationCanceledException;
     private static string Describe(Exception ex) => ex switch
     {
         TimeoutException => "A radio provider did not answer in time.",
