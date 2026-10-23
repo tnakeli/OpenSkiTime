@@ -182,7 +182,8 @@ public sealed class SessionStore
             { room.Clips.RemoveAt(0); }
             while (_sessions.Values.Sum(x => x.Radio?.Clips.Sum(c => (long)c.Audio.Length) ?? 0) > _radioBytes)
             {
-                var oldest = _sessions.Values.Where(x => x.Radio?.Clips.Count > 0).Select(x => x.Radio!).MinBy(x => x.Clips[0].Info.ExpiresAt)!;
+                // The clip received first goes first; lifetimes differ, so expiry would not identify it.
+                var oldest = _sessions.Values.Where(x => x.Radio?.Clips.Count > 0).Select(x => x.Radio!).MinBy(x => x.Clips[0].Info.ReceivedAt)!;
                 oldest.Clips.RemoveAt(0);
             }
         }

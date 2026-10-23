@@ -213,7 +213,9 @@ public sealed partial class MainViewModel
     private void DisposeLiveTiming()
     {
         _liveDisposed = true; _liveTimer?.Stop();
-        if (_livePanel is not null) { _ = _livePanel.DisposeAsync().AsTask(); }
+        // Waits briefly (off the UI thread's context) so the panel can stop the race radio and save its final spend
+        // before the desktop's exit closes the job that owns the live timing processes.
+        if (_livePanel is { } panel) { Task.Run(() => panel.DisposeAsync().AsTask()).Wait(TimeSpan.FromSeconds(10)); }
     }
     private static string DisciplineCode(Discipline value) => value switch
     { Discipline.Slalom => "SL", Discipline.GiantSlalom => "GS", Discipline.SuperG => "SG", Discipline.Downhill => "DH", Discipline.AlpineCombined => "SC", _ => "Other" };
