@@ -106,6 +106,10 @@ public sealed class RadioEngine
         var mode = Budget.Mode(DialogueEstimate, SpeechEstimate);
         if (mode == RadioMode.Exhausted)
         { Report(RadioState.BudgetExhausted, mode: mode); return; }
+        // Nothing is generated, and nothing is paid for, while no server accepts the clips.
+        var sinks = Volatile.Read(ref _sinks);
+        if (sinks.Count == 0 || sinks.All(x => x.Failure is not null))
+        { Report(RadioState.Running, error: sinks.FirstOrDefault(x => x.Failure is not null)?.Failure, mode: mode); return; }
         Report(RadioState.Running, mode: mode);
         if (_batcher.TakeDue(now) is { } batch) { await GenerateAsync(batch, mode, ct); return; }
         if (_batcher.Count > 0 || now < _nextProducer || now < _speechEnds + Budget.ProducerInterval) { return; }
@@ -171,6 +175,8 @@ public sealed class RadioEngine
             for (var i = 0; i < lines.Count; i++)
             {
                 var line = lines[i];
+                // Checked before paying for speech as well as before upload.
+                if (!RadioPlayback.Playable(Volatile.Read(ref _latest)!, _time.GetUtcNow(), expires, phases, conditions)) { _log("Radio batch dropped as stale before speech"); break; }
                 var text = RadioSlots.Render(line.Text, facts, _lexicon);
                 var estimate = RadioPrices.Cost(_ttsPrice, text.Length, RadioPrices.EstimatedDurationMs(text.Length));
                 if (!Budget.CanAfford(estimate)) { Report(RadioState.BudgetExhausted, error: "Radio budget reached; generation stopped."); break; }
@@ -192,14 +198,13 @@ public sealed class RadioEngine
                 Report(lastClip: (now, host.Name));
                 Detect(now);
                 // Urgent news waits for a natural break, not for the end of a long low-priority conversation.
-                if (priority >= 3 && clip.Interruptible && i < lines.Count - 1 && _batcher.Deadline is not null && PendingUrgent())
+                if (priority >= 3 && clip.Interruptible && i < lines.Count - 1 && _batcher.Highest <= 2)
                 { _log("Radio batch cut at an interruptible line for urgent news"); break; }
             }
         }
         finally { _remainingLines = 0; Report(); }
         if (spoken > 0) { foreach (var value in batch) { _diary.Add(value); } }
     }
-    private bool PendingUrgent() => _batcher.Count > 0 && _batcher.Deadline <= _time.GetUtcNow() + EventBatcher.Delays[2];
 
     private async Task<(IReadOnlyList<ScriptLine>?, string?)> DialogueAsync(IReadOnlyList<RadioEvent> batch, FactSheet facts, LineRules rules, CancellationToken ct)
     {

@@ -11,9 +11,12 @@ public enum RadioConditionKind { Status, Rank, TotalRank, Time, Total, CurrentRu
 /// </summary>
 public sealed record RadioCondition(RadioConditionKind Kind, int Run, int Bib = 0, LiveStatus? Status = null, long? Value = null);
 
-/// <summary>Authenticated clip upload from the radio worker. Audio is base64 MP3 or WAV; transcripts are never sent.</summary>
+/// <summary>
+/// Authenticated clip upload from the radio worker. Audio is base64 MP3 or WAV; transcripts are never sent. The lifetime is
+/// relative, so the operator computer's clock and the server's clock need not agree.
+/// </summary>
 public sealed record RadioClipUpload(Guid ClipId, Guid BatchId, int Line, int LineCount, string Host, int Priority,
-    bool Interruptible, DateTimeOffset ExpiresAt, RacePhase[] Phases, RadioCondition[] Conditions, string ContentType,
+    bool Interruptible, int LifetimeSeconds, RacePhase[] Phases, RadioCondition[] Conditions, string ContentType,
     int DurationMs, string Audio);
 
 /// <summary>Worker heartbeat. The server uses its own receive time, never the worker clock, for health.</summary>
@@ -156,12 +159,12 @@ public static class RadioPlayback
     public static bool Available(bool enabled, bool budgetExhausted, DateTimeOffset? heartbeat, LiveSnapshot? state, DateTimeOffset now)
         => enabled && !budgetExhausted && heartbeat is { } beat && now - beat <= HeartbeatTimeout && state is { Paused: false };
 
-    public static void Validate(RadioClipUpload clip, DateTimeOffset now, out byte[] audio)
+    public static void Validate(RadioClipUpload clip, out byte[] audio)
     {
         ArgumentNullException.ThrowIfNull(clip);
         if (clip.ClipId == Guid.Empty || clip.BatchId == Guid.Empty || clip.LineCount is < 1 or > 16 || clip.Line < 0 || clip.Line >= clip.LineCount
             || clip.Priority is < 1 or > 5 || clip.Host is not { Length: >= 1 and <= 32 } || !clip.Host.All(char.IsLetter)
-            || clip.ExpiresAt <= now || clip.ExpiresAt > now + MaxClipLifetime || clip.DurationMs is < 0 or > 120_000
+            || clip.LifetimeSeconds < 1 || clip.LifetimeSeconds > MaxClipLifetime.TotalSeconds || clip.DurationMs is < 0 or > 120_000
             || clip.Phases is null || clip.Phases.Length > 5 || clip.Phases.Any(x => !Enum.IsDefined(x))
             || clip.Conditions is null || clip.Conditions.Length > MaxConditions
             || clip.Conditions.Any(x => x is null || !Enum.IsDefined(x.Kind) || x.Run is < 1 or > 9 || x.Bib is < 0 or > 99999

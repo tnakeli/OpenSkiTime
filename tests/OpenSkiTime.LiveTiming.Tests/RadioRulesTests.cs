@@ -108,20 +108,19 @@ public sealed class RadioRulesTests
     [Fact]
     public void UploadValidationRejectsWrongAudioOversizeAndLongLifetimes()
     {
-        var now = RadioRace.Start;
         var wav = SimulationTts.Tone(500, 440);
-        var valid = new RadioClipUpload(Guid.NewGuid(), Guid.NewGuid(), 0, 1, "Aino", 3, true, now.AddMinutes(2), [], [], "audio/wav", 500, Convert.ToBase64String(wav));
-        RadioPlayback.Validate(valid, now, out var audio);
+        var valid = new RadioClipUpload(Guid.NewGuid(), Guid.NewGuid(), 0, 1, "Aino", 3, true, 120, [], [], "audio/wav", 500, Convert.ToBase64String(wav));
+        RadioPlayback.Validate(valid, out var audio);
         Assert.Equal(wav, audio);
         foreach (var invalid in new[]
         {
             valid with { ContentType = "audio/mpeg" }, valid with { ContentType = "text/html" }, valid with { Audio = "not base64!" },
-            valid with { ExpiresAt = now.AddMinutes(11) }, valid with { ExpiresAt = now }, valid with { Host = "Aino1" }, valid with { Line = 1 },
+            valid with { LifetimeSeconds = 601 }, valid with { LifetimeSeconds = 0 }, valid with { Host = "Aino1" }, valid with { Line = 1 },
             valid with { Priority = 0 }, valid with { Audio = Convert.ToBase64String(new byte[RadioPlayback.MaxClipBytes + 1]) },
             valid with { Conditions = [.. Enumerable.Repeat(new RadioCondition(RadioConditionKind.CurrentRun, 1), RadioPlayback.MaxConditions + 1)] }
         })
-        { Assert.Throws<LiveValidationException>(() => RadioPlayback.Validate(invalid, now, out _)); }
-        RadioPlayback.Validate(valid with { ContentType = "audio/mpeg", Audio = Convert.ToBase64String([0xFF, 0xF3, 0x44, 0xC4, 0x00]) }, now, out _);
+        { Assert.Throws<LiveValidationException>(() => RadioPlayback.Validate(invalid, out _)); }
+        RadioPlayback.Validate(valid with { ContentType = "audio/mpeg", Audio = Convert.ToBase64String([0xFF, 0xF3, 0x44, 0xC4, 0x00]) }, out _);
     }
 
     [Fact]

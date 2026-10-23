@@ -27,9 +27,11 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
 {
     private readonly HttpClient _http;
     private readonly RadioTarget _target;
-    public RadioServerSink(RadioTarget target)
+    private readonly TimeProvider _time;
+    public RadioServerSink(RadioTarget target, TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(target);
+        _time = time ?? TimeProvider.System;
         var uri = new Uri(target.Endpoint.TrimEnd('/') + "/");
         if (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback))
         { throw new LiveValidationException("Radio clips require HTTPS (HTTP only on loopback)."); }
@@ -43,8 +45,9 @@ public sealed class RadioServerSink : IRadioClipSink, IDisposable
     public async Task UploadAsync(RadioClip clip, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(clip);
+        var lifetime = (int)Math.Clamp(Math.Ceiling((clip.ExpiresAt - _time.GetUtcNow()).TotalSeconds), 1, RadioPlayback.MaxClipLifetime.TotalSeconds);
         var upload = new RadioClipUpload(clip.ClipId, clip.BatchId, clip.Line, clip.LineCount, clip.Host, clip.Priority, clip.Interruptible,
-            clip.ExpiresAt, clip.Phases, clip.Conditions, clip.Audio.ContentType, clip.Audio.DurationMs, Convert.ToBase64String(clip.Audio.Data));
+            lifetime, clip.Phases, clip.Conditions, clip.Audio.ContentType, clip.Audio.DurationMs, Convert.ToBase64String(clip.Audio.Data));
         using var response = await Send(t => _http.PostAsJsonAsync($"api/sessions/{_target.SessionId}/radio/clips", upload, LiveJson.Options, t), ct);
     }
     public async Task HeartbeatAsync(RadioStatusUpdate status, CancellationToken ct)

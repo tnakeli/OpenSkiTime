@@ -105,6 +105,8 @@ public sealed class EventBatcher
     private DateTimeOffset _deadline;
     private int _highest = 6;
     public int Count => _pending.Count;
+    /// <summary>The most urgent pending priority, or 6 when nothing is pending.</summary>
+    public int Highest => _highest;
     public DateTimeOffset? Deadline => _pending.Count == 0 ? null : _deadline;
 
     public void Add(RadioEvent value, DateTimeOffset now)

@@ -166,7 +166,7 @@ public sealed class SessionStore
     {
         ArgumentNullException.ThrowIfNull(clip);
         var now = _time.GetUtcNow();
-        RadioPlayback.Validate(clip, now, out var audio);
+        RadioPlayback.Validate(clip, out var audio);
         lock (_gate)
         {
             Prune();
@@ -175,7 +175,7 @@ public sealed class SessionStore
             // An upload proves the worker is alive; the budget flag stays as last reported.
             room.Enabled = true; room.Heartbeat = now;
             room.Clips.Add(new(new(clip.ClipId, clip.BatchId, ++room.Sequence, clip.Line, clip.LineCount, clip.Host, clip.Priority, clip.Interruptible,
-                clip.ExpiresAt, clip.DurationMs), clip.Phases, clip.Conditions, clip.ContentType, audio));
+                now.AddSeconds(clip.LifetimeSeconds), clip.DurationMs), clip.Phases, clip.Conditions, clip.ContentType, audio));
             room.Clips.RemoveAll(x => x.Info.ExpiresAt <= now);
             while (room.Clips.Count > RadioPlayback.MaxClipsPerSession || room.Clips.Sum(x => (long)x.Audio.Length) > RadioPlayback.MaxSessionBytes)
             { room.Clips.RemoveAt(0); }

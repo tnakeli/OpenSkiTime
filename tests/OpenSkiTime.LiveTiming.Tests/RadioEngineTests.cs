@@ -241,6 +241,19 @@ public sealed class RadioEngineTests
         Assert.Equal(RadioState.Running, rig.Engine.Health.State);
     }
 
+    [Fact]
+    public async Task NothingIsGeneratedOrPaidWhileNoServerAcceptsTheClips()
+    {
+        var rig = new Rig { Llm = new((_, _) => Task.FromResult(Script(("Aino", "Maalissa {racer:1}.", true)))) };
+        rig.Sink.Failure = "Cloud live timing server rejected the radio (HTTP 401).";
+        await rig.FirstFinishAsync();
+        await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Empty(rig.Llm.Requests);
+        Assert.Empty(rig.Tts.Texts);
+        Assert.Equal(0m, rig.Budget.Spent);
+        Assert.Equal(rig.Sink.Failure, rig.Engine.Health.Error);
+    }
+
     private static async Task Until(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));

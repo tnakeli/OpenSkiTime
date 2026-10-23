@@ -109,7 +109,7 @@ internal sealed class FakeSink : IRadioClipSink
     public ConcurrentQueue<RadioStatusUpdate> Heartbeats { get; } = new();
     public Func<RadioClip, Task>? OnUpload { get; init; }
     public PublisherKind Channel => PublisherKind.Cloud;
-    public string? Failure => null;
+    public string? Failure { get; set; }
     public async Task UploadAsync(RadioClip clip, CancellationToken ct)
     {
         if (OnUpload is not null) { await OnUpload(clip); }

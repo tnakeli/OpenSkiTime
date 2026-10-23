@@ -148,7 +148,7 @@ public sealed class RadioE2ETests
     }
 
     private static RadioClipUpload Clip(RadioCondition[]? conditions = null) => new(Guid.NewGuid(), Guid.NewGuid(), 0, 1, "Aino", 3, true,
-        DateTimeOffset.UtcNow.AddMinutes(2), [], conditions ?? [], "audio/wav", 400, Convert.ToBase64String(SimulationTts.Tone(400, 440)));
+        120, [], conditions ?? [], "audio/wav", 400, Convert.ToBase64String(SimulationTts.Tone(400, 440)));
 
     private static async Task<ClientWebSocket> Watch(HttpClient http, Guid id)
     {
