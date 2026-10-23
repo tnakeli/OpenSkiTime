@@ -64,7 +64,9 @@ try
                         var llm = RadioProviderFactory.Llm(options.Configuration, options.LlmKey);
                         var tts = RadioProviderFactory.Tts(options.Configuration, options.TtsKey);
                         providers = [llm as IDisposable, tts as IDisposable];
-                        engine = new RadioEngine(options.Configuration, llm, tts, new RadioBudget(options.Configuration.BudgetUsd, options.SpentUsd), TimeProvider.System, log.Write);
+                        // The panel's figure may predate the last charges of the engine just stopped; spend never goes down.
+                        var spent = Math.Max(options.SpentUsd, health.SpentUsd);
+                        engine = new RadioEngine(options.Configuration, llm, tts, new RadioBudget(options.Configuration.BudgetUsd, spent), TimeProvider.System, log.Write);
                         engine.SetSinks(sinks);
                         if (latest is not null) { engine.Offer(latest); }
                         running = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);

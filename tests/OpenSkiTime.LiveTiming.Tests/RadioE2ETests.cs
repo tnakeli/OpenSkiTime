@@ -112,6 +112,10 @@ public sealed class RadioE2ETests
         using (var worker = System.Diagnostics.Process.GetProcessById(radio.ProcessId!.Value)) { worker.Kill(); await worker.WaitForExitAsync(); }
         await ProcessFixture.Until(() => radio.Health.State == RadioState.Error);
         state = SyntheticRace.Update(state, 2, LiveStatus.DNF); publisher.Offer(state);
+        // A restart after the crash gets a fresh worker and connection; the old command pump cannot swallow its start.
+        await radio.StartAsync(ProcessFixture.Artifact("RadioWorker"), new(configuration, 0m),
+            [new(PublisherKind.Cloud, server.Endpoint, session.SessionId, session.PublisherToken)], ProcessFixture.Host);
+        await ProcessFixture.Until(() => radio.Health.State == RadioState.Running);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         while ((await http.GetFromJsonAsync<LiveSnapshot>($"api/sessions/{session.SessionId}/state", LiveJson.Options, timeout.Token))!
             .Runs[0].Results.First(x => x.Bib == 2).Status != LiveStatus.DNF) { await Task.Delay(100, timeout.Token); }

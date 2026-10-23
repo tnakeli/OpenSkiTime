@@ -18,6 +18,8 @@ public sealed class RadioRulesTests
         var first = RadioRace.Set(onCourse, 1, LiveStatus.Finished, 4800);
         var podium = Assert.Single(RadioEventDetector.Detect(onCourse, first, now));
         Assert.Equal((RadioEventKind.Podium, 2), (podium.Kind, podium.Priority));
+        // The announced place is a condition: the first finisher's "leads" is stale once someone is faster.
+        Assert.Contains(new RadioCondition(RadioConditionKind.Rank, 1, 1, Value: 1), podium.Conditions);
         var leader = RadioRace.Set(first, 2, LiveStatus.Finished, 4700);
         Assert.Equal(RadioEventKind.NewLeader, Assert.Single(RadioEventDetector.Detect(first, leader, now)).Kind);
         var fourth = RadioRace.Set(RadioRace.Set(leader, 3, LiveStatus.Finished, 4900), 4, LiveStatus.Finished, 5000);
@@ -53,6 +55,11 @@ public sealed class RadioRulesTests
         // Events that went stale while waiting are dropped instead of narrated late.
         batcher.Add(Event(4, t0) with { Conditions = [new(RadioConditionKind.Status, 1, 1, LiveStatus.OnCourse)] }, t0);
         batcher.Prune(RadioRace.Create(), t0);
+        Assert.Equal(0, batcher.Count);
+        // Run 1 news is dropped once the race has moved on to Run 2.
+        batcher.Add(Event(2, t0), t0);
+        var second = RadioRace.Create() with { CurrentRun = 2, Runs = [.. RadioRace.Create().Runs, RadioRace.Create().Runs[0] with { Number = 2 }] };
+        batcher.Prune(second, t0);
         Assert.Equal(0, batcher.Count);
     }
 

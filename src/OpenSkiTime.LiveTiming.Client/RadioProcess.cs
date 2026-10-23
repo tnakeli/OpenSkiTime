@@ -19,6 +19,7 @@ public sealed class RadioProcess : IAsyncDisposable
     private NamedPipeServerStream? _pipe;
     private Task? _pump;
     private Task? _receive;
+    private CancellationTokenSource? _connectionStop;
     private int _disposed;
     public RadioHealth Health => Volatile.Read(ref _health);
     public int? ProcessId => _process is { HasExited: false } ? _process.Id : null;
@@ -31,8 +32,14 @@ public sealed class RadioProcess : IAsyncDisposable
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         if (!IsConnected)
         {
+            // The previous generation's pump and receiver end before a replacement can take commands from the queue.
+            _connectionStop?.Cancel();
             if (_process is not null) { if (!_process.HasExited) { _process.Kill(true); } _process.Dispose(); _process = null; }
             _pipe?.Dispose();
+            try { if (_pump is not null) { await _pump.WaitAsync(TimeSpan.FromSeconds(2), ct); } }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or TimeoutException or OperationCanceledException) { }
+            _connectionStop?.Dispose();
+            _connectionStop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
             var pipeName = "OpenSkiTime-radio-" + Guid.NewGuid().ToString("N");
             _pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
             Volatile.Write(ref _health, new RadioHealth(RadioState.Starting, BudgetUsd: options.Configuration.BudgetUsd, SpentUsd: options.SpentUsd));
@@ -43,8 +50,8 @@ public sealed class RadioProcess : IAsyncDisposable
                 // Disposed while starting (competition changed or panel closing): never leave an orphan worker behind.
                 ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
                 while (_commands.Reader.TryRead(out _)) { } // Commands for a failed generation cannot reach the replacement.
-                _pump = PumpAsync(_pipe, _stop.Token);
-                _receive = ReceiveAsync(_pipe, _stop.Token);
+                _pump = PumpAsync(_pipe, _connectionStop.Token);
+                _receive = ReceiveAsync(_pipe, _connectionStop);
             }
             catch
             {
@@ -81,8 +88,9 @@ public sealed class RadioProcess : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException) { }
     }
-    private async Task ReceiveAsync(Stream pipe, CancellationToken ct)
+    private async Task ReceiveAsync(Stream pipe, CancellationTokenSource connection)
     {
+        var ct = connection.Token;
         using var reader = new StreamReader(pipe, leaveOpen: true);
         try
         {
@@ -95,6 +103,8 @@ public sealed class RadioProcess : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException or JsonException)
         { if (!ct.IsCancellationRequested) { Volatile.Write(ref _health, Health with { State = RadioState.Error, Error = "Radio worker disconnected." }); } }
+        // The status channel is gone: the command pump of this generation ends too.
+        finally { try { connection.Cancel(); } catch (ObjectDisposedException) { } }
     }
     public async ValueTask DisposeAsync()
     {
@@ -117,6 +127,6 @@ public sealed class RadioProcess : IAsyncDisposable
         if (_process is not null) { if (!_process.HasExited) { _process.Kill(true); } _process.Dispose(); }
         try { if (_receive is not null) { await _receive; } }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException) { }
-        _stop.Dispose();
+        _connectionStop?.Dispose(); _stop.Dispose();
     }
 }

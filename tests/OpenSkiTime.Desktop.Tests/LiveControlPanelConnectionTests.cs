@@ -96,6 +96,15 @@ public sealed class LiveControlPanelConnectionTests
             await ProcessFixture.Until(() => session.ReadState().Radio!.State == RadioState.Stopped);
             Assert.Equal(PublisherState.Running, session.ReadState().Channels[0].Health.State);
             Assert.True(new OpenSkiTime.LiveTiming.Client.RadioSettingsStore(Path.Combine(folder, "live-radio.json")).Read(competitionId).Configuration.CloudEnabled);
+            // Disabling while a start is still connecting: the start completes first and is then stopped, never left generating.
+            var simulation = new RadioConfiguration { LocalEnabled = true, LlmProvider = RadioProviders.Simulation, TtsProvider = RadioProviders.Simulation };
+            Assert.Equal("", await session.SaveRadioAsync(simulation));
+            await session.SyncRadioAsync();
+            Assert.Equal("", await session.SaveRadioAsync(simulation with { LocalEnabled = false }));
+            await session.SyncRadioAsync();
+            await ProcessFixture.Until(() => session.ReadState().Radio!.State == RadioState.Stopped);
+            await Task.Delay(1500); await session.SyncRadioAsync();
+            Assert.Equal(RadioState.Stopped, session.ReadState().Radio!.State);
         }
         finally { if (Directory.Exists(folder)) { Directory.Delete(folder, true); } }
     }

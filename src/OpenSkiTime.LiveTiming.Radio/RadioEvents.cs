@@ -58,8 +58,10 @@ public static class RadioEventDetector
                 case LiveStatus.Finished:
                     var place = totals ? result.TotalRank : result.Rank;
                     var kind = place == 1 && finishers > 1 ? RadioEventKind.NewLeader : place <= 3 ? RadioEventKind.Podium : RadioEventKind.Finish;
+                    // A finish announcement states the place, so it is stale once anyone moves the racer down.
+                    var placed = new RadioCondition(totals ? RadioConditionKind.TotalRank : RadioConditionKind.Rank, run.Number, result.Bib, Value: place);
                     events.Add(Make(kind, kind == RadioEventKind.Finish ? 3 : 2, [result.Bib], kind == RadioEventKind.Finish ? 75 : 120,
-                        kind == RadioEventKind.NewLeader ? 8 : kind == RadioEventKind.Podium ? 5 : 2, conditions: Status(result.Bib, LiveStatus.Finished)));
+                        kind == RadioEventKind.NewLeader ? 8 : kind == RadioEventKind.Podium ? 5 : 2, conditions: [Status(result.Bib, LiveStatus.Finished), placed]));
                     break;
                 case LiveStatus.DNF or LiveStatus.DSQ:
                     events.Add(Make(result.Status == LiveStatus.DNF ? RadioEventKind.DNF : RadioEventKind.DSQ, 3, [result.Bib], 90, 4,
@@ -130,7 +132,7 @@ public sealed class EventBatcher
     /// <summary>Drops events that are already stale, so a slow generation never narrates outdated news.</summary>
     public void Prune(LiveSnapshot state, DateTimeOffset now)
     {
-        _pending.RemoveAll(x => now >= x.At + x.Lifetime || x.Conditions.Any(c => !RadioPlayback.Holds(state, c)));
+        _pending.RemoveAll(x => x.Run != state.CurrentRun || now >= x.At + x.Lifetime || x.Conditions.Any(c => !RadioPlayback.Holds(state, c)));
         if (_pending.Count == 0) { _highest = 6; }
     }
 }

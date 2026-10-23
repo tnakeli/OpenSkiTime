@@ -71,8 +71,17 @@ public sealed class RadioSlotTests
         Assert.Contains(new RadioCondition(RadioConditionKind.Rank, 1, 2, Value: 2), conditions);
         Assert.Contains(new RadioCondition(RadioConditionKind.Time, 1, 2, Value: 4790), conditions);
         Assert.Contains(new RadioCondition(RadioConditionKind.Time, 1, 1, Value: 4701), conditions);
+        // A gap changes when someone else takes the lead, even though neither stated time changes.
+        Assert.Contains(new RadioCondition(RadioConditionKind.Rank, 1, 1, Value: 1), conditions);
         Assert.Contains(new RadioCondition(RadioConditionKind.Status, 1, 4, LiveStatus.DNF), conditions);
-        Assert.Equal(4, conditions.Length);
+        Assert.Equal(5, conditions.Length);
+        var counts = RadioSlots.Conditions("Maalissa {num:finished}, matkaa jäljellä {num:remaining}, {ord:run:nom} lasku.", facts).ToArray();
+        Assert.Equal([new RadioCondition(RadioConditionKind.StatusCount, 1, Status: LiveStatus.Finished, Value: 2),
+            new RadioCondition(RadioConditionKind.StatusCount, 1, Status: LiveStatus.Ready, Value: 1)], counts);
+        Assert.All(counts, x => Assert.True(RadioPlayback.Holds(facts.State, x)));
+        Assert.False(RadioPlayback.Holds(RadioRace.Set(facts.State, 5, LiveStatus.OnCourse), counts[1]));
+        var leaderBeaten = RadioRace.Set(RadioRace.Set(facts.State, 5, LiveStatus.OnCourse), 5, LiveStatus.Finished, 4600);
+        Assert.False(RadioPlayback.Holds(leaderBeaten, new RadioCondition(RadioConditionKind.Rank, 1, 1, Value: 1)));
     }
 
     [Fact]

@@ -184,7 +184,12 @@ public sealed class RadioEngine
                 var voice = RadioPersonas.Voice(host, _tts.Provider, Array.IndexOf(RadioPersonas.Hosts, host) == 0 ? _config.VoiceA : _config.VoiceB);
                 TtsAudio audio;
                 try { audio = await WithTimeout(SpeechTimeout, t => _tts.SynthesizeAsync(text, voice, t), ct); }
-                catch (Exception ex) when (Recoverable(ex, ct)) { Report(error: Describe(ex)); break; }
+                catch (Exception ex) when (Recoverable(ex, ct))
+                {
+                    // The provider may have billed a request whose answer failed or timed out: charge the estimate.
+                    Budget.Charge(estimate);
+                    Report(error: Describe(ex)); break;
+                }
                 Budget.Charge(RadioPrices.Cost(_ttsPrice, text.Length, audio.DurationMs));
                 now = _time.GetUtcNow();
                 var latest = Volatile.Read(ref _latest)!;

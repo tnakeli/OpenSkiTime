@@ -175,7 +175,13 @@ public static partial class RadioSlots
         var run = facts.Run;
         foreach (var slot in Parse(text))
         {
-            if (Value(slot, facts) is not { } value || slot.Kind is "num" or "ord" or "racer" or "bib") { continue; }
+            if (Value(slot, facts) is not { } value || slot.Kind is "racer" or "bib") { continue; }
+            if (slot.Kind is "num" or "ord")
+            {
+                // Counts by status change as the race goes on; the run number is covered by the current-run condition.
+                if (CountStatus(slot.Reference) is { } counted) { yield return new(RadioConditionKind.StatusCount, run, Status: counted, Value: value.Number); }
+                continue;
+            }
             var bib = int.Parse(slot.Reference, CultureInfo.InvariantCulture);
             switch (slot.Kind)
             {
@@ -193,12 +199,20 @@ public static partial class RadioSlots
                     yield return total ? new(RadioConditionKind.Total, run, bib, Value: r.TotalHundredths) : new(RadioConditionKind.Time, run, bib, Value: r.Hundredths);
                     var leaders = facts.State.Runs.First(x => x.Number == run).Results.Where(x => (total ? x.TotalRank : x.Rank) == 1);
                     foreach (var leader in leaders)
-                    { yield return total ? new(RadioConditionKind.Total, run, leader.Bib, Value: leader.TotalHundredths) : new(RadioConditionKind.Time, run, leader.Bib, Value: leader.Hundredths); }
+                    {
+                        yield return total ? new(RadioConditionKind.Total, run, leader.Bib, Value: leader.TotalHundredths) : new(RadioConditionKind.Time, run, leader.Bib, Value: leader.Hundredths);
+                        yield return new(total ? RadioConditionKind.TotalRank : RadioConditionKind.Rank, run, leader.Bib, Value: 1);
+                    }
                     break;
             }
         }
     }
 
+    private static LiveStatus? CountStatus(string key) => key switch
+    {
+        "finished" => LiveStatus.Finished, "oncourse" => LiveStatus.OnCourse, "remaining" => LiveStatus.Ready,
+        "dnf" => LiveStatus.DNF, "dsq" => LiveStatus.DSQ, "dns" => LiveStatus.DNS, _ => null
+    };
     private readonly record struct SlotValue(long Number, LiveStatus Status);
     private static SlotValue? Value(SlotToken slot, FactSheet facts)
     {

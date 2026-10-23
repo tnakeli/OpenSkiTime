@@ -29,7 +29,7 @@ flowchart LR
 
 ### Pipeline
 
-1. **Detection** (deterministic, from consecutive snapshots of the current run): first start of a run, finish (new leader, podium place or other), DNF, DSQ, DNS, result correction, a top-three racer starting a later run, run complete, and an interruption (a run in progress with nobody on course and no update for four minutes). The first snapshot is history and is not announced.
+1. **Detection** (deterministic, from consecutive snapshots of the current run; events of a run that is no longer current are dropped): first start of a run, finish (new leader, podium place or other), DNF, DSQ, DNS, result correction, a top-three racer starting a later run, run complete, and an interruption (a run in progress with nobody on course and no update for four minutes). The first snapshot is history and is not announced.
 2. **Priority batcher.** Delays by the highest priority in the batch: 2 s (P1), 5 s (P2: new leader, podium, run complete, top start), 12 s (P3: finish, DNF/DSQ, correction, run start), 25 s (P4: DNS), 40 s (P5: producer). A higher priority shortens the delay from its arrival; six events flush at once. Events that went stale while waiting are dropped.
 3. **Dialogue** by the language model (JSON lines `{host, text, interruptible}`), or by templates (see 6).
 4. **Validation** of every line before speech (see [Finnish verbalization](#finnish-verbalization-and-guardrails)). One invalid line rejects the whole script.
@@ -177,7 +177,7 @@ Times and gaps are the display hundredths timing already calculated (`Hundredths
 
 Code rejects a line (and the whole script, which then falls back to templates) when it contains an unknown slot, a slot for a missing fact, a disallowed case, a malformed slot, a digit outside slots, a number word outside slots (kaksi…, kolmas…, sekunti…, minuutti…; *yksi*, *ensimmäinen* and *toinen* stay usable as ordinary words), any competitor's first or last name outside a slot, or a capitalized word mid-sentence that is not the competition, place, slope, a club, a racer's country (inflected), a host, a word from the event background or an abbreviation such as FIS or SM. Curation must return every slot unchanged.
 
-Every clip carries the facts its lines state as conditions (rank, time, total, status, the leader's time behind a gap, the current run) plus event conditions (a start is about a racer on course). The worker checks them before upload; the server re-checks them on every state change and announces only clips that still hold.
+Every clip carries the facts its lines state as conditions (rank, time, total, status, the leader's time and first place behind a gap, status counts such as finished or still to start, the current run) plus event conditions (a finish announcement keeps its place, a start is about a racer on course). The worker checks them before upload; the server re-checks them on every state change and announces only clips that still hold.
 
 ## Configuration and control
 
@@ -192,7 +192,7 @@ Radio is configured only in the timing application.
 
 ### Budget
 
-Spend comes from provider-reported token usage for language models and from counted characters (or estimated audio tokens for token-billed speech) multiplied by the dated price table. Before every billable call the engine checks that the estimated cost fits; a failed or timed-out model call is charged at its estimate. Modes: **Full** (dialogue, curation, producer), **Lean** below 20 % left (no curation, deterministic producer), **TemplatesOnly** below 5 % left or when one more dialogue would not fit (templates and speech only), **Exhausted** when one more line cannot be spoken: generation stops, the heartbeat reports the budget as exhausted and the viewer control disappears. Spend can pass the limit only by the estimation error of the last call. Raise the limit to continue.
+Spend comes from provider-reported token usage for language models and from counted characters (or estimated audio tokens for token-billed speech) multiplied by the dated price table. Before every billable call the engine checks that the estimated cost fits; a failed or timed-out model or speech call is charged at its estimate, because the provider may have billed it. Modes: **Full** (dialogue, curation, producer), **Lean** below 20 % left (no curation, deterministic producer), **TemplatesOnly** below 5 % left or when one more dialogue would not fit (templates and speech only), **Exhausted** when one more line cannot be spoken: generation stops, the heartbeat reports the budget as exhausted and the viewer control disappears. Spend can pass the limit only by the estimation error of the last call. Raise the limit to continue.
 
 ## Live Timing Server API (protocol 2)
 

@@ -242,6 +242,22 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task FailedSpeechRequestsCountAgainstTheBudget()
+    {
+        // Templates only (no model calls), and every speech request fails after the provider may have billed it.
+        var rig = new Rig
+        {
+            Llm = new((_, _) => Task.FromResult("")), Budget = new(0.005m, 0m),
+            Tts = new((_, _) => throw new RadioProviderException("Azure Speech could not be reached."))
+        };
+        await rig.FirstFinishAsync();
+        await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Empty(rig.Llm.Requests);
+        Assert.Single(rig.Tts.Texts);
+        Assert.True(rig.Budget.Spent > 0m);
+    }
+
+    [Fact]
     public async Task NothingIsGeneratedOrPaidWhileNoServerAcceptsTheClips()
     {
         var rig = new Rig { Llm = new((_, _) => Task.FromResult(Script(("Aino", "Maalissa {racer:1}.", true)))) };

@@ -212,7 +212,14 @@ public sealed class LiveControlSession : IAsyncDisposable
             _radioStore.Save(id, configuration);
             SaveSpend(force: true);
             Volatile.Write(ref _radioSettings, new RadioCompetitionSettings(configuration, _radioSaved));
-            if (_radioStarted) { await _radio.StopAsync().ConfigureAwait(false); }
+            // A start still connecting would otherwise begin with the old settings after this stop.
+            if (_radioStart is { IsCompleted: false } pending)
+            {
+                try { await pending.ConfigureAwait(false); }
+                catch (Exception) { _radioStarted = false; }
+            }
+            _radioStart = null;
+            if (_radio.IsConnected) { await _radio.StopAsync().ConfigureAwait(false); }
             _radioStarted = false; _radioTargets = []; _radioError = ""; _radioRetry = default;
             return "";
         }
@@ -247,7 +254,9 @@ public sealed class LiveControlSession : IAsyncDisposable
             if (_radioStarted && !_radio.IsConnected) { _radioStarted = false; }
             if (targets.Length == 0)
             {
-                if (_radioStarted) { await _radio.StopAsync().ConfigureAwait(false); _radioStarted = false; }
+                // Also stops a worker that is still generating although no flag says so (for example after a failed save).
+                if (_radioStarted || (_radio.IsConnected && _radio.Health.State is RadioState.Running or RadioState.Starting))
+                { await _radio.StopAsync().ConfigureAwait(false); _radioStarted = false; }
                 _radioTargets = [];
                 return;
             }
