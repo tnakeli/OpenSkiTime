@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
 Live protocol: 2
 
 ### Added
@@ -78,7 +80,8 @@ Live protocol: 1 (implicit)
 
 - First hosted deployment: public race list, responsive race view, publisher keys for session creation and `security.txt`.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.3.0...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.4.0...HEAD
+[0.4.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.3.0...live-v0.4.0
 [0.3.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.2.0...live-v0.3.0
 [0.2.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.1.3...live-v0.2.0
 [0.1.3]: https://github.com/tnakeli/OpenSkiTime/releases/tag/live-v0.1.3
