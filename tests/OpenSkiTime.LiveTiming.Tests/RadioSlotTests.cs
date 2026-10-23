@@ -57,6 +57,25 @@ public sealed class RadioSlotTests
         Assert.Equal(problem, RadioSlots.Problem(line, facts, rules));
     }
 
+    [Fact]
+    public void TheBibGoesBeforeTheFirstMentionOfEachRacer()
+    {
+        var lines = RadioSlots.AnnounceBibs([
+            new("Aino", "Radalla nyt {nation:3} {racer:3}, {club:3}.", false),
+            new("Kalle", "{racer:3} on vauhdissa, ja {racer:2} odottaa.", false),
+            new("Aino", "Numero {bib:4:nom} eli {racer:4} on valmiina.", true)]);
+        Assert.Equal(["Radalla nyt numero {bib:3:nom}, {nation:3} {racer:3}, {club:3}.", "{racer:3} on vauhdissa, ja numero {bib:2:nom}, {racer:2} odottaa.",
+            "Numero {bib:4:nom} eli {racer:4} on valmiina."], lines.Select(x => x.Text));
+        // A racer slot names the racer with or without a case code, so gate and coverage checks see it.
+        Assert.True(RadioSlots.Names("Lähtöportilla seuraavana {racer:3:nom}.", 3));
+        // An explicit nominative is the first mention too.
+        Assert.Equal(["Nyt numero {bib:3:nom}, {nation:3:nom} {racer:3:nom}.", "{racer:3} jatkaa."],
+            RadioSlots.AnnounceBibs([new("Aino", "Nyt {nation:3:nom} {racer:3:nom}.", false), new("Kalle", "{racer:3} jatkaa.", true)]).Select(x => x.Text));
+        Assert.False(RadioSlots.Names("Numero {bib:3:nom} odottaa.", 3));
+        // A start-gate line that gives only the bib still depends on that racer being next.
+        Assert.True(RadioSlots.Mentions("Lähtöportilla seuraavana numero {bib:3:nom}.", 3));
+    }
+
     [Theory]
     [InlineData("Jäljellä {num:remaining:part}.", "Jäljellä {num:remaining:par}.")]
     [InlineData("Numero {bib:3:lle} aukeaa portti.", "Numero {bib:3:all} aukeaa portti.")]

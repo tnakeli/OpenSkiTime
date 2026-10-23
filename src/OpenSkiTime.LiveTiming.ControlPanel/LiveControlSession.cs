@@ -297,7 +297,7 @@ public sealed class LiveControlSession : IAsyncDisposable
         catch (Exception) { _radioError = "Race radio could not start. Check installed components; timing capture and live publishing continue."; }
         finally { _gate.Release(); }
     }
-    private string Key(string provider) => CredentialStore(RadioKeyCredential.Target(provider)).Read() is { Length: > 0 } key ? key
+    private string Key(string provider) => RadioKeyCredential.Read(provider, CredentialStore) is { Length: > 0 } key ? key
         : throw new LiveValidationException($"Save the {RadioKeyCredential.Label(provider)} key in OpenSkiTime Settings → Live timing to use the race radio.");
 
     private static string Artifact(string name)

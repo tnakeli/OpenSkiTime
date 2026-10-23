@@ -44,8 +44,12 @@ public static class RadioRace
 
         var key = PublisherKeyCredential.Target(endpoint);
         var publisherKey = new WindowsCredentialStore(key).Read() ?? throw new InvalidOperationException("Save the Cloud publisher key in OpenSkiTime Settings → Live timing first.");
+        // A service account JSON key (needed for Gemini voices) is read from a file outside the repository, named by
+        // OST_GOOGLE_SERVICE_ACCOUNT, because it does not fit in Credential Manager.
+        var account = Environment.GetEnvironmentVariable("OST_GOOGLE_SERVICE_ACCOUNT");
         string? RadioKey(string provider) => provider == RadioProviders.Simulation ? null
-            : new WindowsCredentialStore(RadioKeyCredential.Target(provider)).Read() ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
+            : provider == RadioProviders.GoogleGemini && !string.IsNullOrWhiteSpace(account) ? File.ReadAllText(account)
+            : RadioKeyCredential.Read(provider, x => new WindowsCredentialStore(x)) ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
         var configuration = new RadioConfiguration
         {
             CloudEnabled = true, BudgetUsd = 3m, LlmProvider = llmProvider, LlmModel = llmModel, TtsProvider = ttsProvider, Curation = true,

@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- Race radio: the viewer no longer waits for a line of a conversation that the server already withdrew.
+
 ## [0.4.1] - 2026-10-23
 
 Live protocol: 2

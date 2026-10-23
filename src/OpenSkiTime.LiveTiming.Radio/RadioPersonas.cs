@@ -14,6 +14,7 @@ public static class RadioPersonas
             {
                 [RadioProviders.Azure] = new(RadioProviders.Azure, "fi-FI-SelmaNeural", 1.08),
                 [RadioProviders.Google] = new(RadioProviders.Google, "fi-FI-Chirp3-HD-Kore", 1.05),
+                [RadioProviders.GoogleGemini] = new(RadioProviders.GoogleGemini, "Kore", 1.0, "Lue naisen äänellä suomeksi täsmälleen sellaisenaan, rauhallisena ja lämpimänä urheiluselostajana"),
                 [RadioProviders.OpenAi] = new(RadioProviders.OpenAi, "coral", 1.05, "Calm, clear and warm Finnish sports radio presenter. Read the text exactly as written."),
                 [RadioProviders.Simulation] = new(RadioProviders.Simulation, "a")
             }),
@@ -22,6 +23,7 @@ public static class RadioPersonas
             {
                 [RadioProviders.Azure] = new(RadioProviders.Azure, "fi-FI-HarriNeural", 1.1),
                 [RadioProviders.Google] = new(RadioProviders.Google, "fi-FI-Chirp3-HD-Charon", 1.08),
+                [RadioProviders.GoogleGemini] = new(RadioProviders.GoogleGemini, "Charon", 1.0, "Lue syvällä miehen äänellä suomeksi täsmälleen sellaisenaan, innostuneena mutta asiallisena hiihtokommentaattorina"),
                 [RadioProviders.OpenAi] = new(RadioProviders.OpenAi, "ash", 1.08, "Enthusiastic but respectful Finnish ski commentator. Read the text exactly as written."),
                 [RadioProviders.Simulation] = new(RadioProviders.Simulation, "b")
             })

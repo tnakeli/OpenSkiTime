@@ -117,6 +117,34 @@ public static partial class RadioSlots
     /// <summary>Returns why a line must not be spoken, or null when it is valid.</summary>
     public static string? Problem(string text, FactSheet facts, LineRules rules) => Check(text, facts, rules).Problem;
 
+    /// <summary>Whether a line names this racer through a racer slot (with or without a case code).</summary>
+    public static bool Names(string text, int bib) =>
+        Parse(text).Any(x => x.Kind == "racer" && x.Reference == bib.ToString(CultureInfo.InvariantCulture));
+    /// <summary>Whether a line refers to this racer at all: name, bib, club or nationality.</summary>
+    public static bool Mentions(string text, int bib) =>
+        Parse(text).Any(x => x.Kind is "racer" or "bib" or "club" or "nation" && x.Reference == bib.ToString(CultureInfo.InvariantCulture));
+
+    [GeneratedRegex(@"(\{nation:(?<n>[0-9]{1,12})(:nom)?\} )?\{racer:(?<r>[0-9]{1,12})(:nom)?\}")]
+    private static partial Regex RacerMention();
+    /// <summary>
+    /// Puts the bib before the first mention of each racer in a conversation ("numero kolme, ruotsalainen Saga Porttila"),
+    /// as alpine commentary does, unless that line already says the bib. Later mentions stay name only.
+    /// </summary>
+    public static IReadOnlyList<ScriptLine> AnnounceBibs(IReadOnlyList<ScriptLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var said = new HashSet<string>(StringComparer.Ordinal);
+        return [.. lines.Select(line => line with
+        {
+            Text = RacerMention().Replace(line.Text, m =>
+            {
+                var bib = m.Groups["r"].Value;
+                if (!said.Add(bib) || line.Text.Contains($"{{bib:{bib}", StringComparison.Ordinal)) { return m.Value; }
+                return $"numero {{bib:{bib}:nom}}, {m.Value}";
+            })
+        })];
+    }
+
     /// <summary>The problem and the word that caused it, for feedback to the model (never logged).</summary>
     public static (string? Problem, string? Word) Check(string text, FactSheet facts, LineRules rules)
     {

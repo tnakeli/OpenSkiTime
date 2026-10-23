@@ -60,7 +60,7 @@ public sealed class RadioEngineTests
         await rig.Engine.StepAsync(CancellationToken.None);
         var clips = rig.Sink.Clips.ToArray();
         Assert.Equal(2, clips.Length);
-        Assert.Equal("Hieno lasku! Maalissa Aada Lumivaara, aika neljäkymmentäseitsemän pilkku nolla yksi sekuntia.", clips[0].Transcript);
+        Assert.Equal("Hieno lasku! Maalissa numero yksi, Aada Lumivaara, aika neljäkymmentäseitsemän pilkku nolla yksi sekuntia.", clips[0].Transcript);
         Assert.Equal("Hän johtaa ensimmäisellä laskulla.", clips[1].Transcript);
         Assert.Equal(["Aino", "Kalle"], clips.Select(x => x.Host));
         Assert.Equal(clips[0].BatchId, clips[1].BatchId);
@@ -96,7 +96,7 @@ public sealed class RadioEngineTests
         await rig.FirstFinishAsync();
         await rig.Engine.StepAsync(CancellationToken.None);
         var spoken = rig.Sink.Clips.Select(x => x.Transcript).ToArray();
-        Assert.Contains("Maalissa Aada Lumivaara, aika neljäkymmentäseitsemän pilkku nolla yksi sekuntia.", spoken);
+        Assert.Contains("Maalissa numero yksi, Aada Lumivaara, aika neljäkymmentäseitsemän pilkku nolla yksi sekuntia.", spoken);
         Assert.Contains("Hän on nyt kärjessä.", spoken);
         Assert.DoesNotContain(spoken, x => x.Any(char.IsDigit));
         Assert.Contains("Templates used", rig.Engine.Health.Error, StringComparison.Ordinal);
@@ -113,12 +113,46 @@ public sealed class RadioEngineTests
         };
         await rig.FirstFinishAsync();
         await rig.Engine.StepAsync(CancellationToken.None);
-        Assert.Contains("Maalissa Aada Lumivaara, ensimmäisenä.", rig.Sink.Clips.Select(x => x.Transcript));
+        Assert.Contains("Maalissa numero yksi, Aada Lumivaara, ensimmäisenä.", rig.Sink.Clips.Select(x => x.Transcript));
         var repair = Assert.Single(rig.Llm.Requests, x => x.User.Contains("your_script", StringComparison.Ordinal));
         Assert.Contains("number words outside slots", repair.User, StringComparison.Ordinal);
         Assert.Contains("Kolmantena", repair.User, StringComparison.Ordinal);
         Assert.DoesNotContain("Lumivaara", repair.User, StringComparison.OrdinalIgnoreCase);
         Assert.Null(rig.Engine.Health.Error);
+    }
+
+    [Fact]
+    public async Task AnEventTheModelLeavesOutGetsItsTemplateLines()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) || FakeLlm.IsProducer(r) ? Echo(r) : Script(("Aino", "Radalla nyt {racer:3}.", true))))
+        };
+        rig.State = RadioRace.Set(RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow()), 2, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        // Bib 1 goes out and bib 3 starts in the same moment; the model writes only about the start.
+        rig.State = RadioRace.Set(RadioRace.Set(rig.State, 1, LiveStatus.DNF, at: rig.Time.GetUtcNow()), 3, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Contains(rig.Sink.Clips, x => x.Transcript.Contains("Aada Lumivaara", StringComparison.Ordinal));
+        Assert.Contains(rig.Sink.Clips, x => x.Transcript.StartsWith("Radalla nyt numero kolme", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AStartScriptWithoutTheNextRacerGetsTheStartGateLine()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) || FakeLlm.IsProducer(r) ? Echo(r) : Script(("Aino", "Radalla nyt {racer:2}.", true))))
+        };
+        rig.State = RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.State = RadioRace.Set(rig.State, 2, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Equal(["Radalla nyt numero kaksi, Veeti Hankiranta.", "Lähtöportilla seuraavana numero kolme, ruotsalainen Saga Porttila."],
+            rig.Sink.Clips.Select(x => x.Transcript));
+        Assert.Equal(["Aino", "Kalle"], rig.Sink.Clips.Select(x => x.Host));
     }
 
     [Fact]
@@ -132,7 +166,7 @@ public sealed class RadioEngineTests
         await rig.FirstFinishAsync();
         await rig.Engine.StepAsync(CancellationToken.None);
         var clip = Assert.Single(rig.Sink.Clips);
-        Assert.Equal(("Maalissa Aada Lumivaara.", true), (clip.Transcript, clip.Interruptible));
+        Assert.Equal(("Maalissa numero yksi, Aada Lumivaara.", true), (clip.Transcript, clip.Interruptible));
         Assert.Null(rig.Engine.Health.Error);
     }
 
@@ -146,7 +180,7 @@ public sealed class RadioEngineTests
         // The run start is announced first; after a short silence the racer on course is featured.
         for (var i = 0; i < 6; i++) { rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None); }
         Assert.StartsWith("Ensimmäinen lasku on alkanut.", rig.Sink.Clips.First().Transcript, StringComparison.Ordinal);
-        Assert.Contains("Radalla on nyt Aada Lumivaara, Rinneseura.", rig.Sink.Clips.Select(x => x.Transcript));
+        Assert.Contains("Radalla on nyt numero yksi, Aada Lumivaara, Rinneseura.", rig.Sink.Clips.Select(x => x.Transcript));
         var featured = rig.Sink.Clips.Count;
         for (var i = 0; i < 4; i++) { rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None); }
         Assert.DoesNotContain(rig.Sink.Clips.Skip(featured), x => x.Transcript.StartsWith("Radalla on nyt Aada", StringComparison.Ordinal));
@@ -174,12 +208,12 @@ public sealed class RadioEngineTests
             var rig = new Rig { Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) ? Echo(r, change) : Script(("Aino", "Maalissa {racer:1}, aika {time:1}.", true)))) };
             await rig.FirstFinishAsync();
             await rig.Engine.StepAsync(CancellationToken.None);
-            Assert.Contains(rig.Sink.Clips, x => x.Transcript == "Maalissa Aada Lumivaara, aika neljäkymmentäseitsemän pilkku nolla yksi sekuntia.");
+            Assert.Contains(rig.Sink.Clips, x => x.Transcript == "Maalissa numero yksi, Aada Lumivaara, aika neljäkymmentäseitsemän pilkku nolla yksi sekuntia.");
         }
         var hosts = new Rig { Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) ? Echo(r).Replace("Aino", "Kalle", StringComparison.Ordinal) : Script(("Aino", "Maalissa {racer:1}.", true)))) };
         await hosts.FirstFinishAsync();
         await hosts.Engine.StepAsync(CancellationToken.None);
-        Assert.Contains(hosts.Sink.Clips, x => x.Transcript == "Maalissa Aada Lumivaara." && x.Host == "Aino");
+        Assert.Contains(hosts.Sink.Clips, x => x.Transcript == "Maalissa numero yksi, Aada Lumivaara." && x.Host == "Aino");
     }
 
     [Fact]
@@ -207,7 +241,8 @@ public sealed class RadioEngineTests
         var rig = new Rig
         {
             Llm = new((_, _) => throw new RadioProviderException("down")),
-            Tts = new(async (_, ct) => { if (Interlocked.Increment(ref calls) <= 2) { await Task.Delay(Timeout.Infinite, ct); } })
+            // The lines of a conversation are synthesized together; the first two conversations hang, the third speaks.
+            Tts = new(async (_, ct) => { if (Interlocked.Increment(ref calls) <= 4) { await Task.Delay(Timeout.Infinite, ct); } })
         };
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         rig.State = RadioRace.Set(RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow()), 1, LiveStatus.Finished, 4701, rig.Time.GetUtcNow());
@@ -225,14 +260,16 @@ public sealed class RadioEngineTests
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         rig.Time.Advance(TimeSpan.FromSeconds(13));
         var second = rig.Engine.StepAsync(CancellationToken.None);
-        await Until(() => Volatile.Read(ref calls) >= 2);
+        await Until(() => Volatile.Read(ref calls) >= 3);
         rig.Time.Advance(RadioEngine.SpeechTimeout);
         await second.WaitAsync(TimeSpan.FromSeconds(5));
         rig.State = RadioRace.Set(RadioRace.Set(rig.State, 3, LiveStatus.OnCourse, at: rig.Time.GetUtcNow()), 3, LiveStatus.DNF, at: rig.Time.GetUtcNow());
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         rig.Time.Advance(TimeSpan.FromSeconds(13));
         await rig.Engine.StepAsync(CancellationToken.None);
-        Assert.Equal("Saga Porttila keskeytti.", Assert.Single(rig.Sink.Clips).Transcript);
+        // The DNF that follows is spoken with feeling: the racer with the bib, then the co-host's reaction.
+        Assert.Equal(2, rig.Sink.Clips.Count);
+        Assert.Contains("numero kolme, Saga Porttila", rig.Sink.Clips.First().Transcript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -294,7 +331,7 @@ public sealed class RadioEngineTests
         rig.Time.Advance(TimeSpan.FromSeconds(62)); await rig.Engine.StepAsync(CancellationToken.None);
         // Before the start there are no standings: the gate rejects the choice twice, then the code picks a valid source.
         Assert.Equal(2, producerCalls);
-        Assert.Equal("Seuraavana lähtövuorossa on Aada Lumivaara.", Assert.Single(rig.Sink.Clips).Transcript);
+        Assert.Equal("Seuraavana lähtövuorossa on numero yksi, Aada Lumivaara.", Assert.Single(rig.Sink.Clips).Transcript);
         Assert.Equal(5, rig.Sink.Clips.Single().Priority);
         Assert.Contains(new RadioCondition(RadioConditionKind.NextStarter, 1, 1), rig.Sink.Clips.Single().Conditions);
     }
@@ -325,7 +362,9 @@ public sealed class RadioEngineTests
         await rig.FirstFinishAsync();
         await rig.Engine.StepAsync(CancellationToken.None);
         Assert.Empty(rig.Llm.Requests);
-        Assert.Single(rig.Tts.Texts);
+        // The conversation's lines are requested together, and each failed request keeps its reservation.
+        Assert.Equal(2, rig.Tts.Texts.Count);
+        Assert.Empty(rig.Sink.Clips);
         Assert.True(rig.Budget.Spent > 0m);
     }
 
