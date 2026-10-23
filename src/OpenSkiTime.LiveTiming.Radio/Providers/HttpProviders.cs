@@ -138,6 +138,41 @@ public sealed class AzureTts(string? apiKey, string region) : IRadioTts, IDispos
     public void Dispose() => _http.Dispose();
 }
 
+/// <summary>
+/// Gemini speech models through Google Cloud Text-to-Speech (fi-FI is in preview). A language-model voice: the style
+/// prompt asks it to read the text exactly, but it may still vary words. The key's project needs the Vertex AI
+/// (Agent Platform) API enabled.
+/// </summary>
+public sealed class GeminiCloudTts(string? apiKey, string model) : IRadioTts, IDisposable
+{
+    private readonly HttpClient _http = RadioHttp.Create();
+    private readonly string _key = RadioHttp.RequireKey(apiKey, "Google Cloud Text-to-Speech");
+    public string Provider => RadioProviders.GoogleGemini;
+    public async Task<TtsAudio> SynthesizeAsync(string text, RadioVoice voice, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(voice);
+        using var message = new HttpRequestMessage(HttpMethod.Post, "https://texttospeech.googleapis.com/v1/text:synthesize")
+        {
+            Content = JsonContent.Create(new
+            {
+                input = new { prompt = (voice.Style + " Speak Finnish. Read the text exactly as written; do not add, drop or change words.").Trim(), text },
+                voice = new { languageCode = "fi-FI", name = voice.Name, modelName = model },
+                audioConfig = new { audioEncoding = "MP3" }
+            })
+        };
+        message.Headers.Add("X-Goog-Api-Key", _key);
+        using var response = await RadioHttp.SendAsync(_http, message, "Google Gemini speech", ct,
+            "Google Gemini speech was refused. Enable the Vertex AI (Agent Platform) API in the Google Cloud project of the key, and check the key in Settings → Live timing.");
+        var json = await RadioHttp.JsonAsync(response, "Google Gemini speech", ct);
+        byte[] data;
+        try { data = Convert.FromBase64String(json.GetProperty("audioContent").GetString() ?? ""); }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or FormatException)
+        { throw new RadioProviderException("Google Gemini speech returned an unexpected response."); }
+        return new(data, "audio/mpeg", AudioDuration.Milliseconds(data, "audio/mpeg"));
+    }
+    public void Dispose() => _http.Dispose();
+}
+
 /// <summary>Google Cloud Text-to-Speech, Chirp 3: HD voices (fi-FI). Finnish has no custom pronunciation support there.</summary>
 public sealed class GoogleTts(string? apiKey) : IRadioTts, IDisposable
 {

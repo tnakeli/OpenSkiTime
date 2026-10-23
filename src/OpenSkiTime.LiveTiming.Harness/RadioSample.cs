@@ -36,7 +36,7 @@ public static class RadioSample
             TtsRegion = region, BudgetUsd = 2m, Curation = true, Lexicon = "Snøheim = Snööheim"
         };
         configuration.Validate();
-        string? Key(string provider) => provider == RadioProviders.Simulation ? null : new WindowsCredentialStore(RadioKeyCredential.Target(provider)).Read();
+        string? Key(string provider) => provider == RadioProviders.Simulation ? null : new WindowsCredentialStore(RadioKeyCredential.Target(RadioProviders.KeyOf(provider))).Read();
         IRadioLlm llm = llmProvider == "templates" ? new FailingLlm() : RadioProviderFactory.Llm(configuration, Key(configuration.LlmProvider));
         var tts = RadioProviderFactory.Tts(configuration, Key(ttsProvider));
         var time = new SampleTime(new DateTimeOffset(2026, 10, 2, 9, 0, 0, TimeSpan.Zero));

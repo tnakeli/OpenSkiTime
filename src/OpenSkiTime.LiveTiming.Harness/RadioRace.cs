@@ -45,7 +45,7 @@ public static class RadioRace
         var key = PublisherKeyCredential.Target(endpoint);
         var publisherKey = new WindowsCredentialStore(key).Read() ?? throw new InvalidOperationException("Save the Cloud publisher key in OpenSkiTime Settings → Live timing first.");
         string? RadioKey(string provider) => provider == RadioProviders.Simulation ? null
-            : new WindowsCredentialStore(RadioKeyCredential.Target(provider)).Read() ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
+            : new WindowsCredentialStore(RadioKeyCredential.Target(RadioProviders.KeyOf(provider))).Read() ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
         var configuration = new RadioConfiguration
         {
             CloudEnabled = true, BudgetUsd = 3m, LlmProvider = llmProvider, LlmModel = llmModel, TtsProvider = ttsProvider, Curation = true,

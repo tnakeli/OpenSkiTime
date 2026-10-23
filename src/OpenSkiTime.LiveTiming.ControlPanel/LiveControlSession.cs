@@ -285,7 +285,7 @@ public sealed class LiveControlSession : IAsyncDisposable
                 // Under ownership, the saved spend is current: another window may have spent and saved since this one loaded it.
                 _radioSaved = Math.Max(_radioSaved, _radioStore.Read(_competitionId.Value).SpentUsd);
                 var llmKey = config.LlmProvider == RadioProviders.Simulation ? null : Key(config.LlmProvider);
-                var ttsKey = config.TtsProvider == RadioProviders.Simulation ? null : Key(config.TtsProvider);
+                var ttsKey = config.TtsProvider == RadioProviders.Simulation ? null : Key(RadioProviders.KeyOf(config.TtsProvider));
                 var radio = _radio; var worker = Artifact("RadioWorker"); var options = new RadioWorkerOptions(config, _radioSaved, llmKey, ttsKey);
                 _radioStart = Task.Run(() => radio.StartAsync(worker, options, targets));
                 _radioStarted = true; _radioTargets = targets; _radioError = "";

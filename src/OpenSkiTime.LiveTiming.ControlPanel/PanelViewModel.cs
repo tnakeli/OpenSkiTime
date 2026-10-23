@@ -31,6 +31,7 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
     public RadioChoice[] RadioTtsChoices { get; } =
     [
         new(RadioProviders.Azure, "neural", "Azure AI Speech · fi-FI neural"), new(RadioProviders.Google, "chirp3-hd", "Google Chirp 3: HD · fi-FI"),
+        new(RadioProviders.GoogleGemini, "gemini-2.5-flash-tts", "Google Gemini TTS · fi-FI (preview)"),
         new(RadioProviders.OpenAi, "gpt-4o-mini-tts", "OpenAI gpt-4o-mini-tts"), new(RadioProviders.Simulation, "simulation", "Simulation (offline tones, no cost)")
     ];
     [ObservableProperty] private bool _radioLocal;

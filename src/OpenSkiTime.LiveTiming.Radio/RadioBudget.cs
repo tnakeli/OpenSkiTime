@@ -24,6 +24,8 @@ public static class RadioPrices
     [
         new(RadioProviders.Azure, "neural", 15m),
         new(RadioProviders.Google, "chirp3-hd", 30m),
+        // Gemini 2.5 Flash TTS: text input and audio output tokens, about 25 audio tokens per second (not confirmed from the price page).
+        new(RadioProviders.GoogleGemini, "gemini-2.5-flash-tts", 0m, 0.50m, 10m, 25),
         // gpt-4o-mini-tts bills text input and audio output tokens; audio is estimated at 21 tokens per second ($12/1M ≈ $0.015/min).
         new(RadioProviders.OpenAi, "gpt-4o-mini-tts", 0m, 0.60m, 12m, 21),
         new(RadioProviders.Simulation, "simulation", 0m)

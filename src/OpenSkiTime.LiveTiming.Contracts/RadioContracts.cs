@@ -93,9 +93,13 @@ public static class RadioProviders
     public const string Gemini = "gemini";
     public const string Azure = "azure";
     public const string Google = "google";
+    /// <summary>Gemini speech models through Google Cloud Text-to-Speech, with the Google Cloud key.</summary>
+    public const string GoogleGemini = "google-gemini";
     public const string Simulation = "simulation";
     public static readonly string[] Llm = [OpenAi, Gemini, Simulation];
-    public static readonly string[] Tts = [Azure, Google, OpenAi, Simulation];
+    public static readonly string[] Tts = [Azure, Google, GoogleGemini, OpenAi, Simulation];
+    /// <summary>The provider whose saved key a provider uses.</summary>
+    public static string KeyOf(string provider) => provider == GoogleGemini ? Google : provider;
 }
 
 public sealed record RadioTarget(PublisherKind Channel, string Endpoint, Guid SessionId, string Token);

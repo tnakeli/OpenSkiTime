@@ -134,6 +134,20 @@ public sealed class RadioRulesTests
     }
 
     [Fact]
+    public void EverySpeechProviderHasVoicesAPriceAndASavedKeyLocation()
+    {
+        foreach (var provider in RadioProviders.Tts)
+        {
+            Assert.All(RadioPersonas.Hosts, h => Assert.Equal(provider, RadioPersonas.Voice(h, provider, null).Provider));
+            Assert.Equal(provider, RadioPrices.ForTts(provider).Provider);
+            if (provider != RadioProviders.Simulation) { Assert.Contains(RadioProviders.KeyOf(provider), OpenSkiTime.LiveTiming.Client.RadioKeyCredential.Providers); }
+        }
+        // Gemini voices through Cloud Text-to-Speech use the Google Cloud key and are billed by audio tokens.
+        Assert.Equal(RadioProviders.Google, RadioProviders.KeyOf(RadioProviders.GoogleGemini));
+        Assert.True(RadioPrices.Cost(RadioPrices.ForTts(RadioProviders.GoogleGemini), 100, 4000) > 0m);
+    }
+
+    [Fact]
     public void PlayControlNeedsEnabledHealthyFundedUnpausedRadio()
     {
         var state = RadioRace.Create();
