@@ -16,8 +16,21 @@ public sealed class RadioRulesTests
         var onCourse = RadioRace.Set(start, 1, LiveStatus.OnCourse);
         var started = Assert.Single(RadioEventDetector.Detect(start, onCourse, now));
         Assert.Equal(RadioEventKind.RunStarted, started.Kind);
-        // "Radalla on nyt ..." is stale once that racer has left the course.
-        Assert.Equal(new RadioCondition(RadioConditionKind.Status, 1, 1, LiveStatus.OnCourse), Assert.Single(started.Conditions));
+        // "Radalla on nyt ..." is stale once that racer has left the course; the next racer in the gate is named while still next.
+        Assert.Equal([1, 2], started.Bibs);
+        Assert.Equal([new RadioCondition(RadioConditionKind.Status, 1, 1, LiveStatus.OnCourse), new RadioCondition(RadioConditionKind.NextStarter, 1, 2)],
+            started.Conditions);
+        // Every later start is announced promptly with the next racer in the start gate.
+        var second = RadioRace.Set(onCourse, 2, LiveStatus.OnCourse);
+        var start2 = Assert.Single(RadioEventDetector.Detect(onCourse, second, now));
+        Assert.Equal((RadioEventKind.Start, 2), (start2.Kind, start2.Priority));
+        Assert.Equal([2, 3], start2.Bibs);
+        Assert.True(RadioPlayback.Playable(second, now, now.AddSeconds(30), start2.Phases, start2.Conditions));
+        Assert.False(RadioPlayback.Playable(RadioRace.Set(second, 3, LiveStatus.OnCourse), now, now.AddSeconds(30), start2.Phases, start2.Conditions));
+        Assert.False(RadioPlayback.Playable(RadioRace.Set(second, 2, LiveStatus.Finished, 4800), now, now.AddSeconds(30), start2.Phases, start2.Conditions));
+        var spoken = FinnishTemplates.Lines([start2], FactSheet.Build(second, start2.Bibs), 0);
+        Assert.Equal(["Matkaan lähti {racer:2}.", "Lähtöportilla seuraavana {racer:3}."], spoken.Select(x => x.Text));
+        Assert.Equal("Matkaan lähti Veeti Hankiranta.", RadioSlots.Render(spoken[0].Text, FactSheet.Build(second, start2.Bibs), new Dictionary<string, string>()));
         // Start and finish coalesced into one snapshot: the run start is announced without naming anyone on course.
         var coalesced = Assert.Single(RadioEventDetector.Detect(start, RadioRace.Set(onCourse, 1, LiveStatus.DNF), now), x => x.Kind == RadioEventKind.RunStarted);
         Assert.Empty(coalesced.Bibs); Assert.Empty(coalesced.Conditions);

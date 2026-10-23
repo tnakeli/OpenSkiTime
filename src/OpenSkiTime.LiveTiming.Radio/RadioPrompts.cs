@@ -47,6 +47,11 @@ public static class RadioPrompts
             - Results are unofficial until approved: when you describe standings say "epävirallisesti" or "epävirallisten tulosten mukaan".
             - If the data is thin, say less. Better short than invented.
 
+            === EVENTS ===
+            - Start, TopStart and RunStarted: bibs[0] has just left the start gate; bibs[1], when present, is the next racer in the
+              start gate. Name both, briefly ("Matkaan lähti {racer:12}. Lähtöportilla seuraavana {racer:13}."). TopStart is one of
+              the leaders after the earlier runs. A start is announced while the racer is on course, so keep it short and prompt.
+
             === ADAPTIVE VERBOSITY ===
             - One routine event: 1-2 lines in total. A notable event (new leader, podium, run complete): up to 4 lines.
             - Several events: weave them into one flowing conversation, most important first.

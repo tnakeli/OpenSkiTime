@@ -65,9 +65,15 @@ public static class FinnishTemplates
                 yield return Line(racer.Previous?.Rank is { } previous && facts.Run == 2
                     ? $"{{racer:{bib}}} lähtee nyt matkaan. Ensimmäisen laskun jälkeen hän oli {Place("prevrank", bib, previous)}."
                     : $"{{racer:{bib}}} lähtee nyt matkaan.");
+                foreach (var line in Gate(e, facts)) { yield return line; }
+                break;
+            case RadioEventKind.Start when racer is not null:
+                yield return Line(Pick($"Matkaan lähti {{racer:{bib}}}.", $"Radalle lähti {{racer:{bib}}}.", $"{{racer:{bib}}} lähti matkaan."));
+                foreach (var line in Gate(e, facts)) { yield return line; }
                 break;
             case RadioEventKind.RunStarted:
                 yield return Line(racer is null ? "{ord:run:nom} lasku on alkanut." : $"{{ord:run:nom}} lasku on alkanut. Radalla on nyt {{racer:{bib}}}.");
+                if (racer is not null) { foreach (var line in Gate(e, facts)) { yield return line; } }
                 break;
             case RadioEventKind.RunComplete:
                 yield return Line(facts.Counts["run"] >= facts.Counts["runs"] ? "Kilpailun viimeinen lasku on päättynyt." : "{ord:run:nom} lasku on päättynyt.", false);
@@ -86,6 +92,12 @@ public static class FinnishTemplates
                 break;
         }
     }
+    private static IEnumerable<ScriptLine> Gate(RadioEvent e, FactSheet facts)
+    {
+        if (e.Bibs.Length > 1 && facts.Racers.ContainsKey(e.Bibs[1]))
+        { yield return new("", $"Lähtöportilla seuraavana {{racer:{e.Bibs[1]}}}.", true); }
+    }
+
     // Ordinal words read naturally up to ten ("kolmantena"); later places use the cardinal ("sijalla kaksikymmentäkolme").
     private static string Place(string kind, int bib, int place) => place <= 10 ? $"{{{kind}:{bib}:ess}}" : $"sijalla {{{kind}:{bib}:card}}";
 

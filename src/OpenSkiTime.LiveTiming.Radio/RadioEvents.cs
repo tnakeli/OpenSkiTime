@@ -1,6 +1,6 @@
 namespace OpenSkiTime.LiveTiming.Radio;
 
-public enum RadioEventKind { Finish, NewLeader, Podium, DNF, DSQ, DNS, Correction, TopStart, RunStarted, RunComplete, Interrupted, Producer }
+public enum RadioEventKind { Finish, NewLeader, Podium, DNF, DSQ, DNS, Correction, TopStart, RunStarted, RunComplete, Interrupted, Producer, Start }
 
 /// <summary>
 /// Something worth saying. Priority 1 is breaking, 5 filler. Conditions are facts the event depends on beyond the slots
@@ -31,6 +31,13 @@ public static class RadioEventDetector
         RadioCondition Status(int bib, LiveStatus status) => new(RadioConditionKind.Status, run.Number, bib, status);
         RadioEvent Make(RadioEventKind kind, int priority, int[] bibs, int seconds, int relevance, RacePhase[]? phases = null, params RadioCondition[] conditions)
             => new(kind, priority, run.Number, bibs, now, TimeSpan.FromSeconds(seconds), phases ?? [], conditions, relevance);
+        // A start names the racer on course and the next one in the start gate (the first still waiting in the start order).
+        // It is stale once the racer has left the course or the next racer is no longer next.
+        var statuses = run.Results.ToDictionary(x => x.Bib, x => x.Status);
+        var gate = run.StartOrder.Where(x => statuses.GetValueOrDefault(x, LiveStatus.Ready) == LiveStatus.Ready).Take(1).ToArray();
+        RadioEvent Started(RadioEventKind kind, int priority, int bib, int seconds, int relevance) => Make(kind, priority, [bib, .. gate], seconds, relevance, Live,
+            [Status(bib, LiveStatus.OnCourse), .. gate.Select(x => new RadioCondition(RadioConditionKind.NextStarter, run.Number, x))]);
+        var named = new HashSet<int>();
 
         if (before is null || !started(before))
         {
@@ -38,8 +45,8 @@ public static class RadioEventDetector
             {
                 // A racer is named only while on course ("Radalla on nyt ..."); a start already finished is not news.
                 var first = run.Results.Where(x => x.Status == LiveStatus.OnCourse && x.StartedAt is not null).OrderBy(x => x.StartedAt).FirstOrDefault();
-                events.Add(first is null ? Make(RadioEventKind.RunStarted, 3, [], 90, 6, Live)
-                    : Make(RadioEventKind.RunStarted, 3, [first.Bib], 90, 6, Live, Status(first.Bib, first.Status)));
+                events.Add(first is null ? Make(RadioEventKind.RunStarted, 3, [], 90, 6, Live) : Started(RadioEventKind.RunStarted, 3, first.Bib, 90, 6));
+                if (first is not null) { named.Add(first.Bib); }
             }
             if (before is null) { return events; }
         }
@@ -77,9 +84,11 @@ public static class RadioEventDetector
                 case LiveStatus.DNS when was == LiveStatus.Ready:
                     events.Add(Make(RadioEventKind.DNS, 4, [result.Bib], 60, 1, conditions: Status(result.Bib, LiveStatus.DNS)));
                     break;
-                case LiveStatus.OnCourse when was == LiveStatus.Ready && run.Number > 1 && TopAfterEarlierRuns(current, run.Number, result.Bib):
-                    // In a later run the leaders start last: their start is news, every other start is routine.
-                    events.Add(Make(RadioEventKind.TopStart, 2, [result.Bib], 60, 5, Live, Status(result.Bib, LiveStatus.OnCourse)));
+                case LiveStatus.OnCourse when was == LiveStatus.Ready && !named.Contains(result.Bib):
+                    // In a later run the leaders start last: their start is bigger news than a routine start. A run lasts
+                    // 45-80 s with one or two racers on course, so every start is announced promptly.
+                    events.Add(run.Number > 1 && TopAfterEarlierRuns(current, run.Number, result.Bib)
+                        ? Started(RadioEventKind.TopStart, 2, result.Bib, 60, 5) : Started(RadioEventKind.Start, 2, result.Bib, 45, 2));
                     break;
             }
         }

@@ -29,8 +29,8 @@ flowchart LR
 
 ### Pipeline
 
-1. **Detection** (deterministic, from consecutive snapshots of the current run; events of a run that is no longer current are dropped): first start of a run, finish (new leader, podium place or other), DNF, DSQ, DNS, result correction, a top-three racer starting a later run, run complete, and an interruption (a run in progress with nobody on course and no update for four minutes). The first snapshot is history and is not announced.
-2. **Priority batcher.** Events of another run or of a phase that no longer applies are dropped, so a batch never mixes incompatible phases. Delays by the highest priority in the batch: 2 s (P1), 5 s (P2: new leader, podium, run complete, top start), 12 s (P3: finish, DNF/DSQ, correction, run start), 25 s (P4: DNS), 40 s (P5: producer). A higher priority shortens the delay from its arrival; six events flush at once. Events that went stale while waiting are dropped.
+1. **Detection** (deterministic, from consecutive snapshots of the current run; events of a run that is no longer current are dropped): first start of a run, every start (a top-three racer starting a later run as a top start), finish (new leader, podium place or other), DNF, DSQ, DNS, result correction, run complete, and an interruption (a run in progress with nobody on course and no update for four minutes). The first snapshot is history and is not announced. A run lasts 45-80 s with one or two racers on course, so each start names the racer who left and the next racer in the start gate (the first still waiting in the start order); the clip is stale once that racer leaves the course or the next racer is no longer next.
+2. **Priority batcher.** Events of another run or of a phase that no longer applies are dropped, so a batch never mixes incompatible phases. Delays by the highest priority in the batch: 2 s (P1), 5 s (P2: new leader, podium, run complete, start, top start), 12 s (P3: finish, DNF/DSQ, correction, run start), 25 s (P4: DNS), 40 s (P5: producer). A higher priority shortens the delay from its arrival; six events flush at once. Events that went stale while waiting are dropped.
 3. **Dialogue** by the language model (JSON lines `{host, text, interruptible}`), or by templates (see 6).
 4. **Validation** of every line before speech (see [Finnish verbalization](#finnish-verbalization-and-guardrails)). One invalid line rejects the whole script.
 5. **Curation** (optional second model pass): style only; the line count, hosts and every slot must stay identical and each line must still validate, otherwise the original script is used. Detected style patterns feed the style memory.
@@ -143,7 +143,7 @@ Model: an alpine run with a start every 40-60 s (about 75 finishes per hour), tw
 | Speech, ElevenLabs Flash / Multilingual | $0.66 / $1.32 |
 | **Default total (Azure + `gpt-4.1-mini` + curation)** | **≈ $0.40** |
 
-A two-run race day with a break is about four hours, so roughly $1.50-2 with the defaults. The panel's default budget is $5 per competition.
+Announcing every start adds up to about 75 short batches per hour (two lines, about 90 rendered characters: the racer who started and the next one in the start gate). Not batched with a finish, they add about $0.14 language model and $0.11 Azure speech, so about $0.65 per hour with the defaults. A two-run race day with a break is about four hours, so roughly $2-2.60 with the defaults. The panel's default budget is $5 per competition.
 
 ### Latency (event → audible clip), estimated
 
