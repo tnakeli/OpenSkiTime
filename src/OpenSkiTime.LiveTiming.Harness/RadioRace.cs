@@ -49,7 +49,7 @@ public static class RadioRace
         var account = Environment.GetEnvironmentVariable("OST_GOOGLE_SERVICE_ACCOUNT");
         string? RadioKey(string provider) => provider == RadioProviders.Simulation ? null
             : provider == RadioProviders.GoogleGemini && !string.IsNullOrWhiteSpace(account) ? File.ReadAllText(account)
-            : new WindowsCredentialStore(RadioKeyCredential.Target(RadioProviders.KeyOf(provider))).Read() ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
+            : RadioKeyCredential.Read(provider, x => new WindowsCredentialStore(x)) ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
         var configuration = new RadioConfiguration
         {
             CloudEnabled = true, BudgetUsd = 3m, LlmProvider = llmProvider, LlmModel = llmModel, TtsProvider = ttsProvider, Curation = true,

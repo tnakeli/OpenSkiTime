@@ -140,10 +140,10 @@ public sealed class RadioRulesTests
         {
             Assert.All(RadioPersonas.Hosts, h => Assert.Equal(provider, RadioPersonas.Voice(h, provider, null).Provider));
             Assert.Equal(provider, RadioPrices.ForTts(provider).Provider);
-            if (provider != RadioProviders.Simulation) { Assert.Contains(RadioProviders.KeyOf(provider), OpenSkiTime.LiveTiming.Client.RadioKeyCredential.Providers); }
+            if (provider != RadioProviders.Simulation) { Assert.All(RadioProviders.KeysOf(provider), x => Assert.Contains(x, OpenSkiTime.LiveTiming.Client.RadioKeyCredential.Providers)); }
         }
-        // Gemini voices through Vertex AI use the Google Gemini key and are billed by audio tokens.
-        Assert.Equal(RadioProviders.Gemini, RadioProviders.KeyOf(RadioProviders.GoogleGemini));
+        // Gemini voices through Vertex AI have their own key and fall back to an existing Google Gemini API key.
+        Assert.Equal([RadioProviders.GoogleGemini, RadioProviders.Gemini], RadioProviders.KeysOf(RadioProviders.GoogleGemini));
         // Gemini's 24 kHz PCM becomes 16 kHz mono WAV with the same duration.
         var second = new byte[48000];
         var wav = OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.Wav(OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.Resample(second, 24000, 16000), 16000);

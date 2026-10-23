@@ -285,7 +285,7 @@ public sealed class LiveControlSession : IAsyncDisposable
                 // Under ownership, the saved spend is current: another window may have spent and saved since this one loaded it.
                 _radioSaved = Math.Max(_radioSaved, _radioStore.Read(_competitionId.Value).SpentUsd);
                 var llmKey = config.LlmProvider == RadioProviders.Simulation ? null : Key(config.LlmProvider);
-                var ttsKey = config.TtsProvider == RadioProviders.Simulation ? null : Key(RadioProviders.KeyOf(config.TtsProvider));
+                var ttsKey = config.TtsProvider == RadioProviders.Simulation ? null : Key(config.TtsProvider);
                 var radio = _radio; var worker = Artifact("RadioWorker"); var options = new RadioWorkerOptions(config, _radioSaved, llmKey, ttsKey);
                 _radioStart = Task.Run(() => radio.StartAsync(worker, options, targets));
                 _radioStarted = true; _radioTargets = targets; _radioError = "";
@@ -297,7 +297,7 @@ public sealed class LiveControlSession : IAsyncDisposable
         catch (Exception) { _radioError = "Race radio could not start. Check installed components; timing capture and live publishing continue."; }
         finally { _gate.Release(); }
     }
-    private string Key(string provider) => CredentialStore(RadioKeyCredential.Target(provider)).Read() is { Length: > 0 } key ? key
+    private string Key(string provider) => RadioKeyCredential.Read(provider, CredentialStore) is { Length: > 0 } key ? key
         : throw new LiveValidationException($"Save the {RadioKeyCredential.Label(provider)} key in OpenSkiTime Settings → Live timing to use the race radio.");
 
     private static string Artifact(string name)
