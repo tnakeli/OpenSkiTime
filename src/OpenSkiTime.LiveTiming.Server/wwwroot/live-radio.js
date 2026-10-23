@@ -5,7 +5,7 @@ const liveRadio = (() => {
   const lineGap = 350, batchGap = 1200, liveEdge = 15000, lineWait = 8000, wait = {};
   // offset maps server times to this browser's clock (browser minus server).
   let session = null, clips = [], playing = false, current = null, timer = null, offset = 0;
-  let lastBatch = null, lastInterruptible = true, lastEnded = 0;
+  let lastBatch = null, lastInterruptible = true, lastEnded = 0, nextLine = 0;
   const done = new Set(), skippedBatches = new Set(), seenAt = new Map();
   function label() {
     button.textContent = playing ? '❚❚ Radio' : '▶ Radio';
@@ -16,15 +16,17 @@ const liveRadio = (() => {
   function pick() {
     const now = Date.now();
     const open = clips.filter(c => !done.has(c.clipId) && !skippedBatches.has(c.batchId) && Date.parse(c.expiresAt) + offset > now);
-    const sameBatch = open.filter(c => c.batchId === lastBatch).sort((a, b) => a.line - b.line);
+    const sameBatch = open.filter(c => c.batchId === lastBatch);
+    // Lines of a conversation play strictly in order; a missing line is never skipped over.
+    const expected = sameBatch.find(c => c.line === nextLine);
     if (!lastInterruptible) {
-      if (sameBatch.length) return sameBatch[0];
+      if (expected) return expected;
       // The next line of an unfinished sentence pair may still be on its way; a batch dropped as stale never finishes.
       if (now - lastEnded < lineWait) return wait;
       skippedBatches.add(lastBatch);
-    }
+    } else if (sameBatch.length && !expected) { skippedBatches.add(lastBatch); }
     // A new conversation starts only at its opening line: a reply whose opening never arrived is not played alone.
-    const startable = open.filter(c => c.batchId === lastBatch || open.some(o => o.batchId === c.batchId && o.line === 0));
+    const startable = open.filter(c => !skippedBatches.has(c.batchId) && (c === expected || (c.line === 0 && c.batchId !== lastBatch)));
     if (!startable.length) return null;
     const next = startable.sort((a, b) => a.priority - b.priority || a.sequence - b.sequence)[0];
     if (lastBatch && next.batchId !== lastBatch && sameBatch.length) skippedBatches.add(lastBatch);
@@ -41,16 +43,23 @@ const liveRadio = (() => {
     current = clip; done.add(clip.clipId);
     audio.src = `/api/sessions/${encodeURIComponent(session)}/radio/clips/${encodeURIComponent(clip.clipId)}`;
     // A browser that refuses playback outside a click shows the control paused again instead of silently dropping clips.
-    audio.play().catch(e => { if (e && e.name === 'NotAllowedError') { current = null; pause(); } else finish(); });
+    audio.play().catch(e => { if (e && e.name === 'NotAllowedError') { current = null; pause(); } else fail(); });
+  }
+  // A clip that could not be loaded or played was not heard: the rest of its conversation is dropped with it.
+  function fail() {
+    const failed = current; current = null;
+    if (!failed) return;
+    skippedBatches.add(failed.batchId);
+    if (playing) timer = setTimeout(next, lineGap);
   }
   function finish() {
     const ended = current; current = null;
     if (!ended) return;
-    lastBatch = ended.batchId; lastInterruptible = ended.interruptible || ended.line === ended.lineCount - 1; lastEnded = Date.now();
+    lastBatch = ended.batchId; lastInterruptible = ended.interruptible || ended.line === ended.lineCount - 1; lastEnded = Date.now(); nextLine = ended.line + 1;
     if (playing) timer = setTimeout(next, lineGap);
   }
   audio.addEventListener('ended', finish);
-  audio.addEventListener('error', finish);
+  audio.addEventListener('error', fail);
   function pause() {
     playing = false; clearTimeout(timer); timer = null; current = null;
     audio.pause(); audio.removeAttribute('src'); label();

@@ -115,6 +115,18 @@ assert.deepEqual(played.slice(-1), ['n1']);
 const before = unlocked;
 listeners['button:click'](); listeners['button:click']();
 assert.equal(unlocked, before + 1);
+// A missing middle line is never skipped over: after line 0, line 2 alone does not play.
+radio.update('s', { available: true, clips: [clip('g0', 'b12', 0, 3, 3, 16, true), clip('g2', 'b12', 2, 3, 3, 18)], serverTime: new Date(now).toISOString() });
+await advance(1500);
+assert.deepEqual(played.slice(-1), ['g0']);
+await end(); await advance(10000);
+assert.deepEqual(played.slice(-1), ['g0']);
+// An opening that fails to load drops its conversation: the reply is not played without it.
+radio.update('s', { available: true, clips: [clip('f0', 'b13', 0, 2, 3, 19, false), clip('f1', 'b13', 1, 2, 3, 20)], serverTime: new Date(now).toISOString() });
+await advance(1500);
+assert.deepEqual(played.slice(-1), ['f0']);
+listeners['audio:error'](); await advance(10000);
+assert.deepEqual(played.slice(-1), ['f0']);
 // Pause stops at once; an unavailable radio hides the control and stops playback.
 listeners['button:click']();
 assert.equal(button.attributes['aria-pressed'], 'false');

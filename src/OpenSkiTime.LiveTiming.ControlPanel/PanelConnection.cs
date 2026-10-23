@@ -80,7 +80,9 @@ public sealed class PanelConnection(string pipeName, LiveControlSession session)
     }
     public async ValueTask DisposeAsync()
     {
-        _stop.Cancel(); _pipe.Dispose();
+        // The session first: its radio shuts down and its final spend is saved while the desktop still keeps this
+        // process alive. Closing the pipe lets the desktop end the panel's process tree.
         await session.DisposeAsync();
+        _stop.Cancel(); _pipe.Dispose();
     }
 }
