@@ -121,7 +121,7 @@ public static partial class RadioSlots
     public static bool Names(string text, int bib) =>
         Parse(text).Any(x => x.Kind == "racer" && x.Reference == bib.ToString(CultureInfo.InvariantCulture));
 
-    [GeneratedRegex(@"(\{nation:(?<n>[0-9]{1,12})\} )?\{racer:(?<r>[0-9]{1,12})\}")]
+    [GeneratedRegex(@"(\{nation:(?<n>[0-9]{1,12})(:nom)?\} )?\{racer:(?<r>[0-9]{1,12})(:nom)?\}")]
     private static partial Regex RacerMention();
     /// <summary>
     /// Puts the bib before the first mention of each racer in a conversation ("numero kolme, ruotsalainen Saga Porttila"),
