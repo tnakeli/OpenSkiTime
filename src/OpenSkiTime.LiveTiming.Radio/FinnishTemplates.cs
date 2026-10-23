@@ -63,16 +63,16 @@ public static class FinnishTemplates
                 break;
             case RadioEventKind.TopStart when racer is not null:
                 yield return Line(racer.Previous?.Rank is { } previous && facts.Run == 2
-                    ? $"{{racer:{bib}}} lähtee nyt matkaan. Ensimmäisen laskun jälkeen hän oli {Place("prevrank", bib, previous)}."
-                    : $"{{racer:{bib}}} lähtee nyt matkaan.");
+                    ? $"Matkaan lähtee {Who(facts, bib)}{Club(facts, bib)}. Ensimmäisen laskun jälkeen hän oli {Place("prevrank", bib, previous)}."
+                    : $"Matkaan lähtee {Who(facts, bib)}{Club(facts, bib)}.");
                 foreach (var line in Gate(e, facts)) { yield return line; }
                 break;
             case RadioEventKind.Start when racer is not null:
-                yield return Line(Pick($"Matkaan lähti {{racer:{bib}}}.", $"Radalle lähti {{racer:{bib}}}.", $"{{racer:{bib}}} lähti matkaan."));
+                yield return Line(Pick($"Matkaan lähti {Who(facts, bib)}{Club(facts, bib)}.", $"Radalle lähti {Who(facts, bib)}{Club(facts, bib)}."));
                 foreach (var line in Gate(e, facts)) { yield return line; }
                 break;
             case RadioEventKind.RunStarted:
-                yield return Line(racer is null ? "{ord:run:nom} lasku on alkanut." : $"{{ord:run:nom}} lasku on alkanut. Radalla on nyt {{racer:{bib}}}.");
+                yield return Line(racer is null ? "{ord:run:nom} lasku on alkanut." : $"{{ord:run:nom}} lasku on alkanut. Radalla on nyt {Who(facts, bib)}{Club(facts, bib)}.");
                 if (racer is not null) { foreach (var line in Gate(e, facts)) { yield return line; } }
                 break;
             case RadioEventKind.RunComplete:
@@ -95,8 +95,12 @@ public static class FinnishTemplates
     private static IEnumerable<ScriptLine> Gate(RadioEvent e, FactSheet facts)
     {
         if (e.Bibs.Length > 1 && facts.Racers.ContainsKey(e.Bibs[1]))
-        { yield return new("", $"Lähtöportilla seuraavana {{racer:{e.Bibs[1]}}}.", true); }
+        { yield return new("", $"Lähtöportilla seuraavana {Who(facts, e.Bibs[1])}.", true); }
     }
+    // In an international field a racer from another country is introduced with the nationality: "ruotsalainen Saga Porttila".
+    private static string Who(FactSheet facts, int bib) => facts.International && facts.Racers[bib].Competitor.Nation != facts.HomeNation
+        && FinnishVerbalizer.Demonym(facts.Racers[bib].Competitor.Nation) is not null ? $"{{nation:{bib}}} {{racer:{bib}}}" : $"{{racer:{bib}}}";
+    private static string Club(FactSheet facts, int bib) => facts.Racers[bib].Competitor.Club.Trim().Length > 0 ? $", {{club:{bib}}}" : "";
 
     // Ordinal words read naturally up to ten ("kolmantena"); later places use the cardinal ("sijalla kaksikymmentäkolme").
     private static string Place(string kind, int bib, int place) => place <= 10 ? $"{{{kind}:{bib}:ess}}" : $"sijalla {{{kind}:{bib}:card}}";

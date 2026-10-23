@@ -165,13 +165,19 @@ The model receives a fact sheet with bib, nation, club, status, times, ranks and
 
 | Slot | Renders | Cases |
 |---|---|---|
-| `{racer:12}` | Full name exactly as published ("Aada Lumivaara"); only an all-capital surname is title-cased, and the operator lexicon may replace the spoken form | Nominative only: code never inflects names |
+| `{racer:12}` | Full name as published ("Aada Lumivaara"); only an all-capital surname is title-cased. A foreign racer's name is respelled for a Finnish voice by nation (see below), and the operator lexicon may replace the spoken form | Nominative only: code never inflects names |
+| `{club:12}` | The club exactly as published ("Rinneseura") | Nominative |
+| `{nation:12}` | Nationality as an adjective ("ruotsalainen") | Nominative |
 | `{bib:12:ade}` | "kahdellatoista" | Cardinal: `nom gen par ine ela ill ade abl all ess tra` |
 | `{rank:12:ess}`, `{totalrank:…}`, `{prevrank:…}` | "kolmantena"; `card` gives "kolme" | Ordinal cases or `card` |
 | `{time:12}`, `{total:12}`, `{prevtime:12}` | "yksi minuutti viisi pilkku nolla kolme", "neljäkymmentäseitsemän pilkku yhdeksänkymmentä sekuntia" | Nominative |
 | `{diff:12}`, `{totaldiff:12}` | "nolla pilkku kolmekymmentäneljä sekuntia" | Nominative |
 | `{status:12}`, `{status:12:noun}` | DNF "keskeytti" / "keskeytys", DSQ "hylättiin" / "hylkäys", DNS "ei lähtenyt matkaan" | `verb`, `noun` |
 | `{num:finished}`, `{ord:run:nom}` | Counts from the fact sheet (`run`, `runs`, `starters`, `finished`, `oncourse`, `remaining`, `dnf`, `dsq`, `dns`) | Cardinal / ordinal cases |
+
+Racers are introduced with their club when they start ("Matkaan lähti Veeti Hankiranta, Rinneseura."). In an international field (more than one nation) a racer from another nation than the field's most common one also gets the nationality ("Lähtöportilla seuraavana ruotsalainen Saga Porttila."). The model is told to do the same, once per racer and run.
+
+**Foreign names.** Finnish voices read Finnish spelling, so `FinnishPronunciation` respells each name word of a non-Finnish racer with ordered rules for the racer's nation: German-speaking (Schneider → Šnaider, Volker → Folker, von → fon), Swedish, Norwegian and Danish (Sjöberg → Šöberj, Göran → Jöran, Kerstin → Šerstin, Snøheim → Snöhäim), Italian (Giacomo → Džakomo), Spanish (Jiménez → Himenes), French, Czech and Slovak, Polish (Szczepański → Štšepanjski), South Slavic and Baltic spellings. English and other nations without regular spelling stay as written. It runs on this computer, so names still go only to the speech provider. The operator lexicon (whole name or one word) always wins. The rules are a heuristic: they are not verified by listening for every voice.
 
 Times and gaps are the display hundredths timing already calculated (`Hundredths`, `Difference`, `TotalHundredths`, `TotalDifference`); the radio never recomputes or re-rounds them. Hundredths below ten are read digit by digit ("nolla viisi") so 0,05 and 0,50 never sound alike. `FinnishNumbers` inflects every component of compound numerals (kahdellakymmenelläkolmella; kahdentenakymmenentenätoisena), with nominative multiples in the partitive (kaksikymmentä) and vowel harmony in ordinals.
 

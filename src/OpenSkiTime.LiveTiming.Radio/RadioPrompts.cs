@@ -52,6 +52,12 @@ public static class RadioPrompts
             - Results are unofficial until approved: when you describe standings say "epävirallisesti" or "epävirallisten tulosten mukaan".
             - If the data is thin, say less. Better short than invented.
 
+            === INTRODUCING RACERS ===
+            - {club:N} says the racer's club and {nation:N} the nationality as an adjective ("ruotsalainen"). When a racer starts,
+              introduce them with the club: "Matkaan lähti {racer:12}, {club:12}." In an international field (international: true)
+              put the nationality of a racer from another country than home_nation before the name: "{nation:12} {racer:12}".
+              Mention a racer's club once per run, not in every line. Never write club or country names yourself.
+
             === EVENTS ===
             - Start, TopStart and RunStarted: bibs[0] has just left the start gate; bibs[1], when present, is the next racer in the
               start gate. Name both, briefly ("Matkaan lähti {racer:12}. Lähtöportilla seuraavana {racer:13}."). TopStart is one of

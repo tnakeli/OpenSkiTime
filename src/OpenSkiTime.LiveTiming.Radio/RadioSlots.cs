@@ -68,7 +68,7 @@ public static partial class RadioSlots
     {
         ["racer"] = ["nom"], ["bib"] = Cardinal, ["rank"] = Rank, ["totalrank"] = Rank, ["prevrank"] = Rank,
         ["time"] = ["nom"], ["total"] = ["nom"], ["prevtime"] = ["nom"], ["diff"] = ["nom"], ["totaldiff"] = ["nom"],
-        ["status"] = ["verb", "noun"], ["num"] = Cardinal, ["ord"] = [.. FinnishNumbers.Codes.Keys]
+        ["status"] = ["verb", "noun"], ["num"] = Cardinal, ["ord"] = [.. FinnishNumbers.Codes.Keys], ["club"] = ["nom"], ["nation"] = ["nom"]
     };
     public const int MaxLineLength = 400;
     private static readonly string[] NumberWords = ["kaksi", "kahde", "kahta", "kolm", "nelj", "viisi", "viide", "viitt", "kuusi", "kuude", "kuutt",
@@ -91,6 +91,8 @@ public static partial class RadioSlots
         ArgumentNullException.ThrowIfNull(facts);
         if (!facts.Racers.TryGetValue(bib, out var racer)) { return []; }
         var list = new List<string> { $"{{racer:{bib}}}", $"{{bib:{bib}:<case>}}", $"{{status:{bib}:verb|noun}}" };
+        if (racer.Competitor.Club.Trim().Length > 0) { list.Add($"{{club:{bib}}}"); }
+        if (FinnishVerbalizer.Demonym(racer.Competitor.Nation) is not null) { list.Add($"{{nation:{bib}}}"); }
         if (racer.Result?.Hundredths is not null && racer.Result.Status == LiveStatus.Finished) { list.Add($"{{time:{bib}}}"); }
         if (racer.Result?.Rank is not null) { list.Add($"{{rank:{bib}:<case>|card}}"); }
         if (racer.Result?.Difference is not null) { list.Add($"{{diff:{bib}}}"); }
@@ -173,6 +175,8 @@ public static partial class RadioSlots
             return slot.Kind switch
             {
                 "racer" => FinnishVerbalizer.Name(facts.Racers[int.Parse(slot.Reference, CultureInfo.InvariantCulture)].Competitor, lexicon),
+                "club" => facts.Racers[int.Parse(slot.Reference, CultureInfo.InvariantCulture)].Competitor.Club.Trim(),
+                "nation" => FinnishVerbalizer.Demonym(facts.Racers[int.Parse(slot.Reference, CultureInfo.InvariantCulture)].Competitor.Nation)!,
                 "bib" or "num" => FinnishNumbers.Cardinal(value.Number, FinnishNumbers.Codes[code]),
                 "ord" => FinnishNumbers.Ordinal(value.Number, FinnishNumbers.Codes[code]),
                 "rank" or "totalrank" or "prevrank" => code == "card" ? FinnishNumbers.Cardinal(value.Number) : FinnishNumbers.Ordinal(value.Number, FinnishNumbers.Codes[code]),
@@ -204,7 +208,8 @@ public static partial class RadioSlots
         var run = facts.Run;
         foreach (var slot in Parse(text))
         {
-            if (Value(slot, facts) is not { } value || slot.Kind is "racer" or "bib") { continue; }
+            // Name, bib, club and nation never change during a race.
+            if (Value(slot, facts) is not { } value || slot.Kind is "racer" or "bib" or "club" or "nation") { continue; }
             if (slot.Kind is "num" or "ord")
             {
                 // Counts by status change as the race goes on; the run number is covered by the current-run condition.
@@ -255,6 +260,8 @@ public static partial class RadioSlots
             // A result under timing review has no status that may be spoken.
             "status" => r?.Status == LiveStatus.Review ? null : 0,
             "racer" => 0, "bib" => bib,
+            "club" => racer.Competitor.Club.Trim().Length > 0 ? 0 : null,
+            "nation" => FinnishVerbalizer.Demonym(racer.Competitor.Nation) is null ? null : 0,
             "rank" => r?.Rank, "totalrank" => r?.TotalRank, "prevrank" => p?.Rank,
             "time" => r?.Status == LiveStatus.Finished ? r.Hundredths : null, "total" => r?.TotalHundredths,
             "prevtime" => p?.Status == LiveStatus.Finished ? p.Hundredths : null,
