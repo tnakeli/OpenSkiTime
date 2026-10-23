@@ -359,6 +359,8 @@ public sealed class RadioEngine
     private void Report(RadioState? state = null, string? error = null, RadioMode? mode = null, (DateTimeOffset At, string Host)? lastClip = null)
     {
         var current = Health;
+        // Errors are OpenSkiTime's own messages (no keys, scripts or names); a repeated error is logged once.
+        if (error is not null && error != current.Error) { _log($"Radio error: {error}"); }
         Volatile.Write(ref _health, current with
         {
             State = state ?? current.State, Error = error ?? current.Error, Mode = mode?.ToString() ?? current.Mode,

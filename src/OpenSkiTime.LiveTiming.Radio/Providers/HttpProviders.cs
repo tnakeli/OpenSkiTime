@@ -14,7 +14,9 @@ internal static class RadioHttp
 {
     public static HttpClient Create() => new(new SocketsHttpHandler { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
     { Timeout = Timeout.InfiniteTimeSpan };
-    public static async Task<HttpResponseMessage> SendAsync(HttpClient http, HttpRequestMessage request, string name, CancellationToken ct)
+    // rejected: the message for HTTP 401/403 when the key is not the only possible cause.
+    public static async Task<HttpResponseMessage> SendAsync(HttpClient http, HttpRequestMessage request, string name, CancellationToken ct,
+        string? rejected = null)
     {
         HttpResponseMessage response;
         try { response = await http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct); }
@@ -24,7 +26,7 @@ internal static class RadioHttp
         response.Dispose();
         throw new RadioProviderException(status switch
         {
-            401 or 403 => $"{name} rejected the API key. Check Settings → Live timing.",
+            401 or 403 => rejected ?? $"{name} rejected the API key. Check Settings → Live timing.",
             429 => $"{name} rate limit or quota reached.",
             _ => $"{name} returned HTTP {status.ToString(CultureInfo.InvariantCulture)}."
         });
@@ -127,7 +129,9 @@ public sealed class AzureTts(string? apiKey, string region) : IRadioTts, IDispos
         message.Headers.Add("Ocp-Apim-Subscription-Key", _key);
         message.Headers.Add("X-Microsoft-OutputFormat", "audio-24khz-48kbitrate-mono-mp3");
         message.Headers.UserAgent.ParseAdd("OpenSkiTime");
-        using var response = await RadioHttp.SendAsync(_http, message, "Azure Speech", ct);
+        // An Azure key works only in its resource's region, so a wrong region looks like a rejected key.
+        using var response = await RadioHttp.SendAsync(_http, message, "Azure Speech", ct,
+            $"Azure Speech rejected the key in region {region}. Check that the Azure region in the radio settings is the Speech resource's region, and the key in Settings → Live timing.");
         var data = await response.Content.ReadAsByteArrayAsync(ct);
         return new(data, "audio/mpeg", AudioDuration.Milliseconds(data, "audio/mpeg"));
     }

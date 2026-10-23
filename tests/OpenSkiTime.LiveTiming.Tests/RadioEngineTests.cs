@@ -21,7 +21,9 @@ public sealed class RadioEngineTests
         public RadioBudget Budget { get; init; } = new(5m, 0m);
         private RadioEngine? _engine;
         public RadioEngine Engine => _engine ??= Create();
-        private RadioEngine Create() { var e = new RadioEngine(Configuration, Llm, Tts, Budget, Time); e.SetSinks([Sink]); return e; }
+        public List<string> Log { get; } = [];
+        private RadioEngine Create()
+        { var e = new RadioEngine(Configuration, Llm, Tts, Budget, Time, x => { lock (Log) { Log.Add(x); } }); e.SetSinks([Sink]); return e; }
         public LiveSnapshot State { get; set; } = RadioRace.Create();
         /// <summary>Publishes the first finish of the race and advances time until its batch is due.</summary>
         public async Task FirstFinishAsync()
@@ -131,6 +133,24 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task RejectedKeyMessageNamesTheLikelyCauseWhenAProviderGivesOne()
+    {
+        using var http = new HttpClient(new StatusHandler(System.Net.HttpStatusCode.Unauthorized));
+        var region = await Assert.ThrowsAsync<RadioProviderException>(() => OpenSkiTime.LiveTiming.Radio.Providers.RadioHttp.SendAsync(http,
+            new HttpRequestMessage(HttpMethod.Post, "https://speech.invalid/"), "Azure Speech", CancellationToken.None, "Check the Azure region."));
+        Assert.Equal("Check the Azure region.", region.Message);
+        var key = await Assert.ThrowsAsync<RadioProviderException>(() => OpenSkiTime.LiveTiming.Radio.Providers.RadioHttp.SendAsync(http,
+            new HttpRequestMessage(HttpMethod.Post, "https://speech.invalid/"), "OpenAI", CancellationToken.None));
+        Assert.Equal("OpenAI rejected the API key. Check Settings → Live timing.", key.Message);
+    }
+
+    private sealed class StatusHandler(System.Net.HttpStatusCode status) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(status));
+    }
+
+    [Fact]
     public async Task FailingOrHangingSpeechSkipsTheBatchAndTheEngineCarriesOn()
     {
         var calls = 0;
@@ -149,6 +169,8 @@ public sealed class RadioEngineTests
         await hanging.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Empty(rig.Sink.Clips);
         Assert.Equal("A radio provider did not answer in time.", rig.Engine.Health.Error);
+        // Errors reach the diagnostic log too, so silence can be diagnosed without the panel.
+        lock (rig.Log) { Assert.Contains("Radio error: A radio provider did not answer in time.", rig.Log); }
         rig.State = RadioRace.Set(RadioRace.Set(rig.State, 2, LiveStatus.OnCourse, at: rig.Time.GetUtcNow()), 2, LiveStatus.DNF, at: rig.Time.GetUtcNow());
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         rig.Time.Advance(TimeSpan.FromSeconds(13));
