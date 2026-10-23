@@ -14,6 +14,7 @@ public sealed class RadioSlotTests
         state = RadioRace.Set(state, 2, LiveStatus.Finished, 4790);
         state = RadioRace.Set(state, 3, LiveStatus.OnCourse);
         state = RadioRace.Set(state, 4, LiveStatus.DNF);
+        state = RadioRace.Set(state, 3, LiveStatus.Review);
         return (FactSheet.Build(state, [2, 3, 4]), new LineRules(state, ["Aino", "Kalle"], "Sponsorina Lumiklubi."));
     }
 
@@ -37,6 +38,7 @@ public sealed class RadioSlotTests
     [InlineData("Matkassa {racer:9}.", "unknown slot")]        // Bib 9 is not in the fact sheet.
     [InlineData("{racer:2:gen} lasku.", "disallowed case")]    // Names are never inflected by code.
     [InlineData("{name:2} maalissa.", "unknown slot")]
+    [InlineData("{racer:3} {status:3}.", "unknown slot")]          // Bib 3 is under timing review.
     [InlineData("Hankiranta johtaa nyt.", "racer name outside slots")]
     [InlineData("Maalissa VEETI {racer:1}.", "racer name outside slots")]
     [InlineData("Hän on kolmas.", "number words outside slots")]

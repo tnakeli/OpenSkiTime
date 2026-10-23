@@ -53,13 +53,18 @@ public static class RadioEventDetector
             {
                 if (result.Status == LiveStatus.Finished && old!.Hundredths != result.Hundredths)
                 { events.Add(Make(RadioEventKind.Correction, 3, [result.Bib], 90, 5, conditions: Status(result.Bib, LiveStatus.Finished))); }
+                // A correction in an earlier run changes only the combined time of this run's row.
+                else if (result.Status == LiveStatus.Finished && result.TotalHundredths is not null && old!.TotalHundredths != result.TotalHundredths)
+                { events.Add(Make(RadioEventKind.Correction, 3, [result.Bib], 90, 5, conditions: Status(result.Bib, LiveStatus.Finished)) with { Source = "total" }); }
                 continue;
             }
             switch (result.Status)
             {
                 case LiveStatus.Finished:
                     var place = totals ? result.TotalRank : result.Rank;
-                    var kind = place == 1 && finishers > 1 ? RadioEventKind.NewLeader : place <= 3 ? RadioEventKind.Podium : RadioEventKind.Finish;
+                    // Equal to the leader's time is a shared lead, not a new leader.
+                    var shared = run.Results.Any(x => x.Bib != result.Bib && (totals ? x.TotalRank : x.Rank) == 1);
+                    var kind = place == 1 && finishers > 1 && !shared ? RadioEventKind.NewLeader : place <= 3 ? RadioEventKind.Podium : RadioEventKind.Finish;
                     // A finish announcement states the place, so it is stale once anyone moves the racer down.
                     var placed = new RadioCondition(totals ? RadioConditionKind.TotalRank : RadioConditionKind.Rank, run.Number, result.Bib, Value: place);
                     events.Add(Make(kind, kind == RadioEventKind.Finish ? 3 : 2, [result.Bib], kind == RadioEventKind.Finish ? 75 : 120,

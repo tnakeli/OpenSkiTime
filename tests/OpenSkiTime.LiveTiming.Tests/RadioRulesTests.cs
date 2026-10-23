@@ -28,6 +28,9 @@ public sealed class RadioRulesTests
         Assert.Contains(new RadioCondition(RadioConditionKind.Rank, 1, 1, Value: 1), podium.Conditions);
         var leader = RadioRace.Set(first, 2, LiveStatus.Finished, 4700);
         Assert.Equal(RadioEventKind.NewLeader, Assert.Single(RadioEventDetector.Detect(first, leader, now)).Kind);
+        // Matching the leader's time shares the lead; nobody is displaced.
+        var tied = RadioRace.Set(leader, 5, LiveStatus.Finished, 4700);
+        Assert.Equal(RadioEventKind.Podium, Assert.Single(RadioEventDetector.Detect(leader, tied, now)).Kind);
         var fourth = RadioRace.Set(RadioRace.Set(leader, 3, LiveStatus.Finished, 4900), 4, LiveStatus.Finished, 5000);
         var events = RadioEventDetector.Detect(leader, fourth, now);
         Assert.Equal([RadioEventKind.Podium, RadioEventKind.Finish], events.Select(x => x.Kind));

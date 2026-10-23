@@ -226,7 +226,9 @@ public static partial class RadioSlots
         var r = racer.Result; var p = racer.Previous;
         long? number = slot.Kind switch
         {
-            "racer" or "status" => 0, "bib" => bib,
+            // A result under timing review has no status that may be spoken.
+            "status" => r?.Status == LiveStatus.Review ? null : 0,
+            "racer" => 0, "bib" => bib,
             "rank" => r?.Rank, "totalrank" => r?.TotalRank, "prevrank" => p?.Rank,
             "time" => r?.Status == LiveStatus.Finished ? r.Hundredths : null, "total" => r?.TotalHundredths,
             "prevtime" => p?.Status == LiveStatus.Finished ? p.Hundredths : null,

@@ -55,6 +55,9 @@ public static class FinnishTemplates
             case RadioEventKind.DSQ when racer is not null:
                 yield return Line($"{{racer:{bib}}} {{status:{bib}}}. Tulokset ovat vielä epävirallisia.");
                 break;
+            case RadioEventKind.Correction when result?.Status == LiveStatus.Finished && e.Source == "total" && result.TotalHundredths is not null:
+                yield return Line($"Yhteistulokseen on tehty korjaus: {{racer:{bib}}}, yhteisaika nyt {{total:{bib}}}.");
+                break;
             case RadioEventKind.Correction when result?.Status == LiveStatus.Finished:
                 yield return Line($"Tulokseen on tehty korjaus: {{racer:{bib}}}, aika nyt {{time:{bib}}}.");
                 break;
