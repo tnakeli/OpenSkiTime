@@ -8,8 +8,13 @@ public sealed record FisCalendarEvent(int Id, int Season, string Name, string Lo
     string Organizer, DateOnly StartDate, DateOnly EndDate, IReadOnlyList<CompetitionValues> Competitions, bool HasEventName = true)
 {
     public int CompetitionCount => Competitions.Count;
+    /// <summary>Races FIS has not given a codex yet; the operator enters it in Competitions.</summary>
+    public int MissingCodexCount => Competitions.Count(x => x.FisCode is null);
     public string Display => $"{StartDate:dd.MM.yyyy}–{EndDate:dd.MM.yyyy} · {Location} · {Nation} · {Name} · {Competitions.Count} races";
 }
+
+/// <summary>The alpine events of one season and the count of calendar races that could not form a competition.</summary>
+public sealed record FisCalendar(IReadOnlyList<FisCalendarEvent> Events, int SkippedRaces);
 
 public sealed partial class FisRaceInformationClient
 {
@@ -21,8 +26,11 @@ public sealed partial class FisRaceInformationClient
         { throw new DomainValidationException("Save a valid public FIS API key in Settings first."); }
         foreach (var race in selected.Competitions)
         {
-            if (race.FisCode is not { Length: 4 } || !race.FisCode.All(char.IsAsciiDigit) || race.Calendar is null)
-            { throw new DomainValidationException("Calendar race has an invalid codex or missing metadata."); }
+            if (race.Calendar is null) { throw new DomainValidationException("Calendar race has missing metadata."); }
+            // A race without a codex has nothing to look up; the operator enters the codex later.
+            if (race.FisCode is null) { continue; }
+            if (race.FisCode is not { Length: 4 } || !race.FisCode.All(char.IsAsciiDigit))
+            { throw new DomainValidationException("Calendar race has an invalid codex."); }
             var codex = int.Parse(race.FisCode!, CultureInfo.InvariantCulture);
             var summary = await GetAsync($"https://api.fis-ski.com/competitions/find-by-codex/AL/{codex}?season={selected.Season}", apiKey, ct);
             if (summary.Id <= 0 || string.IsNullOrWhiteSpace(summary.EventCode)
@@ -35,7 +43,7 @@ public sealed partial class FisRaceInformationClient
         }
     }
 
-    public async Task<IReadOnlyList<FisCalendarEvent>> GetCalendarAsync(int season, string apiKey, CancellationToken ct = default)
+    public async Task<FisCalendar> GetCalendarAsync(int season, string apiKey, CancellationToken ct = default)
     {
         if (season is < 1900 or > 2999) { throw new DomainValidationException("Enter a valid FIS season year."); }
         if (string.IsNullOrWhiteSpace(apiKey) || apiKey.Any(char.IsWhiteSpace) || apiKey.Any(char.IsControl))
@@ -56,17 +64,26 @@ public sealed partial class FisRaceInformationClient
         return ReadCalendarEvents(output.ToArray(), season, source);
     }
 
-    public static IReadOnlyList<FisCalendarEvent> ReadCalendarEvents(byte[] archive, int season, string source)
+    // One unusable row never rejects the calendar: races without a usable codex are imported without one for the
+    // operator to enter, and only races that cannot form a competition (no valid date, unreadable fields) are skipped.
+    public static FisCalendar ReadCalendarEvents(byte[] archive, int season, string source)
     {
         try
         {
             using var input = new MemoryStream(archive, false);
             using var zip = new ZipArchive(input, ZipArchiveMode.Read);
-            var events = ReadRows(zip, "A_event.csv").Where(x => Int(x, "Seasoncode") == season && Value(x, "Sectorcode") == "AL").ToArray();
-            var races = ReadRows(zip, "A_raceal.csv").Where(x => Int(x, "Seasoncode") == season).ToArray();
-            if (events.GroupBy(x => Int(x, "Eventid")).Any(x => x.Key <= 0 || x.Count() != 1)
-                || races.GroupBy(x => Int(x, "Racecodex")).Any(x => x.Count() != 1))
-            { throw new DomainValidationException("FIS calendar contains ambiguous event or codex identities."); }
+            // A repeated event row is the same event; its first row supplies the event fields.
+            var events = ReadRows(zip, "A_event.csv", out _).Where(x => Int(x, "Seasoncode") == season && Value(x, "Sectorcode") == "AL"
+                && Int(x, "Eventid") > 0).GroupBy(x => Int(x, "Eventid")).Select(x => x.First()).ToArray();
+            // A repeated row of one FIS race ID is the same race.
+            var races = ReadRows(zip, "A_raceal.csv", out var malformed).Where(x => Int(x, "Seasoncode") == season)
+                .Select((row, index) => (row, index)).GroupBy(x => Int(x.row, "Raceid") is > 0 and var id ? id : -1L - x.index)
+                .Select(x => x.First().row).ToArray();
+            // A codex shared by several races identifies none of them.
+            var shared = races.Select(CalendarCodex).OfType<int>().GroupBy(x => x).Where(x => x.Count() > 1).Select(x => x.Key).ToHashSet();
+            var eventIds = events.Select(x => Int(x, "Eventid")).ToHashSet();
+            var skipped = malformed + races.Count(x => !eventIds.Contains(Int(x, "Eventid"))
+                && CalendarDiscipline(Value(x, "Disciplinecode").ToUpperInvariant()) is not null);
             var result = new List<FisCalendarEvent>();
             var racesByEvent = races.ToLookup(x => Int(x, "Eventid"));
             foreach (var e in events)
@@ -79,22 +96,9 @@ public sealed partial class FisRaceInformationClient
                     var discipline = CalendarDiscipline(code);
                     // Unsupported alpine disciplines are excluded; never relabel them as slalom.
                     if (discipline is null) { continue; }
-                    var codex = Int(r, "Racecodex");
-                    if (codex is < 1 or > 9999 || Int(r, "Raceid") <= 0
-                        || !DateOnly.TryParseExact(Value(r, "Racedate")[..Math.Min(10, Value(r, "Racedate").Length)], "yyyy-MM-dd",
-                            CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-                    { throw new DomainValidationException("FIS calendar contains an invalid race identity or date."); }
-                    var summary = new FisCompetitionInformation(Int(r, "Raceid"), codex, season, date, code,
-                        Value(r, "Catcode"), Value(r, "Nationcode"), false, Value(r, "Place"), Value(r, "Gender"), id);
-                    var location = string.IsNullOrWhiteSpace(summary.PlaceName) ? Value(e, "Place") : summary.PlaceName;
-                    var calendar = new CompetitionCalendarData(season, location!, summary.PlaceNationCode ?? "",
-                        summary.CategoryCode, summary.GenderCode ?? "", CalendarTechnicalDelegate(r), source).Validated();
-                    var eventName = string.IsNullOrWhiteSpace(Value(e, "Eventname")) ? location : Value(e, "Eventname");
-                    var genderName = calendar.Gender switch { "W" => "Women", "M" => "Men", "A" => "Mixed", _ => calendar.Gender };
-                    var name = $"{eventName} - {code} {genderName} {codex:0000}";
-                    competitions.Add(new CompetitionValues(name, $"{code} {calendar.Gender} {codex:0000}", date, discipline.Value,
-                        RaceType.Fis, discipline is Discipline.Downhill or Discipline.SuperG ? 1 : 2, 0, codex.ToString("0000", CultureInfo.InvariantCulture),
-                        HomologationNumber: Value(r, "Homol"), Calendar: calendar).Validated());
+                    var codex = CalendarCodex(r) is { } value && !shared.Contains(value) ? value : (int?)null;
+                    if (CalendarRace(e, r, season, code, discipline.Value, codex, source) is { } race) { competitions.Add(race); }
+                    else { skipped++; }
                 }
                 if (competitions.Count == 0) { continue; }
                 // Number each discipline/gender chronologically, with codex as a stable same-day tie-breaker.
@@ -126,10 +130,44 @@ public sealed partial class FisRaceInformationClient
                     CalendarDate(e, "Enddate", competitions.Max(x => x.Date)), competitions.OrderBy(x => x.Date).ThenBy(x => x.ShortLabel).ToArray(),
                     !string.IsNullOrWhiteSpace(nameValue)));
             }
-            return result.OrderBy(x => x.StartDate).ThenBy(x => x.Location).ToArray();
+            return new(result.OrderBy(x => x.StartDate).ThenBy(x => x.Location).ToArray(), skipped);
         }
         catch (Exception ex) when (ex is InvalidDataException or System.Text.DecoderFallbackException)
         { throw new DomainValidationException("FIS calendar archive is unreadable."); }
+    }
+
+    private static int? CalendarCodex(Dictionary<string, string> race) => Value(race, "Racecodex") is { Length: > 0 and <= 4 } text
+        && int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var codex) && codex > 0 ? codex : null;
+
+    private static CompetitionValues? CalendarRace(Dictionary<string, string> e, Dictionary<string, string> r, int season,
+        string code, Discipline discipline, int? codex, string source)
+    {
+        var dateText = Value(r, "Racedate");
+        if (!DateOnly.TryParseExact(dateText[..Math.Min(10, dateText.Length)], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        { return null; }
+        var raceId = Int(r, "Raceid");
+        // Without a codex or a FIS race ID a later import could not find the race again and would duplicate it.
+        if (codex is null && raceId <= 0) { return null; }
+        var location = string.IsNullOrWhiteSpace(Value(r, "Place")) ? Value(e, "Place") : Value(r, "Place");
+        var eventName = string.IsNullOrWhiteSpace(Value(e, "Eventname")) ? location : Value(e, "Eventname");
+        var gender = Value(r, "Gender");
+        var genderName = gender.ToUpperInvariant() switch { "W" => "Women", "M" => "Men", "A" => "Mixed", _ => gender };
+        var fisCode = codex?.ToString("0000", CultureInfo.InvariantCulture);
+        // Unreadable TD details are left for manual entry rather than dropping the race.
+        foreach (var td in new[] { CalendarTechnicalDelegate(r), null })
+        {
+            try
+            {
+                var calendar = new CompetitionCalendarData(season, location, Value(r, "Nationcode"), Value(r, "Catcode"), gender, td, source,
+                    raceId > 0 ? raceId : null).Validated();
+                return new CompetitionValues(fisCode is null ? $"{eventName} - {code} {genderName}" : $"{eventName} - {code} {genderName} {fisCode}",
+                    $"{code} {calendar.Gender} {fisCode}", date, discipline, RaceType.Fis, discipline is Discipline.Downhill or Discipline.SuperG ? 1 : 2, 0,
+                    fisCode, HomologationNumber: Value(r, "Homol"), Calendar: calendar).Validated();
+            }
+            catch (DomainValidationException) when (td is not null) { }
+            catch (DomainValidationException) { return null; }
+        }
+        return null;
     }
 
     private static DateOnly CalendarDate(Dictionary<string, string> row, string key, DateOnly fallback)
@@ -139,7 +177,8 @@ public sealed partial class FisRaceInformationClient
     {
         var original = Value(race, "Td1name"); var nation = Value(race, "Td1nation"); var number = Value(race, "Td1code");
         if (original.Length == 0 && number.Length == 0) { return null; }
-        if (number.Length > 0 && !number.All(char.IsAsciiDigit)) { throw new DomainValidationException("FIS calendar TD number is invalid."); }
+        // A malformed TD number is left for manual entry.
+        if (!number.All(char.IsAsciiDigit)) { number = ""; }
         var suffix = " (" + nation + ")";
         var name = original.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ? original[..^suffix.Length] : original;
         var comma = name.Split(',', StringSplitOptions.TrimEntries);

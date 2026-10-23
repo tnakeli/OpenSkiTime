@@ -29,13 +29,15 @@ public sealed partial class MainViewModel
     {
         SeriesCalendarCompetitions.Clear();
         _calendarPreviewRevision = _current?.Revision;
-        foreach (var race in value?.Competitions ?? [])
+        var races = value?.Competitions ?? [];
+        var existing = IsCreatingNew ? [] : Competitions.Select(x => x.Values).ToArray();
+        // The save rejects an ambiguous match; the preview then shows the races as supplied.
+        var matched = CalendarCompetitionMerge.Match(existing, races, out var ambiguous);
+        for (var i = 0; i < races.Count; i++)
         {
-            var matches = IsCreatingNew ? [] : Competitions.Where(x => x.Values.RaceType == RaceType.Fis
-                && x.Values.FisCode?.PadLeft(4, '0') == race.FisCode
-                && (x.Values.Calendar?.Season ?? FisSeason.FromDate(x.Values.Date)) == race.Calendar!.Season).ToArray();
-            SeriesCalendarCompetitions.Add(matches.Length == 1 ? CalendarCompetitionMerge.Merge(matches[0].Values,
-                value!.HasEventName ? race : race with { Name = matches[0].Values.Name }).Validated() : race);
+            var race = races[i];
+            SeriesCalendarCompetitions.Add(!ambiguous && matched[i] is { } index ? CalendarCompetitionMerge.Merge(existing[index],
+                value!.HasEventName ? race : race with { Name = existing[index].Name }).Validated() : race);
         }
     }
     private void FilterSeriesCalendar()
@@ -68,11 +70,14 @@ public sealed partial class MainViewModel
         {
             if (!int.TryParse(seasonText, NumberStyles.None, CultureInfo.InvariantCulture, out var season))
             { throw new DomainValidationException("Enter the FIS season year."); }
-            var events = await new FisRaceInformationClient(_informationHttp).GetCalendarAsync(season, _fisStore.ReadApiKey() ?? "");
+            var calendar = await new FisRaceInformationClient(_informationHttp).GetCalendarAsync(season, _fisStore.ReadApiKey() ?? "");
             if (generation != _calendarBrowseGeneration || path != workspace.FilePath || creating != IsCreatingNew || seasonText != SeriesCalendarSeason) { return; }
+            var events = calendar.Events;
             _calendarEvents = events; FilterSeriesCalendar();
-            SeriesCalendarStatus = events.Count == 0 ? "The latest FIS export has no supported alpine events for this season. Check the season or enter the series manually."
-                : $"{events.Count} alpine events loaded. Select an event to review its competitions.";
+            var skipped = calendar.SkippedRaces == 0 ? ""
+                : $" {calendar.SkippedRaces} unreadable calendar race{(calendar.SkippedRaces == 1 ? " was" : "s were")} skipped; add any you need manually.";
+            SeriesCalendarStatus = (events.Count == 0 ? "The latest FIS export has no supported alpine events for this season. Check the season or enter the series manually."
+                : $"{events.Count} alpine events loaded. Select an event to review its competitions.") + skipped;
         }
         catch (Exception ex) when (ex is DomainValidationException or HttpRequestException or IOException or OperationCanceledException
             or ArgumentException or PlatformNotSupportedException)
@@ -84,6 +89,13 @@ public sealed partial class MainViewModel
         }
         finally { IsSeriesCalendarBusy = false; }
     }
+
+    private static string MissingCodexNote(FisCalendarEvent selected) => selected.MissingCodexCount switch
+    {
+        0 => "",
+        1 => " One race has no FIS codex yet; enter it in Competitions when FIS publishes it.",
+        var count => $" {count} races have no FIS codex yet; enter them in Competitions when FIS publishes them."
+    };
 
     private bool CanUseSeriesCalendarEvent => !IsSeriesCalendarBusy && SelectedSeriesCalendarEvent is not null;
 
@@ -122,7 +134,8 @@ public sealed partial class MainViewModel
                     Nation = values.Nation; Season = values.Season;
                     _pendingCalendarCompetitions = preview;
                     IsSeriesCalendarOpen = false;
-                    SetStatus($"FIS event selected with {selected.Competitions.Count} competitions. Review the series fields and create its file. Missing organizer details must be entered manually.");
+                    SetStatus($"FIS event selected with {selected.Competitions.Count} competitions. Review the series fields and create its file. Missing organizer details must be entered manually."
+                        + MissingCodexNote(selected));
                 }
                 else
                 {
@@ -131,7 +144,8 @@ public sealed partial class MainViewModel
                     InvalidateCompetitionInformation(details.Competitions.Select(x => x.Id));
                     if (_editingCompetitionId is { } id) { SelectedCompetition = Competitions.FirstOrDefault(x => x.Id == id); }
                     IsSeriesCalendarOpen = false;
-                    SetStatus($"FIS event and {selected.Competitions.Count} competitions saved. Missing TD details remain available for manual review in Competitions.");
+                    SetStatus($"FIS event and {selected.Competitions.Count} competitions saved. Missing TD details remain available for manual review in Competitions."
+                        + MissingCodexNote(selected));
                 }
             });
             if (IsError) { SeriesCalendarStatus = StatusMessage; }

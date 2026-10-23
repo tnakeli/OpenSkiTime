@@ -51,7 +51,7 @@ public sealed partial class FisRaceInformationClient
         {
             using var input = new MemoryStream(archive, writable: false);
             using var zip = new ZipArchive(input, ZipArchiveMode.Read);
-            var races = ReadRows(zip, "A_raceal.csv");
+            var races = ReadRows(zip, "A_raceal.csv", out _);
             var matches = races.Where(x => Int(x, "Seasoncode") == summary.SeasonCode && Int(x, "Racecodex") == summary.Codex).ToArray();
             if (matches.Length == 0) { return new(summary, null, null, source, "Competition loaded. This calendar archive has no matching race; event name and TD fields were preserved." + CancellationNote(summary)); }
             if (matches.Length != 1) { throw new DomainValidationException("FIS calendar contains ambiguous season/codex matches. No fields were changed."); }
@@ -64,7 +64,7 @@ public sealed partial class FisRaceInformationClient
                 || !string.Equals(Value(race, "Gender"), summary.GenderCode, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(Value(race, "Nationcode"), summary.PlaceNationCode, StringComparison.OrdinalIgnoreCase))
             { throw new DomainValidationException("FIS calendar export differs from the codex lookup. No fields were changed."); }
-            var events = ReadRows(zip, "A_event.csv").Where(x => Int(x, "Eventid") == summary.EventId
+            var events = ReadRows(zip, "A_event.csv", out _).Where(x => Int(x, "Eventid") == summary.EventId
                 && Int(x, "Seasoncode") == summary.SeasonCode && Value(x, "Sectorcode") == "AL").ToArray();
             if (events.Length > 1) { throw new DomainValidationException("FIS calendar event match is ambiguous. No fields were changed."); }
             var eventName = events.Length == 1 ? Value(events[0], "Eventname") : null;
@@ -80,8 +80,10 @@ public sealed partial class FisRaceInformationClient
         { throw new DomainValidationException("FIS calendar archive is unreadable. No fields were changed."); }
     }
 
-    private static List<Dictionary<string, string>> ReadRows(ZipArchive zip, string name)
+    // A row with the wrong number of fields is skipped and counted; it never rejects the rest of the table.
+    private static List<Dictionary<string, string>> ReadRows(ZipArchive zip, string name, out int malformed)
     {
+        malformed = 0;
         var entries = zip.Entries.Where(x => x.FullName.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
         if (entries.Length != 1 || entries[0].Length > 20_000_000) { throw new DomainValidationException("FIS calendar archive has missing, duplicate or oversized tables."); }
         using var reader = new StreamReader(entries[0].Open(), new UTF8Encoding(false, true), true);
@@ -92,7 +94,7 @@ public sealed partial class FisRaceInformationClient
             length += line.Length;
             if (length > 20_000_000) { throw new DomainValidationException("FIS calendar table is unexpectedly large."); }
             var values = line.Split('\t');
-            if (values.Length != header.Length) { throw new DomainValidationException("FIS calendar table has an invalid row."); }
+            if (values.Length != header.Length) { malformed++; continue; }
             var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < header.Length; i++) { row.Add(header[i], values[i].Trim('\0', '"', ' ').Replace("\"\"", "\"", StringComparison.Ordinal)); }
             rows.Add(row);

@@ -12,6 +12,10 @@ This version uses live protocol 2.
 
 - **Race radio (optional):** short Finnish AI commentary for Local and Cloud live timing viewers. Enable it per competition in the live timing control panel's *Race radio* card, choose the language model and speech provider, set a spending limit (a hard stop) and add event background and pronunciations if needed. Provider keys are saved in Settings → Live timing → *Race radio provider keys* (Windows Credential Manager). Numbers, times, places and names are spoken by OpenSkiTime's own Finnish rules, results are called unofficial, and timing capture and live publishing are never affected. *Simulation* providers rehearse it offline without cost.
 
+### Fixed
+
+- **FIS calendar loads despite incomplete races:** one race without a codex (or another unusable row) no longer rejects the whole FIS calendar. Races without a codex are imported and the codex can be entered in Competitions later; a later calendar import fills it in for the same race. Only races that cannot form a competition are skipped, and the calendar status shows how many.
+
 ### Security
 
 - **FIS live timing logs without racer data:** the local live timing diagnostic log no longer stores racer names, nations, clubs or FIS codes from FIS messages; it records only message structure, bibs and FIS errors. Full protocol tracing for troubleshooting is opt-in with the `OST_FIS_WIRE_TRACE=1` environment variable.

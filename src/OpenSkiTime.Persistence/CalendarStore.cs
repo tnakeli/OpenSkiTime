@@ -12,19 +12,24 @@ internal sealed partial class SqliteSeriesFileSession
         var seriesValues = values.Validated();
         var imported = competitions.Select(x => x.Validated()).ToArray();
         if (imported.Length == 0 || imported.Any(x => x.RaceType != RaceType.Fis || x.Calendar is null)
-            || imported.GroupBy(x => (x.Calendar!.Season, x.FisCode)).Any(x => x.Count() != 1))
+            || imported.Where(x => x.FisCode is not null).GroupBy(x => (x.Calendar!.Season, x.FisCode)).Any(x => x.Count() != 1)
+            || imported.Where(x => x.Calendar!.RaceId is not null).GroupBy(x => (x.Calendar!.Season, x.Calendar.RaceId)).Any(x => x.Count() != 1))
         { throw new DomainValidationException("Select a calendar event with unique FIS competitions."); }
         return WriteAsync(async db =>
         {
             var series = await LoadForWriteAsync(db, expectedRevision, ct);
             var existing = await db.Competitions.Where(x => x.SeriesId == series.Id).ToListAsync(ct);
             var staged = new List<(CompetitionRow Row, CompetitionValues Values, bool IsNew)>();
-            foreach (var incoming in imported)
+            var matched = CalendarCompetitionMerge.Match(existing.Select(Values).ToArray(), imported, out var ambiguous);
+            if (ambiguous)
             {
-                var matches = existing.Where(x => x.RaceType == RaceType.Fis && x.FisCode?.PadLeft(4, '0') == incoming.FisCode
-                    && (Values(x).Calendar?.Season ?? FisSeason.FromDate(x.Date)) == incoming.Calendar!.Season).ToArray();
-                if (matches.Length > 1) { throw new DomainValidationException("Existing season/codex matches are ambiguous. No fields were changed."); }
-                var row = matches.SingleOrDefault();
+                throw new DomainValidationException("A calendar race matches different or several competitions by codex and FIS race ID. "
+                    + "Check the codices in Competitions. No fields were changed.");
+            }
+            for (var i = 0; i < imported.Length; i++)
+            {
+                var incoming = imported[i];
+                var row = matched[i] is { } index ? existing[index] : null;
                 var merged = row is null ? incoming : CalendarCompetitionMerge.Merge(Values(row), incoming).Validated();
                 if (row is not null && !Values(row).HasSameStartOrderRules(merged)
                     && await db.Runs.AnyAsync(x => x.CompetitionId == row.Id, ct))
