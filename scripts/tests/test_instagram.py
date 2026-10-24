@@ -30,8 +30,9 @@ class MediaTests(unittest.TestCase):
     def test_classifies_media_by_extension(self):
         self.assertEqual(instagram.media_kind('a.PNG'), 'image')
         self.assertEqual(instagram.media_kind('a.mp4'), 'video')
-        with self.assertRaises(instagram.InstagramError):
-            instagram.media_kind('a.gif')
+        for unsupported in ('a.gif', 'a.webp'):
+            with self.assertRaises(instagram.InstagramError):
+                instagram.media_kind(unsupported)
 
     def test_jpeg_is_used_as_is(self):
         self.assertEqual(instagram.to_jpeg('photo.JPG', '.'), Path('photo.JPG'))

@@ -37,7 +37,8 @@ STORAGE_CONTAINER = 'instagram-staging'
 CAPTION_LIMIT = 2200
 HASHTAG_LIMIT = 30
 CAROUSEL_LIMIT = 20
-IMAGE_TYPES = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
+# Formats System.Drawing can decode for the JPEG conversion.
+IMAGE_TYPES = {'.jpg', '.jpeg', '.png', '.bmp'}
 VIDEO_TYPES = {'.mp4', '.mov'}
 
 
