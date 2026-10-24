@@ -55,13 +55,13 @@ public static class FinnishVerbalizer
     /// engines may spell capitals letter by letter. A foreign racer's name is respelled for a Finnish voice by the racer's
     /// nation (<see cref="FinnishPronunciation"/>). An operator lexicon entry (whole name or one word) always wins.
     /// </summary>
-    public static string Name(LiveCompetitor competitor, IReadOnlyDictionary<string, string> lexicon)
+    public static string Name(LiveCompetitor competitor, IReadOnlyDictionary<string, string> lexicon, bool respell = true)
     {
         ArgumentNullException.ThrowIfNull(competitor); ArgumentNullException.ThrowIfNull(lexicon);
         var written = Written(competitor);
         if (lexicon.TryGetValue(written, out var spoken)) { return spoken; }
         return string.Join(' ', written.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => lexicon.TryGetValue(x, out var word) ? word : FinnishPronunciation.Spoken(x, competitor.Nation)));
+            .Select(x => lexicon.TryGetValue(x, out var word) ? word : respell ? FinnishPronunciation.Spoken(x, competitor.Nation) : x));
     }
 
     // Finnish adjectives of nationality, spoken before the name in an international field ("ruotsalainen Saga Porttila").

@@ -157,7 +157,10 @@ public static partial class RadioSlots
             if (Value(slot, facts) is null) { return ("unknown slot", slot.Text); }
         }
         if (GluedSuffix().IsMatch(text)) { return ("ending attached to a slot", null); }
-        var stripped = Pattern().Replace(text, "§");
+        foreach (Match tag in Tag().Matches(text))
+        { if (!AudioTags.Contains(tag.Groups["tag"].Value)) { return ("unknown audio tag", tag.Value); } }
+        // Allowed audio tags are not words of the sentence: "[excited] Kärkipaikka" starts with a capital as any sentence.
+        var stripped = Pattern().Replace(Tag().Replace(text, "").TrimStart(), "§");
         if (Braces().IsMatch(stripped)) { return ("malformed slot", null); }
         if (stripped.Any(char.IsDigit)) { return ("digits outside slots", null); }
         var words = LineRules.WordPattern.Matches(stripped);
@@ -192,7 +195,14 @@ public static partial class RadioSlots
         return true;
     }
 
-    public static string Render(string text, FactSheet facts, IReadOnlyDictionary<string, string> lexicon)
+    /// <summary>Audio tags a line may start or contain; only speech providers that understand them receive them.</summary>
+    public static readonly string[] AudioTags = ["excited", "curious", "sighs"];
+    [GeneratedRegex(@"\[(?<tag>[^\]]*)\]")]
+    private static partial Regex Tag();
+    /// <summary>Removes audio tags for a voice that would read them aloud.</summary>
+    public static string StripTags(string text) => string.Join(' ', Tag().Replace(text ?? "", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    public static string Render(string text, FactSheet facts, IReadOnlyDictionary<string, string> lexicon, bool respell = true)
     {
         ArgumentNullException.ThrowIfNull(facts); ArgumentNullException.ThrowIfNull(lexicon);
         var rendered = Pattern().Replace(text, m =>
@@ -202,7 +212,7 @@ public static partial class RadioSlots
             var code = slot.Case ?? CasesByKind[slot.Kind][0];
             return slot.Kind switch
             {
-                "racer" => FinnishVerbalizer.Name(facts.Racers[int.Parse(slot.Reference, CultureInfo.InvariantCulture)].Competitor, lexicon),
+                "racer" => FinnishVerbalizer.Name(facts.Racers[int.Parse(slot.Reference, CultureInfo.InvariantCulture)].Competitor, lexicon, respell),
                 "club" => facts.Racers[int.Parse(slot.Reference, CultureInfo.InvariantCulture)].Competitor.Club.Trim(),
                 "nation" => FinnishVerbalizer.Demonym(facts.Racers[int.Parse(slot.Reference, CultureInfo.InvariantCulture)].Competitor.Nation)!,
                 "bib" or "num" => FinnishNumbers.Cardinal(value.Number, FinnishNumbers.Codes[code]),
@@ -219,10 +229,13 @@ public static partial class RadioSlots
     private static string Tidy(string text)
     {
         var builder = new StringBuilder(text.Length);
-        var capitalize = true;
+        var capitalize = true; var tag = false;
         foreach (var c in string.Join(' ', text.Split(' ', StringSplitOptions.RemoveEmptyEntries)))
         {
-            builder.Append(capitalize && char.IsLetter(c) ? char.ToUpper(c, CultureInfo.GetCultureInfo("fi-FI")) : c);
+            // An audio tag ("[excited]") is not a sentence start and stays lower case.
+            if (c == '[') { tag = true; } else if (c == ']') { tag = false; builder.Append(c); continue; }
+            builder.Append(!tag && capitalize && char.IsLetter(c) ? char.ToUpper(c, CultureInfo.GetCultureInfo("fi-FI")) : c);
+            if (tag) { continue; }
             if (char.IsLetter(c)) { capitalize = false; }
             else if (c is '.' or '!' or '?') { capitalize = true; }
         }

@@ -13,8 +13,11 @@ public static class RadioPrompts
     public const int MaxLines = 6;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = false };
 
-    public static string DialogueSystem(int maxLines)
+    public static string DialogueSystem(int maxLines, bool audioTags = false)
     {
+        var tags = audioTags
+            ? "\n- The voice understands audio tags. A line may start with one of [excited], [curious] or [sighs] when it fits the\n  moment (a new leader, a DNF, a tight finish); most lines need none. No other tags.\n"
+            : "\n- No audio tags or other text in square brackets.\n";
         var hosts = string.Join('\n', RadioPersonas.Hosts.Select(x => $"- {x.Name} ({x.Role}): {x.Style}"));
         return $$"""
             You write the script for a live Finnish-language radio show about an alpine ski race. Hosts:
@@ -23,7 +26,7 @@ public static class RadioPrompts
             === LANGUAGE AND TONE ===
             - Write all dialogue in natural, relaxed but correct spoken Finnish.
             - Be respectful. Fields often include juniors. Never joke at a racer's expense, never mock, no sarcasm about racers.
-            - No stage directions, sound effects, emojis or text that is not speech.
+            - No stage directions, sound effects, emojis or text that is not speech.{{tags}}
 
             === FACTS ONLY THROUGH SLOTS (CRITICAL) ===
             - Refer to every racer, number, time, gap, place, bib, count or status ONLY with the slot tokens listed in the fact sheet,
