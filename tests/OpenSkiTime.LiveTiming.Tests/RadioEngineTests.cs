@@ -477,6 +477,23 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task NewsDuringARunIsAtMostThreeLinesWithTheNewsFirst()
+    {
+        var rig = new Rig
+        {
+            Llm = new((_, _) => Task.FromResult(Script(("Aino", "Maalissa {racer:1}, aika {time:1}.", false), ("Kalle", "Hän johtaa.", false),
+                ("Aino", "Hieno suoritus.", false), ("Kalle", "Aurinko paistaa.", false), ("Aino", "Rinne on kova.", true))))
+        };
+        await rig.FirstFinishAsync();
+        await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Equal(RadioEngine.NewsLinesDuringRun, rig.Sink.Clips.Count);
+        Assert.True(rig.Sink.Clips.Last().Interruptible);
+        var system = rig.Llm.Requests.First().System;
+        Assert.Contains($"Hard cap {RadioEngine.NewsLinesDuringRun} lines", system, StringComparison.Ordinal);
+        Assert.Contains("The FIRST line states the most important event", system, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task UploadFailureIsReportedWithoutStoppingTheRadio()
     {
         var rig = new Rig

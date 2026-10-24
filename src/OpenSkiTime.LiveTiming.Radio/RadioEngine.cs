@@ -52,6 +52,8 @@ public sealed class RadioEngine
     public static readonly TimeSpan ProducerDuringRace = TimeSpan.FromSeconds(35);
     /// <summary>Lines of the hosts' own talk (producer, a racer on course) while a run is in progress.</summary>
     public const int TalkLinesDuringRun = 2;
+    /// <summary>Lines of a news conversation (finish, DNF, new leader) while a run is in progress.</summary>
+    public const int NewsLinesDuringRun = 3;
     private int _remainingLines;
     private RadioHealth _health;
 
@@ -372,7 +374,9 @@ public sealed class RadioEngine
         var now = _time.GetUtcNow();
         // While a run is in progress the next start or finish comes within seconds: the hosts' own talk stays short.
         var talkDuringRun = _phase == RacePhase.RunInProgress && batch.All(x => x.Kind == RadioEventKind.Producer);
-        var maxLines = talkDuringRun ? TalkLinesDuringRun : Math.Min(RadioPrompts.MaxLines, 2 + batch.Count * 2);
+        // News during a run is said in a few lines too: the next start or finish is seconds away.
+        var maxLines = talkDuringRun ? TalkLinesDuringRun
+            : Math.Min(_phase == RacePhase.RunInProgress ? NewsLinesDuringRun : RadioPrompts.MaxLines, 2 + batch.Count * 2);
         var request = new LlmRequest(RadioPrompts.DialogueSystem(maxLines, _tts.AudioTags),
             RadioPrompts.DialogueUser(batch, facts, _phase ?? RacePhase.RunInProgress, _config.EventContext, _topics.Recent(now), _diary.Entries), DialogueTokens, 0.8);
         if (await CompleteAsync(request, DialogueTimeout, ct) is not { } reply) { return (null, null); }

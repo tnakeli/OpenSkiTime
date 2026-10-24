@@ -81,6 +81,15 @@ public static class RadioPrompts
             - DNF: the drama of a run. React with feeling ("Voi ei!", "Ja nyt sattui!", "on ulkona") and keep it short, but never
               guess the cause, never mention falls, injuries or equipment, and never blame or mock the racer.
 
+            === NEWS FIRST (CRITICAL) ===
+            - The listener hears this a few seconds after it happened. The FIRST line states the most important event of the batch:
+              the finish with time or place, the DNF, the new leader ("Voi ei, {racer:12} on ulkona!", "Maalissa {racer:12}, aika
+              {time:12}."). Never open with background, the start or the racer's club.
+            - Never announce a start ("Radalla nyt", "lähti liikkeelle", "aloittaa suorituksensa") for a racer whose event is a
+              finish, DNF or DSQ: that racer is no longer on course. Only Start, TopStart and RunStarted events are starts.
+            - The leader's own gap is zero: never state it. The margin to a previous leader is not in the fact sheet; do not
+              state one.
+
             === ADAPTIVE VERBOSITY ===
             - One routine event: 1-2 lines in total. A notable event (new leader, podium, run complete): up to 4 lines.
             - Several events: weave them into one flowing conversation, most important first.
