@@ -9,6 +9,8 @@ const site = 'https://openskiti.me';
 const repo = 'https://github.com/tnakeli/OpenSkiTime';
 // The maintainer is named on every page and in the structured data so that the project's publisher can be identified.
 const maintainer = { name: 'Teemu Niemi', email: 'tniemi@gmail.com', github: 'https://github.com/tnakeli' };
+// The project's own social profiles: linked in every footer and listed in the software's sameAs.
+const social = [{ name: 'YouTube', url: 'https://www.youtube.com/@openskitime-4c' }, { name: 'Instagram', url: 'https://www.instagram.com/openskitime/' }];
 const image = `${site}/assets/overview.png`;
 // Sharing previews use a 1.91:1 card; the structured data keeps the full application screenshot.
 const shareImage = `${site}/assets/og-image.png`;
@@ -33,7 +35,7 @@ const text = {
 };
 const header = t => `<a class="skip" href="#main">${t.skip}</a>
 <header class="site-header"><div class="shell header-inner"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}" aria-label="${t.home}"><img src="/favicon.svg" width="34" height="34" alt="">OpenSkiTime<span class="brand-dot">.</span></a><nav aria-label="${t.nav}"><a href="${t.features[0]}">${t.features[1]}</a><a href="/guide/">${t.guide}</a><a href="${repo}">GitHub <span aria-hidden="true">↗</span></a><a href="${t.other[0]}" hreflang="${t.other[1]}" lang="${t.other[1]}" title="${t.other[3]}" aria-label="${t.other[3]}">${t.other[2]}</a><a class="nav-download" href="/download/">${t.download} <span aria-hidden="true">↓</span></a></nav></div></header>`;
-const footer = t => `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}">OpenSkiTime<span class="brand-dot">.</span></a><p>${t.tagline}</p></div><div class="shell footer-bottom"><span>${t.license} · ${t.maintainedBy} ${maintainer.name}, <a href="mailto:${maintainer.email}">${maintainer.email}</a></span><nav aria-label="Footer"><a href="/privacy/">${t.privacy}</a><a href="/code-signing/">${t.signing}</a><a href="${repo}/blob/master/LICENSE">${t.licenseLink}</a><a href="${repo}/issues">${t.issue} ↗</a><a href="${repo}/security/advisories/new">${t.vulnerability} ↗</a><a href="${repo}">${t.source} ↗</a></nav></div></footer>`;
+const footer = t => `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}">OpenSkiTime<span class="brand-dot">.</span></a><p>${t.tagline}</p></div><div class="shell footer-bottom"><span>${t.license} · ${t.maintainedBy} ${maintainer.name}, <a href="mailto:${maintainer.email}">${maintainer.email}</a></span><nav aria-label="Footer"><a href="/privacy/">${t.privacy}</a><a href="/code-signing/">${t.signing}</a><a href="${repo}/blob/master/LICENSE">${t.licenseLink}</a><a href="${repo}/issues">${t.issue} ↗</a><a href="${repo}/security/advisories/new">${t.vulnerability} ↗</a><a href="${repo}">${t.source} ↗</a>${social.map(s => `<a href="${s.url}">${s.name} ↗</a>`).join('')}</nav></div></footer>`;
 
 // One source for the visible FAQ and its FAQPage structured data, so search and answer engines read the same text visitors do.
 const faq = {
@@ -109,7 +111,7 @@ const software = lang => ({
       featureList: ['Competitor registration and Excel paste', 'FIS points list lookup', 'Start list draw', 'ALGE Timy, MT1 and ALGE Results timing input', 'Classification with audit history', 'Race points and FIS penalty calculation', 'FIS XML results and timing report', 'PDF start lists and results', 'Live results in the browser', 'Offline race operation'],
       keywords: 'ski race timing software, alpine ski timing, ski racing results, FIS timing, ALGE timing, live results',
       author: { '@id': `${site}/#maintainer` }, maintainer: { '@id': `${site}/#maintainer` },
-      sameAs: [repo]
+      sameAs: [repo, ...social.map(s => s.url)]
     },
     { '@type': 'Person', '@id': `${site}/#maintainer`, name: maintainer.name, email: `mailto:${maintainer.email}`, url: maintainer.github, sameAs: [maintainer.github] },
     { '@type': 'SoftwareSourceCode', codeRepository: repo, programmingLanguage: 'C#', runtimePlatform: '.NET 10', license: `${repo}/blob/master/LICENSE`, targetProduct: { '@id': `${site}/#software` } },

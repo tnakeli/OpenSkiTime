@@ -34,3 +34,5 @@ Key facts:
 - [GitHub repository](https://github.com/tnakeli/OpenSkiTime): source code, issues and releases
 - [README](https://github.com/tnakeli/OpenSkiTime/blob/master/README.md): full race-office workflow with screenshots
 - [Releases](https://github.com/tnakeli/OpenSkiTime/releases): Windows installers, SBOM and checksums
+- [YouTube channel](https://www.youtube.com/@openskitime-4c): demos, how-to videos and release walkthroughs
+- [Instagram](https://www.instagram.com/openskitime/): project news and race-office tips

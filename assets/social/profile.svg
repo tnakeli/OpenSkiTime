@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+  <!-- OpenSkiTime mark from assets/icons/openskitime.svg, full-bleed so circular crops keep the background. -->
+  <rect width="800" height="800" fill="#12323c"/>
+  <g transform="translate(80 80) scale(10)">
+    <polygon points="9,47 27,17 36,32 42,22 55,47" fill="#f4f3eb"/>
+    <polygon points="27,17 34,29 27,26 22,30" fill="#8bb6ad"/>
+    <line x1="39" y1="35" x2="33" y2="47" stroke="#e86949" stroke-width="4"/>
+  </g>
+</svg>
