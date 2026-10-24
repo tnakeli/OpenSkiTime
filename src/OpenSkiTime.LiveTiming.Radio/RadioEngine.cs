@@ -8,6 +8,8 @@ namespace OpenSkiTime.LiveTiming.Radio;
 /// optional curation → Finnish rendering → speech → clip upload, plus a producer for idle moments. Everything runs in the
 /// radio worker process, outside timing capture, with explicit time, timeouts, cancellation and a hard budget stop.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "The speech slots are a SemaphoreSlim whose wait handle is never used; it holds no unmanaged resource.")]
 public sealed class RadioEngine
 {
     public static readonly TimeSpan DialogueTimeout = TimeSpan.FromSeconds(20);
@@ -44,6 +46,8 @@ public sealed class RadioEngine
     private readonly HashSet<(int Run, int Bib)> _featured = [];
     /// <summary>Silence after which a racer on course is talked about during a run.</summary>
     public static readonly TimeSpan OnCourseAfter = TimeSpan.FromSeconds(8);
+    /// <summary>Silence after which the producer fills a pause before or during the race (between runs, for example).</summary>
+    public static readonly TimeSpan ProducerDuringRace = TimeSpan.FromSeconds(35);
     private int _remainingLines;
     private RadioHealth _health;
 
@@ -53,6 +57,7 @@ public sealed class RadioEngine
         ArgumentNullException.ThrowIfNull(budget); ArgumentNullException.ThrowIfNull(time);
         _config = configuration; _llm = llm; _tts = tts; Budget = budget; _time = time; _log = log ?? (_ => { });
         _llmPrice = RadioPrices.ForLlm(llm.Provider, llm.Model) ?? throw new RadioProviderException("The language model has no price entry.");
+        _speechSlots = new(Math.Max(1, tts.MaxConcurrent), Math.Max(1, tts.MaxConcurrent));
         _ttsPrice = RadioPrices.ForTts(tts.Provider, tts is ElevenLabsTts eleven ? eleven.Model : configuration.TtsModel);
         _lexicon = FinnishVerbalizer.Lexicon(configuration.Lexicon);
         _nextProducer = time.GetUtcNow() + TimeSpan.FromSeconds(30);
@@ -125,10 +130,13 @@ public sealed class RadioEngine
             await GenerateAsync([ProducerGate.Event(feature, state, now)], mode, ct);
             return;
         }
-        if (_batcher.Count > 0 || now < _nextProducer || now < _speechEnds + Budget.ProducerInterval) { return; }
         var phase = _phase!.Value;
+        // While viewers wait for the race (before the start, between runs, an interruption) the hosts keep talking; the
+        // budget-aware longer interval applies once the race is over.
+        var interval = phase == RacePhase.AfterRace ? Budget.ProducerInterval : ProducerDuringRace;
+        if (_batcher.Count > 0 || now < _nextProducer || now < _speechEnds + interval) { return; }
         if (_afterRaceSince is { } since && now - since > ProducerAfterRace) { return; }
-        _nextProducer = now + Budget.ProducerInterval;
+        _nextProducer = now + interval;
         var decision = mode == RadioMode.Full ? await ProduceAsync(state, phase, ct) : null;
         decision ??= ProducerGate.Deterministic(state, phase, _producerTurn++);
         if (decision is not null) { await GenerateAsync([ProducerGate.Event(decision, state, now)], mode, ct); }
@@ -258,7 +266,9 @@ public sealed class RadioEngine
         if (count == 0) { return; }
         // All lines are synthesized at once, so a conversation is ready in the time of its slowest line, not the sum of
         // them; they are still uploaded in order. Reserved before the calls: a failed or cancelled request may be billed.
-        var speech = texts.Select(x => SpeakAsync(x.Text, x.Voice, x.Estimate, ct)).ToArray();
+        // Lines still queued when the conversation is cut are not started (and not paid for); started ones finish and settle.
+        using var abandon = new CancellationTokenSource();
+        var speech = texts.Select(x => SpeakAsync(x.Text, x.Voice, x.Estimate, abandon.Token, ct)).ToArray();
         var spoken = 0;
         _remainingLines = count;
         try
@@ -291,6 +301,7 @@ public sealed class RadioEngine
         }
         finally
         {
+            abandon.Cancel();
             // Lines not used still finish and settle before the final report.
             foreach (var pending in speech)
             {
@@ -415,7 +426,14 @@ public sealed class RadioEngine
     // Speech is reserved before the call and settled as soon as it returns; a failed, timed-out or cancelled call keeps its
     // reservation as spend, because the provider may have billed it. Reservations still in flight are not reported as spend,
     // so the panel never saves an estimate that the settled cost then undercuts.
-    private async Task<TtsAudio> SpeakAsync(string text, RadioVoice voice, decimal estimate, CancellationToken ct)
+    private async Task<TtsAudio> SpeakAsync(string text, RadioVoice voice, decimal estimate, CancellationToken queue, CancellationToken ct)
+    {
+        // Lines beyond the provider's concurrency wait here, before their reservation and timeout start.
+        using (var waiting = CancellationTokenSource.CreateLinkedTokenSource(queue, ct)) { await _speechSlots.WaitAsync(waiting.Token); }
+        try { return await SpeakNowAsync(text, voice, estimate, ct); }
+        finally { _speechSlots.Release(); }
+    }
+    private async Task<TtsAudio> SpeakNowAsync(string text, RadioVoice voice, decimal estimate, CancellationToken ct)
     {
         // Charge and reservation change together, so a report never sees one without the other.
         lock (_reservations) { Budget.Charge(estimate); _outstanding += estimate; }
@@ -429,6 +447,7 @@ public sealed class RadioEngine
         finally { if (!settled) { lock (_reservations) { _outstanding -= estimate; } } }
     }
     private readonly Lock _reservations = new();
+    private readonly SemaphoreSlim _speechSlots;
     private decimal _outstanding;
     private decimal SettledSpend { get { lock (_reservations) { return Budget.Spent - _outstanding; } } }
 

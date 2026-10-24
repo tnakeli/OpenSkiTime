@@ -52,9 +52,9 @@ public static class FinnishTemplates
             // A DNF is the drama of an alpine run: said with feeling, never with a guessed cause.
             case RadioEventKind.DNF when racer is not null:
                 yield return Line(Pick($"[excited] Voi ei! {{racer:{bib}}} on ulkona, {{status:{bib}:noun}}!", $"[excited] Ja nyt sattui! {{racer:{bib}}} {{status:{bib}}}!",
-                    $"[excited] Voi harmi, {{racer:{bib}}} on ulkona! Lasku päättyy kesken."), false);
+                    $"[excited] Voi harmi, {{racer:{bib}}} on ulkona! Suoritus päättyy kesken."), false);
                 yield return Line(Pick("[sighs] Kova paikka, mutta tällaista alppihiihto on.", "[sighs] Tämä rinne ei anna anteeksi pieniäkään virheitä.",
-                    "[sighs] Harmillista, mutta seuraava lasku on jo tulossa."));
+                    "[sighs] Harmillista, mutta seuraava laskija on jo tulossa."));
                 break;
             case RadioEventKind.DNS when racer is not null:
                 yield return Line($"{{racer:{bib}}} {{status:{bib}}}.");
@@ -70,7 +70,7 @@ public static class FinnishTemplates
                 break;
             case RadioEventKind.TopStart when racer is not null:
                 yield return Line(racer.Previous?.Rank is { } previous && facts.Run == 2
-                    ? $"Radalla nyt {Who(facts, bib)}{Club(facts, bib)}. Ensimmäisen laskun jälkeen hän oli {Place("prevrank", bib, previous)}."
+                    ? $"Radalla nyt {Who(facts, bib)}{Club(facts, bib)}. Ensimmäisen kierroksen jälkeen hän oli {Place("prevrank", bib, previous)}."
                     : $"Radalla nyt {Who(facts, bib)}{Club(facts, bib)}.");
                 foreach (var line in Gate(e, facts)) { yield return line; }
                 break;
@@ -79,11 +79,11 @@ public static class FinnishTemplates
                 foreach (var line in Gate(e, facts)) { yield return line; }
                 break;
             case RadioEventKind.RunStarted:
-                yield return Line(racer is null ? "{ord:run:nom} lasku on alkanut." : $"{{ord:run:nom}} lasku on alkanut. Radalla on nyt {Who(facts, bib)}{Club(facts, bib)}.");
+                yield return Line(racer is null ? "{ord:run:nom} kierros on alkanut." : $"{{ord:run:nom}} kierros on alkanut. Radalla on nyt {Who(facts, bib)}{Club(facts, bib)}.");
                 if (racer is not null) { foreach (var line in Gate(e, facts)) { yield return line; } }
                 break;
             case RadioEventKind.RunComplete:
-                yield return Line(facts.Counts["run"] >= facts.Counts["runs"] ? "Kilpailun viimeinen lasku on päättynyt." : "{ord:run:nom} lasku on päättynyt.", false);
+                yield return Line(facts.Counts["run"] >= facts.Counts["runs"] ? "Kilpailun viimeinen kierros on päättynyt." : "{ord:run:nom} kierros on päättynyt.", false);
                 var leaders = e.Bibs.Where(facts.Racers.ContainsKey).Take(3).ToArray();
                 if (leaders.Length > 0)
                 {
@@ -92,7 +92,7 @@ public static class FinnishTemplates
                 }
                 break;
             case RadioEventKind.Interrupted:
-                yield return Line("Kilpailussa on tällä hetkellä tauko. Kerromme heti, kun laskut jatkuvat.");
+                yield return Line("Kilpailussa on tällä hetkellä tauko. Kerromme heti, kun kilpailu jatkuu.");
                 break;
             case RadioEventKind.Producer:
                 foreach (var line in Producer(e, facts)) { yield return line; }
@@ -108,8 +108,13 @@ public static class FinnishTemplates
     }
     private static IEnumerable<ScriptLine> Gate(RadioEvent e, FactSheet facts)
     {
+        // The words of the start vary from racer to racer: viiksellä, lähtökopissa, lähdössä, lähtöportilla.
         if (e.Bibs.Length > 1 && facts.Racers.ContainsKey(e.Bibs[1]))
-        { yield return new("", $"Lähtöportilla seuraavana {Who(facts, e.Bibs[1])}.", true); }
+        {
+            var who = Who(facts, e.Bibs[1]);
+            string[] gate = [$"Viiksellä seuraavana {who}.", $"Lähtökopissa odottaa {who}.", $"Seuraavana lähdössä {who}.", $"Lähtöportilla seuraavana {who}."];
+            yield return new("", gate[e.Bibs[1] % gate.Length], true);
+        }
     }
     // In an international field a racer from another country is introduced with the nationality: "ruotsalainen Saga Porttila".
     private static string Who(FactSheet facts, int bib) => facts.International && facts.Racers[bib].Competitor.Nation != facts.HomeNation
@@ -130,7 +135,7 @@ public static class FinnishTemplates
             case ProducerSources.OnCourse when facts.Racers.ContainsKey(bib):
                 yield return new("", $"Radalla on nyt {Who(facts, bib)}{Club(facts, bib)}.", true);
                 if (facts.Racers[bib].Previous?.Rank is { } before)
-                { yield return new("", $"Ensimmäisen laskun jälkeen hän oli {Place("prevrank", bib, before)}.", true); }
+                { yield return new("", $"Ensimmäisen kierroksen jälkeen hän oli {Place("prevrank", bib, before)}.", true); }
                 break;
             case ProducerSources.Standings:
                 var leaders = e.Bibs.Where(facts.Racers.ContainsKey).Take(3).ToArray();

@@ -41,7 +41,7 @@ public static class RadioPrompts
             - {time:N}, {total:N} and {prevtime:N} sound like "yksi minuutti viisi pilkku nolla kolme"; {diff:N} and {totaldiff:N}
               like "nolla pilkku kolmekymmentäneljä sekuntia". Use them as phrases: "aika {time:12}", "eroa kärkeen {diff:12}".
             - "{racer:12} {status:12:verb}." says for example "... keskeytti." {status:N:noun} is a noun such as "keskeytys".
-            - {num:key} and {ord:key} use the counts in the fact sheet: "{ord:run:nom} lasku", "{num:remaining:nom} laskijaa".
+            - {num:key} and {ord:key} use the counts in the fact sheet: "{ord:run:nom} kierros", "{num:remaining:nom} laskijaa".
             - Other proper nouns only from the competition, place, slope, clubs, the racers' countries and the event background.
             - Places and counts are slots too. Wrong: "Kolmantena on {racer:4}." Right: "{rank:4:ess} on {racer:4}."
               Wrong: "Kolme laskijaa on maalissa." Right: "Maalissa on {num:finished:nom} laskijaa" (with a count of one:
@@ -62,9 +62,13 @@ public static class RadioPrompts
               Mention a racer's club once per run, not in every line. Never write club or country names yourself.
             - Code says the bib before the first mention of each racer ("numero kolme, Saga Porttila"); do not add it yourself.
 
+            === ALPINE WORDS ===
+            - A run of the race is "kierros" ("ensimmäinen kierros", "toisella kierroksella"), never "lasku". A racer's own
+              descent is "suoritus". The start is "viiksellä", "lähdössä", "lähtökopissa" or "lähtöportilla"; vary them.
+
             === EVENTS ===
             - Start, TopStart and RunStarted: bibs[0] has just left the start gate; bibs[1], when present, is the next racer in the
-              start gate. Name both, briefly ("Radalla nyt {racer:12}. Lähtöportilla seuraavana {racer:13}."). The line plays a few
+              start gate. Name both, briefly ("Radalla nyt {racer:12}. Viiksellä seuraavana {racer:13}."). The line plays a few
               seconds after the start, so say the racer is on course now ("Radalla nyt"), not that they just left. TopStart is one of
               the leaders after the earlier runs. A start is announced while the racer is on course, so keep it short and prompt.
 

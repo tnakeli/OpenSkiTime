@@ -303,14 +303,16 @@ public sealed class ElevenLabsTts(string? apiKey, string model) : IRadioTts, IDi
     public bool AudioTags => true;
     /// <summary>ElevenLabs voice IDs are 20 letters and digits; anything else is a voice name.</summary>
     public static bool IsVoiceId(string voice) => voice is { Length: 20 } && voice.All(char.IsAsciiLetterOrDigit);
-    // The plan's concurrency limit can refuse one of a conversation's parallel lines; one short retry absorbs it.
+    // ElevenLabs plans limit concurrent requests: the engine sends at most two lines at once, and a refusal is retried
+    // twice with a growing pause before the line is given up.
+    public int MaxConcurrent => 2;
     public async Task<TtsAudio> SynthesizeAsync(string text, RadioVoice voice, CancellationToken ct)
     {
-        try { return await SynthesizeOnceAsync(text, voice, ct); }
-        catch (RadioProviderException ex) when (ex.Message.EndsWith("rate limit or quota reached.", StringComparison.Ordinal))
+        for (var attempt = 0; ; attempt++)
         {
-            await Task.Delay(TimeSpan.FromSeconds(1.5), ct);
-            return await SynthesizeOnceAsync(text, voice, ct);
+            try { return await SynthesizeOnceAsync(text, voice, ct); }
+            catch (RadioProviderException ex) when (attempt < 2 && ex.Message.EndsWith("rate limit or quota reached.", StringComparison.Ordinal)) { }
+            await Task.Delay(TimeSpan.FromSeconds(1.5 * (attempt + 1)), ct);
         }
     }
     private async Task<TtsAudio> SynthesizeOnceAsync(string text, RadioVoice voice, CancellationToken ct)

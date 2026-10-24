@@ -185,7 +185,7 @@ public sealed class RadioEngineTests
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         // The run start is announced first; after a short silence the racer on course is featured.
         for (var i = 0; i < 6; i++) { rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None); }
-        Assert.StartsWith("Ensimmäinen lasku on alkanut.", rig.Sink.Clips.First().Transcript, StringComparison.Ordinal);
+        Assert.StartsWith("Ensimmäinen kierros on alkanut.", rig.Sink.Clips.First().Transcript, StringComparison.Ordinal);
         Assert.Contains("Radalla on nyt numero yksi, Aada Lumivaara, Rinneseura.", rig.Sink.Clips.Select(x => x.Transcript));
         var featured = rig.Sink.Clips.Count;
         for (var i = 0; i < 4; i++) { rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None); }
