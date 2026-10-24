@@ -88,13 +88,13 @@ public sealed class RadioSettingsStore(string path)
 /// <summary>Credential Manager locations of radio provider keys. Never stored in the series, preferences or logs.</summary>
 public static class RadioKeyCredential
 {
-    public static readonly string[] Providers = [RadioProviders.OpenAi, RadioProviders.Gemini, RadioProviders.GoogleGemini, RadioProviders.Azure, RadioProviders.Google];
+    public static readonly string[] Providers = [RadioProviders.OpenAi, RadioProviders.Gemini, RadioProviders.GoogleGemini, RadioProviders.ElevenLabs, RadioProviders.Azure, RadioProviders.Google];
     public static string Target(string provider) => Providers.Contains(provider)
         ? "OpenSkiTime.LiveTiming.Radio:" + provider : throw new ArgumentException("Unknown radio provider.", nameof(provider));
     public static string Label(string provider) => provider switch
     {
         RadioProviders.OpenAi => "OpenAI", RadioProviders.Gemini => "Google Gemini API", RadioProviders.Azure => "Azure AI Speech",
-        RadioProviders.Google => "Google Cloud Text-to-Speech", RadioProviders.GoogleGemini => "Google Gemini TTS (Vertex AI)", _ => provider
+        RadioProviders.Google => "Google Cloud Text-to-Speech", RadioProviders.GoogleGemini => "Google Gemini TTS (Vertex AI)", RadioProviders.ElevenLabs => "ElevenLabs", _ => provider
     };
     /// <summary>The first saved key a provider may use, or null.</summary>
     public static string? Read(string provider, Func<string, ICredentialStore> store)

@@ -139,10 +139,11 @@ public sealed class AzureTts(string? apiKey, string region) : IRadioTts, IDispos
 }
 
 /// <summary>
-/// Gemini speech models through Vertex AI (Agent Platform) generateContent. A language-model voice: the style prefix asks
-/// it to read the text exactly, but it may still vary words. Vertex AI needs an identity with Vertex AI User: an API key
-/// bound to a service account (restricted to the Agent Platform API) or a service account JSON key (OAuth). The PCM
-/// output is resampled to 16 kHz mono WAV, which keeps a long line well within the clip size limit.
+/// Gemini speech models through Vertex AI (Agent Platform) generateContent; Gemini 3.8 Flash TTS by default. A
+/// language-model voice: the style prefix asks it to read the text exactly, but it may still vary words. Vertex AI needs
+/// an identity with Vertex AI User: an API key bound to a service account (restricted to the Agent Platform API) or a
+/// service account JSON key (OAuth). The audio (raw PCM or WAV, depending on the model) becomes 16 kHz mono WAV, which
+/// keeps a long line well within the clip size limit.
 /// </summary>
 public sealed class GeminiCloudTts : IRadioTts, IDisposable
 {
@@ -178,8 +179,9 @@ public sealed class GeminiCloudTts : IRadioTts, IDisposable
         {
             Content = JsonContent.Create(new
             {
-                // "Style: text" is the documented way to steer Gemini speech without the instruction being read aloud.
-                contents = new[] { new { role = "user", parts = new[] { new { text = $"{voice.Style}: {text}" } } } },
+                // Gemini 2.5 takes a "Style: text" prefix without reading it aloud; Gemini 3.x reads such a prefix aloud and
+                // refuses a system instruction, and its voices keep their character without one, so it gets the text only.
+                contents = new[] { new { role = "user", parts = new[] { new { text = _model.StartsWith("gemini-3", StringComparison.Ordinal) ? text : $"{voice.Style}: {text}" } } } },
                 generationConfig = new
                 {
                     responseModalities = Audio,
@@ -197,11 +199,19 @@ public sealed class GeminiCloudTts : IRadioTts, IDisposable
             var audio = json.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts").EnumerateArray()
                 .Select(x => x.TryGetProperty("inlineData", out var data) ? data : default).First(x => x.ValueKind == JsonValueKind.Object);
             var type = audio.GetProperty("mimeType").GetString() ?? "";
-            var rate = type.Split(';').Select(x => x.Trim()).FirstOrDefault(x => x.StartsWith("rate=", StringComparison.Ordinal)) is { } r
-                && int.TryParse(r[5..], NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : 24000;
-            if (!type.StartsWith("audio/L16", StringComparison.OrdinalIgnoreCase) || rate is < 8000 or > 48000)
-            { throw new RadioProviderException("Google Gemini speech returned an unexpected audio format."); }
-            var wav = Pcm16.Wav(Pcm16.Resample(Convert.FromBase64String(audio.GetProperty("data").GetString() ?? ""), rate, Rate), Rate);
+            var bytes = Convert.FromBase64String(audio.GetProperty("data").GetString() ?? "");
+            byte[] pcm; int rate;
+            if (type.StartsWith("audio/wav", StringComparison.OrdinalIgnoreCase) || type.StartsWith("audio/x-wav", StringComparison.OrdinalIgnoreCase))
+            { (pcm, rate) = Pcm16.FromWav(bytes) ?? throw new RadioProviderException("Google Gemini speech returned an unexpected audio format."); }
+            else
+            {
+                rate = type.Split(';').Select(x => x.Trim()).FirstOrDefault(x => x.StartsWith("rate=", StringComparison.OrdinalIgnoreCase)) is { } r
+                    && int.TryParse(r[5..], NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : 24000;
+                if (!type.StartsWith("audio/L16", StringComparison.OrdinalIgnoreCase)) { throw new RadioProviderException("Google Gemini speech returned an unexpected audio format."); }
+                pcm = bytes;
+            }
+            if (rate is < 8000 or > 48000) { throw new RadioProviderException("Google Gemini speech returned an unexpected audio format."); }
+            var wav = Pcm16.Wav(Pcm16.Resample(pcm, rate, Rate), Rate);
             return new(wav, "audio/wav", AudioDuration.Milliseconds(wav, "audio/wav"));
         }
         catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or FormatException or IndexOutOfRangeException)
@@ -213,6 +223,37 @@ public sealed class GeminiCloudTts : IRadioTts, IDisposable
 /// <summary>16-bit little-endian mono PCM helpers.</summary>
 public static class Pcm16
 {
+    /// <summary>The 16-bit PCM samples (mixed to mono) and rate of a WAV file, or null for anything else.</summary>
+    public static (byte[] Pcm, int Rate)? FromWav(byte[] wav)
+    {
+        ArgumentNullException.ThrowIfNull(wav);
+        if (wav.Length < 12 || !wav.AsSpan(0, 4).SequenceEqual("RIFF"u8) || !wav.AsSpan(8, 4).SequenceEqual("WAVE"u8)) { return null; }
+        int channels = 0, rate = 0, bits = 0, format = 0;
+        for (var i = 12; i + 8 <= wav.Length;)
+        {
+            var size = BitConverter.ToInt32(wav, i + 4);
+            if (size < 0) { return null; }
+            var body = i + 8;
+            if (wav.AsSpan(i, 4).SequenceEqual("fmt "u8) && body + 16 <= wav.Length)
+            { format = BitConverter.ToUInt16(wav, body); channels = BitConverter.ToUInt16(wav, body + 2); rate = BitConverter.ToInt32(wav, body + 4); bits = BitConverter.ToUInt16(wav, body + 14); }
+            else if (wav.AsSpan(i, 4).SequenceEqual("data"u8))
+            {
+                // Streamed WAV may give an unknown (oversized) data length; the bytes present are the data.
+                if (format is not (1 or 0xFFFE) || bits != 16 || channels is < 1 or > 2 || rate <= 0) { return null; }
+                var data = wav.AsSpan(body, Math.Min(size, wav.Length - body));
+                if (channels == 1) { return (data.ToArray(), rate); }
+                var mono = new byte[data.Length / 4 * 2];
+                for (var s = 0; s < mono.Length / 2; s++)
+                {
+                    var mixed = (short)((BitConverter.ToInt16(data[(s * 4)..]) + BitConverter.ToInt16(data[(s * 4 + 2)..])) / 2);
+                    mono[s * 2] = (byte)mixed; mono[s * 2 + 1] = (byte)(mixed >> 8);
+                }
+                return (mono, rate);
+            }
+            i = body + size + (size & 1);
+        }
+        return null;
+    }
     /// <summary>Linear-interpolation resampling; speech above 8 kHz carries little, so 16 kHz keeps it clear.</summary>
     public static byte[] Resample(byte[] pcm, int from, int to)
     {
@@ -242,6 +283,36 @@ public static class Pcm16
         pcm.CopyTo(data, 44);
         return data;
     }
+}
+
+/// <summary>
+/// ElevenLabs text to speech with Eleven v4 (Finnish among its languages). Classic synthesis of the given text, with
+/// language_code fi; MP3 output. Requests are logged by ElevenLabs unless the account has zero retention (Enterprise).
+/// </summary>
+public sealed class ElevenLabsTts(string? apiKey, string model) : IRadioTts, IDisposable
+{
+    private readonly HttpClient _http = RadioHttp.Create();
+    private readonly string _key = RadioHttp.RequireKey(apiKey, "ElevenLabs");
+    public string Provider => RadioProviders.ElevenLabs;
+    public async Task<TtsAudio> SynthesizeAsync(string text, RadioVoice voice, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(voice);
+        using var message = new HttpRequestMessage(HttpMethod.Post,
+            $"https://api.elevenlabs.io/v1/text-to-speech/{Uri.EscapeDataString(voice.Name)}?output_format=mp3_44100_128")
+        {
+            Content = JsonContent.Create(new
+            {
+                text, model_id = model, language_code = "fi",
+                voice_settings = new { stability = 0.45, similarity_boost = 0.75, style = 0.25, speed = Math.Clamp(voice.Rate, 0.7, 1.2), use_speaker_boost = true }
+            })
+        };
+        message.Headers.Add("xi-api-key", _key);
+        using var response = await RadioHttp.SendAsync(_http, message, "ElevenLabs", ct);
+        var data = await response.Content.ReadAsByteArrayAsync(ct);
+        if (!RadioMusic.IsMp3(data)) { throw new RadioProviderException("ElevenLabs returned an unexpected response."); }
+        return new(data, "audio/mpeg", AudioDuration.Milliseconds(data, "audio/mpeg"));
+    }
+    public void Dispose() => _http.Dispose();
 }
 
 /// <summary>Google Cloud Text-to-Speech, Chirp 3: HD voices (fi-FI). Finnish has no custom pronunciation support there.</summary>

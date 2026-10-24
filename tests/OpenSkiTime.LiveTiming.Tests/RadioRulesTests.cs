@@ -149,6 +149,10 @@ public sealed class RadioRulesTests
         var wav = OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.Wav(OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.Resample(second, 24000, 16000), 16000);
         Assert.Equal(44 + 32000, wav.Length);
         Assert.Equal(1000, OpenSkiTime.LiveTiming.Radio.Providers.AudioDuration.Milliseconds(wav, "audio/wav"));
+        // Gemini 3.8 returns WAV: its samples are read back, a stereo file is mixed to mono.
+        var (pcm, rate) = OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.FromWav(OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.Wav(new byte[960], 24000))!.Value;
+        Assert.Equal((960, 24000), (pcm.Length, rate));
+        Assert.Null(OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.FromWav("<html></html>"u8.ToArray()));
         Assert.True(RadioPrices.Cost(RadioPrices.ForTts(RadioProviders.GoogleGemini), 100, 4000) > 0m);
     }
 

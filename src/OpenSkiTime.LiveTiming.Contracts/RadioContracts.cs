@@ -95,9 +95,10 @@ public static class RadioProviders
     public const string Google = "google";
     /// <summary>Gemini speech models through Vertex AI, with their own key (an API key bound to a service account).</summary>
     public const string GoogleGemini = "google-gemini";
+    public const string ElevenLabs = "elevenlabs";
     public const string Simulation = "simulation";
     public static readonly string[] Llm = [OpenAi, Gemini, Simulation];
-    public static readonly string[] Tts = [Azure, Google, GoogleGemini, OpenAi, Simulation];
+    public static readonly string[] Tts = [Azure, Google, GoogleGemini, ElevenLabs, OpenAi, Simulation];
     /// <summary>
     /// The saved keys a provider may use, in order. Gemini speech has its own key, because the service-account-bound key
     /// Vertex AI needs cannot also serve the Gemini API; an existing Google Gemini API key is used when it has none.
