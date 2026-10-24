@@ -44,6 +44,8 @@ public sealed class RadioEngine
     private readonly HashSet<(int Run, int Bib)> _featured = [];
     /// <summary>Silence after which a racer on course is talked about during a run.</summary>
     public static readonly TimeSpan OnCourseAfter = TimeSpan.FromSeconds(8);
+    /// <summary>Silence after which the producer fills a pause before or during the race (between runs, for example).</summary>
+    public static readonly TimeSpan ProducerDuringRace = TimeSpan.FromSeconds(35);
     private int _remainingLines;
     private RadioHealth _health;
 
@@ -125,10 +127,13 @@ public sealed class RadioEngine
             await GenerateAsync([ProducerGate.Event(feature, state, now)], mode, ct);
             return;
         }
-        if (_batcher.Count > 0 || now < _nextProducer || now < _speechEnds + Budget.ProducerInterval) { return; }
         var phase = _phase!.Value;
+        // While viewers wait for the race (before the start, between runs, an interruption) the hosts keep talking; the
+        // budget-aware longer interval applies once the race is over.
+        var interval = phase == RacePhase.AfterRace ? Budget.ProducerInterval : ProducerDuringRace;
+        if (_batcher.Count > 0 || now < _nextProducer || now < _speechEnds + interval) { return; }
         if (_afterRaceSince is { } since && now - since > ProducerAfterRace) { return; }
-        _nextProducer = now + Budget.ProducerInterval;
+        _nextProducer = now + interval;
         var decision = mode == RadioMode.Full ? await ProduceAsync(state, phase, ct) : null;
         decision ??= ProducerGate.Deterministic(state, phase, _producerTurn++);
         if (decision is not null) { await GenerateAsync([ProducerGate.Event(decision, state, now)], mode, ct); }

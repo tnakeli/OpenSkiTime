@@ -150,6 +150,8 @@ public sealed class RadioSlotTests
             var lines = FinnishTemplates.Lines([e], facts, 0);
             Assert.NotEmpty(lines);
             Assert.All(lines, x => Assert.Null(RadioSlots.Problem(x.Text, facts, rules)));
+            // A run of the race is "kierros", never "lasku".
+            Assert.All(lines, x => Assert.DoesNotMatch(@"(?i)lasku(n|t|lla|ssa)?", x.Text));
             Assert.True(lines[^1].Interruptible);
         }
         var finish = FinnishTemplates.Lines([Event(RadioEventKind.Finish, 2)], facts, 0);
