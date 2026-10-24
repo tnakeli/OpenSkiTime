@@ -10,7 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Fixed
 
-- Race page: the banner shows the two waiting racers in course order, the racer after next on top and the next racer just above the racers on course.
+- Race page: the banner follows the course from the top: the racer after next, the next racer, then the racers on course from the one who started last down to the one nearest the finish. Both groups were shown in start order.
 
 ## [0.6.0] - 2026-10-24
 

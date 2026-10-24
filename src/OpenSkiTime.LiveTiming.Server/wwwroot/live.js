@@ -110,9 +110,12 @@
     const seen = (runNumber, bib) => { const key = `${runNumber}:${bib}`; courseKeys.add(key); if (!seenOnCourse.has(key)) seenOnCourse.set(key, seenNow); return seenOnCourse.get(key); };
     next.runs.forEach(r => r.results.filter(x => x.status === 'OnCourse').forEach(x => seen(r.number, x.bib)));
     for (const key of [...seenOnCourse.keys()]) if (!courseKeys.has(key)) seenOnCourse.delete(key);
+    // In course order from the top: the racer who started last is highest, the first one (forerunners before racers)
+    // is nearest the finish.
     const onCourse = (current.forerunners || []).filter(f => f.status === 'OnCourse').map(f => ({bib: `F ${f.letter}`, name: `${f.lastName} ${f.firstName}`, nation: nationOf(f), forerunner: true}))
       .concat(current.results.filter(r => r.status === 'OnCourse').sort((a, b) => (Date.parse(a.startedAt) || 0) - (Date.parse(b.startedAt) || 0))
-        .map(r => { const c = competitor(r.bib); return {bib: String(r.bib), name: `${c.lastName} ${c.firstName}`, nation: nationOf(c), clock: {started: r.startedAt, seen: seen(current.number, r.bib)}}; }));
+        .map(r => { const c = competitor(r.bib); return {bib: String(r.bib), name: `${c.lastName} ${c.firstName}`, nation: nationOf(c), clock: {started: r.startedAt, seen: seen(current.number, r.bib)}}; }))
+      .reverse();
     // Once every starter of the current run is finished or classified, the banner says so; a stopped or stale publisher too.
     const complete = current.startOrder.length > 0 && current.startOrder.every(bib => { const r = current.results.find(x => x.bib === bib); return r && !['Ready', 'OnCourse', 'Review'].includes(r.status); });
     const notice = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained' : complete ? `Run ${next.currentRun} complete` : '';

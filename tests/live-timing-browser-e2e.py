@@ -3,6 +3,7 @@ Run: python tests/live-timing-browser-e2e.py --dotnet <dotnet.exe>
 Requires: pip install playwright; python -m playwright install chromium.
 """
 import argparse
+import copy
 import base64
 import hashlib
 import json
@@ -141,6 +142,18 @@ def main():
             state['runs'][0]['forerunners'][1]['status'] = 'Finished'
             request('PUT', f'/api/sessions/{sid}/state', state, token)
             expect(page.locator('#forerunners')).to_have_text('Forerunners · A FORERUNNER Synthetic: finished · B SECOND Synthetic: finished')
+            expect(page.locator('#track li.oncourse')).to_have_count(0)
+            # Racers on course are listed in course order from the top: the one who started last is highest.
+            waiting = copy.deepcopy(state['runs'][0]['results'])
+            state['version'] += 1
+            for bib, ago in [(5, 40), (6, 15)]:
+                started = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=ago)).isoformat().replace('+00:00', 'Z')
+                state['runs'][0]['results'][bib - 1].update(status='OnCourse', at=started, startedAt=started)
+            request('PUT', f'/api/sessions/{sid}/state', state, token)
+            expect(page.locator('#track li.oncourse .bib')).to_have_text(['6', '5'])
+            state['version'] += 1
+            state['runs'][0]['results'] = waiting
+            request('PUT', f'/api/sessions/{sid}/state', state, token)
             expect(page.locator('#track li.oncourse')).to_have_count(0)
             navigations = []
             page.on('framenavigated', lambda frame: navigations.append(frame.url))
