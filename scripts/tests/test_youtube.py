@@ -85,6 +85,12 @@ class VideoMetadataTests(unittest.TestCase):
         self.assertEqual(metadata['snippet'], {'title': 'New', 'description': 'D', 'categoryId': '17', 'tags': ['a']})
         self.assertEqual(metadata['status'], {'privacyStatus': 'unlisted', 'embeddable': False})
 
+    def test_publishing_a_scheduled_video_drops_the_schedule(self):
+        current = {'snippet': {'title': 'T', 'categoryId': '17'},
+                   'status': {'privacyStatus': 'private', 'publishAt': '2026-11-01T10:00:00Z'}}
+        self.assertEqual(youtube.video_metadata(self.args(privacy='public'), current)['status'], {'privacyStatus': 'public'})
+        self.assertIn('publishAt', youtube.video_metadata(self.args(title='New'), current)['status'])
+
     def test_new_upload_is_not_made_for_kids(self):
         metadata = youtube.video_metadata(self.args(title='Demo', category='sports', privacy='private'))
         self.assertEqual(metadata['status'], {'privacyStatus': 'private', 'selfDeclaredMadeForKids': False})

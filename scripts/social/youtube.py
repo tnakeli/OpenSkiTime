@@ -394,6 +394,9 @@ def video_metadata(args, current=None):
         snippet['categoryId'] = CATEGORIES[args.category]
     if args.privacy:
         status['privacyStatus'] = args.privacy
+        if args.privacy != 'private':
+            # A scheduled publication time is only valid on a private video.
+            status.pop('publishAt', None)
     if current is None:
         status['selfDeclaredMadeForKids'] = False
         snippet.setdefault('defaultLanguage', 'en')
