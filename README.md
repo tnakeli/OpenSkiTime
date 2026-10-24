@@ -124,4 +124,4 @@ Run the automated tests with `dotnet test OpenSkiTime.slnx -c Release`.
 
 ## Maintainer
 
-OpenSkiTime is developed and maintained by **Teemu Niemi** (GitHub [@tnakeli](https://github.com/tnakeli), <tniemi@gmail.com>). Use [GitHub issues](https://github.com/tnakeli/OpenSkiTime/issues) for bugs and feature requests, and the [security policy](SECURITY.md) for vulnerabilities. Follow the project on [YouTube](https://www.youtube.com/@openskitime-4c) and [Instagram](https://www.instagram.com/openskitime/).
+OpenSkiTime is developed and maintained by **Teemu Niemi** (GitHub [@tnakeli](https://github.com/tnakeli), <tniemi@gmail.com>). Use [GitHub issues](https://github.com/tnakeli/OpenSkiTime/issues) for bugs and feature requests, and the [security policy](SECURITY.md) for vulnerabilities. Follow the project on [YouTube](https://www.youtube.com/@OpenSkiTime) and [Instagram](https://www.instagram.com/openskitime/).

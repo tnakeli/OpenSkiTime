@@ -40,7 +40,7 @@ The profiles are linked from the website footer and structured data (the
 
 ## YouTube
 
-- **Channel:** [@openskitime-4c](https://www.youtube.com/@openskitime-4c)
+- **Channel:** [@OpenSkiTime](https://www.youtube.com/@OpenSkiTime)
 - **Channel name:** OpenSkiTime
 - **Description:**
 

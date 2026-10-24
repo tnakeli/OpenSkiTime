@@ -10,7 +10,7 @@ const repo = 'https://github.com/tnakeli/OpenSkiTime';
 // The maintainer is named on every page and in the structured data so that the project's publisher can be identified.
 const maintainer = { name: 'Teemu Niemi', email: 'tniemi@gmail.com', github: 'https://github.com/tnakeli' };
 // The project's own social profiles: linked in every footer and listed in the software's sameAs.
-const social = [{ name: 'YouTube', url: 'https://www.youtube.com/@openskitime-4c' }, { name: 'Instagram', url: 'https://www.instagram.com/openskitime/' }];
+const social = [{ name: 'YouTube', url: 'https://www.youtube.com/@OpenSkiTime' }, { name: 'Instagram', url: 'https://www.instagram.com/openskitime/' }];
 const image = `${site}/assets/overview.png`;
 // Sharing previews use a 1.91:1 card; the structured data keeps the full application screenshot.
 const shareImage = `${site}/assets/og-image.png`;
