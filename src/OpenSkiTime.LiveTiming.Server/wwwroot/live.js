@@ -6,6 +6,7 @@
   // The latest finisher (or DNF/DSQ) is highlighted for ten seconds when it changes, not on the first view.
   const flashMs = 10000;
   let latestKey = null, flashUntil = 0, flashTimer;
+  const seenOnCourse = new Map();
   // The server pings every 15 s; longer silence means a dead or half-open connection (e.g. replaced revision).
   const serverTimeout = 35000, pingInterval = 15000;
   const time = value => value == null ? '—' : `${Math.floor(value / 6000)}:${String(Math.floor(value / 100) % 60).padStart(2, '0')}.${String(value % 100).padStart(2, '0')}`;
@@ -57,7 +58,7 @@
   // Small pictograms of the banner rows: the start gate, a skier on course and the finish flag.
   const svg = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">';
   const icons = {
-    next: svg + '<path d="M5 3v18M19 3v18M5 4h14M8 15h8"/></svg>',
+    next: svg + '<path d="M6 7v14M3 21h6"/><circle cx="6" cy="12" r="1.6" fill="currentColor"/><path d="M7.5 12h13" stroke-width="2.6"/></svg>',
     oncourse: svg + '<circle cx="16" cy="4" r="2" fill="currentColor" stroke="none"/><path d="M14 8l-5 3 4 3-2 5M9 11l-3-2M14 8l3 4"/><path d="M3 18l18 4"/></svg>',
     finish: svg + '<path d="M5 22V3"/><path d="M5 4h14v9H5" stroke-width="1.5"/><path d="M5 4h3.5v3H5zM12 4h3.5v3H12zM8.5 7H12v3H8.5zM15.5 7H19v3h-3.5zM5 10h3.5v3H5zM12 10h3.5v3H12z" fill="currentColor" stroke="none"/></svg>'
   };
@@ -76,7 +77,10 @@
   // A cell value is text, a node, {text, className} or a running time {started}; a stacked cell has one value per line.
   const put = (parent, value) => {
     if (value instanceof Node) parent.append(value);
-    else if (value && value.started) { const clock = element('span', 'clock', liveRunningTime(value.started, Date.now())); clock.dataset.started = value.started; parent.append(clock); }
+    else if (value && value.seen != null) {
+      const clock = element('span', 'clock', liveRunningTime(value.started, Date.now(), value.seen));
+      clock.dataset.started = value.started || ''; clock.dataset.seen = value.seen; parent.append(clock);
+    }
     else if (value && value.text != null) parent.append(element('span', value.className, value.text));
     else parent.append(String(value));
   };
@@ -101,9 +105,14 @@
     // Everyone on course of the current run in start order, each with a running time. Forerunners are listed first with
     // an F and never get a time.
     const current = next.runs.find(r => r.number === next.currentRun);
+    // When this viewer first saw each racer on course; the running time falls back to it (see liveRunningTime).
+    const seenNow = Date.now(), courseKeys = new Set();
+    const seen = (runNumber, bib) => { const key = `${runNumber}:${bib}`; courseKeys.add(key); if (!seenOnCourse.has(key)) seenOnCourse.set(key, seenNow); return seenOnCourse.get(key); };
+    next.runs.forEach(r => r.results.filter(x => x.status === 'OnCourse').forEach(x => seen(r.number, x.bib)));
+    for (const key of [...seenOnCourse.keys()]) if (!courseKeys.has(key)) seenOnCourse.delete(key);
     const onCourse = (current.forerunners || []).filter(f => f.status === 'OnCourse').map(f => ({bib: `F ${f.letter}`, name: `${f.lastName} ${f.firstName}`, nation: nationOf(f), forerunner: true}))
       .concat(current.results.filter(r => r.status === 'OnCourse').sort((a, b) => (Date.parse(a.startedAt) || 0) - (Date.parse(b.startedAt) || 0))
-        .map(r => { const c = competitor(r.bib); return {bib: String(r.bib), name: `${c.lastName} ${c.firstName}`, nation: nationOf(c), startedAt: r.startedAt}; }));
+        .map(r => { const c = competitor(r.bib); return {bib: String(r.bib), name: `${c.lastName} ${c.firstName}`, nation: nationOf(c), clock: {started: r.startedAt, seen: seen(current.number, r.bib)}}; }));
     // Once every starter of the current run is finished or classified, the banner says so; a stopped or stale publisher too.
     const complete = current.startOrder.length > 0 && current.startOrder.every(bib => { const r = current.results.find(x => x.bib === bib); return r && !['Ready', 'OnCourse', 'Review'].includes(r.status); });
     const notice = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained' : complete ? `Run ${next.currentRun} complete` : '';
@@ -124,7 +133,7 @@
     const banner = [];
     if (!stale && !next.paused) {
       for (const bib of complete ? [] : liveNextStarters(current, 2)) { const c = competitor(bib); banner.push(bannerRow('next', 'Next', String(bib), `${c.lastName} ${c.firstName}`, nationOf(c), '', '')); }
-      for (const x of onCourse) banner.push(bannerRow('oncourse', 'On course', x.bib, x.name, x.nation, x.forerunner ? {text: 'forerunner', className: 'muted'} : x.startedAt ? {started: x.startedAt} : '—', ''));
+      for (const x of onCourse) banner.push(bannerRow('oncourse', 'On course', x.bib, x.name, x.nation, x.forerunner ? {text: 'forerunner', className: 'muted'} : x.clock, ''));
     }
     if (last) {
       const c = competitor(last.bib), place = totalRanked ? last.totalRank : last.rank, finished = last.status === 'Finished';
@@ -151,7 +160,7 @@
     const later = run.number > 1, totals = later && run.results.some(r => r.totalHundredths != null);
     const rank = r => totals ? r.totalRank : r.rank, gap = r => totals ? r.totalDifference : r.difference;
     // No status column: the run's time column says DNS, DNF, DSQ or NPS, and a racer on course has the running time.
-    const runTime = r => r.status === 'Finished' ? time(r.hundredths) : r.status === 'OnCourse' ? (r.startedAt ? {started: r.startedAt} : '—')
+    const runTime = r => r.status === 'Finished' ? time(r.hundredths) : r.status === 'OnCourse' ? {started: r.startedAt, seen: seen(run.number, r.bib)}
       : r.status === 'Ready' ? '—' : r.status;
     // An earlier run shows its time, or its status when the racer did not finish it.
     const earlierRun = x => !x ? '—' : x.status === 'Finished' ? time(x.hundredths) : ['Ready', 'OnCourse'].includes(x.status) ? '—' : x.status;
@@ -271,6 +280,6 @@
     if (state) render(state);
   });
   // Running times on course (banner and results) tick between updates; only the clocks change, nothing else is redrawn.
-  setInterval(() => { const now = Date.now(); document.querySelectorAll('.clock[data-started]').forEach(e => { e.textContent = liveRunningTime(e.dataset.started, now); }); }, 100);
+  setInterval(() => { const now = Date.now(); document.querySelectorAll('.clock[data-seen]').forEach(e => { e.textContent = liveRunningTime(e.dataset.started, now, Number(e.dataset.seen)); }); }, 100);
   if (id) { get('race').hidden = false; connect(); } else { get('list').hidden = false; list(); }
 })();

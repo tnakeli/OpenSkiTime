@@ -72,12 +72,18 @@ test('the latest outcome can be a DNF or DSQ, chosen by publish time', () => {
   assert.equal(context.liveLatestFinish(results, ['Finished', 'DNF', 'DSQ']).bib, 2);
 });
 
-test('running time counts tenths from the start instant and shows no time for a start far in the future', () => {
+test('running time counts tenths from the start instant, or from when the viewer saw the start when that instant is implausible', () => {
   const start = '2026-12-12T10:00:00Z', at = ms => Date.parse(start) + ms;
   assert.equal(context.liveRunningTime(start, at(0)), '0:00.0');
   assert.equal(context.liveRunningTime(start, at(65_678)), '1:05.6');
   assert.equal(context.liveRunningTime(start, at(-2_000)), '0:00.0');
+  // A start far in the future or long ago (another date or device clock): the time since this viewer saw the start.
   assert.equal(context.liveRunningTime(start, at(-60_000)), '—');
+  assert.equal(context.liveRunningTime(start, at(-60_000), at(-72_300)), '0:12.3');
+  assert.equal(context.liveRunningTime(start, at(700_000), at(690_000)), '0:10.0');
+  // No published start at all.
+  assert.equal(context.liveRunningTime(null, at(5_000), at(0)), '0:05.0');
+  assert.equal(context.liveRunningTime(undefined, at(5_000)), '—');
 });
 
 test('a later correction of an earlier finisher does not make it the latest outcome', () => {

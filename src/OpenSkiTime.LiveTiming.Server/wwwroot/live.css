@@ -55,7 +55,7 @@ button.radio[hidden] { display: none; }
 #course { font-weight: 600; padding: 4px 8px; background: var(--info); border-left: 4px solid var(--accent-text); }
 #course[hidden], #forerunners[hidden] { display: none; }
 #forerunners { font-size: 14px; color: var(--text-2); }
-#track { list-style: none; margin: 0 0 4px; padding: 0; max-width: 760px; display: grid; grid-template-columns: 28px auto minmax(0, 1fr) auto auto auto; }
+#track { list-style: none; margin: 0 0 4px; padding: 0; display: grid; grid-template-columns: 28px auto minmax(0, 1fr) auto auto auto; }
 #track:empty { display: none; }
 #track li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; gap: 0 10px; min-height: 38px; padding: 3px 8px 3px 4px;
   border-bottom: 1px solid var(--line); border-left: 4px solid transparent; transition: background-color .6s, box-shadow .6s; }
@@ -74,7 +74,11 @@ button.radio[hidden] { display: none; }
 #track li.finish .icon { color: var(--text); }
 #track li.out .time { color: var(--error); }
 /* The latest finisher is highlighted for ten seconds when it changes, in the banner and in the results. */
-#track li.flash, tr.flash td { background: var(--flash); box-shadow: inset 0 0 0 2px var(--flash-edge); }
+#track li.flash { background: var(--flash); box-shadow: inset 0 0 0 2px var(--flash-edge); }
+/* One frame around the whole highlighted row, not one per cell. */
+tr.flash td { background: var(--flash); box-shadow: inset 0 2px 0 var(--flash-edge), inset 0 -2px 0 var(--flash-edge); }
+tr.flash td:first-child { box-shadow: inset 2px 0 0 var(--flash-edge), inset 0 2px 0 var(--flash-edge), inset 0 -2px 0 var(--flash-edge); }
+tr.flash td:last-child { box-shadow: inset -2px 0 0 var(--flash-edge), inset 0 2px 0 var(--flash-edge), inset 0 -2px 0 var(--flash-edge); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* Flags: the system's emoji flags, or the bundled Twemoji Country Flags font where the system draws letters instead. */
 @font-face { font-family: "Twemoji Country Flags"; unicode-range: U+1F1E6-1F1FF; src: url("/fonts/TwemojiCountryFlags.woff2") format("woff2"); font-display: swap; }

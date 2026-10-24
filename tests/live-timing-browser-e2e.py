@@ -226,7 +226,9 @@ def main():
             expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Run 1', 'Run 2', 'Total', 'Difference'])
             expect(page.locator('#results tr')).to_have_count(2)
             expect(page.locator('tr[data-bib="5"] td')).to_have_text(['1', '5', 'TEST5 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:01.00', '0:59.00', '2:00.00', '+0:00.00'])
-            expect(page.locator('tr[data-bib="1"] td')).to_have_text(['—', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:00.12', '—', '—', '—'])
+            # On course without a published start instant: the running time still ticks, from when this viewer saw the start.
+            expect(page.locator('tr[data-bib="1"] td')).to_have_text(['—', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:00.12', re.compile(r'^0:0\d\.\d$'), '—', '—'])
+            expect(page.locator('#track li.oncourse .time')).to_have_text([re.compile(r'^0:0\d\.\d$')])
             page.locator('#runs button', has_text='Run 1').click()
             expect(page.locator('#head th').nth(5)).to_have_text('Intermediate 1')
             # A run the viewer chose stays selected through updates while the current run is unchanged.

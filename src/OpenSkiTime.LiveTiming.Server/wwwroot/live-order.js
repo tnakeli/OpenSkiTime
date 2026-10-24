@@ -23,13 +23,16 @@ globalThis.liveLatestFinish = (results, statuses = ['Finished']) => {
   return finished.reduce((latest, r) => (byTicks ? BigInt(r.finishSourceTicks) > BigInt(latest.finishSourceTicks)
     : instant(r) > instant(latest)) ? r : latest);
 };
-/* Running time on course, from the published start instant to now, truncated to tenths (m:ss.t). The viewer's clock
-   decides "now", so it is a display estimate; official times come only from the timing results. */
-globalThis.liveRunningTime = (startedAt, now) => {
-  // A start well in the future means the viewer's clock is wrong: show no time rather than a misleading one.
+/* Running time on course, truncated to tenths (m:ss.t), so viewers see that the racer is on course. It runs from the
+   published start instant. Without one, or when that instant is implausible for the viewer's clock (more than five
+   seconds ahead or ten minutes back: a device clock or date that differs from real time), it runs from the moment this
+   viewer saw the racer go on course. The viewer's clock decides "now", so it is a display estimate; official times come
+   only from the timing results. */
+globalThis.liveRunningTime = (startedAt, now, seenAt = null) => {
   const elapsed = now - Date.parse(startedAt);
-  if (!(elapsed > -5000)) return '—';
-  const ms = Math.max(0, elapsed), tenths = Math.floor(ms / 100);
+  const ms = elapsed > -5000 && elapsed < 600000 ? Math.max(0, elapsed) : seenAt != null ? Math.max(0, now - seenAt) : null;
+  if (ms == null) return '—';
+  const tenths = Math.floor(ms / 100);
   return `${Math.floor(tenths / 600)}:${String(Math.floor(tenths / 10) % 60).padStart(2, '0')}.${tenths % 10}`;
 };
 /* The next racers to start in a run, in start order. A racer is waiting while Ready (or without a result). Waiting racers
