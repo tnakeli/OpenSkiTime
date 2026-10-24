@@ -148,6 +148,27 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(self.upload(fake_urlopen)['id'], 'v1')
         self.assertEqual(sent, ['bytes 0-9/10', 'bytes */10'])
 
+    def test_expired_token_is_renewed_and_the_session_continues(self):
+        tokens = []
+
+        def fake_urlopen(req, timeout=None):
+            tokens.append((req.headers['Authorization'], req.headers['Content-range']))
+            if req.headers['Authorization'] == 'Bearer old':
+                raise urllib.error.HTTPError(req.full_url, 401, 'Unauthorized', {}, io.BytesIO(b''))
+            if req.headers['Content-range'] == 'bytes */10':
+                raise urllib.error.HTTPError(req.full_url, 308, 'Resume Incomplete', {}, io.BytesIO())
+            return io.BytesIO(b'{"id": "v1", "status": {}}')
+
+        with tempfile.TemporaryDirectory() as directory:
+            video = Path(directory) / 'demo.mp4'
+            video.write_bytes(b'0123456789')
+            with mock.patch.object(youtube, 'request', return_value=({}, {'Location': 'https://upload.example/session'})), \
+                    mock.patch.object(youtube.urllib.request, 'urlopen', side_effect=fake_urlopen), \
+                    mock.patch.object(youtube.time, 'sleep'), contextlib.redirect_stdout(io.StringIO()):
+                result = youtube.upload_video('old', str(video), {}, renew_token=lambda: 'new')
+        self.assertEqual(result['id'], 'v1')
+        self.assertEqual(tokens, [('Bearer old', 'bytes 0-9/10'), ('Bearer new', 'bytes */10'), ('Bearer new', 'bytes 0-9/10')])
+
     def test_persistent_failure_tells_operator_to_check_studio(self):
         def fake_urlopen(req, timeout=None):
             raise urllib.error.HTTPError(req.full_url, 500, 'Backend Error', {}, io.BytesIO(b'{"error": {"message": "Backend Error"}}'))

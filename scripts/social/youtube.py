@@ -271,8 +271,10 @@ def fail_on(problems):
 
 # --- Uploads --------------------------------------------------------------------------------
 
-def upload_video(token, path, metadata):
-    """Resumable upload in chunks; returns the video resource once YouTube has the whole file."""
+def upload_video(token, path, metadata, renew_token=None):
+    """Resumable upload in chunks; returns the video resource once YouTube has the whole file.
+
+    renew_token returns a fresh access token when the current one expires during a long upload."""
     size = Path(path).stat().st_size
     content_type = mimetypes.guess_type(path)[0] or 'application/octet-stream'
     _, headers = request('POST', '/videos', token, {'uploadType': 'resumable', 'part': 'snippet,status'}, metadata,
@@ -281,6 +283,7 @@ def upload_video(token, path, metadata):
 
     def put(data, content_range):
         """Returns ('done', video), ('partial', next offset) or ('error', description)."""
+        nonlocal token
         req = urllib.request.Request(session, data=data, method='PUT', headers={
             'Authorization': f'Bearer {token}', 'Content-Type': content_type, 'Content-Range': content_range})
         try:
@@ -290,6 +293,9 @@ def upload_video(token, path, metadata):
             if error.code == 308:
                 received = error.headers.get('Range')
                 return 'partial', int(received.split('-')[1]) + 1 if received else 0
+            if error.code == 401 and renew_token:
+                # The access token expired; the retry continues the same session with a new one.
+                token = renew_token()
             return 'error', f'{error.code}: {describe_error(error.read())}'
         except OSError as error:
             return 'error', str(getattr(error, 'reason', error))
@@ -445,7 +451,7 @@ def command_upload(args):
         print('Preview only; nothing was uploaded. Add --yes to upload.')
         return
     token = access_token()
-    video = upload_video(token, args.file, metadata)
+    video = upload_video(token, args.file, metadata, renew_token=access_token)
     print(f"Uploaded: https://www.youtube.com/watch?v={video['id']} ({video['status']['privacyStatus']}, "
           f"{video['status'].get('uploadStatus')})")
     if args.thumbnail:
