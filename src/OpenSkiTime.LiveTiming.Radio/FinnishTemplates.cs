@@ -36,7 +36,7 @@ public static class FinnishTemplates
         {
             case RadioEventKind.Finish or RadioEventKind.Podium or RadioEventKind.NewLeader when result?.Status == LiveStatus.Finished:
                 if (e.Kind == RadioEventKind.NewLeader)
-                { yield return Line(Pick($"Uusi johtaja! {{racer:{bib}}} nousee kärkeen.", $"Kärkipaikka vaihtuu: {{racer:{bib}}} johtaa nyt."), false); }
+                { yield return Line(Pick($"[excited] Uusi johtaja! {{racer:{bib}}} nousee kärkeen.", $"[excited] Kärkipaikka vaihtuu: {{racer:{bib}}} johtaa nyt."), false); }
                 else
                 { yield return Line(Pick($"Maalissa {{racer:{bib}}}, aika {{time:{bib}}}.", $"{{racer:{bib}}} on maalissa ajalla {{time:{bib}}}."), false); }
                 if (totals)
@@ -51,10 +51,10 @@ public static class FinnishTemplates
                 break;
             // A DNF is the drama of an alpine run: said with feeling, never with a guessed cause.
             case RadioEventKind.DNF when racer is not null:
-                yield return Line(Pick($"Voi ei! {{racer:{bib}}} on ulkona, {{status:{bib}:noun}}!", $"Ja nyt sattui! {{racer:{bib}}} {{status:{bib}}}!",
-                    $"Voi harmi, {{racer:{bib}}} on ulkona! Lasku päättyy kesken."), false);
-                yield return Line(Pick("Kova paikka, mutta tällaista alppihiihto on.", "Tämä rinne ei anna anteeksi pieniäkään virheitä.",
-                    "Harmillista, mutta seuraava lasku on jo tulossa."));
+                yield return Line(Pick($"[excited] Voi ei! {{racer:{bib}}} on ulkona, {{status:{bib}:noun}}!", $"[excited] Ja nyt sattui! {{racer:{bib}}} {{status:{bib}}}!",
+                    $"[excited] Voi harmi, {{racer:{bib}}} on ulkona! Lasku päättyy kesken."), false);
+                yield return Line(Pick("[sighs] Kova paikka, mutta tällaista alppihiihto on.", "[sighs] Tämä rinne ei anna anteeksi pieniäkään virheitä.",
+                    "[sighs] Harmillista, mutta seuraava lasku on jo tulossa."));
                 break;
             case RadioEventKind.DNS when racer is not null:
                 yield return Line($"{{racer:{bib}}} {{status:{bib}}}.");

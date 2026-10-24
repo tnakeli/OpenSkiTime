@@ -15,6 +15,10 @@ public interface IRadioTts
 {
     string Provider { get; }
     Task<TtsAudio> SynthesizeAsync(string text, RadioVoice voice, CancellationToken ct);
+    /// <summary>A multilingual voice that says foreign names well as written; otherwise names are respelled for Finnish.</summary>
+    bool NativeNames => false;
+    /// <summary>Understands audio tags such as [excited]; otherwise they are removed before speech.</summary>
+    bool AudioTags => false;
 }
 
 /// <summary>A provider failure. Messages are written by OpenSkiTime and never echo response bodies, keys or text sent.</summary>

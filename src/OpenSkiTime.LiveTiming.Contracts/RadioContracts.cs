@@ -71,10 +71,16 @@ public sealed record RadioConfiguration
         if (BudgetUsd is < 0m or > 1000m) { throw new LiveValidationException("Radio budget must be between 0 and 1000 USD."); }
         if (!RadioProviders.Llm.Contains(LlmProvider) || !RadioProviders.Tts.Contains(TtsProvider))
         { throw new LiveValidationException("Choose a supported radio provider."); }
-        foreach (var (text, max) in new[] { (LlmModel, 64), (TtsRegion, 32), (VoiceA, 64), (VoiceB, 64) })
+        foreach (var (text, max) in new[] { (LlmModel, 64), (TtsRegion, 32) })
         {
             if (text is null || text.Length > max || text.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '.' or '_')))
-            { throw new LiveValidationException("Radio model, region and voice names may contain only letters, digits, '-', '.' and '_'."); }
+            { throw new LiveValidationException("Radio model and region may contain only letters, digits, '-', '.' and '_'."); }
+        }
+        // Voices are provider voice names or IDs; ElevenLabs voices may also be given by their name ("Sini").
+        foreach (var text in new[] { VoiceA, VoiceB })
+        {
+            if (text is null || text.Length > 64 || text.Any(c => !(char.IsLetterOrDigit(c) || c is '-' or '.' or '_' or ' ')))
+            { throw new LiveValidationException("Radio voice names may contain only letters, digits, spaces, '-', '.' and '_'."); }
         }
         foreach (var (text, max) in new[] { (EventContext, 2000), (CurationNotes, 1000), (Lexicon, 4000) })
         {

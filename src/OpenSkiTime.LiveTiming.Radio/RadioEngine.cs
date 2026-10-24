@@ -244,7 +244,9 @@ public sealed class RadioEngine
         foreach (var line in lines)
         {
             if (!RadioPlayback.Playable(Volatile.Read(ref _latest)!, _time.GetUtcNow(), expires, phases, lineConditions[count])) { _log("Radio batch dropped as stale before speech"); break; }
-            var text = RadioSlots.Render(line.Text, facts, _lexicon);
+            // Multilingual voices get names as written; tags reach only voices that understand them.
+            var rendered = RadioSlots.Render(line.Text, facts, _lexicon, !_tts.NativeNames);
+            var text = _tts.AudioTags ? rendered : RadioSlots.StripTags(rendered);
             var estimate = RadioPrices.Cost(_ttsPrice, text.Length, RadioPrices.EstimatedDurationMs(text.Length));
             if (!Budget.CanAfford(estimate + texts.Sum(x => x.Estimate))) { Report(RadioState.BudgetExhausted, error: "Radio budget reached; generation stopped."); break; }
             var host = RadioPersonas.Find(line.Host) ?? RadioPersonas.Host(count);
@@ -302,7 +304,7 @@ public sealed class RadioEngine
     {
         var now = _time.GetUtcNow();
         var maxLines = Math.Min(RadioPrompts.MaxLines, 2 + batch.Count * 2);
-        var request = new LlmRequest(RadioPrompts.DialogueSystem(maxLines),
+        var request = new LlmRequest(RadioPrompts.DialogueSystem(maxLines, _tts.AudioTags),
             RadioPrompts.DialogueUser(batch, facts, _phase ?? RacePhase.RunInProgress, _config.EventContext, _topics.Recent(now), _diary.Entries), DialogueTokens, 0.8);
         if (await CompleteAsync(request, DialogueTimeout, ct) is not { } reply) { return (null, null); }
         var (lines, topic, problems) = ReadScript(reply.Text, facts, rules);

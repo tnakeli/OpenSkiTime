@@ -286,19 +286,38 @@ public static class Pcm16
 }
 
 /// <summary>
-/// ElevenLabs text to speech with Eleven v4 (Finnish among its languages). Classic synthesis of the given text, with
-/// language_code fi; MP3 output. Requests are logged by ElevenLabs unless the account has zero retention (Enterprise).
+/// ElevenLabs text to speech with Eleven v4 (Finnish among its languages), language_code fi, MP3 output. A voice is an
+/// ElevenLabs voice ID or a voice name ("Sini"), looked up once in the account's voices and then in the Finnish voice
+/// library (the key needs the Voices read permission for names). Eleven v4 is multilingual, so foreign names are sent as
+/// written, and it understands audio tags such as [excited]. Requests are logged by ElevenLabs unless the account has
+/// zero retention (Enterprise).
 /// </summary>
 public sealed class ElevenLabsTts(string? apiKey, string model) : IRadioTts, IDisposable
 {
     private readonly HttpClient _http = RadioHttp.Create();
     private readonly string _key = RadioHttp.RequireKey(apiKey, "ElevenLabs");
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _ids = new(StringComparer.OrdinalIgnoreCase);
     public string Provider => RadioProviders.ElevenLabs;
+    public bool NativeNames => true;
+    public bool AudioTags => true;
+    /// <summary>ElevenLabs voice IDs are 20 letters and digits; anything else is a voice name.</summary>
+    public static bool IsVoiceId(string voice) => voice is { Length: 20 } && voice.All(char.IsAsciiLetterOrDigit);
+    // The plan's concurrency limit can refuse one of a conversation's parallel lines; one short retry absorbs it.
     public async Task<TtsAudio> SynthesizeAsync(string text, RadioVoice voice, CancellationToken ct)
     {
+        try { return await SynthesizeOnceAsync(text, voice, ct); }
+        catch (RadioProviderException ex) when (ex.Message.EndsWith("rate limit or quota reached.", StringComparison.Ordinal))
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1.5), ct);
+            return await SynthesizeOnceAsync(text, voice, ct);
+        }
+    }
+    private async Task<TtsAudio> SynthesizeOnceAsync(string text, RadioVoice voice, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(voice);
+        var id = await VoiceIdAsync(voice.Name, ct);
         using var message = new HttpRequestMessage(HttpMethod.Post,
-            $"https://api.elevenlabs.io/v1/text-to-speech/{Uri.EscapeDataString(voice.Name)}?output_format=mp3_44100_128")
+            $"https://api.elevenlabs.io/v1/text-to-speech/{Uri.EscapeDataString(id)}?output_format=mp3_44100_128")
         {
             Content = JsonContent.Create(new
             {
@@ -311,6 +330,28 @@ public sealed class ElevenLabsTts(string? apiKey, string model) : IRadioTts, IDi
         var data = await response.Content.ReadAsByteArrayAsync(ct);
         if (!RadioMusic.IsMp3(data)) { throw new RadioProviderException("ElevenLabs returned an unexpected response."); }
         return new(data, "audio/mpeg", AudioDuration.Milliseconds(data, "audio/mpeg"));
+    }
+    private async Task<string> VoiceIdAsync(string name, CancellationToken ct)
+    {
+        if (IsVoiceId(name)) { return name; }
+        if (_ids.TryGetValue(name, out var known)) { return known; }
+        var refused = $"ElevenLabs could not look up the voice \"{name}\": the key needs the Voices read permission, or enter the voice ID in the radio settings.";
+        foreach (var (path, list) in new[] { ($"v2/voices?search={Uri.EscapeDataString(name)}&page_size=50", "voices"),
+                     ($"v1/shared-voices?search={Uri.EscapeDataString(name)}&language=fi&page_size=50", "voices") })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.elevenlabs.io/" + path);
+            request.Headers.Add("xi-api-key", _key);
+            using var response = await RadioHttp.SendAsync(_http, request, "ElevenLabs", ct, refused);
+            var json = await RadioHttp.JsonAsync(response, "ElevenLabs", ct);
+            if (!json.TryGetProperty(list, out var voices) || voices.ValueKind != JsonValueKind.Array) { continue; }
+            // An exact name first, then a library name that starts with it ("Sini - Calm Narrator").
+            var named = voices.EnumerateArray().Select(x => (Name: x.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
+                Id: x.TryGetProperty("voice_id", out var v) ? v.GetString() ?? "" : "")).Where(x => IsVoiceId(x.Id)).ToArray();
+            var match = named.FirstOrDefault(x => string.Equals(x.Name.Trim(), name, StringComparison.OrdinalIgnoreCase));
+            if (match.Id is null or "") { match = named.FirstOrDefault(x => x.Name.StartsWith(name + " ", StringComparison.OrdinalIgnoreCase)); }
+            if (match.Id is { Length: > 0 } id) { _ids[name] = id; return id; }
+        }
+        throw new RadioProviderException($"ElevenLabs voice \"{name}\" was not found in the account or the Finnish voice library.");
     }
     public void Dispose() => _http.Dispose();
 }

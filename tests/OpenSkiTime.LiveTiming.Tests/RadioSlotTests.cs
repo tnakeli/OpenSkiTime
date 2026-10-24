@@ -42,6 +42,7 @@ public sealed class RadioSlotTests
     [InlineData("Hankiranta johtaa nyt.", "racer name outside slots")]
     [InlineData("Maalissa VEETI {racer:1}.", "racer name outside slots")]
     [InlineData("Hän on kolmas.", "number words outside slots")]
+    [InlineData("[laughs] Maalissa {racer:2}.", "unknown audio tag")]
     [InlineData("Hieno lasku {racer:2}:lta.", "ending attached to a slot")]
     [InlineData("Kolmantena on {racer:2}.", "number words outside slots")]
     [InlineData("Hän on yhdestoista.", "number words outside slots")]
@@ -74,6 +75,8 @@ public sealed class RadioSlotTests
         Assert.False(RadioSlots.Names("Numero {bib:3:nom} odottaa.", 3));
         // A start-gate line that gives only the bib still depends on that racer being next.
         Assert.True(RadioSlots.Mentions("Lähtöportilla seuraavana numero {bib:3:nom}.", 3));
+        // Voices that would read tags aloud get them removed.
+        Assert.Equal("Uusi johtaja!", RadioSlots.StripTags("[excited] Uusi johtaja!"));
     }
 
     [Theory]
@@ -91,6 +94,8 @@ public sealed class RadioSlotTests
     [InlineData("FIS-kilpailuissa ja SM-tasolla tämä on tuttua, Lumiklubin väki kertoo.")]
     [InlineData("Mäki on jyrkkä, ja kivi ei ole tiellä.")]
     [InlineData("Seurataan laskua yhdessä.")]
+    [InlineData("[excited] Kärkipaikka vaihtuu: {racer:2} johtaa nyt.")]
+    [InlineData("[sighs] Kova paikka, mutta tällaista alppihiihto on.")]
     [InlineData("Täällä Harjoitusrinteellä riittää vauhtia, ja Testitunturilla on hyvä keli.")] // Inflected allowed names.
     public void OrdinaryWordsAndAllowedNamesPass(string line)
     {
