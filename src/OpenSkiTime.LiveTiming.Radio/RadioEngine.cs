@@ -8,6 +8,8 @@ namespace OpenSkiTime.LiveTiming.Radio;
 /// optional curation → Finnish rendering → speech → clip upload, plus a producer for idle moments. Everything runs in the
 /// radio worker process, outside timing capture, with explicit time, timeouts, cancellation and a hard budget stop.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "The speech slots are a SemaphoreSlim whose wait handle is never used; it holds no unmanaged resource.")]
 public sealed class RadioEngine
 {
     public static readonly TimeSpan DialogueTimeout = TimeSpan.FromSeconds(20);
@@ -55,6 +57,7 @@ public sealed class RadioEngine
         ArgumentNullException.ThrowIfNull(budget); ArgumentNullException.ThrowIfNull(time);
         _config = configuration; _llm = llm; _tts = tts; Budget = budget; _time = time; _log = log ?? (_ => { });
         _llmPrice = RadioPrices.ForLlm(llm.Provider, llm.Model) ?? throw new RadioProviderException("The language model has no price entry.");
+        _speechSlots = new(Math.Max(1, tts.MaxConcurrent), Math.Max(1, tts.MaxConcurrent));
         _ttsPrice = RadioPrices.ForTts(tts.Provider, tts is ElevenLabsTts eleven ? eleven.Model : configuration.TtsModel);
         _lexicon = FinnishVerbalizer.Lexicon(configuration.Lexicon);
         _nextProducer = time.GetUtcNow() + TimeSpan.FromSeconds(30);
@@ -422,6 +425,13 @@ public sealed class RadioEngine
     // so the panel never saves an estimate that the settled cost then undercuts.
     private async Task<TtsAudio> SpeakAsync(string text, RadioVoice voice, decimal estimate, CancellationToken ct)
     {
+        // Lines beyond the provider's concurrency wait here, before their reservation and timeout start.
+        await _speechSlots.WaitAsync(ct);
+        try { return await SpeakNowAsync(text, voice, estimate, ct); }
+        finally { _speechSlots.Release(); }
+    }
+    private async Task<TtsAudio> SpeakNowAsync(string text, RadioVoice voice, decimal estimate, CancellationToken ct)
+    {
         // Charge and reservation change together, so a report never sees one without the other.
         lock (_reservations) { Budget.Charge(estimate); _outstanding += estimate; }
         var settled = false;
@@ -434,6 +444,7 @@ public sealed class RadioEngine
         finally { if (!settled) { lock (_reservations) { _outstanding -= estimate; } } }
     }
     private readonly Lock _reservations = new();
+    private readonly SemaphoreSlim _speechSlots;
     private decimal _outstanding;
     private decimal SettledSpend { get { lock (_reservations) { return Budget.Spent - _outstanding; } } }
 

@@ -303,17 +303,15 @@ public sealed class ElevenLabsTts(string? apiKey, string model) : IRadioTts, IDi
     public bool AudioTags => true;
     /// <summary>ElevenLabs voice IDs are 20 letters and digits; anything else is a voice name.</summary>
     public static bool IsVoiceId(string voice) => voice is { Length: 20 } && voice.All(char.IsAsciiLetterOrDigit);
-    // ElevenLabs plans limit concurrent requests: at most two lines are synthesized at once, and a refusal is retried
+    // ElevenLabs plans limit concurrent requests: the engine sends at most two lines at once, and a refusal is retried
     // twice with a growing pause before the line is given up.
-    private readonly SemaphoreSlim _concurrent = new(2, 2);
+    public int MaxConcurrent => 2;
     public async Task<TtsAudio> SynthesizeAsync(string text, RadioVoice voice, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
         {
-            await _concurrent.WaitAsync(ct);
             try { return await SynthesizeOnceAsync(text, voice, ct); }
             catch (RadioProviderException ex) when (attempt < 2 && ex.Message.EndsWith("rate limit or quota reached.", StringComparison.Ordinal)) { }
-            finally { _concurrent.Release(); }
             await Task.Delay(TimeSpan.FromSeconds(1.5 * (attempt + 1)), ct);
         }
     }
@@ -358,7 +356,7 @@ public sealed class ElevenLabsTts(string? apiKey, string model) : IRadioTts, IDi
         }
         throw new RadioProviderException($"ElevenLabs voice \"{name}\" was not found in the account or the Finnish voice library.");
     }
-    public void Dispose() { _http.Dispose(); _concurrent.Dispose(); }
+    public void Dispose() => _http.Dispose();
 }
 
 /// <summary>Google Cloud Text-to-Speech, Chirp 3: HD voices (fi-FI). Finnish has no custom pronunciation support there.</summary>

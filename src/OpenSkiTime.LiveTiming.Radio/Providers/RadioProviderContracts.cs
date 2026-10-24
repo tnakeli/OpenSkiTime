@@ -19,6 +19,8 @@ public interface IRadioTts
     bool NativeNames => false;
     /// <summary>Understands audio tags such as [excited]; otherwise they are removed before speech.</summary>
     bool AudioTags => false;
+    /// <summary>Lines synthesized at once; the engine queues the rest before their timeout starts.</summary>
+    int MaxConcurrent => 6;
 }
 
 /// <summary>A provider failure. Messages are written by OpenSkiTime and never echo response bodies, keys or text sent.</summary>
