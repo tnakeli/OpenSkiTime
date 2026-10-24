@@ -144,6 +144,12 @@ public sealed class RadioRulesTests
             Assert.Equal(provider, RadioPrices.ForTts(provider).Provider);
             if (provider != RadioProviders.Simulation) { Assert.All(RadioProviders.KeysOf(provider), x => Assert.Contains(x, OpenSkiTime.LiveTiming.Client.RadioKeyCredential.Providers)); }
         }
+        // A voice name for another provider (ElevenLabs "Sini" while OpenAI speaks) falls back to the provider's default.
+        Assert.Equal("coral", RadioPersonas.Voice(RadioPersonas.Hosts[0], RadioProviders.OpenAi, "Sini").Name);
+        Assert.Equal("Sini", RadioPersonas.Voice(RadioPersonas.Hosts[0], RadioProviders.ElevenLabs, "Sini").Name);
+        Assert.Equal("nova", RadioPersonas.Voice(RadioPersonas.Hosts[0], RadioProviders.OpenAi, "nova").Name);
+        Assert.Equal("fi-FI-NooraNeural", RadioPersonas.Voice(RadioPersonas.Hosts[0], RadioProviders.Azure, "fi-FI-NooraNeural").Name);
+        Assert.Equal("Kore", RadioPersonas.Voice(RadioPersonas.Hosts[0], RadioProviders.GoogleGemini, "Jussi").Name);
         // A provider's second model has its own price; an unknown model costs like the provider's default.
         Assert.Equal(40m, RadioPrices.ForTts(RadioProviders.ElevenLabs, "eleven_v4_turbo").PerMillionCharacters);
         Assert.Equal(80m, RadioPrices.ForTts(RadioProviders.ElevenLabs, "other").PerMillionCharacters);

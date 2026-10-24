@@ -33,11 +33,33 @@ public static class RadioPersonas
     ];
     public static RadioPersona Host(int index) => Hosts[index % Hosts.Length];
     public static RadioPersona? Find(string name) => Hosts.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-    /// <summary>The voice for this host and provider; an operator voice name replaces the default.</summary>
+    // Voices each provider offers; a configured name for another provider (left over after switching) is ignored.
+    private static readonly HashSet<string> OpenAiVoices = new(StringComparer.OrdinalIgnoreCase)
+    { "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse", "marin", "cedar" };
+    private static readonly HashSet<string> GeminiVoices = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Achernar", "Achird", "Algenib", "Algieba", "Alnilam", "Aoede", "Autonoe", "Callirrhoe", "Charon", "Despina", "Enceladus", "Erinome", "Fenrir",
+        "Gacrux", "Iapetus", "Kore", "Laomedeia", "Leda", "Orus", "Pulcherrima", "Puck", "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Sulafat",
+        "Umbriel", "Vindemiatrix", "Zephyr", "Zubenelgenubi"
+    };
+    /// <summary>Whether a voice name can belong to the provider: fixed lists for OpenAI and Gemini, fi-FI names for Azure and Google.</summary>
+    public static bool Fits(string provider, string voice)
+    {
+        ArgumentNullException.ThrowIfNull(voice);
+        return provider switch
+        {
+            RadioProviders.OpenAi => OpenAiVoices.Contains(voice),
+            RadioProviders.GoogleGemini => GeminiVoices.Contains(voice),
+            RadioProviders.Azure or RadioProviders.Google => voice.StartsWith("fi-FI-", StringComparison.OrdinalIgnoreCase),
+            RadioProviders.Simulation => false,
+            _ => true
+        };
+    }
+    /// <summary>The voice for this host and provider; an operator voice name that fits the provider replaces the default.</summary>
     public static RadioVoice Voice(RadioPersona host, string provider, string? configured)
     {
         ArgumentNullException.ThrowIfNull(host);
         var voice = host.Voices[provider];
-        return string.IsNullOrWhiteSpace(configured) ? voice : voice with { Name = configured.Trim() };
+        return string.IsNullOrWhiteSpace(configured) || !Fits(provider, configured.Trim()) ? voice : voice with { Name = configured.Trim() };
     }
 }
