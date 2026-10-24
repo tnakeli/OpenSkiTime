@@ -28,6 +28,12 @@
          </StackPanel>
         </Grid>
         <TextBlock Text="{Binding Detail}" Classes="muted" />
+        <Border IsVisible="{Binding HasServerLoad}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,4,0,0">
+         <StackPanel Spacing="2">
+          <TextBlock Text="SERVER LOAD" FontSize="10" FontWeight="Bold" LetterSpacing="1" Classes="muted" />
+          <TextBlock Text="{Binding ServerLoad}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+         </StackPanel>
+        </Border>
         <WrapPanel IsEnabled="{Binding !$parent[Window].DataContext.Busy}">
          <Button Content="Start" Classes="primary" Command="{Binding $parent[Window].DataContext.ControlCommand}" CommandParameter="{Binding Start}" Margin="0,0,6,0" />
          <Button Content="Stop" Command="{Binding $parent[Window].DataContext.ControlCommand}" CommandParameter="{Binding Stop}" Margin="0,0,6,0" />

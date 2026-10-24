@@ -72,7 +72,16 @@ public sealed class LiveTimingLayoutTests
         await using var session = new LiveControlSession();
         var vm = new PanelViewModel(session);
         vm.Update(); // Radio defaults before any competition is open.
-        vm.Channels[0].Update(new(PublisherKind.Local, new(PublisherState.Running, "http://localhost:5078", PublicUrl: "http://localhost:5078/r/00000000-0000-0000-0000-000000000001"), 100));
+        var load = new LiveServerStats(DateTimeOffset.UnixEpoch, true, new(42, 3, 61, 25.44, 60), 120, new(530, 4.25, 12.4, 40, 5),
+            new(12.3, 2, 180L << 20, 60L << 20, 1L << 30, 0));
+        vm.Channels[0].Update(new(PublisherKind.Local, new(PublisherState.Running, "http://localhost:5078", PublicUrl: "http://localhost:5078/r/00000000-0000-0000-0000-000000000001")
+            { Server = load, RoundTripMs = 85 }, 100));
+        // Viewers, response times and resources, so the operator sees what limits the server when many people follow.
+        Assert.True(vm.Channels[0].HasServerLoad); Assert.False(vm.Channels[1].HasServerLoad);
+        var lines = vm.Channels[0].ServerLoad.Split(Environment.NewLine);
+        Assert.Equal("Viewers 42 now · last 60 min: min 3, avg 25.4, max 61 · 120 on the server", lines[0]);
+        Assert.Equal("Response avg 4.3 ms, p95 12 ms, max 40 ms (530 requests, 5 min) · round trip 85 ms", lines[1]);
+        Assert.StartsWith("CPU 12.3 % of 2 cores · memory 180 MB (heap 60 MB) of 1.0 GB · queued work 0 · ", lines[2], StringComparison.Ordinal);
         vm.Channels[1].Update(new(PublisherKind.Cloud, new(PublisherState.Error, Error: "Connection unavailable. Check the cloud URL and network, then press Start."), 101));
         vm.Competition = "Synthetic slalom / Run 1";
         var window = new PanelWindow { DataContext = vm, Width = width, Height = height };

@@ -95,3 +95,15 @@ test('a corrected run time does not move a finisher whose device impulses are pu
     startedAt: '2026-12-12T10:00:00Z', hundredths: 60000, at: '2026-12-12T12:00:00Z' }, { bib: 2, status: 'DNF', at: '2026-12-12T10:05:00Z' }];
   assert.equal(context.liveLatestFinish(results, ['Finished', 'DNF', 'DSQ']).bib, 2);
 });
+
+test('the next starters follow the furthest racer who started; a late starter comes after them and a DNS marked ahead is not a start', () => {
+  const run = (statuses) => ({ startOrder: [1, 2, 3, 4, 5, 6], results: Object.entries(statuses).map(([bib, status]) => ({ bib: Number(bib), status })) });
+  const next = (statuses, count) => [...context.liveNextStarters(run(statuses), count)];
+  assert.deepEqual(next({}), [1, 2]);
+  assert.deepEqual(next({ 1: 'Finished', 2: 'OnCourse' }), [3, 4]);
+  // Bib 2 missed its turn: the gate moves on and bib 2 waits after the others.
+  assert.deepEqual(next({ 1: 'Finished', 3: 'OnCourse' }, 6), [4, 5, 6, 2]);
+  // Bib 5 is marked DNS before it is due; it never moves the position.
+  assert.deepEqual(next({ 1: 'DNF', 2: 'OnCourse', 5: 'DNS' }), [3, 4]);
+  assert.deepEqual(next({ 1: 'Finished', 2: 'Finished', 3: 'Finished', 4: 'DSQ', 5: 'Review', 6: 'Finished' }), []);
+});

@@ -91,7 +91,7 @@ try
                         health = health with { State = PublisherState.Starting, Error = null }; log.Write("Publisher start");
                         break;
                     case "stop":
-                        running = false; health = health with { State = PublisherState.Stopped, Error = null };
+                        running = false; health = health with { State = PublisherState.Stopped, Error = null, Server = null, RoundTripMs = null };
                         await SendHealth(); log.Write("Publisher stopped");
                         if (standalone is not null) { await standalone.PauseAsync(lifetime.Token); }
                         break;
@@ -104,7 +104,7 @@ try
                     case "delete-all":
                         running = false;
                         if (standalone is not null) { await standalone.DeleteAsync(command.Command == "delete-all", lifetime.Token); }
-                        health = health with { State = PublisherState.Stopped, PublicUrl = null, ExpiresAt = null, Error = null };
+                        health = health with { State = PublisherState.Stopped, PublicUrl = null, ExpiresAt = null, Error = null, Server = null, RoundTripMs = null };
                         log.Write("Session deleted and all session runtime data cleared"); break;
                     case "shutdown": lifetime.Cancel(); break;
                     default: throw new LiveValidationException("Unknown worker command.");
@@ -129,7 +129,8 @@ try
                         // Reported as progress rather than an error; a failure after the wake timeout reports the error again.
                         health = health with { Notice = WakingNotice, Error = null }; log.Write(WakingNotice); await SendHealth();
                     }
-                    if (state is not null && (refresh || !ReferenceEquals(state, published)))
+                    var publishing = state is not null && (refresh || !ReferenceEquals(state, published));
+                    if (publishing && state is not null)
                     {
                         var sending = state with { Paused = false };
                         if (standalone is not null) { await standalone.PublishAsync(sending, refresh, current.Token); }
@@ -138,12 +139,20 @@ try
                         health = health with { State = PublisherState.Running, Error = null, Notice = null, LastConnected = now,
                             LastSuccessfulPublish = DateTimeOffset.UtcNow, LastEvent = state.UpdatedAt,
                             PublicUrl = standalone?.Session?.PublicUrl, ExpiresAt = standalone?.Session?.ExpiresAt };
-                        log.Write("Authoritative state published"); nextHealth = now.AddSeconds(5); await SendHealth();
+                        log.Write("Authoritative state published"); await SendHealth();
+                        // The first check comes five seconds after the first publish, as for an older server.
+                        if (standalone?.StatsSupported != true || nextHealth == DateTimeOffset.MinValue) { nextHealth = now.AddSeconds(5); }
                     }
-                    else if (now >= nextHealth && published is not null)
+                    // A server with a load report is asked every five seconds, also while results keep coming, so the panel
+                    // shows the load at the busiest moments. An older server is checked only while idle: its check
+                    // downloads the whole state.
+                    if (now >= nextHealth && published is not null && (!publishing || standalone?.StatsSupported == true))
                     {
                         if (standalone is not null && await standalone.HealthAsync(current.Token))
-                        { health = health with { State = PublisherState.Running, Error = null, Notice = null, LastConnected = now }; }
+                        {
+                            health = health with { State = PublisherState.Running, Error = null, Notice = null, LastConnected = now,
+                                Server = standalone.Stats, RoundTripMs = standalone.RoundTripMs };
+                        }
                         else if (standalone is not null)
                         {
                             // Server restarted and lost its RAM state: restore every run on the next pass, without error backoff.

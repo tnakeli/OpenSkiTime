@@ -95,7 +95,7 @@ public static class FinnishTemplates
                 yield return Line("Kilpailussa on tällä hetkellä tauko. Kerromme heti, kun kilpailu jatkuu.");
                 break;
             case RadioEventKind.Producer:
-                foreach (var line in Producer(e, facts)) { yield return line; }
+                foreach (var line in Producer(e, facts, seed)) { yield return line; }
                 break;
         }
     }
@@ -124,7 +124,7 @@ public static class FinnishTemplates
     // Ordinal words read naturally up to ten ("kolmantena"); later places use the cardinal ("sijalla kaksikymmentäkolme").
     private static string Place(string kind, int bib, int place) => place <= 10 ? $"{{{kind}:{bib}:ess}}" : $"sijalla {{{kind}:{bib}:card}}";
 
-    private static IEnumerable<ScriptLine> Producer(RadioEvent e, FactSheet facts)
+    private static IEnumerable<ScriptLine> Producer(RadioEvent e, FactSheet facts, int seed)
     {
         var bib = e.Bibs.FirstOrDefault();
         switch (e.Source)
@@ -143,6 +143,28 @@ public static class FinnishTemplates
                 var first = facts.Racers[leaders[0]];
                 var kind = first.Result?.TotalRank is not null ? "totalrank" : first.Result?.Rank is not null ? "rank" : "prevrank";
                 yield return new("", "Epävirallinen tilanne: " + string.Join(", ", leaders.Select((x, i) => $"{{{kind}:{x}:ess}} {(i == 0 ? "on " : "")}{{racer:{x}}}")) + ".", true);
+                break;
+            case ProducerSources.Recap:
+                var recap = e.Bibs.Where(facts.Racers.ContainsKey).ToArray();
+                if (recap.Length == 0) { yield break; }
+                var top = facts.Racers[recap[0]];
+                var place = top.Result?.TotalRank is not null ? "totalrank" : top.Result?.Rank is not null ? "rank" : "prevrank";
+                yield return new("", recap.Length > 5 ? "Tauko antaa hyvää aikaa kerrata epävirallinen kärki pidemmälti." : "Kerrataan tauon aikana epävirallinen kärki.", false);
+                foreach (var chunk in recap.Chunk(3))
+                {
+                    var said = chunk.Select((x, i) => $"{{{place}:{x}:ess}} {(i == 0 ? "on " : "")}{{racer:{x}}}").ToArray();
+                    yield return new("", (said.Length == 1 ? said[0] : string.Join(", ", said[..^1]) + " ja " + said[^1]) + ".", true);
+                }
+                break;
+            // Light, fact-free talk that never guesses why the race is paused.
+            case ProducerSources.Banter:
+                string[][] banter =
+                [
+                    ["Lähdössä on nyt hieman pidempi tauko.", "Hyvä hetki hakea kuppi kahvia, mutta pysykää kuulolla, jatkamme heti kun kisa jatkuu."],
+                    ["Tämä tauko antaa meillekin täällä selostamossa hetken hengähtää.", "Ja kuulijat voivat kerrata tulokset rauhassa. Palaamme asiaan heti kun seuraava laskija lähtee."],
+                    ["Odottelua tämäkin, mutta alppihiihdossa kärsivällisyys palkitaan.", "Niin on. Ja termospullo on selostamon tärkein varuste."]
+                ];
+                foreach (var text in banter[Math.Abs(seed) % banter.Length]) { yield return new("", text, true); }
                 break;
             case ProducerSources.RunSummary:
                 var finished = facts.Counts["finished"]; var remaining = facts.Counts["remaining"];

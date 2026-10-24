@@ -137,9 +137,11 @@ public sealed class RadioEngine
         if (_batcher.Count > 0 || now < _nextProducer || now < _speechEnds + interval) { return; }
         if (_afterRaceSince is { } since && now - since > ProducerAfterRace) { return; }
         _nextProducer = now + interval;
-        var decision = mode == RadioMode.Full ? await ProduceAsync(state, phase, ct) : null;
-        decision ??= ProducerGate.Deterministic(state, phase, _producerTurn++);
-        if (decision is not null) { await GenerateAsync([ProducerGate.Event(decision, state, now)], mode, ct); }
+        // A pause in the race (a long start interval, an interruption, between runs) gets a recap and light talk.
+        var pause = RadioPause.Duration(state, now);
+        var decision = mode == RadioMode.Full ? await ProduceAsync(state, phase, pause, ct) : null;
+        decision ??= ProducerGate.Deterministic(state, phase, _producerTurn++, pause);
+        if (decision is not null) { await GenerateAsync([ProducerGate.Event(decision, state, now, pause)], mode, ct); }
     }
 
     // The racer on course the longest who has not been featured in this run, once the start announcement had its time.
@@ -396,15 +398,16 @@ public sealed class RadioEngine
         { _log("Radio curation discarded: invalid JSON"); return original; }
     }
 
-    private async Task<ProducerDecision?> ProduceAsync(LiveSnapshot state, RacePhase phase, CancellationToken ct)
+    private async Task<ProducerDecision?> ProduceAsync(LiveSnapshot state, RacePhase phase, TimeSpan? pause, CancellationToken ct)
     {
         var hasContext = !string.IsNullOrWhiteSpace(_config.EventContext);
-        var allowed = ProducerSources.Phases.Where(x => x.Value.Contains(phase) && (x.Key != ProducerSources.EventContext || hasContext)).Select(x => x.Key).ToArray();
+        var allowed = ProducerSources.Phases.Where(x => x.Value.Contains(phase) && (x.Key != ProducerSources.EventContext || hasContext)
+            && (pause is not null || !ProducerSources.PauseOnly.Contains(x.Key))).Select(x => x.Key).ToArray();
         var failed = new List<string>();
         // One retry, like mikradio: the second attempt is told which source failed the gate.
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var request = new LlmRequest(RadioPrompts.ProducerSystem(), RadioPrompts.ProducerUser(state, phase, allowed, _topics.Recent(_time.GetUtcNow()), failed, hasContext), 200, 0.7);
+            var request = new LlmRequest(RadioPrompts.ProducerSystem(), RadioPrompts.ProducerUser(state, phase, allowed, _topics.Recent(_time.GetUtcNow()), failed, hasContext, pause), 200, 0.7);
             if (await CompleteAsync(request, ProducerTimeout, ct) is not { } reply) { return null; }
             try
             {
@@ -413,7 +416,7 @@ public sealed class RadioEngine
                 int? bib = json.RootElement.TryGetProperty("bib", out var b) && b.ValueKind == JsonValueKind.Number ? b.GetInt32() : null;
                 var instruction = json.RootElement.TryGetProperty("instruction", out var i) ? i.GetString() ?? "" : "";
                 var decision = new ProducerDecision(source, bib, instruction);
-                if (ProducerGate.Problem(decision, state, phase, hasContext) is not { } problem) { return decision; }
+                if (ProducerGate.Problem(decision, state, phase, hasContext, pause) is not { } problem) { return decision; }
                 _log($"Radio producer choice rejected: {problem}");
                 failed.Add(source);
             }

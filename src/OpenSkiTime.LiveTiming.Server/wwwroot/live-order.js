@@ -32,3 +32,12 @@ globalThis.liveRunningTime = (startedAt, now) => {
   const ms = Math.max(0, elapsed), tenths = Math.floor(ms / 100);
   return `${Math.floor(tenths / 600)}:${String(Math.floor(tenths / 10) % 60).padStart(2, '0')}.${tenths % 10}`;
 };
+/* The next racers to start in a run, in start order. A racer is waiting while Ready (or without a result). Waiting racers
+   after the furthest racer who has started come first; one still waiting before that position (a late start) follows
+   them. A DNS or NPS marked ahead of time is not a start, so it never moves the position. */
+globalThis.liveNextStarters = (run, count = 2) => {
+  const status = bib => (run.results.find(r => r.bib === bib) || {status: 'Ready'}).status;
+  const started = run.startOrder.reduce((at, bib, i) => ['OnCourse', 'Finished', 'DNF', 'DSQ', 'Review'].includes(status(bib)) ? i : at, -1);
+  const waiting = run.startOrder.map((bib, i) => ({bib, i})).filter(x => status(x.bib) === 'Ready');
+  return [...waiting.filter(x => x.i > started), ...waiting.filter(x => x.i < started)].slice(0, count).map(x => x.bib);
+};

@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import socket
 import subprocess
@@ -30,6 +31,13 @@ def fmt(hundredths):
     if hundredths is None:
         return None
     return f"{hundredths // 6000}:{hundredths // 100 % 60:02d}.{hundredths % 100:02d}"
+
+
+def expect_status(page, bib, status, time_cell):
+    # No status column: the row carries the status as its class, and the run's time column says DNS, DNF, DSQ or NPS.
+    expect(page.locator(f'tr[data-bib="{bib}"]')).to_have_class(re.compile(rf'(^|\s){status.lower()}(\s|$)'))
+    if status in ('DNS', 'DNF', 'DSQ', 'NPS'):
+        expect(time_cell).to_have_text(status)
 
 
 def main():
@@ -102,9 +110,10 @@ def main():
                 head = page.locator('#head th').all_inner_texts()
                 col = {name: index for index, name in enumerate(head)}
                 checked = 0
+                time_column = 'Finish' if state['currentRun'] == 1 else f"Run {state['currentRun']}"
                 for result in run['results']:
                     row = page.locator(f'tr[data-bib="{result["bib"]}"] td')
-                    expect(row.nth(4)).to_have_text(result['status'])
+                    expect_status(page, result['bib'], result['status'], row.nth(col[time_column]))
                     if result['status'] != 'Finished':
                         continue
                     rank = result.get('totalRank') if state['currentRun'] == 2 else result.get('rank')
@@ -133,7 +142,7 @@ def main():
                 if label.endswith('run1-complete'):
                     for item in expected['run1']:
                         row = page.locator(f'tr[data-bib="{item["bib"]}"] td')
-                        expect(row.nth(4)).to_have_text(item['status'])
+                        expect_status(page, item['bib'], item['status'], row.nth(col['Finish']))
                         if item['status'] == 'Finished':
                             expect(row.nth(0)).to_have_text(str(item['rank']))
                             expect(row.nth(col['Finish'])).to_have_text(item['time'])
@@ -163,6 +172,12 @@ def main():
             phone.goto(session['publicUrl'])
             expect(phone.locator('#connection')).to_have_text('Live')
             expect(phone.locator('#results tr')).to_have_count(len(run['startOrder']))
+            # Two-line cells instead of a wide table: name over club, Run 1 over Run 2, total over difference, without
+            # sideways scrolling.
+            winner = next(x for x in expected['final'] if x['total'] and x['rank'] == 1)
+            expect(phone.locator(f'tr[data-bib="{winner["bib"]}"] td.result .line').first).to_have_text(winner['total'])
+            expect(phone.locator(f'tr[data-bib="{winner["bib"]}"] td.runs .line')).to_have_count(2)
+            assert phone.evaluate("(() => { const t = document.querySelector('.table'); return t.scrollWidth <= t.clientWidth; })()"), 'phone table scrolls sideways'
             if shots:
                 phone.screenshot(path=str(shots / 'final-mobile.png'))
             if errors:

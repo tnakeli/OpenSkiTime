@@ -175,13 +175,33 @@ public sealed partial class PanelChannel(string label, PublisherKind kind) : Obs
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPublicUrl))] private string _publicUrl = "";
     [ObservableProperty] private string _expiration = "";
     [ObservableProperty] private string _indicatorColor = "#94A3B8";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasServerLoad))] private string _serverLoad = "";
+    public bool HasServerLoad => ServerLoad.Length > 0;
     public void Update(LiveChannelHealth channel)
     {
         ArgumentNullException.ThrowIfNull(channel);
         var h = channel.Health;
+        ServerLoad = h.Server is { } server ? Load(server, h.RoundTripMs) : "";
         Status = h.State.ToString(); PublicUrl = h.PublicUrl ?? "";
         Expiration = h.ExpiresAt is { } expiry ? "Expires " + expiry.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) : "";
         Detail = h.Error ?? h.Notice ?? (h.LastSuccessfulPublish is { } last ? "Last published " + last.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "Ready to start");
         IndicatorColor = h.State == PublisherState.Stopped ? "#94A3B8" : h.State == PublisherState.Running ? "#16A34A" : "#DC2626";
+    }
+    /// <summary>Viewers, server response times and resources, so the operator sees the bottleneck when many people follow.</summary>
+    public static string Load(LiveServerStats s, int? roundTripMs)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        var c = CultureInfo.InvariantCulture;
+        string Ms(double value) => value.ToString(value < 10 ? "0.0" : "0", c) + " ms";
+        static string Size(long bytes) => bytes >= 1L << 30 ? (bytes / (double)(1L << 30)).ToString("0.0", CultureInfo.InvariantCulture) + " GB"
+            : (bytes / (double)(1L << 20)).ToString("0", CultureInfo.InvariantCulture) + " MB";
+        var v = s.Viewers; var r = s.Responses; var m = s.Resources;
+        return string.Join(Environment.NewLine,
+            $"Viewers {v.Current.ToString(c)} now · last {v.WindowMinutes.ToString(c)} min: min {v.Min.ToString(c)}, avg {v.Average.ToString("0.0", c)}, max {v.Max.ToString(c)} · {s.ServerViewers.ToString(c)} on the server",
+            (r.Count == 0 ? $"No requests in the last {r.WindowMinutes.ToString(c)} min"
+                : $"Response avg {Ms(r.AverageMs)}, p95 {Ms(r.P95Ms)}, max {Ms(r.MaxMs)} ({r.Count.ToString(c)} requests, {r.WindowMinutes.ToString(c)} min)")
+                + (roundTripMs is { } trip ? $" · round trip {trip.ToString(c)} ms" : ""),
+            $"CPU {m.CpuPercent.ToString("0.0", c)} % of {m.Processors.ToString(c)} cores · memory {Size(m.WorkingSetBytes)} (heap {Size(m.GcHeapBytes)}) of {Size(m.MemoryLimitBytes)}"
+                + $" · queued work {m.ThreadPoolQueue.ToString(c)} · {s.At.ToLocalTime().ToString("HH:mm:ss", c)}");
     }
 }

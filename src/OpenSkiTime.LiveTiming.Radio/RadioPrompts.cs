@@ -72,6 +72,12 @@ public static class RadioPrompts
               seconds after the start, so say the racer is on course now ("Radalla nyt"), not that they just left. TopStart is one of
               the leaders after the earlier runs. A start is announced while the racer is on course, so keep it short and prompt.
 
+            - Producer recap (the race is paused): go through the racers in bibs in order of their places, unofficially, several
+              per line ("{rank:12:ess} on {racer:12}, {rank:7:ess} {racer:7}"; totalrank from the second run on).
+            - Producer banter (the race is paused): light, warm humour between the hosts so that listeners do not get bored, about
+              waiting, the hosts themselves or alpine skiing in general. Never joke about a racer, never guess why the race is
+              paused (it may be an injury) and state no new facts.
+
             - DNF: the drama of a run. React with feeling ("Voi ei!", "Ja nyt sattui!", "on ulkona") and keep it short, but never
               guess the cause, never mention falls, injuries or equipment, and never blame or mock the racer.
 
@@ -178,11 +184,14 @@ public static class RadioPrompts
         - run_summary: how many have finished and how many are still to start.
         - event_context: something from the event background text.
         - general: short atmosphere talk without new facts.
-        Rules: only allowed sources and listed bibs; avoid recent topics; keep it brief while a run is in progress.
+        - recap: only during a pause (pause_seconds is set): the unofficial standings, recap_size places (ten when the pause is long).
+        - banter: only during a pause: light humour between the hosts to keep listeners company; never about racers or the cause of the pause.
+        Rules: only allowed sources and listed bibs; avoid recent topics; keep it brief while a run is in progress. During a pause,
+        alternate between recap, banter and the other sources.
         Respond with JSON only: {"source": "<id>", "bib": <number or null>, "instruction": "<one sentence for the hosts, at most 200 characters, no digits>"}
         """;
     public static string ProducerUser(LiveSnapshot state, RacePhase phase, IReadOnlyList<string> allowed, IReadOnlyList<string> topics,
-        IReadOnlyList<string> failed, bool hasContext)
+        IReadOnlyList<string> failed, bool hasContext, TimeSpan? pause = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         var run = state.Runs.First(x => x.Number == state.CurrentRun);
@@ -190,6 +199,7 @@ public static class RadioPrompts
         return JsonSerializer.Serialize(new
         {
             phase = phase.ToString(), current_run = run.Number, allowed_sources = allowed,
+            pause_seconds = pause is { } paused ? (int?)paused.TotalSeconds : null, recap_size = pause is { } length ? RadioPause.RecapSize(length) : (int?)null,
             waiting = run.StartOrder.Where(x => Status(x) == LiveStatus.Ready).Take(5),
             on_course = run.StartOrder.Where(x => Status(x) == LiveStatus.OnCourse),
             has_event_background = hasContext, recent_topics = topics,

@@ -95,7 +95,23 @@ public sealed record PublisherHealth(PublisherState State, string Endpoint = "",
 {
     /// <summary>Progress that is not an error, such as waiting for a cloud server to wake from scale-to-zero.</summary>
     public string? Notice { get; init; }
+    /// <summary>Latest load report of a standalone live timing server, and the publisher's round trip for fetching it.</summary>
+    public LiveServerStats? Server { get; init; }
+    public int? RoundTripMs { get; init; }
 }
+/// <summary>
+/// Operator-only load report of a standalone server: viewers of this session and of the whole server, recent API response
+/// times and the server process's resources. HasState is false when the server lost the session's state (a restart).
+/// </summary>
+public sealed record LiveServerStats(DateTimeOffset At, bool HasState, LiveViewerStats Viewers, int ServerViewers,
+    LiveResponseStats Responses, LiveResourceStats Resources);
+/// <summary>Viewers watching now, and the lowest, average and highest count sampled over the window.</summary>
+public sealed record LiveViewerStats(int Current, int Min, int Max, double Average, int WindowMinutes);
+/// <summary>Server-side processing time of HTTP requests over the window (pages, scripts and API; viewer sockets excluded).</summary>
+public sealed record LiveResponseStats(int Count, double AverageMs, double P95Ms, double MaxMs, int WindowMinutes);
+/// <summary>CPU use of the server process as a share of the processors it may use, its memory and the queued thread-pool work.</summary>
+public sealed record LiveResourceStats(double CpuPercent, int Processors, long WorkingSetBytes, long GcHeapBytes, long MemoryLimitBytes,
+    long ThreadPoolQueue);
 public sealed record PublisherOptions(PublisherKind Kind, string Endpoint, string FisPassword = "", int TcpPort = 1550,
     string? LocalServerAssembly = null, LiveSession? ResumeSession = null, string? LocalSigningKey = null, string? PublisherKey = null);
 public sealed record WorkerInput(string Command, PublisherOptions? Options = null, LiveSnapshot? Snapshot = null);

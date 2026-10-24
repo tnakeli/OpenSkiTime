@@ -263,6 +263,11 @@ public sealed class SessionStore
                 ? null : (clip.Audio, clip.ContentType);
         }
     }
+    /// <summary>Every live session, with or without published state.</summary>
+    public IReadOnlyList<Guid> Sessions()
+    {
+        lock (_gate) { Prune(); return _sessions.Keys.ToArray(); }
+    }
     public IReadOnlyList<Guid> RadioSessions()
     {
         lock (_gate) { Prune(); return _sessions.Where(x => x.Value.Radio is not null).Select(x => x.Key).ToArray(); }
