@@ -266,7 +266,9 @@ public sealed class RadioEngine
         if (count == 0) { return; }
         // All lines are synthesized at once, so a conversation is ready in the time of its slowest line, not the sum of
         // them; they are still uploaded in order. Reserved before the calls: a failed or cancelled request may be billed.
-        var speech = texts.Select(x => SpeakAsync(x.Text, x.Voice, x.Estimate, ct)).ToArray();
+        // Lines still queued when the conversation is cut are not started (and not paid for); started ones finish and settle.
+        using var abandon = new CancellationTokenSource();
+        var speech = texts.Select(x => SpeakAsync(x.Text, x.Voice, x.Estimate, abandon.Token, ct)).ToArray();
         var spoken = 0;
         _remainingLines = count;
         try
@@ -299,6 +301,7 @@ public sealed class RadioEngine
         }
         finally
         {
+            abandon.Cancel();
             // Lines not used still finish and settle before the final report.
             foreach (var pending in speech)
             {
@@ -423,10 +426,10 @@ public sealed class RadioEngine
     // Speech is reserved before the call and settled as soon as it returns; a failed, timed-out or cancelled call keeps its
     // reservation as spend, because the provider may have billed it. Reservations still in flight are not reported as spend,
     // so the panel never saves an estimate that the settled cost then undercuts.
-    private async Task<TtsAudio> SpeakAsync(string text, RadioVoice voice, decimal estimate, CancellationToken ct)
+    private async Task<TtsAudio> SpeakAsync(string text, RadioVoice voice, decimal estimate, CancellationToken queue, CancellationToken ct)
     {
         // Lines beyond the provider's concurrency wait here, before their reservation and timeout start.
-        await _speechSlots.WaitAsync(ct);
+        using (var waiting = CancellationTokenSource.CreateLinkedTokenSource(queue, ct)) { await _speechSlots.WaitAsync(waiting.Token); }
         try { return await SpeakNowAsync(text, voice, estimate, ct); }
         finally { _speechSlots.Release(); }
     }
