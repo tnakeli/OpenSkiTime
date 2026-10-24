@@ -80,10 +80,11 @@ class VideoMetadataTests(unittest.TestCase):
     def test_update_keeps_current_writable_values_and_drops_read_only_ones(self):
         current = {'snippet': {'title': 'Old', 'description': 'D', 'categoryId': '17', 'tags': ['a'],
                                'thumbnails': {}, 'channelId': 'c', 'publishedAt': 'p'},
-                   'status': {'privacyStatus': 'unlisted', 'embeddable': False, 'uploadStatus': 'processed'}}
+                   'status': {'privacyStatus': 'unlisted', 'embeddable': False, 'containsSyntheticMedia': True,
+                              'uploadStatus': 'processed'}}
         metadata = youtube.video_metadata(self.args(title='New'), current)
         self.assertEqual(metadata['snippet'], {'title': 'New', 'description': 'D', 'categoryId': '17', 'tags': ['a']})
-        self.assertEqual(metadata['status'], {'privacyStatus': 'unlisted', 'embeddable': False})
+        self.assertEqual(metadata['status'], {'privacyStatus': 'unlisted', 'embeddable': False, 'containsSyntheticMedia': True})
 
     def test_publishing_a_scheduled_video_drops_the_schedule(self):
         current = {'snippet': {'title': 'T', 'categoryId': '17'},
@@ -126,17 +127,33 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(video_resource['id'], 'v1')
         self.assertEqual(sent, ['bytes 0-7/10', 'bytes 3-9/10'])
 
-    def test_failed_chunk_reports_nothing_published(self):
-        def fake_urlopen(req, timeout=None):
-            raise urllib.error.HTTPError(req.full_url, 500, 'Backend Error', {}, io.BytesIO(b'{"error": {"message": "Backend Error"}}'))
-
+    def upload(self, fake_urlopen):
         with tempfile.TemporaryDirectory() as directory:
             video = Path(directory) / 'demo.mp4'
             video.write_bytes(b'0123456789')
             with mock.patch.object(youtube, 'request', return_value=({}, {'Location': 'https://upload.example/session'})), \
-                    mock.patch.object(youtube.urllib.request, 'urlopen', side_effect=fake_urlopen):
-                with self.assertRaisesRegex(youtube.YouTubeError, 'Nothing was published'):
-                    youtube.upload_video('token', str(video), {'snippet': {}, 'status': {}})
+                    mock.patch.object(youtube.urllib.request, 'urlopen', side_effect=fake_urlopen), \
+                    mock.patch.object(youtube.time, 'sleep'), contextlib.redirect_stdout(io.StringIO()):
+                return youtube.upload_video('token', str(video), {'snippet': {}, 'status': {}})
+
+    def test_lost_response_to_last_chunk_is_resolved_without_resending(self):
+        sent = []
+
+        def fake_urlopen(req, timeout=None):
+            sent.append(req.headers['Content-range'])
+            if len(sent) == 1:
+                raise urllib.error.HTTPError(req.full_url, 503, 'Unavailable', {}, io.BytesIO(b''))
+            return io.BytesIO(b'{"id": "v1", "status": {"privacyStatus": "private"}}')
+
+        self.assertEqual(self.upload(fake_urlopen)['id'], 'v1')
+        self.assertEqual(sent, ['bytes 0-9/10', 'bytes */10'])
+
+    def test_persistent_failure_tells_operator_to_check_studio(self):
+        def fake_urlopen(req, timeout=None):
+            raise urllib.error.HTTPError(req.full_url, 500, 'Backend Error', {}, io.BytesIO(b'{"error": {"message": "Backend Error"}}'))
+
+        with self.assertRaisesRegex(youtube.YouTubeError, 'check YouTube Studio before uploading again'):
+            self.upload(fake_urlopen)
 
 
 class PreviewTests(unittest.TestCase):

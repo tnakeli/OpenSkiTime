@@ -134,7 +134,10 @@ Every command that changes the channel only prints a preview unless `--yes` is g
 Uploads are private unless `--privacy` says otherwise, are not made for kids, and use the
 Sports category by default (`--category tech` for Science & Technology). Updates start
 from the video's current values, because the API replaces whole parts. Uploads use
-resumable 16 MiB chunks; an upload is reported only when YouTube returns the video.
+resumable 16 MiB chunks; an upload is reported only when YouTube returns the video. After
+a failed chunk the tool asks the upload session how much YouTube received before resending,
+so a lost response does not create a duplicate. If the outcome stays unknown it says so:
+check YouTube Studio before uploading again.
 Projects get 100 uploads a day. Tests: `python -m unittest scripts/tests/test_youtube.py`.
 
 ## Content rules

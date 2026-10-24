@@ -25,6 +25,7 @@ import secrets
 import shlex
 import sys
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -50,6 +51,7 @@ CHANNEL_DESCRIPTION_LIMIT = 1000
 CHANNEL_KEYWORDS_LIMIT = 500
 IMAGE_BYTES = {'banner': 6 * 1024 * 1024, 'thumbnail': 2 * 1024 * 1024}
 UPLOAD_CHUNK = 16 * 1024 * 1024
+UPLOAD_RETRIES = 3
 
 
 class YouTubeError(Exception):
@@ -276,26 +278,44 @@ def upload_video(token, path, metadata):
     _, headers = request('POST', '/videos', token, {'uploadType': 'resumable', 'part': 'snippet,status'}, metadata,
                          base=UPLOAD_API, headers={'X-Upload-Content-Type': content_type, 'X-Upload-Content-Length': str(size)})
     session = headers['Location']
-    with open(path, 'rb') as stream:
-        offset = 0
-        while offset < size:
-            chunk = stream.read(UPLOAD_CHUNK)
-            end = offset + len(chunk) - 1
-            req = urllib.request.Request(session, data=chunk, method='PUT', headers={
-                'Authorization': f'Bearer {token}', 'Content-Type': content_type,
-                'Content-Range': f'bytes {offset}-{end}/{size}'})
-            try:
-                with urllib.request.urlopen(req, timeout=600) as response:
-                    return json.load(response)
-            except urllib.error.HTTPError as error:
-                if error.code != 308:
-                    raise YouTubeError(f'Upload failed at byte {offset} of {size} ({error.code}): '
-                                       f'{describe_error(error.read())}. Nothing was published; run the upload again.') from None
+
+    def put(data, content_range):
+        """Returns ('done', video), ('partial', next offset) or ('error', description)."""
+        req = urllib.request.Request(session, data=data, method='PUT', headers={
+            'Authorization': f'Bearer {token}', 'Content-Type': content_type, 'Content-Range': content_range})
+        try:
+            with urllib.request.urlopen(req, timeout=600) as response:
+                return 'done', json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code == 308:
                 received = error.headers.get('Range')
-                offset = int(received.split('-')[1]) + 1 if received else 0
-                stream.seek(offset)
-                print(f'  {offset * 100 // size} % uploaded', flush=True)
-    raise YouTubeError('Upload ended without a response from YouTube; check YouTube Studio before uploading again.')
+                return 'partial', int(received.split('-')[1]) + 1 if received else 0
+            return 'error', f'{error.code}: {describe_error(error.read())}'
+        except OSError as error:
+            return 'error', str(getattr(error, 'reason', error))
+
+    with open(path, 'rb') as stream:
+        offset, failures = 0, 0
+        while True:
+            stream.seek(offset)
+            chunk = stream.read(UPLOAD_CHUNK)
+            kind, value = put(chunk, f'bytes {offset}-{offset + len(chunk) - 1}/{size}')
+            if kind == 'error':
+                # The failed request may still have reached YouTube, so ask the session where it stands before resending.
+                failures += 1
+                if failures > UPLOAD_RETRIES:
+                    raise YouTubeError(f'Upload stopped at byte {offset} of {size} ({value}). YouTube may still have '
+                                       'received the video: check YouTube Studio before uploading again.')
+                time.sleep(2 ** failures)
+                kind, value = put(b'', f'bytes */{size}')
+                if kind == 'error':
+                    continue
+            if kind == 'done':
+                return value
+            if value > offset:
+                failures = 0
+            offset = value
+            print(f'  {offset * 100 // size} % uploaded', flush=True)
 
 
 def upload_image(token, path, endpoint, params=None):
@@ -375,7 +395,8 @@ def command_channel(args):
 
 
 WRITABLE_SNIPPET = ('title', 'description', 'tags', 'categoryId', 'defaultLanguage', 'defaultAudioLanguage')
-WRITABLE_STATUS = ('privacyStatus', 'embeddable', 'license', 'publicStatsViewable', 'publishAt', 'selfDeclaredMadeForKids')
+WRITABLE_STATUS = ('privacyStatus', 'embeddable', 'license', 'publicStatsViewable', 'publishAt', 'selfDeclaredMadeForKids',
+                   'containsSyntheticMedia')
 
 
 def video_metadata(args, current=None):
