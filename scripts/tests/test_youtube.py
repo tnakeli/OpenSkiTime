@@ -201,6 +201,19 @@ class UploadTests(unittest.TestCase):
             self.upload(fake_urlopen)
 
 
+class ImageUploadTests(unittest.TestCase):
+    def test_images_use_simple_media_upload(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / 'thumb.png'
+            image.write_bytes(b'png')
+            with mock.patch.object(youtube, 'call', return_value={}) as call:
+                youtube.upload_image('token', image, '/thumbnails/set', {'videoId': 'v1'})
+        method, endpoint, token, params = call.call_args.args
+        self.assertEqual((method, endpoint, params), ('POST', '/thumbnails/set', {'videoId': 'v1', 'uploadType': 'media'}))
+        self.assertEqual(call.call_args.kwargs['base'], youtube.UPLOAD_API)
+        self.assertEqual(call.call_args.kwargs['content_type'], 'image/png')
+
+
 class PreviewTests(unittest.TestCase):
     def test_upload_without_yes_signs_in_to_nothing(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -327,7 +327,8 @@ def upload_video(token, path, metadata, renew_token=None):
 def upload_image(token, path, endpoint, params=None):
     data = Path(path).read_bytes()
     content_type = 'image/png' if Path(path).suffix.lower() == '.png' else 'image/jpeg'
-    return call('POST', endpoint, token, params, base=UPLOAD_API, data=data, content_type=content_type)
+    return call('POST', endpoint, token, {**(params or {}), 'uploadType': 'media'}, base=UPLOAD_API, data=data,
+                content_type=content_type)
 
 
 # --- Commands -------------------------------------------------------------------------------
