@@ -30,7 +30,7 @@ public static class RadioRace
     public static async Task<int> RunAsync(string llmProvider, string llmModel, string ttsProvider, string endpoint, int count, string workerDll,
         string radioWorkerDll, string musicFolder, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(musicFolder);
+        ArgumentNullException.ThrowIfNull(musicFolder); ArgumentNullException.ThrowIfNull(llmProvider); ArgumentNullException.ThrowIfNull(ttsProvider);
         var random = new Random(20261023);
         var finns = (int)Math.Round(count * 0.6);
         var competitors = new List<LiveCompetitor>();
@@ -49,10 +49,12 @@ public static class RadioRace
         var account = Environment.GetEnvironmentVariable("OST_GOOGLE_SERVICE_ACCOUNT");
         string? RadioKey(string provider) => provider == RadioProviders.Simulation ? null
             : provider == RadioProviders.GoogleGemini && !string.IsNullOrWhiteSpace(account) ? File.ReadAllText(account)
-            : RadioKeyCredential.Read(provider, x => new WindowsCredentialStore(x)) ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
+            : RadioKeyCredential.Read(provider.Split(':')[0], x => new WindowsCredentialStore(x)) ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
         var configuration = new RadioConfiguration
         {
-            CloudEnabled = true, BudgetUsd = 3m, LlmProvider = llmProvider, LlmModel = llmModel, TtsProvider = ttsProvider, Curation = true,
+            CloudEnabled = true, BudgetUsd = 3m, LlmProvider = llmProvider, LlmModel = llmModel, Curation = true,
+            // "elevenlabs:eleven_v4_turbo" picks a provider's model.
+            TtsProvider = ttsProvider.Split(':')[0], TtsModel = ttsProvider.Contains(':', StringComparison.Ordinal) ? ttsProvider.Split(':')[1] : "",
             MusicFolder = musicFolder.Length == 0 ? "" : Path.GetFullPath(musicFolder),
             EventContext = "Synteettinen testikilpailu OpenSkiTimen radiolle Hauskarinteessä. Laskijat ja seurat ovat keksittyjä. "
                 + "Aurinko paistaa, lunta on hyvin ja yleisöä on paikalla mukavasti."

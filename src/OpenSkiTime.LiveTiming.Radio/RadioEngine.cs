@@ -53,7 +53,7 @@ public sealed class RadioEngine
         ArgumentNullException.ThrowIfNull(budget); ArgumentNullException.ThrowIfNull(time);
         _config = configuration; _llm = llm; _tts = tts; Budget = budget; _time = time; _log = log ?? (_ => { });
         _llmPrice = RadioPrices.ForLlm(llm.Provider, llm.Model) ?? throw new RadioProviderException("The language model has no price entry.");
-        _ttsPrice = RadioPrices.ForTts(tts.Provider);
+        _ttsPrice = RadioPrices.ForTts(tts.Provider, tts is ElevenLabsTts eleven ? eleven.Model : configuration.TtsModel);
         _lexicon = FinnishVerbalizer.Lexicon(configuration.Lexicon);
         _nextProducer = time.GetUtcNow() + TimeSpan.FromSeconds(30);
         _health = new(RadioState.Running, BudgetUsd: budget.Limit, SpentUsd: budget.Spent);
@@ -170,12 +170,14 @@ public sealed class RadioEngine
         var facts = FactSheet.Build(state, bibs);
         var rules = new LineRules(state, RadioPersonas.Hosts.Select(x => x.Name), _config.EventContext);
         IReadOnlyList<ScriptLine>? lines = null; string? topic = null;
-        if (mode is RadioMode.Full or RadioMode.Lean)
+        // A start is said at once from its template (racer, club, next in the gate): the model adds nothing there but time.
+        var startsOnly = batch.All(x => x.Kind is RadioEventKind.Start or RadioEventKind.TopStart or RadioEventKind.RunStarted);
+        if (mode is RadioMode.Full or RadioMode.Lean && !startsOnly)
         {
             (lines, topic) = await DialogueAsync(batch, facts, rules, ct);
-            // A start is announced while the racer is on course and the next one waits in the gate: no time for curation.
-            var starts = batch.Any(x => x.Kind is RadioEventKind.Start or RadioEventKind.TopStart or RadioEventKind.RunStarted);
-            if (lines is not null && mode == RadioMode.Full && _config.Curation && !starts) { lines = await CurateAsync(lines, facts, rules, ct); }
+            // Race news is said at once; the style pass (a second model call) is kept for the hosts' own talk in quiet moments.
+            var news = batch.Any(x => x.Kind != RadioEventKind.Producer);
+            if (lines is not null && mode == RadioMode.Full && _config.Curation && !news) { lines = await CurateAsync(lines, facts, rules, ct); }
             // Every event is said: one the model script leaves out (a DNF beside a start, a line cut by validation) gets its
             // template lines at the end of the conversation.
             if (lines is not null)

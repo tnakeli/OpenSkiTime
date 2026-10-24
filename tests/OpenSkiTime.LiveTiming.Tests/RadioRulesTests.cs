@@ -68,12 +68,14 @@ public sealed class RadioRulesTests
         var t0 = RadioRace.Start;
         RadioEvent Event(int priority, DateTimeOffset at) => new(RadioEventKind.Finish, priority, 1, [1], at, TimeSpan.FromMinutes(5), [], [], 1);
         batcher.Add(Event(3, t0), t0);
-        Assert.Equal(t0.AddSeconds(12), batcher.Deadline);
-        Assert.Null(batcher.TakeDue(t0.AddSeconds(6)));
+        Assert.Equal(t0 + EventBatcher.Delays[3], batcher.Deadline);
+        Assert.Null(batcher.TakeDue(t0 + EventBatcher.Delays[3] / 2));
         // A higher priority shortens the delay from its own arrival.
-        batcher.Add(Event(2, t0.AddSeconds(2)), t0.AddSeconds(2));
-        Assert.Equal(t0.AddSeconds(7), batcher.Deadline);
-        var batch = batcher.TakeDue(t0.AddSeconds(7))!;
+        var urgent = t0 + TimeSpan.FromSeconds(1);
+        batcher.Add(Event(2, urgent), urgent);
+        Assert.Equal(urgent + EventBatcher.Delays[2], batcher.Deadline);
+        Assert.True(urgent + EventBatcher.Delays[2] < t0 + EventBatcher.Delays[3]);
+        var batch = batcher.TakeDue(urgent + EventBatcher.Delays[2])!;
         Assert.Equal([2, 3], batch.Select(x => x.Priority));
         Assert.Equal(0, batcher.Count);
         for (var i = 0; i < EventBatcher.MaxBatch; i++) { batcher.Add(Event(5, t0), t0); }
@@ -142,6 +144,9 @@ public sealed class RadioRulesTests
             Assert.Equal(provider, RadioPrices.ForTts(provider).Provider);
             if (provider != RadioProviders.Simulation) { Assert.All(RadioProviders.KeysOf(provider), x => Assert.Contains(x, OpenSkiTime.LiveTiming.Client.RadioKeyCredential.Providers)); }
         }
+        // A provider's second model has its own price; an unknown model costs like the provider's default.
+        Assert.Equal(40m, RadioPrices.ForTts(RadioProviders.ElevenLabs, "eleven_v4_turbo").PerMillionCharacters);
+        Assert.Equal(80m, RadioPrices.ForTts(RadioProviders.ElevenLabs, "other").PerMillionCharacters);
         // Gemini voices through Vertex AI have their own key and fall back to an existing Google Gemini API key.
         Assert.Equal([RadioProviders.GoogleGemini, RadioProviders.Gemini], RadioProviders.KeysOf(RadioProviders.GoogleGemini));
         // Gemini's 24 kHz PCM becomes 16 kHz mono WAV with the same duration.
