@@ -38,6 +38,49 @@ The profiles are linked from the website footer and structured data (the
 
 - **Link:** https://openskiti.me
 
+### Publishing through the API
+
+`scripts/social/instagram.py` publishes image posts, carousels and reels through the
+[Instagram API with Instagram Login](https://developers.facebook.com/docs/instagram-platform/content-publishing).
+It is a maintainer tool for Windows (Python standard library, PowerShell 7, Azure CLI).
+
+One-time setup:
+
+1. The Instagram account must be a public Professional (Business) account.
+2. In the [Meta App Dashboard](https://developers.facebook.com/apps), create an app with
+   the use case *Manage messaging & content on Instagram* (no business portfolio needed)
+   and choose *API setup with Instagram login*. Required permissions:
+   `instagram_business_basic` and `instagram_business_content_publish`.
+3. Under *App roles*, add @openskitime with the **Instagram Tester** role (the admin and
+   developer roles need a Facebook account), and accept the invite at
+   instagram.com → *Apps and websites* → *Tester invites*.
+4. Under *Generate access tokens*, generate a token for @openskitime. The app stays in
+   development mode; Standard Access covers accounts the app owner manages, so no App
+   Review is needed.
+5. Run `python scripts/social/instagram.py login` and paste the token into the masked
+   window. It is checked against the API and saved in this Windows user's Credential
+   Manager as `OpenSkiTime.Social.Instagram`. Never paste it into a terminal, chat or file.
+6. Instagram downloads media from a public URL. Local files are uploaded to the private
+   blob container `instagram-staging` in the storage account `openskitimesocial`
+   (override with `OPENSKITIME_SOCIAL_STORAGE`), passed to Instagram as a two-hour
+   read-only user-delegation SAS URL and deleted after publishing. The signed-in Azure
+   user needs *Storage Blob Data Contributor* on the account.
+
+Use:
+
+```powershell
+python scripts/social/instagram.py status            # account, 24 h publishing quota, token age
+python scripts/social/instagram.py post shot.png --caption-file caption.txt --alt-text "..."
+python scripts/social/instagram.py post a.png b.png --caption "..."   # carousel, 2–20 items
+python scripts/social/instagram.py reel clip.mp4 --caption-file caption.txt --cover cover.png
+python scripts/social/instagram.py refresh           # extend the token by 60 days
+```
+
+Publishing commands only print a preview unless `--yes` is given. Non-JPEG images are
+converted to JPEG. A post is reported as published only after Instagram has processed
+the media and returned its permalink. Refresh the token at least every 60 days;
+`status` shows its age. Tests: `python -m unittest scripts/tests/test_instagram.py`.
+
 ## YouTube
 
 - **Channel:** [@OpenSkiTime](https://www.youtube.com/@OpenSkiTime)
