@@ -231,16 +231,16 @@ public static class Pcm16
         int channels = 0, rate = 0, bits = 0, format = 0;
         for (var i = 12; i + 8 <= wav.Length;)
         {
-            var size = BitConverter.ToInt32(wav, i + 4);
-            if (size < 0) { return null; }
+            // Unsigned, clamped to the bytes present: streamed WAV marks an unknown length with 0xFFFFFFFF.
             var body = i + 8;
+            var size = (int)Math.Min(BitConverter.ToUInt32(wav, i + 4), (uint)(wav.Length - body));
             if (wav.AsSpan(i, 4).SequenceEqual("fmt "u8) && body + 16 <= wav.Length)
             { format = BitConverter.ToUInt16(wav, body); channels = BitConverter.ToUInt16(wav, body + 2); rate = BitConverter.ToInt32(wav, body + 4); bits = BitConverter.ToUInt16(wav, body + 14); }
             else if (wav.AsSpan(i, 4).SequenceEqual("data"u8))
             {
                 // Streamed WAV may give an unknown (oversized) data length; the bytes present are the data.
                 if (format is not (1 or 0xFFFE) || bits != 16 || channels is < 1 or > 2 || rate <= 0) { return null; }
-                var data = wav.AsSpan(body, Math.Min(size, wav.Length - body));
+                var data = wav.AsSpan(body, size);
                 if (channels == 1) { return (data.ToArray(), rate); }
                 var mono = new byte[data.Length / 4 * 2];
                 for (var s = 0; s < mono.Length / 2; s++)

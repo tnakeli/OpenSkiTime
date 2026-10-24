@@ -153,6 +153,10 @@ public sealed class RadioRulesTests
         var (pcm, rate) = OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.FromWav(OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.Wav(new byte[960], 24000))!.Value;
         Assert.Equal((960, 24000), (pcm.Length, rate));
         Assert.Null(OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.FromWav("<html></html>"u8.ToArray()));
+        // A streamed WAV with the unknown-length marker still gives its samples.
+        var streamed = OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.Wav(new byte[480], 24000);
+        BitConverter.GetBytes(uint.MaxValue).CopyTo(streamed, 40);
+        Assert.Equal(480, OpenSkiTime.LiveTiming.Radio.Providers.Pcm16.FromWav(streamed)!.Value.Pcm.Length);
         Assert.True(RadioPrices.Cost(RadioPrices.ForTts(RadioProviders.GoogleGemini), 100, 4000) > 0m);
     }
 
