@@ -113,11 +113,12 @@ public static class RadioEventDetector
 /// </summary>
 public sealed class EventBatcher
 {
-    // Alpine finishes come every 40-60 s, so delays are shorter than in endurance racing.
+    // A start or finish comes every 10-25 s and the news is stale within a run, so a batch waits only long enough to take in
+    // events of the same moment (a finish and the next start). Generation and speech add about 3 s.
     public static readonly IReadOnlyDictionary<int, TimeSpan> Delays = new Dictionary<int, TimeSpan>
     {
-        [1] = TimeSpan.FromSeconds(2), [2] = TimeSpan.FromSeconds(5), [3] = TimeSpan.FromSeconds(12),
-        [4] = TimeSpan.FromSeconds(25), [5] = TimeSpan.FromSeconds(40)
+        [1] = TimeSpan.FromSeconds(0.5), [2] = TimeSpan.FromSeconds(1.5), [3] = TimeSpan.FromSeconds(3),
+        [4] = TimeSpan.FromSeconds(8), [5] = TimeSpan.FromSeconds(20)
     };
     public const int MaxBatch = 6;
     private readonly List<RadioEvent> _pending = [];

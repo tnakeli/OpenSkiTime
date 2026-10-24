@@ -60,7 +60,9 @@ public sealed class RadioEngineTests
         await rig.Engine.StepAsync(CancellationToken.None);
         var clips = rig.Sink.Clips.ToArray();
         Assert.Equal(2, clips.Length);
-        Assert.Equal("Hieno lasku! Maalissa numero yksi, Aada Lumivaara, aika neljäkymmentäseitsemän pilkku nolla yksi sekuntia.", clips[0].Transcript);
+        // Race news is said at once: no style pass for a finish (curation is for quiet-moment talk).
+        Assert.DoesNotContain(rig.Llm.Requests, FakeLlm.IsCuration);
+        Assert.Equal("Upea lasku! Maalissa numero yksi, Aada Lumivaara, aika neljäkymmentäseitsemän pilkku nolla yksi sekuntia.", clips[0].Transcript);
         Assert.Equal("Hän johtaa ensimmäisellä laskulla.", clips[1].Transcript);
         Assert.Equal(["Aino", "Kalle"], clips.Select(x => x.Host));
         Assert.Equal(clips[0].BatchId, clips[1].BatchId);
@@ -139,19 +141,23 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
-    public async Task AStartScriptWithoutTheNextRacerGetsTheStartGateLine()
+    public async Task AStartIsSaidAtOnceFromItsTemplateWithTheNextRacerInTheGate()
     {
         var rig = new Rig
         {
-            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) || FakeLlm.IsProducer(r) ? Echo(r) : Script(("Aino", "Radalla nyt {racer:2}.", true))))
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) || FakeLlm.IsProducer(r) ? Echo(r) : Script(("Aino", "Mallin lause.", true))))
         };
         rig.State = RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         rig.State = RadioRace.Set(rig.State, 2, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
         rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
         rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None);
-        Assert.Equal(["Radalla nyt numero kaksi, Veeti Hankiranta.", "Lähtöportilla seuraavana numero kolme, ruotsalainen Saga Porttila."],
-            rig.Sink.Clips.Select(x => x.Transcript));
+        // No model call: the template says the racer, the club and the next racer in the gate.
+        Assert.DoesNotContain(rig.Llm.Requests, x => !FakeLlm.IsProducer(x));
+        var spoken = rig.Sink.Clips.Select(x => x.Transcript).ToArray();
+        Assert.Equal(2, spoken.Length);
+        Assert.EndsWith("numero kaksi, Veeti Hankiranta, Rinneseura.", spoken[0], StringComparison.Ordinal);
+        Assert.Equal("Lähtöportilla seuraavana numero kolme, ruotsalainen Saga Porttila.", spoken[1]);
         Assert.Equal(["Aino", "Kalle"], rig.Sink.Clips.Select(x => x.Host));
     }
 

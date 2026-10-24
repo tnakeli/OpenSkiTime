@@ -57,6 +57,8 @@ public sealed record RadioConfiguration
     public bool Curation { get; init; } = true;
     public string TtsProvider { get; init; } = RadioProviders.Azure;
     public string TtsRegion { get; init; } = "westeurope";
+    /// <summary>The speech model where a provider offers several ("eleven_v4_turbo"); empty for the provider's default.</summary>
+    public string TtsModel { get; init; } = "";
     public string VoiceA { get; init; } = "";
     public string VoiceB { get; init; } = "";
     public string EventContext { get; init; } = "";
@@ -71,7 +73,7 @@ public sealed record RadioConfiguration
         if (BudgetUsd is < 0m or > 1000m) { throw new LiveValidationException("Radio budget must be between 0 and 1000 USD."); }
         if (!RadioProviders.Llm.Contains(LlmProvider) || !RadioProviders.Tts.Contains(TtsProvider))
         { throw new LiveValidationException("Choose a supported radio provider."); }
-        foreach (var (text, max) in new[] { (LlmModel, 64), (TtsRegion, 32) })
+        foreach (var (text, max) in new[] { (LlmModel, 64), (TtsRegion, 32), (TtsModel, 64) })
         {
             if (text is null || text.Length > max || text.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '.' or '_')))
             { throw new LiveValidationException("Radio model and region may contain only letters, digits, '-', '.' and '_'."); }

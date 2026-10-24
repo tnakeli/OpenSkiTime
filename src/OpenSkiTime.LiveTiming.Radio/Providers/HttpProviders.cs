@@ -298,6 +298,7 @@ public sealed class ElevenLabsTts(string? apiKey, string model) : IRadioTts, IDi
     private readonly string _key = RadioHttp.RequireKey(apiKey, "ElevenLabs");
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _ids = new(StringComparer.OrdinalIgnoreCase);
     public string Provider => RadioProviders.ElevenLabs;
+    public string Model => model;
     public bool NativeNames => true;
     public bool AudioTags => true;
     /// <summary>ElevenLabs voice IDs are 20 letters and digits; anything else is a voice name.</summary>

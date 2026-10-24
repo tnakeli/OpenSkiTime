@@ -81,7 +81,8 @@ public static class RadioProviderFactory
             RadioProviders.Azure => new AzureTts(key, configuration.TtsRegion),
             RadioProviders.Google => new GoogleTts(key),
             RadioProviders.GoogleGemini => new GeminiCloudTts(key, "gemini-3.8-flash-tts"),
-            RadioProviders.ElevenLabs => new ElevenLabsTts(key, "eleven_v4"),
+            // Eleven v4 by default; v4 Turbo answers faster at half the price.
+            RadioProviders.ElevenLabs => new ElevenLabsTts(key, configuration.TtsModel == "eleven_v4_turbo" ? "eleven_v4_turbo" : "eleven_v4"),
             RadioProviders.OpenAi => new OpenAiTts(key),
             _ => new SimulationTts()
         };

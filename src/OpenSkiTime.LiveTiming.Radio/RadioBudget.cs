@@ -29,12 +29,15 @@ public static class RadioPrices
         new(RadioProviders.GoogleGemini, "gemini-3.8-flash-tts", 0m, 1m, 18m, 25),
         // ElevenLabs Eleven v4: $0.08 per 1,000 characters (API pricing page, 2026-10-24).
         new(RadioProviders.ElevenLabs, "eleven_v4", 80m),
+        new(RadioProviders.ElevenLabs, "eleven_v4_turbo", 40m),
         // gpt-4o-mini-tts bills text input and audio output tokens; audio is estimated at 21 tokens per second ($12/1M ≈ $0.015/min).
         new(RadioProviders.OpenAi, "gpt-4o-mini-tts", 0m, 0.60m, 12m, 21),
         new(RadioProviders.Simulation, "simulation", 0m)
     ];
     public static LlmPrice? ForLlm(string provider, string model) => Llm.FirstOrDefault(x => x.Provider == provider && x.Model == model);
-    public static TtsPrice ForTts(string provider) => Tts.First(x => x.Provider == provider);
+    /// <summary>The price of the provider's model, or of its default model when the model is not priced separately.</summary>
+    public static TtsPrice ForTts(string provider, string model = "") =>
+        Tts.FirstOrDefault(x => x.Provider == provider && x.Model == model) ?? Tts.First(x => x.Provider == provider);
     public static decimal Cost(LlmPrice price, long inputTokens, long outputTokens)
     {
         ArgumentNullException.ThrowIfNull(price);

@@ -33,6 +33,7 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
         new(RadioProviders.Azure, "neural", "Azure AI Speech · fi-FI neural"), new(RadioProviders.Google, "chirp3-hd", "Google Chirp 3: HD · fi-FI"),
         new(RadioProviders.GoogleGemini, "gemini-3.8-flash-tts", "Google Gemini 3.8 Flash TTS (Vertex AI)"),
         new(RadioProviders.ElevenLabs, "eleven_v4", "ElevenLabs Eleven v4"),
+        new(RadioProviders.ElevenLabs, "eleven_v4_turbo", "ElevenLabs Eleven v4 Turbo (faster)"),
         new(RadioProviders.OpenAi, "gpt-4o-mini-tts", "OpenAI gpt-4o-mini-tts"), new(RadioProviders.Simulation, "simulation", "Simulation (offline tones, no cost)")
     ];
     [ObservableProperty] private bool _radioLocal;
@@ -82,7 +83,8 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
         var c = configuration ?? new RadioConfiguration();
         RadioLocal = c.LocalEnabled; RadioCloud = c.CloudEnabled; RadioBudget = c.BudgetUsd; RadioCuration = c.Curation;
         RadioLlm = RadioLlmChoices.FirstOrDefault(x => x.Provider == c.LlmProvider && (x.Model == c.LlmModel || c.LlmProvider == RadioProviders.Simulation)) ?? RadioLlmChoices[0];
-        RadioTts = RadioTtsChoices.FirstOrDefault(x => x.Provider == c.TtsProvider) ?? RadioTtsChoices[0];
+        RadioTts = RadioTtsChoices.FirstOrDefault(x => x.Provider == c.TtsProvider && x.Model == c.TtsModel)
+            ?? RadioTtsChoices.FirstOrDefault(x => x.Provider == c.TtsProvider) ?? RadioTtsChoices[0];
         RadioRegion = c.TtsRegion; RadioVoiceA = c.VoiceA; RadioVoiceB = c.VoiceB;
         RadioContext = c.EventContext; RadioNotes = c.CurationNotes; RadioLexicon = c.Lexicon; RadioMusicFolder = c.MusicFolder; RadioSaveStatus = "";
     }
@@ -115,7 +117,7 @@ public sealed partial class PanelViewModel(LiveControlSession session, PanelConn
         {
             LocalEnabled = RadioLocal, CloudEnabled = RadioCloud, BudgetUsd = RadioBudget ?? 0m, Curation = RadioCuration,
             LlmProvider = RadioLlm?.Provider ?? RadioProviders.Simulation, LlmModel = RadioLlm?.Model ?? "simulation",
-            TtsProvider = RadioTts?.Provider ?? RadioProviders.Simulation, TtsRegion = RadioRegion.Trim(),
+            TtsProvider = RadioTts?.Provider ?? RadioProviders.Simulation, TtsModel = RadioTts?.Model ?? "", TtsRegion = RadioRegion.Trim(),
             VoiceA = RadioVoiceA.Trim(), VoiceB = RadioVoiceB.Trim(), EventContext = RadioContext, CurationNotes = RadioNotes, Lexicon = RadioLexicon,
             MusicFolder = RadioMusicFolder.Trim()
         };
