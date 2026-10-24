@@ -74,16 +74,20 @@ test('the latest outcome can be a DNF or DSQ, chosen by publish time', () => {
 
 test('running time counts tenths from the start instant, or from when the viewer saw the start when that instant is implausible', () => {
   const start = '2026-12-12T10:00:00Z', at = ms => Date.parse(start) + ms;
-  assert.equal(context.liveRunningTime(start, at(0)), '0:00.0');
-  assert.equal(context.liveRunningTime(start, at(65_678)), '1:05.6');
-  assert.equal(context.liveRunningTime(start, at(-2_000)), '0:00.0');
-  // A start far in the future or long ago (another date or device clock): the time since this viewer saw the start.
-  assert.equal(context.liveRunningTime(start, at(-60_000)), '—');
-  assert.equal(context.liveRunningTime(start, at(-60_000), at(-72_300)), '0:12.3');
-  assert.equal(context.liveRunningTime(start, at(700_000), at(690_000)), '0:10.0');
-  // No published start at all.
-  assert.equal(context.liveRunningTime(null, at(5_000), at(0)), '0:05.0');
-  assert.equal(context.liveRunningTime(undefined, at(5_000)), '—');
+  // Seen on course within the plausible window: the published start is the origin.
+  assert.equal(context.liveClockOrigin(start, at(30_000)), at(0));
+  assert.equal(context.liveClockOrigin(start, at(-4_000)), at(0));
+  assert.equal(context.liveRunningTime(at(0), at(65_678)), '1:05.6');
+  assert.equal(context.liveRunningTime(at(0), at(-2_000)), '0:00.0');
+  // A start far ahead of the viewer's clock or long ago (another device clock or date), or none: since the viewer saw it.
+  assert.equal(context.liveClockOrigin(start, at(-60_000)), at(-60_000));
+  assert.equal(context.liveClockOrigin(start, at(700_000)), at(700_000));
+  assert.equal(context.liveClockOrigin(null, at(5_000)), at(5_000));
+  assert.equal(context.liveClockOrigin(undefined, at(5_000)), at(5_000));
+  // The origin is chosen once: a clock 60 s ahead keeps counting from the first sighting, without jumping back to zero.
+  const origin = context.liveClockOrigin(start, at(-60_000));
+  assert.equal(context.liveRunningTime(origin, at(-3_000)), '0:57.0');
+  assert.equal(context.liveRunningTime(origin, at(10_000)), '1:10.0');
 });
 
 test('a later correction of an earlier finisher does not make it the latest outcome', () => {

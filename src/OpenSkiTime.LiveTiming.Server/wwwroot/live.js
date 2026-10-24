@@ -78,8 +78,8 @@
   const put = (parent, value) => {
     if (value instanceof Node) parent.append(value);
     else if (value && value.seen != null) {
-      const clock = element('span', 'clock', liveRunningTime(value.started, Date.now(), value.seen));
-      clock.dataset.started = value.started || ''; clock.dataset.seen = value.seen; parent.append(clock);
+      const origin = liveClockOrigin(value.started, value.seen), clock = element('span', 'clock', liveRunningTime(origin, Date.now()));
+      clock.dataset.origin = origin; parent.append(clock);
     }
     else if (value && value.text != null) parent.append(element('span', value.className, value.text));
     else parent.append(String(value));
@@ -105,7 +105,7 @@
     // Everyone on course of the current run in start order, each with a running time. Forerunners are listed first with
     // an F and never get a time.
     const current = next.runs.find(r => r.number === next.currentRun);
-    // When this viewer first saw each racer on course; the running time falls back to it (see liveRunningTime).
+    // When this viewer first saw each racer on course; it decides the running time's origin (see liveClockOrigin).
     const seenNow = Date.now(), courseKeys = new Set();
     const seen = (runNumber, bib) => { const key = `${runNumber}:${bib}`; courseKeys.add(key); if (!seenOnCourse.has(key)) seenOnCourse.set(key, seenNow); return seenOnCourse.get(key); };
     next.runs.forEach(r => r.results.filter(x => x.status === 'OnCourse').forEach(x => seen(r.number, x.bib)));
@@ -280,6 +280,6 @@
     if (state) render(state);
   });
   // Running times on course (banner and results) tick between updates; only the clocks change, nothing else is redrawn.
-  setInterval(() => { const now = Date.now(); document.querySelectorAll('.clock[data-seen]').forEach(e => { e.textContent = liveRunningTime(e.dataset.started, now, Number(e.dataset.seen)); }); }, 100);
+  setInterval(() => { const now = Date.now(); document.querySelectorAll('.clock[data-origin]').forEach(e => { e.textContent = liveRunningTime(Number(e.dataset.origin), now); }); }, 100);
   if (id) { get('race').hidden = false; connect(); } else { get('list').hidden = false; list(); }
 })();
