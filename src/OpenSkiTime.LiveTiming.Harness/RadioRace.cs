@@ -24,7 +24,10 @@ public static class RadioRace
         ("Sepp", "GIPFELSTÜRMER", "AUT", "SC Talblick"), ("Reto", "MATTERLI", "SUI", "SC Gletscher"), ("Giacomo", "CECCHINATO", "ITA", "Sci Club Neve"),
         ("Chiara", "DISCESA", "ITA", "Sci Club Neve"), ("Jean-Baptiste", "POUDREUSE", "FRA", "Club des Neiges"), ("Michał", "SZCZEPAŃSKI", "POL", "KS Śnieg"),
         ("Jiří", "SNĚHULÁK", "CZE", "SK Sníh"), ("Guillermo", "JIMÉNEZ", "ESP", "Club Nieve"), ("Søren", "BAKKEGAARD", "DEN", "Skiklubben"),
-        ("Tine", "ČEBULJ", "SLO", "SK Sneg")
+        ("Tine", "ČEBULJ", "SLO", "SK Sneg"), ("Astrid", "FJÄLLGREN", "SWE", "Fjällklubben"), ("Henrik", "SNÖBERG", "SWE", "Backens IF"),
+        ("Ingrid", "HALLINGSKRED", "NOR", "Fjellaget"), ("Thomas", "BERGLÖFFLER", "AUT", "SC Talblick"), ("Mathilde", "NEIGEBLANCHE", "FRA", "Club des Neiges"),
+        ("Luca", "VALANGHETTI", "ITA", "Sci Club Neve"), ("Kasia", "ŚNIEŻYŃSKA", "POL", "KS Śnieg"), ("Marek", "SVAHOVSKÝ", "CZE", "SK Sníh"),
+        ("Lena", "GLETSCHERLI", "SUI", "SC Gletscher"), ("Freya", "SKISPORLUND", "DEN", "Skiklubben")
     ];
 
     public static async Task<int> RunAsync(string llmProvider, string llmModel, string ttsProvider, string endpoint, int count, string workerDll,
@@ -35,8 +38,13 @@ public static class RadioRace
         var finns = (int)Math.Round(count * 0.6);
         var competitors = new List<LiveCompetitor>();
         var firstNames = FinnishFirst.OrderBy(_ => random.Next()).ToArray(); var lastNames = FinnishLast.OrderBy(_ => random.Next()).ToArray();
+        // First and surnames combined so that no full name repeats in a field of up to a few hundred.
         for (var i = 0; i < finns; i++)
-        { competitors.Add(new(0, lastNames[i % lastNames.Length], firstNames[i % firstNames.Length], "FIN", FinnishClubs[random.Next(FinnishClubs.Length)], "")); }
+        {
+            var first = firstNames[i % firstNames.Length];
+            var last = lastNames[(i + i / firstNames.Length * 7) % lastNames.Length];
+            competitors.Add(new(0, last, first, "FIN", FinnishClubs[random.Next(FinnishClubs.Length)], ""));
+        }
         foreach (var x in Foreign.OrderBy(_ => random.Next()).Take(count - finns)) { competitors.Add(new(0, x.Last, x.First, x.Nation, x.Club, "")); }
         // Bibs in a mixed order, as a draw would give.
         var field = competitors.OrderBy(_ => random.Next()).Select((x, i) => x with { Bib = i + 1 }).ToArray();
@@ -52,12 +60,13 @@ public static class RadioRace
             : RadioKeyCredential.Read(provider.Split(':')[0], x => new WindowsCredentialStore(x)) ?? throw new InvalidOperationException($"Save the {provider} radio key in Settings first.");
         var configuration = new RadioConfiguration
         {
-            CloudEnabled = true, BudgetUsd = 3m, LlmProvider = llmProvider, LlmModel = llmModel, Curation = true,
+            CloudEnabled = true, BudgetUsd = 5m, LlmProvider = llmProvider, LlmModel = llmModel, Curation = true,
             // "elevenlabs:eleven_v4_turbo" picks a provider's model.
             TtsProvider = ttsProvider.Split(':')[0], TtsModel = ttsProvider.Contains(':', StringComparison.Ordinal) ? ttsProvider.Split(':')[1] : "",
             MusicFolder = musicFolder.Length == 0 ? "" : Path.GetFullPath(musicFolder),
             EventContext = "Synteettinen testikilpailu OpenSkiTimen radiolle Hauskarinteessä. Laskijat ja seurat ovat keksittyjä. "
-                + "Aurinko paistaa, lunta on hyvin ja yleisöä on paikalla mukavasti."
+                + "Aurinko paistaa, lunta on hyvin ja yleisöä on paikalla mukavasti. Juontajat heittävät välillä kevyttä, "
+                + "hyväntahtoista huumoria säästä, rinteestä, makkaranpaistosta ja omasta selostuksestaan, mutta eivät koskaan laskijoiden kustannuksella."
         };
         configuration.Validate();
 
