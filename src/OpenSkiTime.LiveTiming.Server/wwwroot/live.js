@@ -6,6 +6,7 @@
   // The latest finisher (or DNF/DSQ) is highlighted for ten seconds when it changes, not on the first view.
   const flashMs = 10000;
   let latestKey = null, flashUntil = 0, flashTimer;
+  const seenOnCourse = new Map();
   // The server pings every 15 s; longer silence means a dead or half-open connection (e.g. replaced revision).
   const serverTimeout = 35000, pingInterval = 15000;
   const time = value => value == null ? '—' : `${Math.floor(value / 6000)}:${String(Math.floor(value / 100) % 60).padStart(2, '0')}.${String(value % 100).padStart(2, '0')}`;
@@ -34,32 +35,52 @@
   }
   // One element with optional class and text.
   const element = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text != null) e.textContent = text; return e; };
-  // Flags are Unicode regional-indicator pairs. Where the platform draws them as two letters (Windows desktops) they would
-  // only repeat the code, so they are left out: a drawn flag has coloured pixels, letters do not.
-  const flagsDrawn = (() => {
+  // Flags are Unicode regional-indicator pairs. Where the platform draws them as two letters (Windows desktops), the page
+  // draws them with the bundled Twemoji Country Flags font instead: a drawn flag has coloured pixels, letters do not.
+  const nativeFlags = (() => {
     try {
       const canvas = document.createElement('canvas'); canvas.width = canvas.height = 20;
-      const context = canvas.getContext('2d', {willReadFrequently: true}); context.textBaseline = 'top'; context.font = '16px sans-serif';
+      const context = canvas.getContext('2d', {willReadFrequently: true}); context.textBaseline = 'top';
+      context.font = '16px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
       context.fillText(liveNation('FIN').flag, 0, 0);
       const pixels = context.getImageData(0, 0, 20, 20).data;
       for (let i = 0; i < pixels.length; i += 4) if (pixels[i + 3] > 0 && (pixels[i] !== pixels[i + 1] || pixels[i + 1] !== pixels[i + 2])) return true;
       return false;
-    } catch { return false; }
+    } catch { return true; }
   })();
+  if (!nativeFlags) document.documentElement.classList.add('flag-font');
   // A nation as flag and code; the full name is the tooltip where it is used.
   const nation = code => {
     const n = liveNation(code), part = document.createDocumentFragment();
-    if (flagsDrawn && n.flag) { const flag = element('span', 'flag', n.flag); flag.setAttribute('aria-hidden', 'true'); part.append(flag); }
+    if (n.flag) { const flag = element('span', 'flag', n.flag); flag.setAttribute('aria-hidden', 'true'); part.append(flag); }
     part.append(element('span', 'code', n.code)); return part;
   };
-  const who = (c, bib) => { const part = document.createDocumentFragment(); part.append(`${bib} ${c.lastName} ${c.firstName}`); if (c.nation) part.append(' ', nation(c.nation)); return part; };
+  // Small pictograms of the banner rows: the start gate, a skier on course and the finish flag.
+  const svg = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">';
+  const icons = {
+    next: svg + '<path d="M6 7v14M3 21h6"/><circle cx="6" cy="12" r="1.6" fill="currentColor"/><path d="M7.5 12h13" stroke-width="2.6"/></svg>',
+    oncourse: svg + '<circle cx="16" cy="4" r="2" fill="currentColor" stroke="none"/><path d="M14 8l-5 3 4 3-2 5M9 11l-3-2M14 8l3 4"/><path d="M3 18l18 4"/></svg>',
+    finish: svg + '<path d="M5 22V3"/><path d="M5 4h14v9H5" stroke-width="1.5"/><path d="M5 4h3.5v3H5zM12 4h3.5v3H12zM8.5 7H12v3H8.5zM15.5 7H19v3h-3.5zM5 10h3.5v3H5zM12 10h3.5v3H12z" fill="currentColor" stroke="none"/></svg>'
+  };
+  // One banner row: pictogram, bib, name, nation (two lines), time and rank, in a grid shared by all rows.
+  const bannerRow = (kind, label, bib, name, code, time, rank) => {
+    const li = element('li', kind), icon = element('span', 'icon'), place = element('span', 'nation'), clock = element('span', 'time');
+    icon.innerHTML = icons[kind];
+    if (code) { place.title = liveNation(code).name; fill(place, [...nation(code).childNodes]); }
+    fill(clock, time);
+    li.append(icon, element('span', 'sr', label + ': '), element('span', 'bib', bib), element('span', 'who', name), place, clock, element('span', 'rank', rank));
+    return li;
+  };
   // Phones get two-line cells (name over club, Run 1 over Run 2, total over difference) instead of a wide table.
   const narrow = matchMedia('(max-width: 640px)');
   narrow.addEventListener?.('change', () => { if (state) render(state); });
   // A cell value is text, a node, {text, className} or a running time {started}; a stacked cell has one value per line.
   const put = (parent, value) => {
     if (value instanceof Node) parent.append(value);
-    else if (value && value.started) { const clock = element('span', 'clock', liveRunningTime(value.started, Date.now())); clock.dataset.started = value.started; parent.append(clock); }
+    else if (value && value.seen != null) {
+      const origin = liveClockOrigin(value.started, value.seen), clock = element('span', 'clock', liveRunningTime(origin, Date.now()));
+      clock.dataset.origin = origin; parent.append(clock);
+    }
     else if (value && value.text != null) parent.append(element('span', value.className, value.text));
     else parent.append(String(value));
   };
@@ -70,7 +91,7 @@
   function render(next) {
     state = next;
     get('results').replaceChildren(); get('runs').replaceChildren();
-    if (!next) { liveRadio.update(id, null); get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('next').hidden = true; get('latest').hidden = true; get('forerunners').hidden = true; get('summary').hidden = true; get('updated').textContent = ''; title(); return; }
+    if (!next) { liveRadio.update(id, null); get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('course').hidden = false; get('track').replaceChildren(); get('forerunners').hidden = true; get('summary').hidden = true; get('updated').textContent = ''; title(); return; }
     get('name').textContent = next.competition.name; title(next.competition.name);
     get('metadata').textContent = `${next.competition.place} · ${next.competition.discipline} · ${next.competition.date}`;
     // A viewer may look at another run; when the race moves on to a new current run, every viewer follows it.
@@ -78,46 +99,27 @@
     next.runs.forEach(r => { const b = document.createElement('button'); b.textContent = `Run ${r.number}`; b.setAttribute('aria-pressed', r.number === selectedRun); b.onclick = () => { selectedRun = r.number; render(state); }; get('runs').append(b); });
     const run = next.runs.find(r => r.number === selectedRun);
     const competitor = bib => next.competitors.find(c => c.bib === bib);
-    // Everyone on course of the current run, one per line in start order, each with a running time. Forerunners are
-    // listed first with an F and never get a time.
+    // A race with racers of one nation only shows no nation anywhere.
+    const nationsShown = new Set(next.competitors.map(c => (c.nation || '').trim().toUpperCase()).filter(Boolean)).size > 1;
+    const nationOf = c => nationsShown ? c.nation : '';
+    // Everyone on course of the current run in start order, each with a running time. Forerunners are listed first with
+    // an F and never get a time.
     const current = next.runs.find(r => r.number === next.currentRun);
-    const onCourse = (current.forerunners || []).filter(f => f.status === 'OnCourse').map(f => ({bib: `F ${f.letter}`, name: `${f.lastName} ${f.firstName}`, forerunner: true}))
+    // When this viewer first saw each racer on course; it decides the running time's origin (see liveClockOrigin).
+    const seenNow = Date.now(), courseKeys = new Set();
+    const seen = (runNumber, bib) => { const key = `${runNumber}:${bib}`; courseKeys.add(key); if (!seenOnCourse.has(key)) seenOnCourse.set(key, seenNow); return seenOnCourse.get(key); };
+    next.runs.forEach(r => r.results.filter(x => x.status === 'OnCourse').forEach(x => seen(r.number, x.bib)));
+    for (const key of [...seenOnCourse.keys()]) if (!courseKeys.has(key)) seenOnCourse.delete(key);
+    const onCourse = (current.forerunners || []).filter(f => f.status === 'OnCourse').map(f => ({bib: `F ${f.letter}`, name: `${f.lastName} ${f.firstName}`, nation: nationOf(f), forerunner: true}))
       .concat(current.results.filter(r => r.status === 'OnCourse').sort((a, b) => (Date.parse(a.startedAt) || 0) - (Date.parse(b.startedAt) || 0))
-        .map(r => { const c = competitor(r.bib); return {bib: String(r.bib), name: `${c.lastName} ${c.firstName}`, nation: c.nation, startedAt: r.startedAt}; }));
-    // Once every starter of the current run is finished or classified, the banner says so instead of an empty course.
+        .map(r => { const c = competitor(r.bib); return {bib: String(r.bib), name: `${c.lastName} ${c.firstName}`, nation: nationOf(c), clock: {started: r.startedAt, seen: seen(current.number, r.bib)}}; }));
+    // Once every starter of the current run is finished or classified, the banner says so; a stopped or stale publisher too.
     const complete = current.startOrder.length > 0 && current.startOrder.every(bib => { const r = current.results.find(x => x.bib === bib); return r && !['Ready', 'OnCourse', 'Review'].includes(r.status); });
-    const course = get('course');
-    if (stale || next.paused || !onCourse.length) {
-      course.textContent = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained'
-        : complete ? `Run ${next.currentRun} complete` : 'On course · —';
-    } else {
-      const label = element('span', 'label', 'On course'), list = element('ol', 'oncourse');
-      onCourse.forEach(x => {
-        const li = document.createElement('li'), name = element('span', 'who', x.name), clock = element('span', 'clock');
-        if (x.nation) name.append(' ', nation(x.nation));
-        if (x.forerunner) { clock.textContent = 'forerunner'; clock.classList.add('muted'); }
-        else if (x.startedAt) { clock.dataset.started = x.startedAt; clock.textContent = liveRunningTime(x.startedAt, Date.now()); }
-        else clock.textContent = '—';
-        li.append(element('span', 'bib', x.bib), name, clock); list.append(li);
-      });
-      course.replaceChildren(label, list);
-    }
-    // The next two racers in the start gate of the current run, so viewers see who is coming.
-    const coming = stale || next.paused || complete ? [] : liveNextStarters(current, 2);
-    get('next').hidden = coming.length === 0;
-    get('next').replaceChildren(...(coming.length === 0 ? [] : [element('span', 'label', 'Next'),
-      ...coming.map(bib => { const item = element('span', 'item'); item.append(who(competitor(bib), bib)); return item; })]));
-    // The latest finisher of the current run (or the latest DNF/DSQ) stays visible even when the time ranks low.
+    const notice = stale ? 'Waiting for publisher · Last state retained' : next.paused ? 'Publishing stopped · Last state retained' : complete ? `Run ${next.currentRun} complete` : '';
+    get('course').textContent = notice; get('course').hidden = !notice;
+    // The latest finisher of the current run (or the latest DNF/DSQ) stays visible even when the time ranks low; it is
+    // highlighted for ten seconds when it changes.
     const last = liveLatestFinish(current.results, ['Finished', 'DNF', 'DSQ']), totalRanked = current.number > 1 && last?.totalHundredths != null;
-    const latest = get('latest');
-    latest.hidden = !last;
-    if (last) {
-      const c = competitor(last.bib), place = totalRanked ? last.totalRank : last.rank, finished = last.status === 'Finished';
-      latest.textContent = finished ? `Last finish · ${last.bib} ${c.lastName} ${c.firstName} · ${time(last.hundredths)}`
-        + (totalRanked ? ` · Total ${time(last.totalHundredths)}` : '') + (place ? ` · Rank ${place}` : '')
-        : `Last · ${last.bib} ${c.lastName} ${c.firstName} · ${last.status}`;
-      latest.classList.toggle('out', !finished);
-    }
     const key = last ? `${current.number}:${last.bib}:${last.status}:${last.hundredths}` : '';
     if (latestKey !== null && key && key !== latestKey) {
       flashUntil = Date.now() + flashMs; clearTimeout(flashTimer);
@@ -126,7 +128,22 @@
     }
     latestKey = key;
     const flashing = !!last && Date.now() < flashUntil;
-    latest.classList.toggle('flash', flashing);
+    // The banner follows the course from top to bottom: the next two racers in the start gate, everyone on course and
+    // the latest finisher.
+    const banner = [];
+    if (!stale && !next.paused) {
+      for (const bib of complete ? [] : liveNextStarters(current, 2)) { const c = competitor(bib); banner.push(bannerRow('next', 'Next', String(bib), `${c.lastName} ${c.firstName}`, nationOf(c), '', '')); }
+      for (const x of onCourse) banner.push(bannerRow('oncourse', 'On course', x.bib, x.name, x.nation, x.forerunner ? {text: 'forerunner', className: 'muted'} : x.clock, ''));
+    }
+    if (last) {
+      const c = competitor(last.bib), place = totalRanked ? last.totalRank : last.rank, finished = last.status === 'Finished';
+      const finish = bannerRow('finish', 'Last finish', String(last.bib), `${c.lastName} ${c.firstName}`, nationOf(c),
+        !finished ? last.status : totalRanked ? [time(last.hundredths), {text: `Total ${time(last.totalHundredths)}`, className: 'muted'}] : time(last.hundredths),
+        finished && place ? `#${place}` : '');
+      finish.id = 'latest'; finish.classList.toggle('out', !finished); finish.classList.toggle('flash', flashing);
+      banner.push(finish);
+    }
+    get('track').replaceChildren(...banner);
     // Forerunners of the shown run: where each one is (at start, on course, finished), never a time.
     const forerunnerState = s => ({Ready:'at start', OnCourse:'on course', Finished:'finished', DNS:'DNS', DNF:'DNF', Review:'checking'})[s] || s;
     const shownRunners = run.forerunners || [];
@@ -143,12 +160,12 @@
     const later = run.number > 1, totals = later && run.results.some(r => r.totalHundredths != null);
     const rank = r => totals ? r.totalRank : r.rank, gap = r => totals ? r.totalDifference : r.difference;
     // No status column: the run's time column says DNS, DNF, DSQ or NPS, and a racer on course has the running time.
-    const runTime = r => r.status === 'Finished' ? time(r.hundredths) : r.status === 'OnCourse' ? (r.startedAt ? {started: r.startedAt} : '—')
+    const runTime = r => r.status === 'Finished' ? time(r.hundredths) : r.status === 'OnCourse' ? {started: r.startedAt, seen: seen(run.number, r.bib)}
       : r.status === 'Ready' ? '—' : r.status;
     // An earlier run shows its time, or its status when the racer did not finish it.
     const earlierRun = x => !x ? '—' : x.status === 'Finished' ? time(x.hundredths) : ['Ready', 'OnCourse'].includes(x.status) ? '—' : x.status;
     const difference = r => gap(r) == null ? '—' : '+' + time(gap(r));
-    const nations = next.competitors.some(c => c.nation), clubs = next.competitors.some(c => c.club);
+    const nations = nationsShown, clubs = next.competitors.some(c => c.club);
     const splitHeads = liveSplitHeaders(splits, splitMode), compact = narrow.matches;
     const splitValues = x => liveSplitValues(x.r, splits, splitMode).map(time);
     // Each column: its heading (one entry per line of a stacked cell) and the value of a row {r: result, c: competitor,
@@ -186,14 +203,14 @@
       });
       get('results').append(tr);
     });
-    summary(next);
+    summary(next, nationsShown);
   }
   // Race statistics under the results: racers, each run's outcome, and racers per nation and club, opened on demand. The
   // details elements stay in the page, so a list a viewer opened stays open across updates.
-  function summary(next) {
+  function summary(next, nationsShown) {
     const count = (value, one, many) => `${value} ${value === 1 ? one : many}`;
     get('summary').hidden = next.competitors.length === 0;
-    const nations = liveGroupCounts(next.competitors, 'nation').filter(g => g.key), clubs = liveGroupCounts(next.competitors, 'club').filter(g => g.key);
+    const nations = nationsShown ? liveGroupCounts(next.competitors, 'nation').filter(g => g.key) : [], clubs = liveGroupCounts(next.competitors, 'club').filter(g => g.key);
     get('totals').textContent = [count(next.competitors.length, 'racer', 'racers'), nations.length ? count(nations.length, 'nation', 'nations') : '',
       clubs.length ? count(clubs.length, 'club', 'clubs') : ''].filter(Boolean).join(' · ');
     get('runCounts').replaceChildren(...next.runs.slice().sort((a, b) => a.number - b.number).map(r => {
@@ -263,6 +280,6 @@
     if (state) render(state);
   });
   // Running times on course (banner and results) tick between updates; only the clocks change, nothing else is redrawn.
-  setInterval(() => { const now = Date.now(); document.querySelectorAll('.clock[data-started]').forEach(e => { e.textContent = liveRunningTime(e.dataset.started, now); }); }, 100);
+  setInterval(() => { const now = Date.now(); document.querySelectorAll('.clock[data-origin]').forEach(e => { e.textContent = liveRunningTime(Number(e.dataset.origin), now); }); }, 100);
   if (id) { get('race').hidden = false; connect(); } else { get('list').hidden = false; list(); }
 })();

@@ -81,7 +81,10 @@ app.Use(async (context, next) =>
     catch (LiveCapacityException) { context.Response.StatusCode = 503; await context.Response.WriteAsync("Session capacity reached."); }
 });
 app.UseRateLimiter();
-app.UseDefaultFiles(); app.UseStaticFiles();
+app.UseDefaultFiles();
+// The bundled flag font never changes within a release; viewers' browsers may keep it for a day. Everything else stays no-store.
+app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = file =>
+{ if (file.File.Name.EndsWith(".woff2", StringComparison.OrdinalIgnoreCase)) { file.Context.Response.Headers.CacheControl = "public, max-age=86400"; } } });
 app.MapGet("/health", () => Results.Ok(new { status = "Running", processId = Environment.ProcessId, protocol = LiveProtocol.Version }));
 app.MapGet("/.well-known/security.txt", (HttpContext context, IConfiguration config, TimeProvider time) =>
     Results.Text(SecurityTxt.Create(PublicBase(context, config), config, time.GetUtcNow()), "text/plain; charset=utf-8"));

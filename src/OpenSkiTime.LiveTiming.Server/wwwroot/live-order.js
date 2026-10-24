@@ -23,13 +23,19 @@ globalThis.liveLatestFinish = (results, statuses = ['Finished']) => {
   return finished.reduce((latest, r) => (byTicks ? BigInt(r.finishSourceTicks) > BigInt(latest.finishSourceTicks)
     : instant(r) > instant(latest)) ? r : latest);
 };
-/* Running time on course, from the published start instant to now, truncated to tenths (m:ss.t). The viewer's clock
-   decides "now", so it is a display estimate; official times come only from the timing results. */
-globalThis.liveRunningTime = (startedAt, now) => {
-  // A start well in the future means the viewer's clock is wrong: show no time rather than a misleading one.
-  const elapsed = now - Date.parse(startedAt);
-  if (!(elapsed > -5000)) return '—';
-  const ms = Math.max(0, elapsed), tenths = Math.floor(ms / 100);
+/* Running time on course, so viewers see that the racer is on course. Its origin is chosen once, when this viewer first
+   sees the racer on course (seenAt): the published start instant when it is plausible for the viewer's clock at that
+   moment (at most five seconds ahead and less than ten minutes back), otherwise seenAt itself, for a missing start or a
+   device clock or date that differs from real time. The choice depends only on these two values, so the clock never
+   jumps during the run. The viewer's clock decides "now", so it is a display estimate; official times come only from the
+   timing results. */
+globalThis.liveClockOrigin = (startedAt, seenAt) => {
+  const start = Date.parse(startedAt), lead = seenAt - start;
+  return lead > -5000 && lead < 600000 ? start : seenAt;
+};
+/* Time since the origin, truncated to tenths (m:ss.t); never negative. */
+globalThis.liveRunningTime = (origin, now) => {
+  const tenths = Math.floor(Math.max(0, now - origin) / 100);
   return `${Math.floor(tenths / 600)}:${String(Math.floor(tenths / 10) % 60).padStart(2, '0')}.${tenths % 10}`;
 };
 /* The next racers to start in a run, in start order. A racer is waiting while Ready (or without a result). Waiting racers

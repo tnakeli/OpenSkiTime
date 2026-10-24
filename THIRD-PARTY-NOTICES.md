@@ -25,6 +25,18 @@ phase gate, and topic/style memories and an event diary. The dialogue, curation 
 adapt the structure and several rules of mikradio's prompts. The repository has no license file; its author permitted the
 OpenSkiTime project to use its ideas and code. No voice IDs, team data, articles or names were copied.
 
+## Twemoji Country Flags font
+
+Project: country-flag-emoji-polyfill 0.1.10 by TalkJS (https://github.com/talkjs/country-flag-emoji-polyfill)\
+Purpose: draws country flags on the live timing page where the system has no flag emoji (Windows)\
+File: `src/OpenSkiTime.LiveTiming.Server/wwwroot/fonts/TwemojiCountryFlags.woff2`
+(SHA-256 `9f04f14429bb6a9f415c7a4dd902a918d7e81a4f7526c415496fdb063954e3b8`)\
+License: font code MIT (Copyright (c) 2022 TalkJS); flag graphics from Twemoji
+(https://github.com/twitter/twemoji), Copyright Twitter, Inc. and other contributors, licensed under
+CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+The font file is redistributed unchanged.
+
 ## Other dependencies
 
 Additional third-party dependencies are managed through NuGet.
