@@ -16,6 +16,7 @@ import argparse
 import base64
 from datetime import datetime, timezone
 import hashlib
+import http.client
 import http.server
 import json
 import mimetypes
@@ -297,8 +298,9 @@ def upload_video(token, path, metadata, renew_token=None):
                 # The access token expired; the retry continues the same session with a new one.
                 token = renew_token()
             return 'error', f'{error.code}: {describe_error(error.read())}'
-        except OSError as error:
-            return 'error', str(getattr(error, 'reason', error))
+        except (OSError, http.client.HTTPException, ValueError) as error:
+            # Includes a connection closed mid-response and a truncated JSON body: the outcome is unknown.
+            return 'error', str(getattr(error, 'reason', error)) or type(error).__name__
 
     with open(path, 'rb') as stream:
         offset, failures = 0, 0

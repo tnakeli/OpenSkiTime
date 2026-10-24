@@ -181,6 +181,18 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(self.upload(fake_urlopen)['id'], 'v1')
         self.assertEqual(sent, ['bytes 0-9/10', 'bytes */10', 'bytes */10'])
 
+    def test_truncated_final_response_is_resolved_through_the_session(self):
+        sent = []
+
+        def fake_urlopen(req, timeout=None):
+            sent.append(req.headers['Content-range'])
+            if len(sent) == 1:
+                return io.BytesIO(b'{"id": "v1", "sta')
+            return io.BytesIO(b'{"id": "v1", "status": {}}')
+
+        self.assertEqual(self.upload(fake_urlopen)['id'], 'v1')
+        self.assertEqual(sent, ['bytes 0-9/10', 'bytes */10'])
+
     def test_persistent_failure_tells_operator_to_check_studio(self):
         def fake_urlopen(req, timeout=None):
             raise urllib.error.HTTPError(req.full_url, 500, 'Backend Error', {}, io.BytesIO(b'{"error": {"message": "Backend Error"}}'))
