@@ -35,6 +35,15 @@ def save(target, username, record):
         raise CredentialError(f'Could not save {target} to Credential Manager (error {ctypes.GetLastError()}).')
 
 
+def delete(target):
+    """Removes a record; returns False when there was none."""
+    if ctypes.windll.advapi32.CredDeleteW(target, _CRED_TYPE_GENERIC, 0):
+        return True
+    if ctypes.GetLastError() == _ERROR_NOT_FOUND:
+        return False
+    raise CredentialError(f'Could not delete {target} from Credential Manager (error {ctypes.GetLastError()}).')
+
+
 def load(target, missing_hint):
     """Returns the saved record; missing_hint tells the operator how to create it."""
     pointer = ctypes.POINTER(_Credential)()

@@ -116,8 +116,12 @@ One-time setup, in the Google account that owns the OpenSkiTime Brand Account:
 4. Run `python scripts/social/youtube.py client-import <file>`; the client is saved in
    Credential Manager as `OpenSkiTime.Social.YouTube.Client`. Delete the downloaded file.
 5. Run `python scripts/social/youtube.py login` and choose the **OpenSkiTime** channel in
-   the account chooser. The browser returns to a one-shot `127.0.0.1` listener (PKCE,
-   scope `youtube`); the refresh token is saved as `OpenSkiTime.Social.YouTube`.
+   the account chooser (Google lists it after the account as a brand account). The tool
+   also prints the sign-in address in case no browser opens; open it on the same computer.
+   The browser returns to a one-shot `127.0.0.1` listener (PKCE, scope `youtube`); the
+   refresh token is saved as `OpenSkiTime.Social.YouTube`. Only `@OpenSkiTime` is accepted:
+   a sign-in to another channel, such as a personal one on the same Google account, is
+   revoked and not saved, and a saved sign-in for another channel is refused.
 6. Custom thumbnails require a channel verified at https://www.youtube.com/verify.
 
 Use:

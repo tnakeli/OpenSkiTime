@@ -42,6 +42,9 @@ TOKEN_URL = 'https://oauth2.googleapis.com/token'
 SCOPE = 'https://www.googleapis.com/auth/youtube'
 CLIENT_TARGET = 'OpenSkiTime.Social.YouTube.Client'
 TOKEN_TARGET = 'OpenSkiTime.Social.YouTube'
+# Sign-in is accepted only for this channel, so a personal channel on the same Google account is never changed.
+CHANNEL_HANDLE = '@OpenSkiTime'
+REVOKE_URL = 'https://oauth2.googleapis.com/revoke'
 PRIVACY = ('private', 'unlisted', 'public')
 # Categories that fit the channel: Sports and Science & Technology.
 CATEGORIES = {'sports': '17', 'tech': '28'}
@@ -80,7 +83,10 @@ def load_client():
 
 
 def load_token():
-    return load(TOKEN_TARGET, 'Run: python scripts/social/youtube.py login')
+    record = load(TOKEN_TARGET, 'Run: python scripts/social/youtube.py login')
+    if record.get('handle', '').lower() != CHANNEL_HANDLE.lower():
+        raise YouTubeError(f'The saved sign-in is not for {CHANNEL_HANDLE}. Run: python scripts/social/youtube.py login')
+    return record
 
 
 def pkce_pair():
@@ -104,6 +110,16 @@ def post_form(url, fields):
         if 'invalid_grant' in message:
             message += ' – sign in again: python scripts/social/youtube.py login'
         raise YouTubeError(f'Google sign-in failed: {message}') from None
+
+
+def revoke(token):
+    """Revokes a token Google issued for the wrong channel; failure only leaves it for myaccount.google.com/permissions."""
+    request = urllib.request.Request(REVOKE_URL, data=urllib.parse.urlencode({'token': token}).encode('ascii'), method='POST')
+    try:
+        with urllib.request.urlopen(request, timeout=60):
+            pass
+    except OSError:
+        print('Warning: could not revoke the token; remove the app at myaccount.google.com/permissions.', file=sys.stderr)
 
 
 def access_token():
@@ -361,6 +377,7 @@ def command_login(_):
         'access_type': 'offline', 'prompt': 'consent select_account', 'state': state,
         'code_challenge': challenge, 'code_challenge_method': 'S256'})
     print('Opening Google sign-in in the browser. Choose the OpenSkiTime channel, not a personal one.')
+    print(f'If no browser opens, open this address on this computer:\n{url}', flush=True)
     webbrowser.open(url)
     code = wait()
     tokens = post_form(TOKEN_URL, {'client_id': client['client_id'], 'client_secret': client['client_secret'], 'code': code,
@@ -368,8 +385,15 @@ def command_login(_):
     if 'refresh_token' not in tokens:
         raise YouTubeError('Google returned no refresh token; remove the app at myaccount.google.com/permissions and sign in again.')
     channel = my_channel(tokens['access_token'], 'snippet')
+    handle = channel['snippet'].get('customUrl', '')
+    if handle.lower() != CHANNEL_HANDLE.lower():
+        revoke(tokens['refresh_token'])
+        raise YouTubeError(f"Signed in to \"{channel['snippet']['title']}\" ({handle or channel['id']}), not {CHANNEL_HANDLE}; "
+                           'its access was revoked and nothing was saved. Sign in again and choose the OpenSkiTime '
+                           'channel (Google may list it after the account as a brand account).')
     save(TOKEN_TARGET, channel['snippet']['title'], {'refresh_token': tokens['refresh_token'], 'channel_id': channel['id'],
-                                                      'title': channel['snippet']['title'], 'saved': datetime.now(timezone.utc).isoformat()})
+                                                      'title': channel['snippet']['title'], 'handle': handle,
+                                                      'saved': datetime.now(timezone.utc).isoformat()})
     print(f"Signed in as the channel \"{channel['snippet']['title']}\" ({channel['snippet'].get('customUrl', channel['id'])}).")
 
 

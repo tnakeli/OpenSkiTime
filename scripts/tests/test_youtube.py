@@ -212,6 +212,29 @@ class UploadTests(unittest.TestCase):
             self.upload(fake_urlopen)
 
 
+class ChannelGuardTests(unittest.TestCase):
+    def test_saved_sign_in_for_another_channel_is_refused(self):
+        for record in ({'refresh_token': 'r', 'title': 'Personal'}, {'refresh_token': 'r', 'handle': '@someone'}):
+            with mock.patch.object(youtube, 'load', return_value=record):
+                with self.assertRaisesRegex(youtube.YouTubeError, 'not for @OpenSkiTime'):
+                    youtube.load_token()
+        with mock.patch.object(youtube, 'load', return_value={'refresh_token': 'r', 'handle': '@openskitime'}):
+            self.assertEqual(youtube.load_token()['refresh_token'], 'r')
+
+    def test_login_to_another_channel_revokes_and_saves_nothing(self):
+        with mock.patch.object(youtube, 'load_client', return_value={'client_id': 'c', 'client_secret': 's'}), \
+                mock.patch.object(youtube, 'receive_code', return_value=('http://127.0.0.1:1', lambda: 'code')), \
+                mock.patch.object(youtube.webbrowser, 'open'), \
+                mock.patch.object(youtube, 'post_form', return_value={'access_token': 'a', 'refresh_token': 'r'}), \
+                mock.patch.object(youtube, 'my_channel', return_value={'id': 'UC1', 'snippet': {'title': 'Personal', 'customUrl': '@me'}}), \
+                mock.patch.object(youtube, 'revoke') as revoke, mock.patch.object(youtube, 'save') as save, \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as error:
+            self.assertEqual(youtube.main(['login']), 1)
+        revoke.assert_called_once_with('r')
+        save.assert_not_called()
+        self.assertIn('nothing was saved', error.getvalue())
+
+
 class ImageUploadTests(unittest.TestCase):
     def test_images_use_simple_media_upload(self):
         with tempfile.TemporaryDirectory() as directory:
