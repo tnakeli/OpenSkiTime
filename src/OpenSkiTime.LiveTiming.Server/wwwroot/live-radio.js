@@ -1,5 +1,6 @@
 /* Optional race radio. The control appears only while the server announces a healthy radio, starts paused and never
-   autoplays. Clips play one at a time with short pauses; starting or resuming joins at the live edge. */
+   autoplays. Clips play one at a time with short pauses; starting or resuming joins at the live edge, and a conversation
+   that waited longer than the live edge behind others is skipped. */
 const liveRadio = (() => {
   const button = document.getElementById('radio'), audio = new Audio();
   // lineWait covers the worker's slowest successful next line: speech (15 s) plus an upload to each of two servers (10 s each).
@@ -76,6 +77,9 @@ const liveRadio = (() => {
       if (alive && now - lastEnded < lineWait) return wait;
       skippedBatches.add(lastBatch);
     } else if (sameBatch.length && !expected) { skippedBatches.add(lastBatch); }
+    // A conversation that could not start within the live edge of its arrival (others were playing) is no longer news:
+    // it is skipped with its replies, so speech never drifts behind the race while the radio plays.
+    open.forEach(c => { if (c.line === 0 && c.batchId !== lastBatch && now - (seenAt.get(c.clipId) ?? now) > liveEdge) skippedBatches.add(c.batchId); });
     // A new conversation starts only at its opening line: a reply whose opening never arrived is not played alone.
     const startable = open.filter(c => !skippedBatches.has(c.batchId) && (c === expected || (c.line === 0 && c.batchId !== lastBatch)));
     if (!startable.length) return null;

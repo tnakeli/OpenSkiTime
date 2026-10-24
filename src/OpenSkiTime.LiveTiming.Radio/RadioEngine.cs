@@ -19,6 +19,8 @@ public sealed class RadioEngine
     public static readonly TimeSpan UploadTimeout = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan ProducerAfterRace = TimeSpan.FromMinutes(30);
+    /// <summary>How often quiet-moment talk checks whether race news has arrived and it must give way.</summary>
+    public static readonly TimeSpan NewsCheckInterval = TimeSpan.FromMilliseconds(250);
     private const int DialogueTokens = 900;
 
     private readonly RadioConfiguration _config;
@@ -127,7 +129,7 @@ public sealed class RadioEngine
             _featured.Add((state.CurrentRun, racer));
             var feature = new ProducerDecision(ProducerSources.OnCourse, racer,
                 "Kerro radalla olevasta laskijasta: seura, maa kansainvälisessä kentässä ja aiempi tulos, jos sellainen on. Ei arvailua.");
-            await GenerateAsync([ProducerGate.Event(feature, state, now)], mode, ct);
+            await TalkAsync(talk => GenerateAsync([ProducerGate.Event(feature, state, now)], mode, ct, talk), ct);
             return;
         }
         var phase = _phase!.Value;
@@ -139,9 +141,47 @@ public sealed class RadioEngine
         _nextProducer = now + interval;
         // A pause in the race (a long start interval, an interruption, between runs) gets a recap and light talk.
         var pause = RadioPause.Duration(state, now);
-        var decision = mode == RadioMode.Full ? await ProduceAsync(state, phase, pause, ct) : null;
-        decision ??= ProducerGate.Deterministic(state, phase, _producerTurn++, pause);
-        if (decision is not null) { await GenerateAsync([ProducerGate.Event(decision, state, now, pause)], mode, ct); }
+        await TalkAsync(async talk =>
+        {
+            var decision = mode == RadioMode.Full ? await ProduceAsync(state, phase, pause, talk) : null;
+            decision ??= ProducerGate.Deterministic(state, phase, _producerTurn++, pause);
+            if (decision is not null) { await GenerateAsync([ProducerGate.Event(decision, state, now, pause)], mode, ct, talk); }
+        }, ct);
+    }
+
+    // Quiet-moment talk (producer segments, a racer on course) gives way to race news: a snapshot that brings news cancels
+    // the talk's model calls and the wait for its speech at once, as long as nothing of it has been uploaded, so the news
+    // is generated on the next pass instead of waiting behind talk that would be dropped as stale anyway. Once a line is
+    // uploaded the conversation is not cut here: viewers would wait for its missing lines.
+    private async Task TalkAsync(Func<CancellationToken, Task> talk, CancellationToken ct)
+    {
+        using var news = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var done = new CancellationTokenSource();
+        var watch = WatchForNewsAsync(news, done.Token);
+        try { await talk(news.Token); }
+        catch (OperationCanceledException) when (news.IsCancellationRequested && !ct.IsCancellationRequested)
+        { _log("Radio talk cut for race news"); }
+        finally
+        {
+            await done.CancelAsync();
+            await watch;
+        }
+    }
+    private async Task WatchForNewsAsync(CancellationTokenSource news, CancellationToken done)
+    {
+        try
+        {
+            while (!news.IsCancellationRequested)
+            {
+                await Task.Delay(NewsCheckInterval, _time, done);
+                var latest = Volatile.Read(ref _latest);
+                var processed = Volatile.Read(ref _processed);
+                // Detection is a pure function of two snapshots; the engine loop detects the same events again afterwards.
+                if (latest is not null && !ReferenceEquals(latest, processed) && RadioEventDetector.Detect(processed, latest, _time.GetUtcNow()).Count > 0)
+                { await news.CancelAsync(); }
+            }
+        }
+        catch (OperationCanceledException) when (done.IsCancellationRequested) { }
     }
 
     // The racer on course the longest who has not been featured in this run, once the start announcement had its time.
@@ -160,7 +200,7 @@ public sealed class RadioEngine
         if (!ReferenceEquals(state, _processed))
         {
             foreach (var value in RadioEventDetector.Detect(_processed, state, now)) { _batcher.Add(value, now); }
-            _processed = state;
+            Volatile.Write(ref _processed, state);
         }
         var phase = RacePhases.Derive(state, now);
         if (phase == RacePhase.Interrupted && _phase == RacePhase.RunInProgress)
@@ -172,8 +212,11 @@ public sealed class RadioEngine
         return state;
     }
 
-    private async Task GenerateAsync(IReadOnlyList<RadioEvent> batch, RadioMode mode, CancellationToken ct)
+    // talk: cancelled when quiet-moment talk must give way to news (see TalkAsync); it stops the model calls and the wait
+    // for speech until the first line is uploaded. Race news passes none.
+    private async Task GenerateAsync(IReadOnlyList<RadioEvent> batch, RadioMode mode, CancellationToken ct, CancellationToken talk = default)
     {
+        var generation = talk.CanBeCanceled ? talk : ct;
         var state = Volatile.Read(ref _latest)!;
         var now = _time.GetUtcNow();
         var bibs = batch.SelectMany(x => x.Bibs).Concat(_diary.Entries.TakeLast(3).SelectMany(x => x.Bibs));
@@ -184,10 +227,10 @@ public sealed class RadioEngine
         var startsOnly = batch.All(x => x.Kind is RadioEventKind.Start or RadioEventKind.TopStart or RadioEventKind.RunStarted);
         if (mode is RadioMode.Full or RadioMode.Lean && !startsOnly)
         {
-            (lines, topic) = await DialogueAsync(batch, facts, rules, ct);
+            (lines, topic) = await DialogueAsync(batch, facts, rules, generation);
             // Race news is said at once; the style pass (a second model call) is kept for the hosts' own talk in quiet moments.
             var news = batch.Any(x => x.Kind != RadioEventKind.Producer);
-            if (lines is not null && mode == RadioMode.Full && _config.Curation && !news) { lines = await CurateAsync(lines, facts, rules, ct); }
+            if (lines is not null && mode == RadioMode.Full && _config.Curation && !news) { lines = await CurateAsync(lines, facts, rules, generation); }
             // Every event is said: one the model script leaves out (a DNF beside a start, a line cut by validation) gets its
             // template lines at the end of the conversation.
             if (lines is not null)
@@ -270,7 +313,11 @@ public sealed class RadioEngine
         // them; they are still uploaded in order. Reserved before the calls: a failed or cancelled request may be billed.
         // Lines still queued when the conversation is cut are not started (and not paid for); started ones finish and settle.
         using var abandon = new CancellationTokenSource();
-        var speech = texts.Select(x => SpeakAsync(x.Text, x.Voice, x.Estimate, abandon.Token, ct)).ToArray();
+        // Talk cut for news before its first upload also cancels its speech requests (their reservations stay as spend).
+        using var cut = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var uploaded = 0;
+        using var giveWay = generation.Register(() => { if (Volatile.Read(ref uploaded) == 0) { cut.Cancel(); } });
+        var speech = texts.Select(x => SpeakAsync(x.Text, x.Voice, x.Estimate, abandon.Token, cut.Token)).ToArray();
         var spoken = 0;
         _remainingLines = count;
         try
@@ -279,8 +326,11 @@ public sealed class RadioEngine
             {
                 var line = lines[i];
                 TtsAudio audio;
-                try { audio = await speech[i]; }
+                try { audio = spoken == 0 ? await speech[i].WaitAsync(generation) : await speech[i]; }
+                catch (OperationCanceledException) when (spoken == 0 && generation.IsCancellationRequested && !ct.IsCancellationRequested) { throw; }
                 catch (Exception ex) when (Recoverable(ex, ct)) { Report(error: Describe(ex)); break; }
+                // From here the talk is committed: news no longer cancels its remaining speech.
+                if (spoken == 0) { Volatile.Write(ref uploaded, 1); generation.ThrowIfCancellationRequested(); }
                 now = _time.GetUtcNow();
                 var latest = Volatile.Read(ref _latest)!;
                 // The race moved on while this line was generated: drop it and the rest of the batch.
