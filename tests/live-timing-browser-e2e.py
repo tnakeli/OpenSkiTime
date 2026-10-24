@@ -113,9 +113,9 @@ def main():
             # Where the platform draws flags as letters (Windows), the bundled flag font draws them.
             if page.evaluate("document.documentElement.classList.contains('flag-font')"):
                 assert page.evaluate("document.fonts.ready.then(() => [...document.fonts].some(f => f.family.includes('Twemoji Country Flags') && f.status === 'loaded'))"), 'flag font not loaded'
-            # The banner follows the course from the start gate down: the next two racers come first.
-            expect(page.locator('#track li.next .bib')).to_have_text(['1', '2'])
-            expect(page.locator('#track li.next .who')).to_have_text(['TEST1 Synthetic', 'TEST2 Synthetic'])
+            # The banner follows the course from the top down: the racer after next, then the next racer just above the course.
+            expect(page.locator('#track li.next .bib')).to_have_text(['2', '1'])
+            expect(page.locator('#track li.next .who')).to_have_text(['TEST2 Synthetic', 'TEST1 Synthetic'])
             expect(page.locator('#track li.next .nation .code')).to_have_text(['FIN', 'FIN'])
             expect(page.locator('#course')).to_be_hidden()
             # Race statistics below the results; racers per nation and club open on demand.
@@ -168,7 +168,7 @@ def main():
                     expect(page.locator('#track li.oncourse .who')).to_have_text(['TEST1 Synthetic'])
                     expect(page.locator('#track li')).to_have_class([re.compile('next'), re.compile('next'), re.compile('oncourse')])
                     expect(page.locator('tr[data-bib="1"] td').nth(-2)).to_have_text(re.compile(r'^1:1\d\.\d$'))
-                    expect(page.locator('#track li.next .bib')).to_have_text(['2', '3'])
+                    expect(page.locator('#track li.next .bib')).to_have_text(['3', '2'])
                     clock = page.locator('#track li.oncourse .clock')
                     expect(clock).to_have_text(re.compile(r'^1:1\d\.\d$'))
                     first = clock.inner_text(); page.wait_for_timeout(400)
@@ -196,7 +196,7 @@ def main():
             expect(page.locator('tr[data-bib="1"] td').nth(5)).to_contain_text('0:21.34')
             expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('1:00.12')
             # A DNS marked ahead of time is not a start: the next racers are those after the last one who started.
-            expect(page.locator('#track li.next .bib')).to_have_text(['5', '6'])
+            expect(page.locator('#track li.next .bib')).to_have_text(['6', '5'])
             expect(page.locator('#runCounts li')).to_have_text(['Run 1 6 starters · 1 finished · 1 DNS · 1 DNF · 1 DSQ · 2 to start'])
             # The viewer switches between cumulative intermediate times and sector times, each in its own column; the last
             # sector ends at the finish. The choice is remembered by this browser across a reload.

@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- Race page: the banner shows the two waiting racers in course order, the racer after next on top and the next racer just above the racers on course.
+
 ## [0.6.0] - 2026-10-24
 
 Live protocol: 2

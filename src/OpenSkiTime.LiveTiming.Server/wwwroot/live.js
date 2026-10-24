@@ -128,11 +128,11 @@
     }
     latestKey = key;
     const flashing = !!last && Date.now() < flashUntil;
-    // The banner follows the course from top to bottom: the next two racers in the start gate, everyone on course and
-    // the latest finisher.
+    // The banner follows the course from top to bottom: the racer after next, the next racer in the start gate (just
+    // above the course), everyone on course and the latest finisher.
     const banner = [];
     if (!stale && !next.paused) {
-      for (const bib of complete ? [] : liveNextStarters(current, 2)) { const c = competitor(bib); banner.push(bannerRow('next', 'Next', String(bib), `${c.lastName} ${c.firstName}`, nationOf(c), '', '')); }
+      for (const bib of complete ? [] : liveNextStarters(current, 2).reverse()) { const c = competitor(bib); banner.push(bannerRow('next', 'Next', String(bib), `${c.lastName} ${c.firstName}`, nationOf(c), '', '')); }
       for (const x of onCourse) banner.push(bannerRow('oncourse', 'On course', x.bib, x.name, x.nation, x.forerunner ? {text: 'forerunner', className: 'muted'} : x.clock, ''));
     }
     if (last) {
