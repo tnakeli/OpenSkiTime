@@ -13,8 +13,6 @@ and deleted after publishing. Without --yes a publish command only prints what i
     python scripts/social/instagram.py reel clip.mp4 --caption-file caption.txt [--cover cover.png] [--yes]
 """
 import argparse
-import ctypes
-import ctypes.wintypes as wt
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -28,6 +26,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+
+import credentials
 
 API = 'https://graph.instagram.com/v26.0'
 CREDENTIAL_TARGET = 'OpenSkiTime.Social.Instagram'
@@ -48,40 +48,18 @@ class InstagramError(Exception):
 
 # --- Windows Credential Manager -------------------------------------------------------------
 
-class _Credential(ctypes.Structure):
-    _fields_ = [('Flags', wt.DWORD), ('Type', wt.DWORD), ('TargetName', wt.LPWSTR), ('Comment', wt.LPWSTR),
-                ('LastWritten', wt.FILETIME), ('CredentialBlobSize', wt.DWORD),
-                ('CredentialBlob', ctypes.POINTER(ctypes.c_char)), ('Persist', wt.DWORD),
-                ('AttributeCount', wt.DWORD), ('Attributes', ctypes.c_void_p),
-                ('TargetAlias', wt.LPWSTR), ('UserName', wt.LPWSTR)]
-
-
-_CRED_TYPE_GENERIC = 1
-_CRED_PERSIST_LOCAL_MACHINE = 2
-_ERROR_NOT_FOUND = 1168
-
-
 def save_credential(record):
-    blob = json.dumps(record).encode('utf-8')
-    buffer = ctypes.create_string_buffer(blob, len(blob))
-    credential = _Credential(Type=_CRED_TYPE_GENERIC, TargetName=CREDENTIAL_TARGET, UserName=record['username'],
-                             CredentialBlobSize=len(blob), CredentialBlob=ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char)),
-                             Persist=_CRED_PERSIST_LOCAL_MACHINE)
-    if not ctypes.windll.advapi32.CredWriteW(ctypes.byref(credential), 0):
-        raise InstagramError(f'Could not save the token to Credential Manager (error {ctypes.GetLastError()}).')
+    try:
+        credentials.save(CREDENTIAL_TARGET, record['username'], record)
+    except credentials.CredentialError as error:
+        raise InstagramError(str(error)) from None
 
 
 def load_credential():
-    pointer = ctypes.POINTER(_Credential)()
-    if not ctypes.windll.advapi32.CredReadW(CREDENTIAL_TARGET, _CRED_TYPE_GENERIC, 0, ctypes.byref(pointer)):
-        if ctypes.GetLastError() == _ERROR_NOT_FOUND:
-            raise InstagramError('No Instagram token saved. Run: python scripts/social/instagram.py login')
-        raise InstagramError(f'Could not read the token from Credential Manager (error {ctypes.GetLastError()}).')
     try:
-        credential = pointer.contents
-        return json.loads(ctypes.string_at(credential.CredentialBlob, credential.CredentialBlobSize).decode('utf-8'))
-    finally:
-        ctypes.windll.advapi32.CredFree(pointer)
+        return credentials.load(CREDENTIAL_TARGET, 'Run: python scripts/social/instagram.py login')
+    except credentials.CredentialError as error:
+        raise InstagramError(str(error)) from None
 
 
 # --- Graph API ------------------------------------------------------------------------------

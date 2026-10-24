@@ -96,6 +96,47 @@ the media and returned its permalink. Refresh the token at least every 60 days;
 - **Keywords:** alpine skiing, ski race timing, race timing software, FIS, slalom, giant slalom, ALGE, live results, open source
 - **Links:** Website https://openskiti.me · GitHub https://github.com/tnakeli/OpenSkiTime
 
+### Managing the channel through the API
+
+`scripts/social/youtube.py` uploads videos, changes video metadata and thumbnails, and
+sets the channel description, keywords and banner through the
+[YouTube Data API v3](https://developers.google.com/youtube/v3). It is a maintainer tool for
+Windows using only the Python standard library. The channel picture cannot be set through
+the API.
+
+One-time setup, in the Google account that owns the OpenSkiTime Brand Account:
+
+1. In the [Google Cloud console](https://console.cloud.google.com), create the project
+   *OpenSkiTime Publisher* and enable *YouTube Data API v3*.
+2. Under *Google Auth Platform*, configure the consent screen with audience *External*,
+   then *Publish app* (status *In production*). While an app is in *Testing*, Google
+   expires its refresh tokens after seven days. The app is not verified; the sign-in shows
+   a warning that the owner passes with *Advanced → Go to OpenSkiTime Publisher*.
+3. Under *Clients*, create an OAuth client of type *Desktop app* and download its JSON.
+4. Run `python scripts/social/youtube.py client-import <file>`; the client is saved in
+   Credential Manager as `OpenSkiTime.Social.YouTube.Client`. Delete the downloaded file.
+5. Run `python scripts/social/youtube.py login` and choose the **OpenSkiTime** channel in
+   the account chooser. The browser returns to a one-shot `127.0.0.1` listener (PKCE,
+   scope `youtube`); the refresh token is saved as `OpenSkiTime.Social.YouTube`.
+6. Custom thumbnails require a channel verified at https://www.youtube.com/verify.
+
+Use:
+
+```powershell
+python scripts/social/youtube.py status
+python scripts/social/youtube.py channel --description-file description.txt --keywords 'FIS "alpine skiing"' --banner assets/social/youtube-banner.png
+python scripts/social/youtube.py upload demo.mp4 --title "..." --description-file description.txt --tags "slalom,FIS timing" --thumbnail thumb.png
+python scripts/social/youtube.py update VIDEO_ID --privacy public
+python scripts/social/youtube.py thumbnail VIDEO_ID thumb.png
+```
+
+Every command that changes the channel only prints a preview unless `--yes` is given.
+Uploads are private unless `--privacy` says otherwise, are not made for kids, and use the
+Sports category by default (`--category tech` for Science & Technology). Updates start
+from the video's current values, because the API replaces whole parts. Uploads use
+resumable 16 MiB chunks; an upload is reported only when YouTube returns the video.
+Projects get 100 uploads a day. Tests: `python -m unittest scripts/tests/test_youtube.py`.
+
 ## Content rules
 
 Show only synthetic or anonymized race data, as in the repository screenshots.
