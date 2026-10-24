@@ -459,6 +459,24 @@ public sealed class RadioEngineTests
     }
 
     [Fact]
+    public async Task TalkDuringARunIsAtMostTwoLines()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) ? Echo(r) : Script(("Aino", "Hyvää päivää.", false), ("Kalle", "Aurinko paistaa.", false),
+                ("Aino", "Rinne on kova.", false), ("Kalle", "Yleisöä on paljon.", true))))
+        };
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.State = RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        for (var i = 0; i < 6; i++) { rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None); }
+        var talk = rig.Sink.Clips.Where(x => x.Priority == 5).ToArray();
+        Assert.Equal(["Hyvää päivää.", "Aurinko paistaa."], talk.Select(x => x.Transcript));
+        Assert.True(talk[^1].Interruptible);
+        Assert.Contains(rig.Llm.Requests, r => r.System.Contains($"Hard cap {RadioEngine.TalkLinesDuringRun} lines", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task UploadFailureIsReportedWithoutStoppingTheRadio()
     {
         var rig = new Rig

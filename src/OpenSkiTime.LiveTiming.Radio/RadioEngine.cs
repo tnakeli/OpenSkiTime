@@ -50,6 +50,8 @@ public sealed class RadioEngine
     public static readonly TimeSpan OnCourseAfter = TimeSpan.FromSeconds(8);
     /// <summary>Silence after which the producer fills a pause before or during the race (between runs, for example).</summary>
     public static readonly TimeSpan ProducerDuringRace = TimeSpan.FromSeconds(35);
+    /// <summary>Lines of the hosts' own talk (producer, a racer on course) while a run is in progress.</summary>
+    public const int TalkLinesDuringRun = 2;
     private int _remainingLines;
     private RadioHealth _health;
 
@@ -368,7 +370,9 @@ public sealed class RadioEngine
     private async Task<(IReadOnlyList<ScriptLine>?, string?)> DialogueAsync(IReadOnlyList<RadioEvent> batch, FactSheet facts, LineRules rules, CancellationToken ct)
     {
         var now = _time.GetUtcNow();
-        var maxLines = Math.Min(RadioPrompts.MaxLines, 2 + batch.Count * 2);
+        // While a run is in progress the next start or finish comes within seconds: the hosts' own talk stays short.
+        var talkDuringRun = _phase == RacePhase.RunInProgress && batch.All(x => x.Kind == RadioEventKind.Producer);
+        var maxLines = talkDuringRun ? TalkLinesDuringRun : Math.Min(RadioPrompts.MaxLines, 2 + batch.Count * 2);
         var request = new LlmRequest(RadioPrompts.DialogueSystem(maxLines, _tts.AudioTags),
             RadioPrompts.DialogueUser(batch, facts, _phase ?? RacePhase.RunInProgress, _config.EventContext, _topics.Recent(now), _diary.Entries), DialogueTokens, 0.8);
         if (await CompleteAsync(request, DialogueTimeout, ct) is not { } reply) { return (null, null); }
@@ -387,16 +391,21 @@ public sealed class RadioEngine
             if (lines is not null && problems.Min(x => x.Line) is var first and > 0)
             {
                 _log($"Radio script shortened: {problems[0].Problem}");
-                lines = [.. lines[..first]];
-                lines[^1] = lines[^1] with { Interruptible = true };
-                return (lines, topic is { } kept && !kept.Any(char.IsDigit) ? kept : null);
+                return (Cap(lines[..first], maxLines), topic is { } kept && !kept.Any(char.IsDigit) ? kept : null);
             }
             Report(error: $"Language model script rejected: {problems[0].Problem}. Templates used.");
             _log($"Radio script rejected: {problems[0].Problem}");
             return (null, null);
         }
         if (lines is null) { return (null, null); }
-        return (lines, topic is { } summary && !summary.Any(char.IsDigit) ? summary : null);
+        return (lines.Length > maxLines ? Cap(lines, maxLines) : lines, topic is { } summary && !summary.Any(char.IsDigit) ? summary : null);
+    }
+    // A script longer than asked for, or cut at a rejected line, ends at the cap as a finished conversation.
+    private static ScriptLine[] Cap(ScriptLine[] lines, int maxLines)
+    {
+        ScriptLine[] kept = [.. lines.Take(maxLines)];
+        kept[^1] = kept[^1] with { Interruptible = true };
+        return kept;
     }
 
     /// <summary>The script's lines and topic, or the problems of the lines that may not be spoken (null lines: unusable JSON).</summary>

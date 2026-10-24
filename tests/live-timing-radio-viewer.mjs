@@ -153,6 +153,17 @@ radio.update('s', { available: true, clips: [clip('start', 'b21', 0, 2, 3, 41), 
 await advance(1200);
 assert.deepEqual(played.slice(-1), ['next']);
 await end(); await advance(1200);
+// The hosts' own talk (priority 5) gives way to race news at its next line, even inside a sentence pair.
+radio.update('s', { available: true, clips: [clip('t0', 'b30', 0, 3, 5, 50, false), clip('t1', 'b30', 1, 3, 5, 51, false), clip('t2', 'b30', 2, 3, 5, 52)],
+  serverTime: new Date(now).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['t0']);
+radio.update('s', { available: true, clips: [clip('t0', 'b30', 0, 3, 5, 50, false), clip('t1', 'b30', 1, 3, 5, 51, false), clip('t2', 'b30', 2, 3, 5, 52),
+  clip('fin', 'b31', 0, 1, 2, 53)], serverTime: new Date(now).toISOString() });
+await end(); await advance(1200);
+assert.deepEqual(played.slice(-1), ['fin'], 'the finish cuts the talk');
+await end(); await advance(5000);
+assert.deepEqual(played.slice(-1), ['fin'], 'the rest of the talk is dropped');
 // Pressing Radio with nothing queued plays a short silent sound inside the click (iOS Safari audio unlock).
 const before = unlocked;
 listeners['button:click'](); listeners['button:click']();
