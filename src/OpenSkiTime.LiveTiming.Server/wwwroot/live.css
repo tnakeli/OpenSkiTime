@@ -4,7 +4,7 @@
   --surface: #FFFFFF; --surface-head: #EEF2F7; --text: #111827; --text-2: #475569;
   --accent: #1D4ED8; --accent-hover: #1E40AF; --on-accent: #FFFFFF; --accent-text: #1D4ED8; --link: #1D4ED8;
   --selected: #DBEAFE; --info: #EFF6FF; --border: #CBD5E1; --line: #E2E8F0; --live: #16A34A; --waiting: #D97706;
-  --flash: #FEF3C7; --flash-edge: #D97706; --error: #B91C1C;
+  --flash: #FEF3C7; --flash-edge: #D97706; --error: #B91C1C; --finish: #DCFCE7;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text); background: var(--surface);
 }
@@ -13,7 +13,7 @@
     --surface: #101923; --surface-head: #172A39; --text: #E6EDF3; --text-2: #A9BBC8;
     --accent: #2563EB; --accent-hover: #1D4ED8; --on-accent: #FFFFFF; --accent-text: #93C5FD; --link: #93C5FD;
     --selected: #203849; --info: #203849; --border: #4A6172; --line: #2D404E; --live: #4ADE80; --waiting: #FBBF24;
-    --flash: #4A3A0C; --flash-edge: #FBBF24; --error: #FCA5A5;
+    --flash: #4A3A0C; --flash-edge: #FBBF24; --error: #FCA5A5; --finish: #173A26;
   }
 }
 body { margin: 0; line-height: 1.35; }
@@ -22,14 +22,14 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent-text); o
 
 main { max-width: 1200px; margin: auto; padding: 6px 12px 12px; }
 
-/* One compact bar: competition on the left, run and split selectors, update time and connection on the right.
-   On narrow screens the controls wrap to a second row. */
-.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-bottom: 6px; }
-.title { flex: 1 1 260px; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
-h1 { margin: 0; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
-#metadata { margin: 0; color: var(--text-2); font-size: 13px; }
-.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; order: 2; }
-.status { order: 3; }
+/* One compact bar: competition name with place, discipline and date under it on the left; update time, connection and
+   the run, split and radio selectors on the right. On narrow screens the selectors wrap below. */
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.title { flex: 1 1 220px; min-width: 0; }
+h1 { margin: 0; font-size: 19px; line-height: 1.2; overflow-wrap: anywhere; }
+#metadata { margin: 2px 0 0; color: var(--text-2); font-size: 13px; }
+.status { order: 2; flex-direction: column; align-items: flex-end; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 10px; order: 3; }
 nav { display: inline-flex; }
 nav[hidden] { display: none; }
 button { min-height: 32px; padding: 0 10px; margin-left: -1px; border: 1px solid var(--border); border-radius: 0; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
@@ -39,7 +39,7 @@ nav button:only-child { border-radius: 4px; }
 button:hover { border-color: var(--accent-text); position: relative; }
 button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); position: relative; }
 button[aria-pressed=true]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-.status { display: flex; align-items: center; gap: 2px 10px; }
+.status { display: flex; gap: 2px 10px; }
 /* Race radio: shown only while a healthy radio is announced; starts paused. */
 button.radio { border-radius: 4px; margin-left: 0; }
 button.radio[hidden] { display: none; }
@@ -48,30 +48,41 @@ button.radio[hidden] { display: none; }
 .connection::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--waiting); }
 .connection[data-state=live]::before { background: var(--live); }
 
-/* On course and the latest finisher of the current run. */
-.banner { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 0 0 6px; padding: 4px 8px; background: var(--info); border-left: 4px solid var(--accent-text); font-size: 14px; font-weight: 600; }
-.banner p { margin: 0; overflow-wrap: anywhere; }
-#course:empty, #next[hidden], #latest[hidden], #forerunners[hidden] { display: none; }
-#forerunners { font-weight: 500; color: var(--text-2); }
-/* On course: one racer per line with a running time. */
-#course { display: flex; gap: 2px 10px; align-items: baseline; }
-#course .label { white-space: nowrap; }
-#course .oncourse { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 1px 10px; }
-#course .oncourse li { display: contents; }
-#course .oncourse .bib { text-align: right; font-variant-numeric: tabular-nums; }
-#course .oncourse .clock { text-align: right; font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; color: var(--accent-text); min-width: 4.5em; }
-#course .oncourse .clock.muted { font-size: 13px; font-weight: 500; color: var(--text-2); }
-/* The next racers in the start gate. */
-#next .label { margin-right: 8px; }
-#next .item + .item::before { content: "·"; margin: 0 8px; color: var(--text-2); }
+/* The banner follows the course: the next racers in the start gate, everyone on course with a running time and the
+   latest finisher, one row each in a grid shared by all rows (pictogram, bib, name, nation, time, rank). */
+.banner { margin: 0 0 8px; font-size: 15px; }
+.banner p { margin: 0 0 4px; overflow-wrap: anywhere; }
+#course { font-weight: 600; padding: 4px 8px; background: var(--info); border-left: 4px solid var(--accent-text); }
+#course[hidden], #forerunners[hidden] { display: none; }
+#forerunners { font-size: 14px; color: var(--text-2); }
+#track { list-style: none; margin: 0 0 4px; padding: 0; max-width: 760px; display: grid; grid-template-columns: 28px auto minmax(0, 1fr) auto auto auto; }
+#track:empty { display: none; }
+#track li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; gap: 0 10px; min-height: 38px; padding: 3px 8px 3px 4px;
+  border-bottom: 1px solid var(--line); border-left: 4px solid transparent; transition: background-color .6s, box-shadow .6s; }
+#track .icon { display: flex; justify-content: center; color: var(--text-2); }
+#track .bib { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+#track .who { font-weight: 700; overflow-wrap: anywhere; }
+#track .nation { display: flex; flex-direction: column; align-items: center; font-size: 11px; line-height: 1.1; color: var(--text-2); }
+#track .nation .flag { margin: 0; font-size: 18px; }
+#track .time { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#track .time .muted { display: block; font-size: 12px; font-weight: 500; color: var(--text-2); }
+#track .rank { min-width: 2.2em; text-align: right; color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+#track li.next .icon { color: var(--accent-text); }
+#track li.oncourse { background: var(--selected); border-left-color: var(--accent-text); }
+#track li.oncourse .icon, #track li.oncourse .clock { color: var(--accent-text); }
+#track li.finish { background: var(--finish); }
+#track li.finish .icon { color: var(--text); }
+#track li.out .time { color: var(--error); }
+/* The latest finisher is highlighted for ten seconds when it changes, in the banner and in the results. */
+#track li.flash, tr.flash td { background: var(--flash); box-shadow: inset 0 0 0 2px var(--flash-edge); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Flags: the system's emoji flags, or the bundled Twemoji Country Flags font where the system draws letters instead. */
+@font-face { font-family: "Twemoji Country Flags"; unicode-range: U+1F1E6-1F1FF; src: url("/fonts/TwemojiCountryFlags.woff2") format("woff2"); font-display: swap; }
 .flag { margin-right: 4px; font-weight: 400; }
-/* The latest finisher, highlighted for a few seconds when it changes; DNF/DSQ in the error colour. */
-#latest { padding: 0 6px; margin: 0 -6px; border-radius: 3px; transition: background-color .6s, box-shadow .6s; }
-#latest.out { color: var(--error); }
-#latest.flash, tr.flash td { background: var(--flash); box-shadow: inset 0 0 0 2px var(--flash-edge); }
+.flag-font .flag { font-family: "Twemoji Country Flags", "Segoe UI Emoji", sans-serif; }
 /* A racer on course: the running time in the results too. */
 td .clock { color: var(--accent-text); font-weight: 700; }
-@media (prefers-reduced-motion: reduce) { #latest { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #track li { transition: none; } }
 
 .table { overflow-x: auto; border-top: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; font-size: 15px; }
@@ -126,4 +137,6 @@ footer { max-width: 1200px; margin: auto; padding: 12px 12px 24px; display: flex
   .controls { order: 2; }
   table { font-size: 14px; }
   td, th { padding: 6px 5px; }
+  .banner { font-size: 14px; }
+  #track li { gap: 0 8px; padding-right: 6px; }
 }

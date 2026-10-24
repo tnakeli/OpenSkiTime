@@ -27,6 +27,7 @@
 
 # Binaries
 *.png   binary
+*.woff2 binary
 *.jpg   binary
 *.ico   binary
 *.snk   binary

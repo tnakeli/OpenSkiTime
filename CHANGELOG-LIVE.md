@@ -8,6 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed
+
+- Race page: the banner follows the course with one row per racer and a pictogram: the next two racers in the start gate, everyone on course with the running time, and the latest finisher with time and rank. The competition name has place, discipline and date under it.
+- A race whose racers all have the same nation shows no nation information.
+
+### Fixed
+
+- Country flags show on Windows desktop browsers too, drawn with a bundled flag font (Twemoji Country Flags, CC-BY 4.0) where the system has no flag emoji.
+
 ## [0.5.0] - 2026-10-24
 
 Live protocol: 2

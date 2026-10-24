@@ -95,19 +95,35 @@ def main():
             # No intermediate times yet: the column is removed rather than filled with dashes.
             expect(page.locator('#splitMode')).to_be_hidden()
             # No status column: a run's time column says DNS/DNF/DSQ and shows the running time on course.
+            # A race of one nation shows no nation anywhere: no column, nothing in the banner, no nation statistics.
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Club', 'Finish', 'Difference'])
+            expect(page.locator('#track li.next')).to_have_count(2)
+            expect(page.locator('#track .nation .code')).to_have_count(0)
+            expect(page.locator('#byNation')).to_be_hidden()
+            expect(page.locator('#totals')).to_have_text('6 racers · 1 club')
+            # A second nation brings them back: flag and code, the country name on hover.
+            state['version'] += 1
+            state['competitors'][5]['nation'] = 'SWE'
+            request('PUT', f'/api/sessions/{sid}/state', state, token)
             expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Finish', 'Difference'])
             expect(page.locator('tr[data-bib="1"] td')).to_have_count(7)
-            # The nation cell shows the code (with a flag where the platform draws flags) and names the country on hover.
             expect(page.locator('tr[data-bib="1"] td.nation')).to_have_text(re.compile(r'FIN$'))
             expect(page.locator('tr[data-bib="1"] td.nation')).to_have_attribute('title', 'Finland')
-            # The next two racers in the start gate are shown above the results.
-            expect(page.locator('#next .item')).to_have_text([re.compile(r'^1 TEST1 Synthetic .*FIN$'), re.compile(r'^2 TEST2 Synthetic .*FIN$')])
+            expect(page.locator('tr[data-bib="6"] td.nation .flag')).to_have_text('\U0001F1F8\U0001F1EA')
+            # Where the platform draws flags as letters (Windows), the bundled flag font draws them.
+            if page.evaluate("document.documentElement.classList.contains('flag-font')"):
+                assert page.evaluate("document.fonts.ready.then(() => [...document.fonts].some(f => f.family.includes('Twemoji Country Flags') && f.status === 'loaded'))"), 'flag font not loaded'
+            # The banner follows the course from the start gate down: the next two racers come first.
+            expect(page.locator('#track li.next .bib')).to_have_text(['1', '2'])
+            expect(page.locator('#track li.next .who')).to_have_text(['TEST1 Synthetic', 'TEST2 Synthetic'])
+            expect(page.locator('#track li.next .nation .code')).to_have_text(['FIN', 'FIN'])
+            expect(page.locator('#course')).to_be_hidden()
             # Race statistics below the results; racers per nation and club open on demand.
-            expect(page.locator('#totals')).to_have_text('6 racers · 1 nation · 1 club')
+            expect(page.locator('#totals')).to_have_text('6 racers · 2 nations · 1 club')
             expect(page.locator('#runCounts li')).to_have_text(['Run 1 6 starters · 0 finished · 0 DNS · 0 DNF · 0 DSQ · 6 to start'])
             expect(page.locator('#nations')).to_be_hidden()
             page.locator('#byNation summary').click()
-            expect(page.locator('#nations li')).to_have_text([re.compile(r'FIN Finland\s*6$')])
+            expect(page.locator('#nations li')).to_have_text([re.compile(r'FIN Finland\s*5$'), re.compile(r'SWE Sweden\s*1$')])
             # Forerunners show where they are (on course, at start) but never a time and never a results row.
             expect(page.locator('#forerunners')).to_be_hidden()
             state['version'] += 1
@@ -115,17 +131,17 @@ def main():
                                                {'letter': 'B', 'lastName': 'SECOND', 'firstName': 'Synthetic', 'nation': 'FIN', 'status': 'Ready'}]
             request('PUT', f'/api/sessions/{sid}/state', state, token)
             expect(page.locator('#forerunners')).to_have_text('Forerunners · A FORERUNNER Synthetic: on course · B SECOND Synthetic: at start')
-            # On course is a list; a forerunner on it shows no running time.
-            expect(page.locator('#course .oncourse .bib')).to_have_text(['F A'])
-            expect(page.locator('#course .oncourse .who')).to_have_text(['FORERUNNER Synthetic'])
-            expect(page.locator('#course .oncourse .clock')).to_have_text(['forerunner'])
+            # Everyone on course has a banner row; a forerunner on it shows no running time.
+            expect(page.locator('#track li.oncourse .bib')).to_have_text(['F A'])
+            expect(page.locator('#track li.oncourse .who')).to_have_text(['FORERUNNER Synthetic'])
+            expect(page.locator('#track li.oncourse .time')).to_have_text(['forerunner'])
             expect(page.locator('#results tr')).to_have_count(6)
             state['version'] += 1
             state['runs'][0]['forerunners'][0]['status'] = 'Finished'
             state['runs'][0]['forerunners'][1]['status'] = 'Finished'
             request('PUT', f'/api/sessions/{sid}/state', state, token)
             expect(page.locator('#forerunners')).to_have_text('Forerunners · A FORERUNNER Synthetic: finished · B SECOND Synthetic: finished')
-            expect(page.locator('#course')).to_have_text('On course · —')
+            expect(page.locator('#track li.oncourse')).to_have_count(0)
             navigations = []
             page.on('framenavigated', lambda frame: navigations.append(frame.url))
             for bib, status, kind in [(1, 'OnCourse', 'CompetitorStarted'), (1, 'OnCourse', 'IntermediateTime'), (1, 'Finished', 'CompetitorFinished'),
@@ -149,32 +165,38 @@ def main():
                     expect(page.locator(f'tr[data-bib="{bib}"] td').nth(-2)).to_have_text(status)
                 if kind == 'CompetitorStarted':
                     # The racer is listed on course with a running time that ticks between updates, in the results too.
-                    expect(page.locator('#course .oncourse .who')).to_have_text([re.compile(r'^TEST1 Synthetic .*FIN$')])
+                    expect(page.locator('#track li.oncourse .who')).to_have_text(['TEST1 Synthetic'])
+                    expect(page.locator('#track li')).to_have_class([re.compile('next'), re.compile('next'), re.compile('oncourse')])
                     expect(page.locator('tr[data-bib="1"] td').nth(-2)).to_have_text(re.compile(r'^1:1\d\.\d$'))
-                    expect(page.locator('#next .item')).to_have_text([re.compile(r'^2 TEST2'), re.compile(r'^3 TEST3')])
-                    clock = page.locator('#course .oncourse .clock')
+                    expect(page.locator('#track li.next .bib')).to_have_text(['2', '3'])
+                    clock = page.locator('#track li.oncourse .clock')
                     expect(clock).to_have_text(re.compile(r'^1:1\d\.\d$'))
                     first = clock.inner_text(); page.wait_for_timeout(400)
                     assert clock.inner_text() != first, 'running time does not tick'
                 if kind == 'CompetitorFinished':
                     # The new latest finisher is highlighted for ten seconds, in the banner and in the results.
-                    expect(page.locator('#latest')).to_have_text('Last finish · 1 TEST1 Synthetic · 1:00.12 · Rank 1')
+                    expect(page.locator('#latest .bib')).to_have_text('1')
+                    expect(page.locator('#latest .who')).to_have_text('TEST1 Synthetic')
+                    expect(page.locator('#latest .time')).to_have_text('1:00.12')
+                    expect(page.locator('#latest .rank')).to_have_text('#1')
                     expect(page.locator('#latest')).to_have_class(re.compile('flash'))
                     expect(page.locator('tr[data-bib="1"]')).to_have_class(re.compile('flash'))
                     page.wait_for_timeout(8000)
                     expect(page.locator('tr[data-bib="1"]')).to_have_class(re.compile('flash'), timeout=100)
                     expect(page.locator('#latest')).not_to_have_class(re.compile('flash'), timeout=5000)
-                    expect(page.locator('#course')).to_have_text('On course · —')
+                    expect(page.locator('#track li.oncourse')).to_have_count(0)
                 if kind == 'DNS':
-                    expect(page.locator('#latest')).to_contain_text('1:00.12')
+                    expect(page.locator('#latest .time')).to_have_text('1:00.12')
                 if kind == 'DNF':
                     # A DNF is the latest outcome too, shown with its status and highlighted.
-                    expect(page.locator('#latest')).to_have_text('Last · 3 TEST3 Synthetic · DNF')
+                    expect(page.locator('#latest .bib')).to_have_text('3')
+                    expect(page.locator('#latest .time')).to_have_text('DNF')
+                    expect(page.locator('#latest .rank')).to_have_text('')
                     expect(page.locator('#latest')).to_have_class(re.compile('out.*flash|flash.*out'))
             expect(page.locator('tr[data-bib="1"] td').nth(5)).to_contain_text('0:21.34')
             expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('1:00.12')
             # A DNS marked ahead of time is not a start: the next racers are those after the last one who started.
-            expect(page.locator('#next .item')).to_have_text([re.compile(r'^5 TEST5'), re.compile(r'^6 TEST6')])
+            expect(page.locator('#track li.next .bib')).to_have_text(['5', '6'])
             expect(page.locator('#runCounts li')).to_have_text(['Run 1 6 starters · 1 finished · 1 DNS · 1 DNF · 1 DSQ · 2 to start'])
             # The viewer switches between cumulative intermediate times and sector times, each in its own column; the last
             # sector ends at the finish. The choice is remembered by this browser across a reload.
@@ -265,7 +287,7 @@ def main():
             assert not navigations, f'Updates caused page navigation: {navigations}'
             assert not failures, f'Browser errors: {failures}'
             browser.close()
-        print('PASS: offline responsive Chromium (desktop columns and two-line phone cells), nation flags/codes, next starters, race statistics, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ in the time column with a ten-second highlight, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
+        print('PASS: offline responsive Chromium (desktop columns and two-line phone cells), nation flags/codes (hidden for one nation, flag font where needed), start gate/on course/finish banner, race statistics, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ in the time column with a ten-second highlight, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
     finally:
         if process and process.poll() is None:
             process.kill()
