@@ -306,16 +306,14 @@ def upload_video(token, path, metadata, renew_token=None):
             stream.seek(offset)
             chunk = stream.read(UPLOAD_CHUNK)
             kind, value = put(chunk, f'bytes {offset}-{offset + len(chunk) - 1}/{size}')
-            if kind == 'error':
-                # The failed request may still have reached YouTube, so ask the session where it stands before resending.
+            while kind == 'error':
+                # The failed request may still have reached YouTube, so nothing is resent until the session says where it stands.
                 failures += 1
                 if failures > UPLOAD_RETRIES:
                     raise YouTubeError(f'Upload stopped at byte {offset} of {size} ({value}). YouTube may still have '
                                        'received the video: check YouTube Studio before uploading again.')
                 time.sleep(2 ** failures)
                 kind, value = put(b'', f'bytes */{size}')
-                if kind == 'error':
-                    continue
             if kind == 'done':
                 return value
             if value > offset:
@@ -455,7 +453,8 @@ def command_upload(args):
     print(f"Uploaded: https://www.youtube.com/watch?v={video['id']} ({video['status']['privacyStatus']}, "
           f"{video['status'].get('uploadStatus')})")
     if args.thumbnail:
-        upload_image(token, args.thumbnail, '/thumbnails/set', {'videoId': video['id']})
+        # A long upload may have outlived the first access token.
+        upload_image(access_token(), args.thumbnail, '/thumbnails/set', {'videoId': video['id']})
         print('Thumbnail set.')
 
 

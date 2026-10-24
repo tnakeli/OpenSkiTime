@@ -169,6 +169,18 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(result['id'], 'v1')
         self.assertEqual(tokens, [('Bearer old', 'bytes 0-9/10'), ('Bearer new', 'bytes */10'), ('Bearer new', 'bytes 0-9/10')])
 
+    def test_failed_status_query_is_retried_before_any_data_is_resent(self):
+        sent = []
+
+        def fake_urlopen(req, timeout=None):
+            sent.append(req.headers['Content-range'])
+            if len(sent) <= 2:
+                raise urllib.error.URLError('connection reset')
+            return io.BytesIO(b'{"id": "v1", "status": {}}')
+
+        self.assertEqual(self.upload(fake_urlopen)['id'], 'v1')
+        self.assertEqual(sent, ['bytes 0-9/10', 'bytes */10', 'bytes */10'])
+
     def test_persistent_failure_tells_operator_to_check_studio(self):
         def fake_urlopen(req, timeout=None):
             raise urllib.error.HTTPError(req.full_url, 500, 'Backend Error', {}, io.BytesIO(b'{"error": {"message": "Backend Error"}}'))
