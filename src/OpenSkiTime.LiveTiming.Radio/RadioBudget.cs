@@ -24,8 +24,11 @@ public static class RadioPrices
     [
         new(RadioProviders.Azure, "neural", 15m),
         new(RadioProviders.Google, "chirp3-hd", 30m),
-        // Gemini 2.5 Flash TTS: text input and audio output tokens, about 25 audio tokens per second (not confirmed from the price page).
-        new(RadioProviders.GoogleGemini, "gemini-2.5-flash-tts", 0m, 0.50m, 10m, 25),
+        // Gemini 3.8 Flash TTS: $1 / 1M text and $18 / 1M audio tokens (25 per second), the regular rates. The promotional
+        // half price until 2026-12-31 is not used, so the hard limit never undercounts once it ends.
+        new(RadioProviders.GoogleGemini, "gemini-3.8-flash-tts", 0m, 1m, 18m, 25),
+        // ElevenLabs Eleven v4: $0.08 per 1,000 characters (API pricing page, 2026-10-24).
+        new(RadioProviders.ElevenLabs, "eleven_v4", 80m),
         // gpt-4o-mini-tts bills text input and audio output tokens; audio is estimated at 21 tokens per second ($12/1M ≈ $0.015/min).
         new(RadioProviders.OpenAi, "gpt-4o-mini-tts", 0m, 0.60m, 12m, 21),
         new(RadioProviders.Simulation, "simulation", 0m)

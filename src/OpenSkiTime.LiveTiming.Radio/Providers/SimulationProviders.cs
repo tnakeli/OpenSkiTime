@@ -80,7 +80,8 @@ public static class RadioProviderFactory
         {
             RadioProviders.Azure => new AzureTts(key, configuration.TtsRegion),
             RadioProviders.Google => new GoogleTts(key),
-            RadioProviders.GoogleGemini => new GeminiCloudTts(key, "gemini-2.5-flash-tts"),
+            RadioProviders.GoogleGemini => new GeminiCloudTts(key, "gemini-3.8-flash-tts"),
+            RadioProviders.ElevenLabs => new ElevenLabsTts(key, "eleven_v4"),
             RadioProviders.OpenAi => new OpenAiTts(key),
             _ => new SimulationTts()
         };
