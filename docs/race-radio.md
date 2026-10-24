@@ -51,6 +51,10 @@ During a run, a racer on course who has not been featured in that run is talked 
 
 When nothing is waiting and the last speech ended long enough ago, the producer picks at most one source: **standings** (unofficial top three), **next_starter**, **on_course**, **run_summary**, **event_context** (operator background) or **general**. A hard code gate checks the phase allowlist and that a named racer is a participant in the right state (waiting to start, on course); a rejected choice is retried once with the failed source named, then the code picks a valid source deterministically. Before the start, between runs and during an interruption it speaks after 35 s of silence, so viewers waiting for the race keep hearing the hosts; after the race the interval is budget-aware: 60 s at the start, rising to 240 s as the budget is used. The producer stops 30 minutes after the race ends.
 
+#### Pauses in the race
+
+Course repairs and injured racers make the start interval grow. `RadioPause` treats a run in progress with nobody on course, racers still to start and no published change for 45 s as a pause, and so are the time between runs and an interruption; the pause length is the time since the snapshot's last update. During a pause two more producer sources are allowed: **recap** goes through the unofficial top five, or the top ten once the pause has lasted three minutes (combined standings from Run 2 on), and **banter** is light, warm humour between the hosts so that listeners do not get bored. Banter never jokes about a racer, never guesses why the race is paused (it may be an injury) and states no facts. The code gate refuses both outside a pause; without a language model the rotation during a pause is recap, banter, run summary and next starter, with fixed Finnish recap and banter lines. Both carry the condition that nobody is on course, so the next start makes the rest of the pause talk stale and the start is announced at once.
+
 ### Memories (RAM only)
 
 - **Topic memory:** model summaries (at most ten words) for two hours, at most 50, so hosts avoid repeating themselves.
@@ -242,7 +246,7 @@ Personas are defined in code (`RadioPersonas`): Aino, a calm and precise lead co
 
 | Recipient | Data sent | When |
 |---|---|---|
-| Language model (OpenAI or Google Gemini API) | Competition name, place, slope, discipline; per racer concerned and the current top three: bib, nation, club, status, run and total times, ranks and gaps, previous-run time and rank; counts; event kinds; the operator's event background and curation notes; recent topic summaries; generated script text (curation). **No names, birth years or FIS codes.** | Each dialogue, curation and producer call |
+| Language model (OpenAI or Google Gemini API) | Competition name, place, slope, discipline; per racer concerned and the current top three (top five or ten in a recap during a pause): bib, nation, club, status, run and total times, ranks and gaps, previous-run time and rank; counts; event kinds; the operator's event background and curation notes; recent topic summaries; generated script text (curation). **No names, birth years or FIS codes.** | Each dialogue, curation and producer call |
 | Speech provider (Azure, Google Cloud, Vertex AI, ElevenLabs or OpenAI) | The rendered Finnish line, which includes racer names (or the lexicon's spoken form), times, ranks and statuses | Each spoken line |
 | Live Timing Server (Local or Cloud) | Audio, clip metadata and conditions (bibs, run, rank/time/status values). No transcripts or names in metadata | Each clip |
 | Live Timing Server, then viewers | The music folder's MP3 files as they are (including any tags the files carry), without file names or the folder path | Once per server and session |

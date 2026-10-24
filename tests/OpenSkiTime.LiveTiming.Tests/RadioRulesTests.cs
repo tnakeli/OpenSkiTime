@@ -244,6 +244,62 @@ public sealed class RadioRulesTests
     }
 
     [Fact]
+    public void APauseInARunGetsARecapOfTheTopFiveThenTheTopTenAndLightTalkUntilTheRaceGoesOn()
+    {
+        // Twelve racers (fictional names); the first eleven have finished, ranked by bib, and the last one waits at the start.
+        var basic = RadioRace.Create();
+        string[] names = ["KALLIOLA", "PURONEN", "VAARANEN", "HONKALA", "RINTALA", "LAHTELA", "MÄKIOJA"];
+        LiveCompetitor[] more = [.. names.Select((name, i) => new LiveCompetitor(6 + i, name, "Testi", "FIN", "Rinneseura", ""))];
+        var state = basic with { Competitors = [.. basic.Competitors, .. more], Runs = [basic.Runs[0] with { StartOrder = [.. Enumerable.Range(1, 12)],
+            Results = [.. Enumerable.Range(1, 12).Select(b => new LiveResult(b, LiveStatus.Ready, null, null, null, RadioRace.Start))] }] };
+        state = Enumerable.Range(1, 11).Aggregate(state, (s, bib) => RadioRace.Set(s, bib, LiveStatus.Finished, 4800 + bib * 10));
+        var last = state.UpdatedAt;
+        // A normal start interval is no pause; 45 seconds without a start or finish is, and three minutes is a long one.
+        Assert.Null(RadioPause.Duration(state, last.AddSeconds(44)));
+        Assert.Equal(TimeSpan.FromSeconds(45), RadioPause.Duration(state, last.AddSeconds(45)));
+        Assert.Equal(TimeSpan.FromSeconds(61), RadioPause.Duration(state, last.AddSeconds(61)));
+        Assert.Equal(RadioPause.Recap, RadioPause.RecapSize(TimeSpan.FromSeconds(61)));
+        Assert.Equal(RadioPause.LongRecap, RadioPause.RecapSize(TimeSpan.FromMinutes(3)));
+        Assert.Equal(TimeSpan.FromMinutes(5), RadioPause.Duration(state, last.AddMinutes(5))); // Interrupted
+        // Somebody on course is no pause, however long the run takes.
+        var racing = RadioRace.Set(state, 12, LiveStatus.OnCourse, at: last.AddSeconds(5));
+        Assert.Null(RadioPause.Duration(racing, racing.UpdatedAt.AddMinutes(2)));
+        // Recap and banter only during a pause; the deterministic rotation offers them first.
+        var shortPause = RadioPause.Duration(state, last.AddSeconds(61));
+        Assert.Equal("the race is not paused", ProducerGate.Problem(new(ProducerSources.Recap, null, ""), state, RacePhase.RunInProgress, false));
+        Assert.Equal("the race is not paused", ProducerGate.Problem(new(ProducerSources.Banter, null, ""), state, RacePhase.RunInProgress, false));
+        Assert.Null(ProducerGate.Problem(new(ProducerSources.Recap, null, ""), state, RacePhase.RunInProgress, false, shortPause));
+        Assert.Equal(ProducerSources.Recap, ProducerGate.Deterministic(state, RacePhase.RunInProgress, 0, shortPause)!.Source);
+        Assert.Equal(ProducerSources.Banter, ProducerGate.Deterministic(state, RacePhase.RunInProgress, 1, shortPause)!.Source);
+        Assert.Equal(ProducerSources.Standings, ProducerGate.Deterministic(state, RacePhase.RunInProgress, 0)!.Source);
+        var producer = RadioPrompts.ProducerUser(state, RacePhase.RunInProgress, [ProducerSources.Recap], [], [], false, shortPause);
+        Assert.Contains("\"pause_seconds\":61", producer, StringComparison.Ordinal); Assert.Contains("\"recap_size\":5", producer, StringComparison.Ordinal);
+        // The top five in a short pause, the top ten after three minutes, best first.
+        var recap = ProducerGate.Event(new(ProducerSources.Recap, null, ""), state, last.AddSeconds(61), shortPause);
+        Assert.Equal([1, 2, 3, 4, 5], recap.Bibs);
+        var longRecap = ProducerGate.Event(new(ProducerSources.Recap, null, ""), state, last.AddMinutes(3), RadioPause.Duration(state, last.AddMinutes(3)));
+        Assert.Equal(Enumerable.Range(1, 10), longRecap.Bibs);
+        var facts = FactSheet.Build(state, longRecap.Bibs);
+        var rules = new LineRules(state, RadioPersonas.Hosts.Select(x => x.Name), "");
+        var lines = FinnishTemplates.Lines([longRecap], facts, 0);
+        Assert.Equal(5, lines.Count); // An opening line and the ten places, three per line.
+        Assert.All(lines, x => Assert.Null(RadioSlots.Problem(x.Text, facts, rules)));
+        Assert.Equal("Ensimmäisenä on Aada Lumivaara, toisena Veeti Hankiranta ja kolmantena Saga Porttila.",
+            RadioSlots.Render(lines[1].Text, facts, FinnishVerbalizer.Lexicon("")));
+        // Banter states no facts and passes the same validation as every other line.
+        for (var seed = 0; seed < 3; seed++)
+        {
+            var banter = FinnishTemplates.Lines([ProducerGate.Event(new(ProducerSources.Banter, null, ""), state, last.AddSeconds(61), shortPause)], facts, seed);
+            Assert.Equal(2, banter.Count);
+            Assert.All(banter, x => Assert.Null(RadioSlots.Problem(x.Text, facts, rules)));
+        }
+        // The next start ends the pause talk: its clips go stale, so the start is announced at once.
+        var condition = Assert.Single(recap.Conditions);
+        Assert.True(RadioPlayback.Holds(state, condition));
+        Assert.False(RadioPlayback.Holds(racing, condition));
+    }
+
+    [Fact]
     public void MemoriesExpireAndEvictByRelevance()
     {
         var now = RadioRace.Start;

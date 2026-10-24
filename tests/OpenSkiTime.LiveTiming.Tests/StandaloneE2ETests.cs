@@ -136,6 +136,47 @@ public sealed class StandaloneE2ETests
         Assert.Equal(LiveStatus.OnCourse,(await ReceiveState(socket))!.Runs.Single(r => r.Number == 2).Results.Single(r => r.Bib == 5).Status);
     }
     [Fact]
+    public async Task PublisherReportsServerLoadWithViewersResponseTimesAndResourcesToTheOperatorOnly()
+    {
+        await using var server = new ServerProcess(); await server.Start();
+        await using var publisher = new PublisherProcess();
+        var state = SyntheticRace.Create(6); publisher.Offer(state);
+        await publisher.StartAsync(ProcessFixture.Artifact("Worker"),new PublisherOptions(PublisherKind.Cloud, server.Endpoint, PublisherKey: server.PublisherKey),ProcessFixture.Host);
+        await ProcessFixture.Until(() => publisher.Health.State == PublisherState.Running);
+        var session = publisher.ResumeSession!;
+        using var http = new HttpClient { BaseAddress = new(server.Endpoint), Timeout = TimeSpan.FromSeconds(3) };
+        // The report describes the whole server: without the session's publisher token it is refused.
+        Assert.Equal(HttpStatusCode.Unauthorized,(await http.GetAsync($"api/sessions/{session.SessionId}/stats")).StatusCode);
+        using var first = await Watch(http,session.SessionId); Assert.NotNull(await ReceiveState(first));
+        using var second = await Watch(http,session.SessionId); Assert.NotNull(await ReceiveState(second));
+        // Fetched with the health check every five seconds, also while results keep coming.
+        for (var i = 1; i <= 3; i++) { state = SyntheticRace.Update(state,i,LiveStatus.OnCourse); publisher.Offer(state); await Task.Delay(400); }
+        await ProcessFixture.Until(() => publisher.Health.Server is { Viewers.Current: 2 });
+        var load = publisher.Health.Server!;
+        Assert.True(load.HasState); Assert.True(load.ServerViewers >= 2); Assert.Equal(2,load.Viewers.Max); Assert.Equal(60,load.Viewers.WindowMinutes);
+        Assert.True(load.Responses.Count > 0); Assert.InRange(load.Responses.AverageMs,0,load.Responses.MaxMs); Assert.InRange(load.Responses.P95Ms,0,load.Responses.MaxMs);
+        Assert.True(load.Resources.Processors > 0); Assert.InRange(load.Resources.CpuPercent,0,100);
+        Assert.True(load.Resources.WorkingSetBytes > 0); Assert.True(load.Resources.MemoryLimitBytes > 0);
+        Assert.NotNull(publisher.Health.RoundTripMs);
+        // A viewer who leaves is no longer counted now, but stays in the hour's highest count.
+        await first.CloseAsync(WebSocketCloseStatus.NormalClosure,null,CancellationToken.None);
+        await ProcessFixture.Until(() => publisher.Health.Server is { Viewers: { Current: 1, Max: 2 } });
+        // A server that lost the session's state says so in the report, and the publisher restores it.
+        await server.Kill(); await server.Start();
+        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+        {
+            while (true)
+            {
+                using var response = await http.GetAsync($"api/sessions/{session.SessionId}/state",timeout.Token);
+                if (response.IsSuccessStatusCode) { break; }
+                Assert.Equal(HttpStatusCode.NotFound,response.StatusCode); await Task.Delay(50,timeout.Token);
+            }
+        }
+        Assert.Equal(3,(await Read(http,session)).Runs[0].Results.Count(r => r.Status == LiveStatus.OnCourse));
+        await publisher.CommandAsync("stop"); await ProcessFixture.Until(() => publisher.Health.State == PublisherState.Stopped);
+        Assert.Null(publisher.Health.Server);
+    }
+    [Fact]
     public async Task ManagedLocalProcessWorksOfflineAndCoalescesBoundedSnapshots()
     {
         await using var publisher = new PublisherProcess();

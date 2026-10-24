@@ -25,6 +25,8 @@ builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<PublisherKeys>();
 builder.Services.AddSingleton<RadioBroadcaster>();
 builder.Services.AddHostedService<RadioMonitor>();
+builder.Services.AddSingleton<ServerStats>();
+builder.Services.AddHostedService<ServerStatsSampler>();
 builder.Services.AddSignalR(o => { o.MaximumReceiveMessageSize = 4096; o.MaximumParallelInvocationsPerClient = 1; })
     .AddJsonProtocol(o => { foreach (var c in LiveJson.Options.Converters) { o.PayloadSerializerOptions.Converters.Add(c); } });
 builder.Services.AddRateLimiter(o =>
@@ -53,6 +55,16 @@ _ = app.Services.GetRequiredService<SessionStore>(); // Fail before listening if
 _ = app.Services.GetRequiredService<PublisherKeys>(); // Fail before listening if publisher keys are missing or invalid.
 var audit = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(PublisherAudit.Category);
 if (trustForwardedFor) { app.UseForwardedHeaders(); }
+var serverStats = app.Services.GetRequiredService<ServerStats>();
+var clock = app.Services.GetRequiredService<TimeProvider>();
+app.Use(async (context, next) =>
+{
+    // Response times of requests that answer; a viewer's socket (or long poll) on the hub lasts as long as the viewer.
+    if (context.Request.Path.Equals("/live", StringComparison.OrdinalIgnoreCase)) { await next(context); return; }
+    var started = clock.GetTimestamp();
+    try { await next(context); }
+    finally { serverStats.Response(clock.GetElapsedTime(started)); }
+});
 app.Use(async (context, next) =>
 {
     context.Response.Headers.CacheControl = "no-store";
@@ -92,6 +104,9 @@ app.MapPut("/api/sessions/{id:guid}/state", async (Guid id, LiveSnapshot state, 
     await radio.SendAsync(id); // A new state can make queued radio clips stale.
     return Results.Ok();
 });
+// Operator load report for the publisher of this session; never public, as it describes the whole server.
+app.MapGet("/api/sessions/{id:guid}/stats", (Guid id, HttpContext context, SessionStore store, ServerStats stats) =>
+    Authorize(context, store, id) is null ? Results.Unauthorized() : Results.Ok(stats.Read(id, store.Read(id) is not null)));
 app.MapPost("/api/sessions/{id:guid}/events", async (Guid id, LiveEvent update, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio) =>
 {
     if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }

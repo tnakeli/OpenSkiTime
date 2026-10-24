@@ -8,6 +8,10 @@ public static class ProducerSources
     public const string RunSummary = "run_summary";
     public const string EventContext = "event_context";
     public const string General = "general";
+    /// <summary>During a pause: the unofficial top five, or the top ten once the pause is long.</summary>
+    public const string Recap = "recap";
+    /// <summary>During a pause: light humour between the hosts, so listeners do not get bored.</summary>
+    public const string Banter = "banter";
     public static readonly IReadOnlyDictionary<string, RacePhase[]> Phases = new Dictionary<string, RacePhase[]>(StringComparer.Ordinal)
     {
         [Standings] = [RacePhase.RunInProgress, RacePhase.BetweenRuns, RacePhase.Interrupted, RacePhase.AfterRace],
@@ -15,8 +19,42 @@ public static class ProducerSources
         [OnCourse] = [RacePhase.RunInProgress],
         [RunSummary] = [RacePhase.RunInProgress, RacePhase.BetweenRuns, RacePhase.Interrupted, RacePhase.AfterRace],
         [EventContext] = [RacePhase.BeforeStart, RacePhase.BetweenRuns, RacePhase.Interrupted, RacePhase.AfterRace],
-        [General] = [RacePhase.BeforeStart, RacePhase.RunInProgress, RacePhase.BetweenRuns, RacePhase.Interrupted, RacePhase.AfterRace]
+        [General] = [RacePhase.BeforeStart, RacePhase.RunInProgress, RacePhase.BetweenRuns, RacePhase.Interrupted, RacePhase.AfterRace],
+        [Recap] = [RacePhase.RunInProgress, RacePhase.BetweenRuns, RacePhase.Interrupted],
+        [Banter] = [RacePhase.RunInProgress, RacePhase.BetweenRuns, RacePhase.Interrupted]
     };
+    /// <summary>Sources that only a pause allows (see <see cref="RadioPause"/>).</summary>
+    public static readonly IReadOnlySet<string> PauseOnly = new HashSet<string>(StringComparer.Ordinal) { Recap, Banter };
+}
+
+/// <summary>
+/// A pause in the race: between runs, an interruption, or a run in progress with nobody on course and racers still to
+/// start, for example while the course is repaired or an injured racer is helped. Its length is the time since the last
+/// published change, measured like the interruption itself from the snapshot's update time. The hosts then recap the
+/// standings (the top ten once the pause is long) and keep listeners company, without guessing the cause.
+/// </summary>
+public static class RadioPause
+{
+    /// <summary>A normal start interval leaves the course empty for a few seconds only; 45 seconds without change is a pause.</summary>
+    public static readonly TimeSpan After = TimeSpan.FromSeconds(45);
+    public static readonly TimeSpan LongAfter = TimeSpan.FromMinutes(3);
+    public const int Recap = 5;
+    public const int LongRecap = 10;
+    public static TimeSpan? Duration(LiveSnapshot state, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var quiet = now - state.UpdatedAt;
+        if (quiet < After) { return null; }
+        var run = state.Runs.First(x => x.Number == state.CurrentRun);
+        LiveStatus Status(int bib) => run.Results.FirstOrDefault(x => x.Bib == bib)?.Status ?? LiveStatus.Ready;
+        return RacePhases.Derive(state, now) switch
+        {
+            RacePhase.BetweenRuns or RacePhase.Interrupted => quiet,
+            RacePhase.RunInProgress when run.StartOrder.All(x => Status(x) != LiveStatus.OnCourse) && run.StartOrder.Any(x => Status(x) == LiveStatus.Ready) => quiet,
+            _ => null
+        };
+    }
+    public static int RecapSize(TimeSpan pause) => pause >= LongAfter ? LongRecap : Recap;
 }
 
 public sealed record ProducerDecision(string Source, int? Bib, string Instruction);
@@ -28,11 +66,12 @@ public sealed record ProducerDecision(string Source, int? Bib, string Instructio
 /// </summary>
 public static class ProducerGate
 {
-    public static string? Problem(ProducerDecision decision, LiveSnapshot state, RacePhase phase, bool hasContext)
+    public static string? Problem(ProducerDecision decision, LiveSnapshot state, RacePhase phase, bool hasContext, TimeSpan? pause = null)
     {
         ArgumentNullException.ThrowIfNull(decision); ArgumentNullException.ThrowIfNull(state);
         if (!ProducerSources.Phases.TryGetValue(decision.Source, out var phases)) { return "unknown source"; }
         if (!phases.Contains(phase)) { return "source not allowed in this phase"; }
+        if (ProducerSources.PauseOnly.Contains(decision.Source) && pause is null) { return "the race is not paused"; }
         if (decision.Instruction.Length > 300 || decision.Instruction.Any(char.IsControl)) { return "invalid instruction"; }
         var run = state.Runs.First(x => x.Number == state.CurrentRun);
         LiveStatus Status(int bib) => run.Results.FirstOrDefault(x => x.Bib == bib)?.Status ?? LiveStatus.Ready;
@@ -41,23 +80,27 @@ public static class ProducerGate
             ProducerSources.NextStarter => decision.Bib is { } next && run.StartOrder.FirstOrDefault(x => Status(x) == LiveStatus.Ready) == next && next != 0
                 ? null : "racer is not the next to start",
             ProducerSources.OnCourse => decision.Bib is { } racer && run.StartOrder.Contains(racer) && Status(racer) == LiveStatus.OnCourse ? null : "racer is not on course",
-            ProducerSources.Standings => Leaders(state).Length > 0 ? null : "no standings yet",
+            ProducerSources.Standings or ProducerSources.Recap => Leaders(state).Length > 0 ? null : "no standings yet",
             ProducerSources.RunSummary => run.Results.Any(x => x.Status != LiveStatus.Ready) ? null : "run has not started",
             ProducerSources.EventContext => hasContext ? null : "no operator context",
             _ => null
         };
     }
     /// <summary>Builds the event for an accepted decision with the racers it concerns.</summary>
-    public static RadioEvent Event(ProducerDecision decision, LiveSnapshot state, DateTimeOffset now)
+    public static RadioEvent Event(ProducerDecision decision, LiveSnapshot state, DateTimeOffset now, TimeSpan? pause = null)
     {
         ArgumentNullException.ThrowIfNull(decision); ArgumentNullException.ThrowIfNull(state);
         var run = state.CurrentRun;
-        int[] bibs = decision.Source == ProducerSources.Standings ? Leaders(state) : decision.Bib is { } bib ? [bib] : [];
+        int[] bibs = decision.Source == ProducerSources.Standings ? Leaders(state)
+            : decision.Source == ProducerSources.Recap ? Leaders(state, RadioPause.RecapSize(pause ?? TimeSpan.Zero))
+            : decision.Bib is { } bib ? [bib] : [];
         var current = state.Runs.First(x => x.Number == run);
         RadioCondition[] conditions = decision.Source switch
         {
             ProducerSources.NextStarter => [new(RadioConditionKind.NextStarter, run, bibs[0])],
             ProducerSources.OnCourse => [new(RadioConditionKind.Status, run, bibs[0], LiveStatus.OnCourse)],
+            // Pause talk ends when the race goes on: the next start makes the rest of it stale, so the start is said at once.
+            ProducerSources.Recap or ProducerSources.Banter => [new(RadioConditionKind.StatusCount, run, Status: LiveStatus.OnCourse, Value: 0)],
             // Standings of the previous run hold only until the first finish of this run changes them.
             ProducerSources.Standings when !current.Results.Any(x => x.Rank is not null || x.TotalRank is not null)
                 => [new(RadioConditionKind.StatusCount, run, Status: LiveStatus.Finished, Value: 0)],
@@ -66,28 +109,36 @@ public static class ProducerGate
         return new(RadioEventKind.Producer, 5, run, bibs, now, TimeSpan.FromSeconds(120), ProducerSources.Phases[decision.Source], conditions, 0)
         { Instruction = decision.Instruction, Source = decision.Source };
     }
-    /// <summary>Choice without a language model: rotate through the sources that the phase and data allow.</summary>
-    public static ProducerDecision? Deterministic(LiveSnapshot state, RacePhase phase, int turn)
+    /// <summary>
+    /// Choice without a language model: rotate through the sources that the phase and data allow. During a pause the
+    /// rotation is the recap, banter, the run summary and the next starter.
+    /// </summary>
+    public static ProducerDecision? Deterministic(LiveSnapshot state, RacePhase phase, int turn, TimeSpan? pause = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         var run = state.Runs.First(x => x.Number == state.CurrentRun);
         var next = run.StartOrder.FirstOrDefault(bib => (run.Results.FirstOrDefault(x => x.Bib == bib)?.Status ?? LiveStatus.Ready) == LiveStatus.Ready);
         var onCourse = run.Results.Where(x => x.Status == LiveStatus.OnCourse).OrderBy(x => x.StartedAt).Select(x => x.Bib).FirstOrDefault();
-        var candidates = new[]
+        var candidates = (pause is null ? new[]
         {
             new ProducerDecision(ProducerSources.Standings, null, ""), new ProducerDecision(ProducerSources.NextStarter, next == 0 ? null : next, ""),
             new ProducerDecision(ProducerSources.RunSummary, null, ""), new ProducerDecision(ProducerSources.OnCourse, onCourse == 0 ? null : onCourse, "")
-        }.Where(x => Problem(x, state, phase, false) is null).ToArray();
+        } : new[]
+        {
+            new ProducerDecision(ProducerSources.Recap, null, ""), new ProducerDecision(ProducerSources.Banter, null, ""),
+            new ProducerDecision(ProducerSources.RunSummary, null, ""), new ProducerDecision(ProducerSources.NextStarter, next == 0 ? null : next, "")
+        }).Where(x => Problem(x, state, phase, false, pause) is null).ToArray();
         return candidates.Length == 0 ? null : candidates[Math.Abs(turn) % candidates.Length];
     }
-    internal static int[] Leaders(LiveSnapshot state)
+    /// <summary>The racers placed at most <paramref name="places"/> (ties included), best first.</summary>
+    internal static int[] Leaders(LiveSnapshot state, int places = 3)
     {
         var run = state.Runs.First(x => x.Number == state.CurrentRun);
         var totals = run.Number > 1 && run.Results.Any(x => x.TotalRank is not null);
-        var leaders = run.Results.Where(x => (totals ? x.TotalRank : x.Rank) is <= 3).OrderBy(x => totals ? x.TotalRank : x.Rank).Select(x => x.Bib).ToArray();
+        var leaders = run.Results.Where(x => (totals ? x.TotalRank : x.Rank) <= places).OrderBy(x => totals ? x.TotalRank : x.Rank).ThenBy(x => x.Bib).Select(x => x.Bib).ToArray();
         // Between runs the new run has no times yet; the standings are those of the run before.
         if (leaders.Length == 0 && state.Runs.FirstOrDefault(x => x.Number == run.Number - 1) is { } previous)
-        { leaders = previous.Results.Where(x => (x.TotalRank ?? x.Rank) is <= 3).OrderBy(x => x.TotalRank ?? x.Rank).Select(x => x.Bib).ToArray(); }
+        { leaders = previous.Results.Where(x => (x.TotalRank ?? x.Rank) <= places).OrderBy(x => x.TotalRank ?? x.Rank).ThenBy(x => x.Bib).Select(x => x.Bib).ToArray(); }
         return leaders;
     }
 }

@@ -114,9 +114,32 @@ public sealed class StandalonePublisher : IDisposable
         }
         _sent = snapshot;
     }
+    /// <summary>The server's latest load report and the round trip of the request that fetched it.</summary>
+    public LiveServerStats? Stats { get; private set; }
+    public int? RoundTripMs { get; private set; }
+    /// <summary>False once the server answered that it has no load report (a server older than the report); never retried.</summary>
+    public bool StatsSupported { get; private set; } = true;
     /// <summary>Returns false when the server no longer holds this session's state and needs the full snapshot again.</summary>
     public async Task<bool> HealthAsync(CancellationToken ct)
     {
+        if (Session is not null && StatsSupported)
+        {
+            // The load report also says whether the session's state is still there, without downloading the state.
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            using var report = await SendAsync(token => _http.GetAsync($"api/sessions/{Session.SessionId}/stats", token), ct);
+            _log($"Server stats HTTP {(int)report.StatusCode}");
+            if (report.StatusCode != HttpStatusCode.NotFound)
+            {
+                Ensure(report);
+                LiveServerStats? stats;
+                try { stats = await report.Content.ReadFromJsonAsync<LiveServerStats>(LiveJson.Options, ct); }
+                catch (JsonException) { throw new IOException("Invalid server stats response."); }
+                if (stats?.Viewers is null || stats.Responses is null || stats.Resources is null) { throw new IOException("Invalid server stats response."); }
+                Stats = stats; RoundTripMs = (int)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                return stats.HasState;
+            }
+            StatsSupported = false; Stats = null; RoundTripMs = null;
+        }
         var path = Session is null ? "health" : $"api/sessions/{Session.SessionId}/state";
         using var response = await SendAsync(token => _http.GetAsync(path, token), ct);
         _log($"Server health HTTP {(int)response.StatusCode}");
@@ -140,7 +163,7 @@ public sealed class StandalonePublisher : IDisposable
         using var response = await SendAsync(token => _http.DeleteAsync(path, token), ct);
         _log($"Session deletion HTTP {(int)response.StatusCode}");
         Ensure(response);
-        Session = null; _sent = null; _http.DefaultRequestHeaders.Authorization = null;
+        Session = null; _sent = null; _http.DefaultRequestHeaders.Authorization = null; Stats = null; RoundTripMs = null;
     }
     // Every request gets the short timeout once the server has answered, and the wake timeout before that. A gateway
     // status (the ingress answering while no replica runs yet) or a failure returns to waking: after an outage the server

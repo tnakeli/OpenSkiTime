@@ -8,6 +8,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-24
+
+Live protocol: 2
+
+### Added
+
+- Race page: the country flag beside each nation code (where the device draws flag emoji) with the country name as tooltip, the next two racers in the start gate, and race statistics under the results: racers, nations and clubs, and per run the starters, finished, DNS, DNF and DSQ. Racers by nation and by club open on click.
+- Phones get two-line cells (name over club, Run 1 over Run 2, total over difference) instead of a wide table that scrolls sideways.
+- Operator load report `GET /api/sessions/{id}/stats` (session token): viewers now and over the last hour, viewers on the whole server, response times, CPU, memory and queued work. The live timing control panel of the next OpenSkiTime release shows it for Local and Cloud. Compatible addition; live protocol stays 2.
+
+### Changed
+
+- Race page: no status column; DNS, DNF, DSQ and NPS are shown in the run's time column and a racer on course has the running time there. The latest finisher stays highlighted for ten seconds instead of six.
+
 ### Fixed
 
 - Race radio: the viewer no longer waits for a line of a conversation that the server already withdrew.

@@ -69,7 +69,8 @@ def main():
         request('PUT', f'/api/sessions/{sid}/state', state, token)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
-            context = browser.new_context(viewport={'width': 390, 'height': 844})
+            # A desktop viewer first; the phone layout is checked further down.
+            context = browser.new_context(viewport={'width': 1100, 'height': 844})
             # The browser may contact only this offline service.
             context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(base) else route.abort())
             # Viewer WebSockets pass through a proxy that can silence the server like a half-open connection after a revision swap.
@@ -93,8 +94,20 @@ def main():
             expect(page.locator('#results tr')).to_have_count(6)
             # No intermediate times yet: the column is removed rather than filled with dashes.
             expect(page.locator('#splitMode')).to_be_hidden()
-            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Finish', 'Difference'])
+            # No status column: a run's time column says DNS/DNF/DSQ and shows the running time on course.
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Finish', 'Difference'])
             expect(page.locator('tr[data-bib="1"] td')).to_have_count(7)
+            # The nation cell shows the code (with a flag where the platform draws flags) and names the country on hover.
+            expect(page.locator('tr[data-bib="1"] td.nation')).to_have_text(re.compile(r'FIN$'))
+            expect(page.locator('tr[data-bib="1"] td.nation')).to_have_attribute('title', 'Finland')
+            # The next two racers in the start gate are shown above the results.
+            expect(page.locator('#next .item')).to_have_text([re.compile(r'^1 TEST1 Synthetic .*FIN$'), re.compile(r'^2 TEST2 Synthetic .*FIN$')])
+            # Race statistics below the results; racers per nation and club open on demand.
+            expect(page.locator('#totals')).to_have_text('6 racers · 1 nation · 1 club')
+            expect(page.locator('#runCounts li')).to_have_text(['Run 1 6 starters · 0 finished · 0 DNS · 0 DNF · 0 DSQ · 6 to start'])
+            expect(page.locator('#nations')).to_be_hidden()
+            page.locator('#byNation summary').click()
+            expect(page.locator('#nations li')).to_have_text([re.compile(r'FIN Finland\s*6$')])
             # Forerunners show where they are (on course, at start) but never a time and never a results row.
             expect(page.locator('#forerunners')).to_be_hidden()
             state['version'] += 1
@@ -131,20 +144,26 @@ def main():
                     # Started 70 s ago, so the 1:00.12 finish lies before the later DNF, as on a real course.
                     result['startedAt'] = (now - datetime.timedelta(seconds=70)).isoformat().replace('+00:00', 'Z')
                 request('POST', f'/api/sessions/{sid}/events', {'version': state['version'], 'run': 1, 'kind': kind, 'result': result, 'at': state['updatedAt']}, token)
-                expect(page.locator(f'tr[data-bib="{bib}"] td').nth(4)).to_have_text(status)
+                expect(page.locator(f'tr[data-bib="{bib}"]')).to_have_class(re.compile(rf'(^|\s){status.lower()}(\s|$)'))
+                if status in ('DNS', 'DNF', 'DSQ'):
+                    expect(page.locator(f'tr[data-bib="{bib}"] td').nth(-2)).to_have_text(status)
                 if kind == 'CompetitorStarted':
-                    # The racer is listed on course with a running time that ticks between updates.
-                    expect(page.locator('#course .oncourse .who')).to_have_text(['TEST1 Synthetic'])
+                    # The racer is listed on course with a running time that ticks between updates, in the results too.
+                    expect(page.locator('#course .oncourse .who')).to_have_text([re.compile(r'^TEST1 Synthetic .*FIN$')])
+                    expect(page.locator('tr[data-bib="1"] td').nth(-2)).to_have_text(re.compile(r'^1:1\d\.\d$'))
+                    expect(page.locator('#next .item')).to_have_text([re.compile(r'^2 TEST2'), re.compile(r'^3 TEST3')])
                     clock = page.locator('#course .oncourse .clock')
                     expect(clock).to_have_text(re.compile(r'^1:1\d\.\d$'))
                     first = clock.inner_text(); page.wait_for_timeout(400)
                     assert clock.inner_text() != first, 'running time does not tick'
                 if kind == 'CompetitorFinished':
-                    # The new latest finisher is highlighted for a few seconds, in the banner and in the results.
+                    # The new latest finisher is highlighted for ten seconds, in the banner and in the results.
                     expect(page.locator('#latest')).to_have_text('Last finish · 1 TEST1 Synthetic · 1:00.12 · Rank 1')
                     expect(page.locator('#latest')).to_have_class(re.compile('flash'))
                     expect(page.locator('tr[data-bib="1"]')).to_have_class(re.compile('flash'))
-                    expect(page.locator('#latest')).not_to_have_class(re.compile('flash'), timeout=9000)
+                    page.wait_for_timeout(8000)
+                    expect(page.locator('tr[data-bib="1"]')).to_have_class(re.compile('flash'), timeout=100)
+                    expect(page.locator('#latest')).not_to_have_class(re.compile('flash'), timeout=5000)
                     expect(page.locator('#course')).to_have_text('On course · —')
                 if kind == 'DNS':
                     expect(page.locator('#latest')).to_contain_text('1:00.12')
@@ -154,13 +173,16 @@ def main():
                     expect(page.locator('#latest')).to_have_class(re.compile('out.*flash|flash.*out'))
             expect(page.locator('tr[data-bib="1"] td').nth(5)).to_contain_text('0:21.34')
             expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('1:00.12')
+            # A DNS marked ahead of time is not a start: the next racers are those after the last one who started.
+            expect(page.locator('#next .item')).to_have_text([re.compile(r'^5 TEST5'), re.compile(r'^6 TEST6')])
+            expect(page.locator('#runCounts li')).to_have_text(['Run 1 6 starters · 1 finished · 1 DNS · 1 DNF · 1 DSQ · 2 to start'])
             # The viewer switches between cumulative intermediate times and sector times, each in its own column; the last
             # sector ends at the finish. The choice is remembered by this browser across a reload.
-            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Intermediate 1', 'Finish', 'Difference'])
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Intermediate 1', 'Finish', 'Difference'])
             expect(page.locator('#splitMode button[data-mode="intermediate"]')).to_have_attribute('aria-pressed', 'true')
             page.locator('#splitMode button[data-mode="sector"]').click()
-            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Sector 1', 'Sector 2', 'Finish', 'Difference'])
-            expect(page.locator('tr[data-bib="1"] td')).to_have_text(['1', '1', 'TEST1 Synthetic', 'FIN / Test Club', 'Finished', '0:21.34', '0:38.78', '1:00.12', '+0:00.00'])
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Sector 1', 'Sector 2', 'Finish', 'Difference'])
+            expect(page.locator('tr[data-bib="1"] td')).to_have_text(['1', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '0:21.34', '0:38.78', '1:00.12', '+0:00.00'])
             page.reload()
             expect(page.locator('#connection')).to_have_text('Live')
             expect(page.locator('#splitMode button[data-mode="sector"]')).to_have_attribute('aria-pressed', 'true')
@@ -179,10 +201,10 @@ def main():
                 {'bib': 1, 'status': 'OnCourse', 'hundredths': None, 'rank': None, 'difference': None, 'at': '2026-10-02T11:02:00Z'}]})
             request('PUT', f'/api/sessions/{sid}/state', second, token)
             expect(page.locator('#runs button[aria-pressed="true"]')).to_have_text('Run 2')
-            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Run 1', 'Run 2', 'Total', 'Difference'])
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Run 1', 'Run 2', 'Total', 'Difference'])
             expect(page.locator('#results tr')).to_have_count(2)
-            expect(page.locator('tr[data-bib="5"] td')).to_have_text(['1', '5', 'TEST5 Synthetic', 'FIN / Test Club', 'Finished', '1:01.00', '0:59.00', '2:00.00', '+0:00.00'])
-            expect(page.locator('tr[data-bib="1"] td')).to_have_text(['—', '1', 'TEST1 Synthetic', 'FIN / Test Club', 'OnCourse', '1:00.12', '—', '—', '—'])
+            expect(page.locator('tr[data-bib="5"] td')).to_have_text(['1', '5', 'TEST5 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:01.00', '0:59.00', '2:00.00', '+0:00.00'])
+            expect(page.locator('tr[data-bib="1"] td')).to_have_text(['—', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:00.12', '—', '—', '—'])
             page.locator('#runs button', has_text='Run 1').click()
             expect(page.locator('#head th').nth(5)).to_have_text('Intermediate 1')
             # A run the viewer chose stays selected through updates while the current run is unchanged.
@@ -191,10 +213,24 @@ def main():
             expect(page.locator('#updated')).to_contain_text('Run 1')
             expect(page.locator('#runs button[aria-pressed="true"]')).to_have_text('Run 1')
             page.locator('#runs button', has_text='Run 2').click()
-            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation / club', 'Status', 'Run 1', 'Intermediate 1', 'Run 2', 'Total', 'Difference'])
+            expect(page.locator('#head th')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Run 1', 'Intermediate 1', 'Run 2', 'Total', 'Difference'])
             expect(page.locator('tr[data-bib="1"] td').nth(6)).to_have_text('0:20.50')
-            # The wider table scrolls inside its own container; the phone-width page never scrolls sideways.
+            expect(page.locator('#runCounts li')).to_have_text(['Run 1 6 starters · 2 finished · 1 DNS · 1 DNF · 1 DSQ · 1 to start',
+                                                               'Run 2 2 starters · 1 finished · 0 DNS · 0 DNF · 0 DSQ · 1 on course'])
+            # A phone gets two-line cells instead of the wide table: rank over bib, last name over first name and club,
+            # Run 1 over Run 2, total over difference. Neither the page nor the table scrolls sideways.
+            page.set_viewport_size({'width': 390, 'height': 844})
+            expect(page.locator('.table')).to_have_class(re.compile('compact'))
+            expect(page.locator('tr[data-bib="5"] td').first.locator('.line')).to_have_text(['1', '5'])
+            expect(page.locator('tr[data-bib="5"] td.name .line')).to_have_text(['TEST5', 'Synthetic', 'Test Club'])
+            expect(page.locator('tr[data-bib="5"] td.nation .code')).to_have_text('FIN')
+            expect(page.locator('tr[data-bib="5"] td.runs .line')).to_have_text(['1:01.00', '0:59.00'])
+            expect(page.locator('tr[data-bib="5"] td.result .line')).to_have_text(['2:00.00', '+0:00.00'])
+            expect(page.locator('tr[data-bib="1"] td.splits .line')).to_have_text(['0:20.50'])
             assert page.evaluate('document.documentElement.scrollWidth') <= 390
+            assert page.evaluate("(() => { const t = document.querySelector('.table'); return t.scrollWidth <= t.clientWidth; })()"), 'phone table scrolls sideways'
+            page.set_viewport_size({'width': 1100, 'height': 844})
+            expect(page.locator('.table')).not_to_have_class(re.compile('compact'))
             page.locator('#runs button', has_text='Run 1').click()
             request('PUT', f'/api/sessions/{sid}/state', state, token)
             expect(page.locator('#runs button')).to_have_count(1)
@@ -229,7 +265,7 @@ def main():
             assert not navigations, f'Updates caused page navigation: {navigations}'
             assert not failures, f'Browser errors: {failures}'
             browser.close()
-        print('PASS: offline responsive Chromium, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
+        print('PASS: offline responsive Chromium (desktop columns and two-line phone cells), nation flags/codes, next starters, race statistics, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ in the time column with a ten-second highlight, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
     finally:
         if process and process.poll() is None:
             process.kill()

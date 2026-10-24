@@ -51,7 +51,7 @@ button.radio[hidden] { display: none; }
 /* On course and the latest finisher of the current run. */
 .banner { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 0 0 6px; padding: 4px 8px; background: var(--info); border-left: 4px solid var(--accent-text); font-size: 14px; font-weight: 600; }
 .banner p { margin: 0; overflow-wrap: anywhere; }
-#course:empty, #latest[hidden], #forerunners[hidden] { display: none; }
+#course:empty, #next[hidden], #latest[hidden], #forerunners[hidden] { display: none; }
 #forerunners { font-weight: 500; color: var(--text-2); }
 /* On course: one racer per line with a running time. */
 #course { display: flex; gap: 2px 10px; align-items: baseline; }
@@ -61,10 +61,16 @@ button.radio[hidden] { display: none; }
 #course .oncourse .bib { text-align: right; font-variant-numeric: tabular-nums; }
 #course .oncourse .clock { text-align: right; font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; color: var(--accent-text); min-width: 4.5em; }
 #course .oncourse .clock.muted { font-size: 13px; font-weight: 500; color: var(--text-2); }
+/* The next racers in the start gate. */
+#next .label { margin-right: 8px; }
+#next .item + .item::before { content: "·"; margin: 0 8px; color: var(--text-2); }
+.flag { margin-right: 4px; font-weight: 400; }
 /* The latest finisher, highlighted for a few seconds when it changes; DNF/DSQ in the error colour. */
 #latest { padding: 0 6px; margin: 0 -6px; border-radius: 3px; transition: background-color .6s, box-shadow .6s; }
 #latest.out { color: var(--error); }
 #latest.flash, tr.flash td { background: var(--flash); box-shadow: inset 0 0 0 2px var(--flash-edge); }
+/* A racer on course: the running time in the results too. */
+td .clock { color: var(--accent-text); font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { #latest { transition: none; } }
 
 .table { overflow-x: auto; border-top: 1px solid var(--border); }
@@ -73,12 +79,35 @@ th { text-align: left; color: var(--text-2); background: var(--surface-head); fo
 th[hidden] { display: none; }
 td, th { padding: 7px 8px; border-bottom: 1px solid var(--line); line-height: 1.25; }
 td:first-child { font-weight: 700; }
-td:nth-child(3) { font-weight: 600; }
+td.name { font-weight: 600; }
+td.nation { white-space: nowrap; }
 .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 tr.oncourse { background: var(--selected); }
 tr.oncourse td:first-child { box-shadow: inset 4px 0 0 var(--accent-text); }
 tr.finished td:first-child { color: var(--accent-text); }
 .note { color: var(--text-2); font-size: 13px; }
+/* Phones: two or three lines per cell instead of a wide table (name over club, Run 1 over Run 2, total over difference). */
+.stack .line { display: block; }
+.compact th, .compact td { vertical-align: middle; }
+.compact td.name { font-weight: 400; overflow-wrap: anywhere; }
+.compact td.name .last { font-weight: 700; }
+.compact td.nation { text-align: center; }
+.compact td.nation .flag { margin: 0; font-size: 17px; }
+.compact td.result .line:first-child { font-weight: 700; }
+.compact .muted { color: var(--text-2); font-weight: 400; }
+
+/* Race statistics under the results; nations and clubs open on demand. */
+.summary { margin-top: 12px; padding: 6px 8px 8px; border-top: 1px solid var(--border); font-size: 14px; }
+.summary h2 { margin: 0 0 4px; font-size: 15px; }
+.summary p { margin: 0 0 4px; color: var(--text-2); }
+#runCounts { list-style: none; margin: 0 0 6px; padding: 0; }
+#runCounts li { padding: 2px 0; }
+.summary details { margin-top: 4px; }
+.summary details[hidden] { display: none; }
+.summary summary { cursor: pointer; font-weight: 600; color: var(--link); padding: 4px 0; }
+.groups { list-style: none; margin: 2px 0 6px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 18px; }
+.groups li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.groups .count { font-variant-numeric: tabular-nums; font-weight: 600; }
 #empty { color: var(--text-2); }
 
 #races { list-style: none; padding: 0; margin: 8px 0; border-top: 1px solid var(--line); }
@@ -97,6 +126,4 @@ footer { max-width: 1200px; margin: auto; padding: 12px 12px 24px; display: flex
   .controls { order: 2; }
   table { font-size: 14px; }
   td, th { padding: 6px 5px; }
-  td:nth-child(3) { min-width: 120px; }
-  td:nth-child(4) { min-width: 8.5em; }
 }
