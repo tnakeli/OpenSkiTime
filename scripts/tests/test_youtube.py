@@ -193,6 +193,17 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(self.upload(fake_urlopen)['id'], 'v1')
         self.assertEqual(sent, ['bytes 0-9/10', 'bytes */10'])
 
+    def test_session_without_progress_gives_up(self):
+        sent = []
+
+        def fake_urlopen(req, timeout=None):
+            sent.append(req.headers['Content-range'])
+            raise urllib.error.HTTPError(req.full_url, 308, 'Resume Incomplete', {}, io.BytesIO())
+
+        with self.assertRaisesRegex(youtube.YouTubeError, 'no progress'):
+            self.upload(fake_urlopen)
+        self.assertEqual(len(sent), youtube.UPLOAD_RETRIES + 1)
+
     def test_persistent_failure_tells_operator_to_check_studio(self):
         def fake_urlopen(req, timeout=None):
             raise urllib.error.HTTPError(req.full_url, 500, 'Backend Error', {}, io.BytesIO(b'{"error": {"message": "Backend Error"}}'))

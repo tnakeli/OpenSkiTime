@@ -302,26 +302,35 @@ def upload_video(token, path, metadata, renew_token=None):
             # Includes a connection closed mid-response and a truncated JSON body: the outcome is unknown.
             return 'error', str(getattr(error, 'reason', error)) or type(error).__name__
 
+    failures = 0
+
+    def back_off(offset, reason):
+        """Counts a failure or a response without progress; gives up after UPLOAD_RETRIES in a row."""
+        nonlocal failures
+        failures += 1
+        if failures > UPLOAD_RETRIES:
+            raise YouTubeError(f'Upload stopped at byte {offset} of {size} ({reason}). YouTube may still have '
+                               'received the video: check YouTube Studio before uploading again.')
+        time.sleep(2 ** failures)
+
     with open(path, 'rb') as stream:
-        offset, failures = 0, 0
+        offset = 0
         while True:
             stream.seek(offset)
             chunk = stream.read(UPLOAD_CHUNK)
             kind, value = put(chunk, f'bytes {offset}-{offset + len(chunk) - 1}/{size}')
             while kind == 'error':
                 # The failed request may still have reached YouTube, so nothing is resent until the session says where it stands.
-                failures += 1
-                if failures > UPLOAD_RETRIES:
-                    raise YouTubeError(f'Upload stopped at byte {offset} of {size} ({value}). YouTube may still have '
-                                       'received the video: check YouTube Studio before uploading again.')
-                time.sleep(2 ** failures)
+                back_off(offset, value)
                 kind, value = put(b'', f'bytes */{size}')
             if kind == 'done':
                 return value
             if value > offset:
                 failures = 0
+                print(f'  {value * 100 // size} % uploaded', flush=True)
+            else:
+                back_off(offset, 'no progress')
             offset = value
-            print(f'  {offset * 100 // size} % uploaded', flush=True)
 
 
 def upload_image(token, path, endpoint, params=None):
