@@ -16,6 +16,7 @@ const image = `${site}/assets/overview.png`;
 const shareImage = `${site}/assets/og-image.png`;
 // The videos play on YouTube. The page shows a local poster and links out, so no third-party content loads with the site.
 const video = { id: '5m10JrVdtv0', url: 'https://www.youtube.com/watch?v=5m10JrVdtv0', poster: 'demo-video.jpg', uploadDate: '2026-10-25', duration: 'PT2M31S', length: '2:31', name: 'OpenSkiTime demo: a two-run FIS slalom from entries to results', description: 'A complete two-run alpine slalom with 100 synthetic athletes, recorded from the running application: FIS calendar, Excel entries, FIS draw, simulated timing, a referee DSQ, Run 2 start order, live results, FIS XML and PDF reports.' };
+const editingVideo = { id: 'IBvZwUvbqHo', url: 'https://www.youtube.com/watch?v=IBvZwUvbqHo', poster: 'editing-video.jpg', uploadDate: '2026-10-25', duration: 'PT2M47S', length: '2:47', name: 'Editing competitors: copy & paste from a spreadsheet, undo, multi-edit and PDF | OpenSkiTime', description: 'Entry lists copied from LibreOffice Calc and pasted into the competitor grid with every new or changed value highlighted, a one-column club update, race entries, editing in the grid, undo, multi-row edits and entry-list PDFs. Synthetic athletes and clubs.' };
 const liveVideo = { id: 'W4O_gWhQhyM', url: 'https://www.youtube.com/watch?v=W4O_gWhQhyM', poster: 'live-radio-video.jpg', uploadDate: '2026-10-25', duration: 'PT1M', length: '1:00', name: 'OpenSkiTime live timing with AI race radio', description: 'The live timing control panel and radio settings, then the live race page with the course banner, a DNF and the first finish while two AI hosts comment in Finnish. Four synthetic racers and simulated timing.' };
 const radioCredit = 'https://wapice.com/insights/ai-radio-hosts-live-event-commentary/';
 // [source, route, language, full title, description]. Descriptions stay under 160 characters so search results show them whole.
@@ -100,6 +101,8 @@ const liveVideoText = {
 };
 const videoSection = (item, v) => `<div class="section-heading"><div><p class="eyebrow">${v.eyebrow}</p><h2>${v.heading}</h2></div><p>${v.intro}</p></div><figure class="product-shot"><div class="window-bar"><span></span><span></span><span></span><p>${v.bar}</p><b>${item.length}</b></div><a class="video-link" href="${item.url}"><img src="/assets/${item.poster}" width="1440" height="810" alt="${escape(v.alt)}" loading="lazy"><span class="play-button">${v.watch} <span aria-hidden="true">▶</span></span></a><figcaption>${v.caption}</figcaption></figure>${v.credit ? `<p class="small">${v.credit}</p>` : ''}`;
 const videoHtml = lang => videoSection(video, videoText[lang]);
+// The guide shows the editing tutorial as one of its figures, linking out to YouTube like the home page videos.
+const editingVideoHtml = `<figure><a class="video-link" href="${editingVideo.url}"><img src="/assets/${editingVideo.poster}" width="1440" height="810" alt="Play the competitor editing video on YouTube: pasted fictional entries highlighted in yellow in the competitor grid" loading="lazy"><span class="play-button">Watch on YouTube <span aria-hidden="true">▶</span></span></a><figcaption><b>Video · ${editingVideo.length}</b><span>Paste from a spreadsheet, edit, undo, multi-edit and entry-list PDFs. Opens YouTube; no sound.</span></figcaption></figure>`;
 const liveVideoHtml = lang => videoSection(liveVideo, liveVideoText[lang]);
 const faqHtml = lang => `<div class="faq">${faq[lang].map(([q, a]) => `<details><summary>${escape(q)}</summary><p>${escape(a)}</p></details>`).join('')}</div>`;
 // JSON-LD is a data block, not a script: browsers do not execute it and the CSP needs no script-src.
@@ -136,7 +139,9 @@ const subpage = (name, route, title, description) => ({
     ] },
     ...(name === 'guide' ? [{
       '@type': 'TechArticle', '@id': `${site}${route}#article`, headline: title, description, inLanguage: 'en', url: `${site}${route}`,
-      image: `${site}/assets/05-timing.png`, author: { '@type': 'Person', name: maintainer.name, url: maintainer.github },
+      image: `${site}/assets/05-timing.png`,
+      video: { '@type': 'VideoObject', '@id': `${site}${route}#editing-video`, name: editingVideo.name, description: editingVideo.description, inLanguage: 'en', thumbnailUrl: `${site}/assets/${editingVideo.poster}`, uploadDate: editingVideo.uploadDate, duration: editingVideo.duration, url: editingVideo.url, embedUrl: `https://www.youtube-nocookie.com/embed/${editingVideo.id}` },
+      author: { '@type': 'Person', name: maintainer.name, url: maintainer.github },
       about: { '@type': 'SoftwareApplication', '@id': `${site}/#software`, name: 'OpenSkiTime' },
       ...(lastmod(name) ? { dateModified: lastmod(name) } : {})
     }] : [])
@@ -147,12 +152,12 @@ await mkdir(path.join(output, 'assets'), { recursive: true });
 for (const name of ['site.css', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'robots.txt', 'staticwebapp.config.json', 'indexnow-key.txt']) {
   await copyFile(path.join(root, name), path.join(output, name));
 }
-for (const name of [video.poster, liveVideo.poster, 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png']) {
+for (const name of [video.poster, liveVideo.poster, editingVideo.poster, 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png']) {
   await copyFile(path.join(root, '..', 'docs', 'screenshots', name), path.join(output, 'assets', name));
 }
 for (const [name, route, lang, title, description] of pages) {
   const t = text[lang];
-  const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang)).replace('{{liveVideo}}', liveVideoHtml(lang));
+  const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang)).replace('{{liveVideo}}', liveVideoHtml(lang)).replace('{{editingVideo}}', editingVideoHtml);
   const translated = Object.values(alternates).includes(route);
   const head = [
     `<title>${escape(title)}</title>`,
