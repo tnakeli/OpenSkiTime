@@ -23,6 +23,12 @@ public sealed record LiveResult(int Bib, LiveStatus Status, long? Hundredths, in
     public long? TotalHundredths { get; init; }
     public int? TotalRank { get; init; }
     public long? TotalDifference { get; init; }
+    /// <summary>Structural equality: record equality compares the intermediates array by reference.</summary>
+    public static bool Equivalent(LiveResult a, LiveResult b)
+    {
+        ArgumentNullException.ThrowIfNull(a); ArgumentNullException.ThrowIfNull(b);
+        return a with { Intermediates = null } == b with { Intermediates = null } && a.Splits.SequenceEqual(b.Splits);
+    }
 }
 // A forerunner's progress through the run (at start, on course, finished, DNS/DNF). Deliberately no time.
 public sealed record LiveForerunner(string Letter, string LastName, string FirstName, string Nation, LiveStatus Status);

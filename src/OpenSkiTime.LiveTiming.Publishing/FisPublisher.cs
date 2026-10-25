@@ -28,7 +28,7 @@ public sealed class FisPublisher(IFisLiveTimingTransport transport, string passw
             {
                 var previous = _sent.Runs.FirstOrDefault(p => p.Number == r.Number);
                 return previous is null || previous.Results.Length != r.Results.Length
-                    || r.Results.Any(x => !previous.Results.Any(p => p.Bib == x.Bib && StandalonePublisher.Equivalent(p, x)));
+                    || r.Results.Any(x => !previous.Results.Any(p => p.Bib == x.Bib && LiveResult.Equivalent(p, x)));
             })
             || snapshot.Runs.Any(r => !_sent.Runs.Any(p => p.Number == r.Number && p.StartOrder.SequenceEqual(r.StartOrder)))
             || snapshot.Runs.Any(r => r.Results.Any(x => _sent.Runs.FirstOrDefault(p => p.Number == r.Number)?.Results.FirstOrDefault(p => p.Bib == x.Bib)?.Splits
@@ -61,7 +61,7 @@ public sealed class FisPublisher(IFisLiveTimingTransport transport, string passw
                 // change, also when only another racer's result moved them (in Run 2, the combined standings).
                 var finishes = FinishValues(snapshot, run);
                 var sentFinishes = FinishValues(_sent, sentRun);
-                var changes = run.Results.Where(r => !sentRun.Results.Any(p => p.Bib == r.Bib && StandalonePublisher.Equivalent(p, r))
+                var changes = run.Results.Where(r => !sentRun.Results.Any(p => p.Bib == r.Bib && LiveResult.Equivalent(p, r))
                     || finishes.GetValueOrDefault(r.Bib) != sentFinishes.GetValueOrDefault(r.Bib)).ToArray();
                 if (changes.Length == 0) { continue; }
                 await ActivateAsync(run.Number, ct);

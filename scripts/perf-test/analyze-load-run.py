@@ -40,7 +40,9 @@ for label in labels:
     folder = root / 'results' / label
     with gzip.open(folder / 'states.csv.gz', 'rt') as f:
         for r in csv.DictReader(f):
-            states.append((label, int(r['viewer']), int(r['version']), int(r['received_utc_ticks']), int(r['updated_utc_ticks']), int(r['bytes']), r['first'] == '1'))
+            # Files before viewer synchronization have no kind column: every row was a State message.
+            states.append((label, int(r['viewer']), int(r['version']), int(r['received_utc_ticks']), int(r['updated_utc_ticks']), int(r['bytes']), r['first'] == '1',
+                           r.get('kind') or 'State'))
     with gzip.open(folder / 'attempts.csv.gz', 'rt') as f:
         for r in csv.DictReader(f):
             attempts.append({'label': label, 'viewer': int(r['viewer']), 'started': int(r['started_utc_ticks']),
@@ -120,8 +122,9 @@ summary = {
     'first_attempt_failed': sum(1 for a in first_attempts if a['first'] is None),
     'failures': dict(failures),
     'updates': len(per_version), 'broadcast_messages': len(broadcast), 'initial_states': sum(1 for s in states if s[6]),
-    'null_states': sum(1 for s in states if s[2] < 0),
+    'null_states': sum(1 for s in states if s[2] < 0 and s[7] in ('State', 'Sync')),
     'megabytes': sum(s[5] for s in states) / 1e6,
+    'megabytes_by_kind': {k: sum(s[5] for s in states if s[7] == k) / 1e6 for k in sorted({s[7] for s in states})},
     'message_kb': dist([s[5] / 1000 for s in broadcast]),
     'reached_per_update': dist([len(xs) for xs in per_version.values()]),
     'spread_ms': dist(spread),

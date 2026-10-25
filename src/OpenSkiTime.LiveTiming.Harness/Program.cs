@@ -8,6 +8,7 @@ if (mode == "help")
 {
     Console.WriteLine("Modes: local|cloud <worker.dll> <endpoint> [server.dll]; fis-tcp|fis-https <endpoint> [count]. FIS password: OST_FIS_PASSWORD environment variable, never command line. Codex: OST_FIS_CODEX (default 9754). Press Ctrl+C to stop simulation.");
     Console.WriteLine("radio-race <llm> <model> <tts> <endpoint> <worker.dll> <radio-worker.dll> [racers] [music-folder]: a real-time synthetic two-run race with the race radio on a Cloud server for listening tests (fictional names; publisher and radio keys from Credential Manager; billed).");
+    Console.WriteLine("load-race <endpoint> [racers=100] [start-interval-seconds=6] [output-folder]: a real-time synthetic slalom for viewer load tests; publisher key from OST_LIVE_PUBLISHER_KEY. Restores the race after a server restart; Ctrl+C stops.");
     Console.WriteLine("radio-sample <openai|gemini|simulation|templates> <model> <azure|google|openai|simulation> <output-folder-outside-repository> [azure-region]: listening-test clips from a synthetic race. Keys come from Windows Credential Manager (Settings → Live timing); real providers are billed.");
     return 0;
 }
@@ -18,6 +19,12 @@ if (mode == "radio-race")
     if (args.Length < 7) { Console.Error.WriteLine("radio-race needs <llm> <model> <tts> <endpoint> <worker.dll> <radio-worker.dll> [racers] [music-folder]."); return 2; }
     return await RadioRace.RunAsync(args[1], args[2], args[3], args[4], args.Length > 7 ? int.Parse(args[7], System.Globalization.CultureInfo.InvariantCulture) : 30,
         args[5], args[6], args.Length > 8 ? args[8] : "", stop.Token);
+}
+if (mode == "load-race")
+{
+    if (args.Length < 2) { Console.Error.WriteLine("load-race needs <endpoint> [racers] [start-interval-seconds] [output-folder]."); return 2; }
+    return await LoadRace.RunAsync(args[1], args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 100,
+        args.Length > 3 ? double.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) : 6, args.Length > 4 ? args[4] : null, stop.Token);
 }
 if (mode == "radio-sample")
 {

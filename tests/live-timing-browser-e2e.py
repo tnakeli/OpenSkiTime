@@ -18,6 +18,9 @@ import datetime
 import urllib.request
 from playwright.sync_api import sync_playwright, expect
 
+# The last release of the race page before viewer synchronization (live.js speaking only Watch and State).
+LEGACY_PAGE = '89b5561'
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -31,8 +34,9 @@ def main():
         port = reserve.getsockname()[1]
     base = f'http://127.0.0.1:{port}'
     publisher_key = 'ost_pk_' + secrets.token_urlsafe(32)
+    # Sync beacons every 3 s instead of 30 s, so a lost last delta is repaired within the test's patience.
     env = dict(os.environ, LiveTiming__SigningKey=base64.b64encode(secrets.token_bytes(32)).decode(), Logging__LogLevel__Default='Warning',
-               LiveTiming__PublisherKeys='e2e:' + hashlib.sha256(publisher_key.encode()).hexdigest())
+               LiveTiming__PublisherKeys='e2e:' + hashlib.sha256(publisher_key.encode()).hexdigest(), LiveTiming__SyncBeaconSeconds='3')
     process = None
 
     def start():
@@ -73,13 +77,26 @@ def main():
             # A desktop viewer first; the phone layout is checked further down.
             context = browser.new_context(viewport={'width': 1100, 'height': 844})
             # The browser may contact only this offline service.
-            context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(base) else route.abort())
-            # Viewer WebSockets pass through a proxy that can silence the server like a half-open connection after a revision swap.
-            silent = {'on': False}
+            # While blocked, the page cannot reach the hub: SignalR negotiation fails as in a network outage.
+            blocked = {'on': False}
+            context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(base)
+                          and not (blocked['on'] and '/live/negotiate' in route.request.url) else route.abort())
+            # Viewer WebSockets pass through a proxy that can silence the server like a half-open connection after a revision
+            # swap, lose deltas, and drop the connection.
+            silent, drop, sockets = {'on': False}, {'Delta': 0}, []
 
             def proxy(ws):
                 upstream = ws.connect_to_server()
-                upstream.on_message(lambda message: None if silent['on'] else ws.send(message))
+                sockets.append((ws, upstream))
+
+                def relay(message):
+                    if silent['on']:
+                        return
+                    if drop['Delta'] and isinstance(message, str) and '"target":"Delta"' in message:
+                        drop['Delta'] -= 1
+                        return
+                    ws.send(message)
+                upstream.on_message(relay)
             context.route_web_socket(re.compile(r'/live\?'), proxy)
             page = context.new_page()
             failures = []
@@ -281,6 +298,25 @@ def main():
                     expect(page.locator('#latest')).to_have_class(re.compile('out.*flash|flash.*out'))
             expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(5)).to_contain_text('0:21.34')
             expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('1:00.12')
+            # Changes arrive as deltas. A lost last delta (nothing follows it) is found by the sync beacon and repaired
+            # with the complete state.
+            drop['Delta'] = 1
+            request('POST', f'/api/sessions/{sid}/pause', token=token)
+            page.wait_for_timeout(300)
+            assert drop['Delta'] == 0, 'the pause was not sent as a delta'
+            expect(page.locator('#course')).not_to_contain_text('Publishing stopped', timeout=100)
+            expect(page.locator('#course')).to_contain_text('Publishing stopped', timeout=15000)
+            # A lost delta followed by another is a gap: the next one does not fit, and the page asks for the state.
+            drop['Delta'] = 1
+            state['version'] += 1
+            request('PUT', f'/api/sessions/{sid}/state', state, token)
+            page.wait_for_timeout(300)
+            assert drop['Delta'] == 0, 'the resumed state was not sent as a delta'
+            expect(page.locator('#course')).to_contain_text('Publishing stopped', timeout=100)
+            state['version'] += 1
+            request('PUT', f'/api/sessions/{sid}/state', state, token)
+            expect(page.locator('#course')).not_to_contain_text('Publishing stopped', timeout=15000)
+            expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('1:00.12')
             # A DNS marked ahead of time is not a start: the next racers are those after the last one who started.
             expect(page.locator('#track li.next .bib')).to_have_text(['6', '5'])
             expect(page.locator('#runCounts li')).to_have_text(['Run 1 6 starters · 1 finished · 1 DNS · 1 DNF · 1 DSQ · 2 to start'])
@@ -386,6 +422,32 @@ def main():
             request('PUT', f'/api/sessions/{sid}/state', state, token)
             expect(page.locator('#course')).not_to_contain_text('Waiting for publisher')
             expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('1:00.12')
+            # A page opened before viewer synchronization keeps its old script across a server update: it subscribes
+            # without declaring synchronization and still gets the complete state after every change.
+            legacy = subprocess.run(['git', 'show', f'{LEGACY_PAGE}:src/OpenSkiTime.LiveTiming.Server/wwwroot/live.js'], cwd=root,
+                                    capture_output=True, text=True, encoding='utf-8')
+            legacy_checked = legacy.returncode == 0
+            if legacy_checked:
+                old = browser.new_context(viewport={'width': 1100, 'height': 844})
+                old.route('**/*', lambda route: route.continue_() if route.request.url.startswith(base) else route.abort())
+                old.route(re.compile(r'/live\.js$'), lambda route: route.fulfill(body=legacy.stdout, content_type='text/javascript'))
+                old_page = old.new_page()
+                old_page.on('pageerror', lambda error: failures.append(str(error)))
+                old_page.goto(base + '/r/' + sid)
+                expect(old_page.locator('#connection')).to_have_text('Live')
+                expect(old_page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('1:00.12')
+                state['version'] += 1
+                state['runs'][0]['forerunners'][0]['status'] = 'OnCourse'
+                request('PUT', f'/api/sessions/{sid}/state', state, token)
+                expect(old_page.locator('#forerunners')).to_contain_text('A FORERUNNER Synthetic: on course')
+                expect(page.locator('#forerunners')).to_contain_text('A FORERUNNER Synthetic: on course')
+                state['version'] += 1
+                state['runs'][0]['forerunners'][0]['status'] = 'Finished'
+                request('PUT', f'/api/sessions/{sid}/state', state, token)
+                expect(old_page.locator('#forerunners')).to_contain_text('A FORERUNNER Synthetic: finished')
+                old.close()
+            else:
+                print(f'NOTE: commit {LEGACY_PAGE} is not available; the page from before viewer synchronization was not checked.')
             # The front page lists the favorites with their results in every published race. Removing one there removes
             # it in the race page open in another tab too.
             front = context.new_page()
@@ -400,13 +462,26 @@ def main():
             expect(front.locator('#favorites')).to_be_hidden()
             expect(page.locator('tr[data-bib="2"] button.star')).to_have_attribute('aria-pressed', 'false')
             front.close()
+            # Deleted while the page was offline: on reconnecting it is told so and clears the results, instead of keeping
+            # them as waiting for the publisher.
+            blocked['on'] = True
+            for ws, upstream in sockets:
+                ws.close()
+                upstream.close()
+            expect(page.locator('#connection')).not_to_have_text('Live', timeout=10000)
             request('DELETE', f'/api/sessions/{sid}/data', token=token)
+            page.wait_for_timeout(1500)
+            expect(page.locator('#results tr')).to_have_count(6, timeout=100)
+            blocked['on'] = False
+            expect(page.locator('#connection')).to_have_text('Live', timeout=30000)
             expect(page.locator('#results tr')).to_have_count(0)
             expect(page.locator('#name')).to_have_text('Live timing unavailable')
+            expect(page.locator('#course')).to_have_text('Session ended')
             assert not navigations, f'Updates caused page navigation: {navigations}'
             assert not failures, f'Browser errors: {failures}'
             browser.close()
-        print('PASS: offline responsive Chromium (desktop columns and two-line phone cells), nation flags/codes (hidden for one nation, flag font where needed), start gate/on course/finish banner, race statistics with several nation and club filters, name/club/nation/bib search kept as filter chips and keeping focus through updates, favorite stars in local storage with a favorites-only filter and the front-page favorites list synced across tabs, live viewer count, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ in the time column with a ten-second highlight, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns, time ranks in brackets and the +/- places-gained column, and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
+        print('PASS: offline responsive Chromium (desktop columns and two-line phone cells), nation flags/codes (hidden for one nation, flag font where needed), start gate/on course/finish banner, race statistics with several nation and club filters, name/club/nation/bib search kept as filter chips and keeping focus through updates, favorite stars in local storage with a favorites-only filter and the front-page favorites list synced across tabs, live viewer count, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ in the time column with a ten-second highlight, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns, time ranks in brackets and the +/- places-gained column, and current-run following, stop/resume, updates as deltas with a lost last delta repaired by the sync beacon and a gap repaired by resync, silent-socket and process restart/self-reconnect/retained state/full resync, '
+              + ('a page from before viewer synchronization still updating, ' if legacy_checked else '') + 'deletion while the page was offline; zero refreshes or browser errors.')
     finally:
         if process and process.poll() is None:
             process.kill()

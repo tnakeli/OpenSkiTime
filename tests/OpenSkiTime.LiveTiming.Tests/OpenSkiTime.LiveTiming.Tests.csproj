@@ -9,6 +9,7 @@
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Radio/OpenSkiTime.LiveTiming.Radio.csproj" />
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.RadioWorker/OpenSkiTime.LiveTiming.RadioWorker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Worker/OpenSkiTime.LiveTiming.Worker.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" ReferenceOutputAssembly="false" />
+    <!-- Referenced for unit tests of the session store and its gates; process tests still start the built server. -->
+    <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj" />
   </ItemGroup>
 </Project>

@@ -43,6 +43,8 @@ public sealed class ServerStats(TimeProvider time)
         }
     }
     public int Viewers(Guid session) { lock (_gate) { return _viewers.GetValueOrDefault(session); } }
+    /// <summary>Every session some connection watches now, with or without stored state.</summary>
+    public IReadOnlyList<Guid> Watched() { lock (_gate) { return _viewers.Keys.ToArray(); } }
     private void Leave(Guid session)
     {
         if (_viewers.GetValueOrDefault(session) <= 1) { _viewers.Remove(session); } else { _viewers[session]--; }
