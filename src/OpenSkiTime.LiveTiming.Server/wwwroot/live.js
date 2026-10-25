@@ -273,13 +273,16 @@
     // An earlier run shows its time and run rank, or its status when the racer did not finish it.
     const earlierRun = x => !x ? '—' : x.status === 'Finished' ? ranked(time(x.hundredths), x.rank) : ['Ready', 'OnCourse'].includes(x.status) ? '—' : x.status;
     const difference = r => gap(r) == null ? '—' : '+' + time(gap(r));
-    // Places gained or lost since the previous run's standings (+/−, the FIS "Pr"), once the racer has a combined rank.
+    // Places gained or lost since the previous run's standings (+/−, the FIS "Pr"), once the racer has finished this run:
+    // from the provisional standing, which counts those ahead after the previous run who are still to come as ahead.
     const placesTitle = `Places gained or lost since Run ${run.number - 1}`;
+    const provisional = totals ? liveProvisionalRanks(next, run.number) : new Map();
     const placesGained = x => {
-      const change = livePositionChange(livePreviousRank(next, run.number, x.r.bib), x.r.status === 'Finished' ? x.r.totalRank : null);
+      const now = provisional.get(x.r.bib), change = livePositionChange(now?.previous, now?.rank);
       if (change == null) return '';
       const e = element('span', change > 0 ? 'pr up' : change < 0 ? 'pr down' : 'pr same', String(change));
-      e.title = change === 0 ? `Same place as after Run ${run.number - 1}` : `${Math.abs(change)} ${Math.abs(change) === 1 ? 'place' : 'places'} ${change > 0 ? 'up' : 'down'} since Run ${run.number - 1}`;
+      e.title = (change === 0 ? `Same place as after Run ${run.number - 1}` : `${Math.abs(change)} ${Math.abs(change) === 1 ? 'place' : 'places'} ${change > 0 ? 'up' : 'down'} since Run ${run.number - 1}`)
+        + (now.pending ? ` · provisional: ${now.pending} ${now.pending === 1 ? 'racer' : 'racers'} ahead after Run ${run.number - 1} still to come` : '');
       return e;
     };
     const nations = nationsShown, clubs = next.competitors.some(c => c.club);

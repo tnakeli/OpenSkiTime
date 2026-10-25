@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-25
+
+Live protocol: 2
+
+### Changed
+
+- Race page: **+/−** now follows the provisional standing during the run. Racers who were ahead after the previous run and are still to come count as ahead. So a racer passed by one of them keeps their value, one passed by someone from behind loses a place, and every finish or drop-out behind updates the value. When everyone has run it equals the final places gained.
+
 ## [0.8.0] - 2026-10-25
 
 Live protocol: 2
@@ -149,7 +157,8 @@ Live protocol: 1 (implicit)
 
 - First hosted deployment: public race list, responsive race view, publisher keys for session creation and `security.txt`.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.0...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.1...HEAD
+[0.8.1]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.0...live-v0.8.1
 [0.8.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.7.0...live-v0.8.0
 [0.7.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.6.0...live-v0.7.0
 [0.6.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.5.0...live-v0.6.0
