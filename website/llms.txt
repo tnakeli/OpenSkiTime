@@ -27,7 +27,8 @@ Key facts:
 
 ## Video
 
-- [Demo video on YouTube](https://www.youtube.com/watch?v=VgQcExvV3S0): a complete two-run FIS slalom with 100 synthetic athletes, from entries to live results, FIS XML and PDF reports (2:31, silent, English captions)
+- [Demo video on YouTube](https://www.youtube.com/watch?v=5m10JrVdtv0): a complete two-run FIS slalom with 100 synthetic athletes, from entries to live results, FIS XML and PDF reports (2:31, silent, English captions)
+- [Live timing video on YouTube](https://www.youtube.com/watch?v=W4O_gWhQhyM): the live timing control panel and the live race page with AI race radio commenting in Finnish (1:00, with sound, English captions). The race radio is inspired by Lassi's [AI radio hosts for live event commentary](https://wapice.com/insights/ai-radio-hosts-live-event-commentary/).
 
 ## Source and documentation
 
