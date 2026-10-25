@@ -13,6 +13,13 @@
   // The viewer's choice of intermediate or sector times is remembered in this browser only; storage may be unavailable.
   const splitModeKey = 'openskitime.live.splitMode';
   let splitMode = (() => { try { return localStorage.getItem(splitModeKey) === 'sector' ? 'sector' : 'intermediate'; } catch { return 'intermediate'; } })();
+  // Favorite racers stay in this browser's local storage only (see live-favorites.js); the results filter lasts for this page.
+  const favoritesKey = 'openskitime.live.favorites';
+  const loadFavorites = () => { try { return liveFavoritesParse(localStorage.getItem(favoritesKey)); } catch { return []; } };
+  let favorites = loadFavorites();
+  const saveFavorites = list => { favorites = list; try { localStorage.setItem(favoritesKey, JSON.stringify(list)); } catch { /* Kept for this page only. */ } };
+  const isFavorite = c => favorites.some(f => liveIsFavorite(f, c));
+  const filter = {text: '', chips: [], favorites: false};
   const gender = value => ({M:'Men', L:'Women', W:'Women', A:'Mixed'})[value] || '';
   // The connection state is shown in the race bar (and on the race list); a dot marks a live connection.
   const connection = text => document.querySelectorAll('[data-connection]').forEach(e => { e.textContent = text; e.dataset.state = text === 'Live' ? 'live' : 'waiting'; });
@@ -30,8 +37,49 @@
         li.append(a, meta); return li;
       }));
       get('empty').hidden = races.length > 0;
+      listedRaces = races; await loadFavoriteStates(); showFavorites();
     } catch { connection('Reconnecting'); }
     retry = setTimeout(list, 30000);
+  }
+  // The front page lists this browser's favorite racers with their results in every race published here. Race states are
+  // read only while there are favorites, with the race list every 30 seconds.
+  let listedRaces = [], raceStates = new Map();
+  async function loadFavoriteStates() {
+    if (favorites.length === 0) { raceStates = new Map(); return; }
+    const states = await Promise.all(listedRaces.map(r => fetch(`/api/sessions/${encodeURIComponent(r.sessionId)}/state`, {cache:'no-store'})
+      .then(x => x.ok ? x.json() : null).catch(() => null)));
+    raceStates = new Map(listedRaces.map((r, i) => [r.sessionId, states[i]]));
+  }
+  const outcome = r => r.status === 'Finished' ? time(r.hundredths) : ({Ready:'to start', OnCourse:'on course', Review:'checking'})[r.status] || r.status;
+  function showFavorites(focusIndex) {
+    get('favorites').hidden = favorites.length === 0;
+    get('favoriteList').replaceChildren(...favorites.map(f => {
+      const li = element('li'), who = element('div', 'who'), remove = element('button', 'star', '★');
+      remove.type = 'button'; remove.title = 'Remove from favorites'; remove.setAttribute('aria-pressed', 'true');
+      remove.setAttribute('aria-label', `Remove ${f.lastName} ${f.firstName} from favorites`);
+      remove.onclick = () => {
+        const index = favorites.findIndex(x => x.code === f.code && x.lastName === f.lastName && x.firstName === f.firstName);
+        saveFavorites(favorites.filter((_, i) => i !== index)); showFavorites(index);
+      };
+      who.append(remove, element('strong', '', `${f.lastName} ${f.firstName}`));
+      const details = [f.nation, f.club].filter(Boolean).join(' · ');
+      if (details) who.append(element('span', 'muted', details));
+      const entries = listedRaces.map(race => ({race, result: liveFavoriteResults(raceStates.get(race.sessionId), f)})).filter(e => e.result);
+      const races = element('ul', 'entries');
+      races.replaceChildren(...entries.map(({race, result}) => {
+        const entry = element('li'), a = element('a', '', race.name);
+        a.href = `/r/${encodeURIComponent(race.sessionId)}`;
+        const runs = result.runs.map(r => `Run ${r.number} ${outcome(r)}${r.status === 'Finished' && r.rank ? ` #${r.rank}` : ''}`);
+        if (result.total) runs.push(`Total ${time(result.total.hundredths)}${result.total.rank ? ` #${result.total.rank}` : ''}`);
+        entry.append(a, element('span', 'muted', [race.date, race.discipline, `Bib ${result.competitor.bib}`].filter(Boolean).join(' · ')),
+          element('span', 'runs', runs.join(' · ') || 'No runs yet'));
+        return entry;
+      }));
+      li.append(who, entries.length ? races : element('p', 'note', 'Not in a race published here right now.'));
+      return li;
+    }));
+    // After a removal, focus stays in the list: on the next favorite, or the previous one at the end.
+    if (focusIndex != null) { const stars = get('favoriteList').querySelectorAll('button.star'); stars[Math.min(focusIndex, stars.length - 1)]?.focus(); }
   }
   // One element with optional class and text.
   const element = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text != null) e.textContent = text; return e; };
@@ -88,9 +136,60 @@
     if (!Array.isArray(value)) { put(cell, value); return; }
     cell.classList.add('stack'); value.forEach(line => { const span = element('span', 'line'); put(span, line); cell.append(span); });
   };
+  // A favorite star or a statistics group keeps keyboard focus when it is redrawn.
+  const focusKey = () => { const e = document.activeElement; return e?.dataset?.focusKey ?? null; };
+  const restoreFocus = key => { if (key && document.activeElement?.dataset?.focusKey !== key) document.querySelector(`[data-focus-key="${CSS.escape(key)}"]`)?.focus({preventScroll: true}); };
+  // A star button for a racer, in its own first column of the results.
+  const star = c => {
+    const on = isFavorite(c), b = element('button', 'star', on ? '★' : '☆');
+    b.type = 'button'; b.dataset.bib = c.bib; b.dataset.focusKey = `star:${c.bib}`; b.setAttribute('aria-pressed', on);
+    b.setAttribute('aria-label', `Favorite ${c.lastName} ${c.firstName}`); b.title = on ? 'Remove from favorites' : 'Add to favorites';
+    return b;
+  };
+  // The filter chips beside the search, each removable; with several, one more removes them all.
+  const chipLabel = c => c.kind === 'text' ? `“${c.value}”` : c.kind === 'club' ? `Club: ${c.value}` : `Nation: ${liveNation(c.value).name}`;
+  function filterBar() {
+    get('favoritesOnly').setAttribute('aria-pressed', filter.favorites);
+    get('addFilter').hidden = !liveSearchText(get('search').value);
+    const chips = filter.chips.map((c, i) => {
+      const chip = element('button', 'chip', `${chipLabel(c)} ✕`);
+      chip.type = 'button'; chip.dataset.kind = c.kind; chip.dataset.value = c.value; chip.setAttribute('aria-label', `Remove filter ${chipLabel(c)}`);
+      chip.onclick = () => {
+        filter.chips = filter.chips.filter(x => x !== c); render(state);
+        // Focus moves to the next chip, or the search when none is left.
+        const rest = get('chips').querySelectorAll('.chip[data-value]');
+        (rest[Math.min(i, rest.length - 1)] || get('search')).focus({preventScroll: true});
+      };
+      return chip;
+    });
+    if (filter.chips.length > 1) {
+      const clear = element('button', 'chip clear', 'Clear all'); clear.type = 'button';
+      clear.onclick = () => { filter.chips = []; render(state); get('search').focus({preventScroll: true}); };
+      chips.push(clear);
+    }
+    get('chips').replaceChildren(...chips);
+  }
+  // The typed search becomes a filter chip (Enter or + Filter) and the search field is free for the next one.
+  function addSearch() {
+    if (!liveSearchText(get('search').value)) return;
+    filter.chips = liveFilterToggle(filter.chips.filter(c => !(c.kind === 'text' && c.value === liveSearchText(get('search').value))), 'text', get('search').value);
+    get('search').value = filter.text = ''; render(state); get('search').focus({preventScroll: true});
+  }
+  // Selecting a club or nation in the statistics adds it as a filter (selecting it again removes it) and brings the
+  // results into view.
+  function pick(kind, key) {
+    filter.chips = liveFilterToggle(filter.chips, kind, key); render(state);
+    const chip = [...get('chips').querySelectorAll('.chip')].find(c => c.dataset.kind === kind && c.dataset.value === key);
+    if (chip) {
+      get('filters').scrollIntoView({block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+      chip.focus({preventScroll: true});
+    }
+  }
   function render(next) {
     state = next;
+    const focused = focusKey();
     get('results').replaceChildren(); get('runs').replaceChildren();
+    get('filters').hidden = !next;
     if (!next) { liveRadio.update(id, null); get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('course').hidden = false; get('track').replaceChildren(); get('forerunners').hidden = true; get('summary').hidden = true; get('updated').textContent = ''; title(); return; }
     get('name').textContent = next.competition.name; title(next.competition.name);
     get('metadata').textContent = `${next.competition.place} · ${next.competition.discipline} · ${next.competition.date}`;
@@ -173,7 +272,9 @@
     const splitValues = x => liveSplitValues(x.r, splits, splitMode).map(time);
     // Each column: its heading (one entry per line of a stacked cell) and the value of a row {r: result, c: competitor,
     // before: earlier runs}. The last column ("result") leads with the time that decides the standings.
+    const favoriteColumn = {head: element('span', 'sr', 'Favorite'), className: 'fav', value: x => star(x.c)};
     const columns = compact ? [
+      favoriteColumn,
       {head: ['Rank', 'Bib'], value: x => [rank(x.r) || '—', {text: String(x.r.bib), className: 'muted'}]},
       {head: ['Name', 'Club'], className: 'name', value: x => [{text: x.c.lastName, className: 'last'}, x.c.firstName, ...(x.c.club ? [{text: x.c.club, className: 'muted'}] : [])]},
       ...(nations ? [{head: 'Nation', className: 'nation', value: x => [...nation(x.c.nation).childNodes], title: x => liveNation(x.c.nation).name}] : []),
@@ -182,6 +283,7 @@
         {head: ['Total', 'Difference'], num: true, className: 'result', value: x => [time(x.r.totalHundredths), difference(x.r)]}]
         : [{head: ['Time', 'Difference'], num: true, className: 'result', value: x => [runTime(x.r), difference(x.r)]}])
     ] : [
+      favoriteColumn,
       {head: 'Rank', value: x => rank(x.r) || '—'}, {head: 'Bib', value: x => x.r.bib},
       {head: 'Competitor', className: 'name', value: x => `${x.c.lastName} ${x.c.firstName}`},
       ...(nations ? [{head: 'Nation', className: 'nation', value: x => nation(x.c.nation), title: x => liveNation(x.c.nation).name}] : []),
@@ -192,12 +294,20 @@
       ...(later ? [{head: 'Total', num: true, value: x => time(x.r.totalHundredths)}] : []),
       {head: 'Difference', num: true, value: x => difference(x.r)}
     ];
-    get('head').replaceChildren(...columns.map(column => { const th = document.createElement('th'); if (column.num) th.className = 'num'; fill(th, column.head); return th; }));
+    get('head').replaceChildren(...columns.map(column => { const th = document.createElement('th'); if (column.num) th.className = 'num'; if (column.className === 'fav') th.classList.add('fav'); fill(th, column.head); return th; }));
     document.querySelector('.table').classList.toggle('compact', compact);
     const rows = liveResultOrder(run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'}), run.startOrder, rank);
-    rows.forEach(r => {
+    // The filter hides rows only; ranks and differences stay those of the whole race.
+    filterBar();
+    const shown = rows.filter(r => { const c = competitor(r.bib); return liveFilterMatch(c, filter, isFavorite(c)); });
+    get('matches').textContent = liveFilterActive(filter) ? `${shown.length} of ${rows.length} racers` : '';
+    if (shown.length === 0 && rows.length > 0) {
+      const tr = document.createElement('tr'), td = element('td', 'none', 'No racers match the filter.');
+      td.colSpan = columns.length; tr.append(td); get('results').append(tr);
+    }
+    shown.forEach(r => {
       const x = {r, c: competitor(r.bib), before: liveEarlierRuns(next, run.number, r.bib)}, tr = document.createElement('tr');
-      tr.dataset.bib = r.bib; tr.className = r.status.toLowerCase();
+      tr.dataset.bib = r.bib; tr.className = r.status.toLowerCase(); tr.classList.toggle('favorite', isFavorite(x.c));
       if (flashing && run.number === current.number && r.bib === last.bib) tr.classList.add('flash');
       columns.forEach(column => {
         const td = document.createElement('td'); if (column.num) td.classList.add('num'); if (column.className) td.classList.add(column.className);
@@ -207,6 +317,7 @@
       get('results').append(tr);
     });
     summary(next, nationsShown);
+    restoreFocus(focused);
   }
   // Race statistics under the results: racers, each run's outcome, and racers per nation and club, opened on demand. The
   // details elements stay in the page, so a list a viewer opened stays open across updates.
@@ -224,12 +335,21 @@
       return li;
     }));
     get('byNation').hidden = nations.length === 0; get('byClub').hidden = clubs.length === 0;
+    // Each group is a button that filters the results by it.
+    const group = (kind, key, label, count) => {
+      const li = document.createElement('li'), b = element('button', 'pick'), value = kind === 'nation' ? key.toUpperCase() : key;
+      b.type = 'button'; b.dataset.focusKey = `${kind}:${value}`; b.setAttribute('aria-pressed', filter.chips.some(c => c.kind === kind && c.value === value));
+      b.append(label, element('span', 'count', String(count))); b.onclick = () => pick(kind, value);
+      li.append(b); return li;
+    };
     get('nations').replaceChildren(...nations.map(g => {
-      const li = document.createElement('li'), name = element('span', 'group'); name.append(nation(g.key), ' ' + liveNation(g.key).name);
-      li.append(name, element('span', 'count', String(g.count))); return li;
+      const name = element('span', 'group'); name.append(nation(g.key), ' ' + liveNation(g.key).name);
+      return group('nation', g.key, name, g.count);
     }));
-    get('clubs').replaceChildren(...clubs.map(g => { const li = document.createElement('li'); li.append(element('span', 'group', g.key), element('span', 'count', String(g.count))); return li; }));
+    get('clubs').replaceChildren(...clubs.map(g => group('club', g.key, element('span', 'group', g.key), g.count)));
   }
+  // How many viewers watch this race now, this one included, as counted by the server; hidden while not connected.
+  const viewers = count => { const e = get('viewers'); e.hidden = !(count > 0); e.textContent = count > 0 ? `${count} watching live` : ''; };
   function schedule() {
     connection('Reconnecting'); clearTimeout(retry); waiting = true;
     // Exponential backoff with jitter spreads every viewer's reconnect after a service restart.
@@ -239,7 +359,7 @@
     if (socket !== closing) return; // Late events from an abandoned socket never start a second connection.
     socket = null; clearInterval(closing.keepAlive);
     // Without a connection there are no corrections or deletions: the radio stops until a fresh announcement arrives.
-    liveRadio.update(id, null);
+    liveRadio.update(id, null); viewers(0);
     closing.onopen = closing.onmessage = closing.onclose = closing.onerror = null;
     try { closing.close(); } catch { /* Already closed. */ }
     schedule();
@@ -260,6 +380,7 @@
           if (!raw) continue; const message = JSON.parse(raw);
           if (!handshaken) { if (message.error) { drop(current); return; } handshaken = true; attempt = 0; watchPending = true; connection('Live'); current.send(JSON.stringify({type:1,target:'Watch',arguments:[id],invocationId:'1'}) + '\u001e'); }
           else if (message.type === 1 && message.target === 'Radio') liveRadio.update(id, message.arguments[0]);
+          else if (message.type === 1 && message.target === 'Viewers') viewers(message.arguments[0]);
           else if (message.type === 1 && message.target === 'State') {
             // After a service restart the server is empty until the publisher restores it; keep showing the last results meanwhile.
             const next = message.arguments[0]; stale = watchPending && !next && !!state; watchPending = false;
@@ -281,6 +402,20 @@
     splitMode = b.dataset.mode;
     try { localStorage.setItem(splitModeKey, splitMode); } catch { /* Not remembered; the choice still applies now. */ }
     if (state) render(state);
+  });
+  get('search').addEventListener('input', () => { filter.text = get('search').value; if (state) render(state); });
+  get('search').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); addSearch(); } });
+  get('addFilter').onclick = addSearch;
+  get('favoritesOnly').onclick = () => { filter.favorites = !filter.favorites; if (state) render(state); };
+  get('results').addEventListener('click', event => {
+    const b = event.target.closest('button.star'), c = b && state?.competitors.find(x => x.bib === Number(b.dataset.bib));
+    if (c) { saveFavorites(liveFavoritesToggle(favorites, c)); render(state); }
+  });
+  // Favorites changed in another tab of this browser apply here too.
+  addEventListener('storage', event => {
+    if (event.key !== favoritesKey && event.key !== null) return;
+    favorites = loadFavorites();
+    if (id) { if (state) render(state); } else loadFavoriteStates().then(() => showFavorites());
   });
   // Running times on course (banner and results) tick between updates; only the clocks change, nothing else is redrawn.
   setInterval(() => { const now = Date.now(); document.querySelectorAll('.clock[data-origin]').forEach(e => { e.textContent = liveRunningTime(Number(e.dataset.origin), now); }); }, 100);
