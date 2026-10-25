@@ -7,7 +7,8 @@ namespace OpenSkiTime.LiveTiming.Server;
 public sealed class SessionStore
 {
     private sealed record Claims(Guid SessionId, long Expires);
-    private sealed record Entry(DateTimeOffset Expires, LiveSnapshot? State, RadioRoom? Radio = null);
+    // Generation and Revision identify the state for viewer synchronization; both are set whenever State is.
+    private sealed record Entry(DateTimeOffset Expires, LiveSnapshot? State, RadioRoom? Radio = null, string? Generation = null, long Revision = 0);
     // Race radio of one session: worker health and a RAM-only ring of clips. Removed with the session (delete, Delete All
     // Data, expiry); nothing is written to disk. Mutated only under the store lock.
     private sealed class RadioRoom
@@ -78,6 +79,20 @@ public sealed class SessionStore
     {
         lock (_gate) { Prune(); return _sessions.GetValueOrDefault(id)?.State; }
     }
+    /// <summary>
+    /// The session's state with its generation and revision, or its status without state: Deleted while a deletion marker
+    /// exists in this server's RAM, otherwise Awaiting (created but unpublished, not restored after a restart, or unknown).
+    /// </summary>
+    public LiveSyncState Sync(Guid id)
+    {
+        lock (_gate)
+        {
+            Prune();
+            if (_sessions.GetValueOrDefault(id) is { State: { } state, Generation: { } generation } entry)
+            { return new(LiveSessionStatus.Live, generation, entry.Revision, state); }
+            return new(_deleted.ContainsKey(id) ? LiveSessionStatus.Deleted : LiveSessionStatus.Awaiting, null, 0, null);
+        }
+    }
     public IReadOnlyList<LiveSessionSummary> List()
     {
         lock (_gate)
@@ -90,7 +105,7 @@ public sealed class SessionStore
                     x.State.Competition.Codex, x.State.UpdatedAt, x.State.Paused)).ToArray();
         }
     }
-    public void Replace(Guid id, DateTimeOffset expires, LiveSnapshot state)
+    public LiveChange Replace(Guid id, DateTimeOffset expires, LiveSnapshot state)
     {
         ArgumentNullException.ThrowIfNull(state);
         state.Validate(); // Complete validation precedes mutation.
@@ -99,11 +114,17 @@ public sealed class SessionStore
             Prune();
             if (_deleted.ContainsKey(id)) { throw new LiveValidationException("Session was deleted."); }
             if (!_sessions.ContainsKey(id) && _sessions.Count + _deleted.Count >= _capacity) { throw new LiveCapacityException(); }
+            var existing = _sessions.GetValueOrDefault(id);
+            // State created from nothing (first publish, or a restore after a server restart) starts a new generation.
+            var change = existing is { State: { } before, Generation: { } generation }
+                ? new LiveChange(generation, existing.Revision + 1, before, state)
+                : new LiveChange(Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8)), 1, null, state);
             // A full replacement keeps the session's radio, so a publisher resync never silences it.
-            _sessions[id] = _sessions.TryGetValue(id, out var existing) ? existing with { Expires = expires, State = state } : new(expires, state);
+            _sessions[id] = (existing ?? new(expires, null)) with { Expires = expires, State = state, Generation = change.Generation, Revision = change.Revision };
+            return change;
         }
     }
-    public LiveSnapshot Apply(Guid id, LiveEvent update)
+    public LiveChange Apply(Guid id, LiveEvent update)
     {
         ArgumentNullException.ThrowIfNull(update);
         lock (_gate)
@@ -130,18 +151,21 @@ public sealed class SessionStore
             var results = run.Results.Where(x => x.Bib != update.Result.Bib).Append(update.Result).OrderBy(x => x.Bib).ToArray();
             var next = state with { Version = update.Version, UpdatedAt = update.At,
                 Runs = state.Runs.Select(x => x.Number == run.Number ? x with { Results = results } : x).ToArray() };
-            _sessions[id] = entry! with { State = next };
-            return next;
+            _sessions[id] = entry! with { State = next, Revision = entry.Revision + 1 };
+            return new(entry.Generation!, entry.Revision + 1, state, next);
         }
     }
-    public LiveSnapshot? Pause(Guid id)
+    /// <summary>Marks published state paused; null when the session has no state, which leaves nothing to pause or send.</summary>
+    public LiveChange? Pause(Guid id)
     {
         lock (_gate)
         {
+            Prune();
             var entry = _sessions.GetValueOrDefault(id);
             if (entry?.State is not { } state) { return null; }
-            state = state with { Paused = true };
-            _sessions[id] = entry with { State = state }; return state;
+            var next = state with { Paused = true };
+            _sessions[id] = entry with { State = next, Revision = entry.Revision + 1 };
+            return new(entry.Generation!, entry.Revision + 1, state, next);
         }
     }
     public void Delete(Guid id, DateTimeOffset expires)
@@ -288,5 +312,7 @@ public sealed class SessionStore
         foreach (var id in _deleted.Where(x => x.Value <= now).Select(x => x.Key).ToArray()) { _deleted.Remove(id); }
     }
 }
+/// <summary>One accepted mutation: the new state, its generation and revision, and the state it replaced (null when new).</summary>
+public sealed record LiveChange(string Generation, long Revision, LiveSnapshot? Before, LiveSnapshot State);
 public sealed class LiveCapacityException : Exception;
 public sealed class LiveConflictException : Exception;

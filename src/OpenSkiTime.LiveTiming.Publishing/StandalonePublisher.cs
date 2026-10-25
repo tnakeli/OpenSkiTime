@@ -193,13 +193,8 @@ public sealed class StandalonePublisher : IDisposable
         after.Runs.SelectMany(run => run.Results.Where(r =>
         {
             var old = before.Runs.FirstOrDefault(x => x.Number == run.Number)?.Results.FirstOrDefault(x => x.Bib == r.Bib);
-            return old is null || !Equivalent(old, r);
+            return old is null || !LiveResult.Equivalent(old, r);
         }).Select(r => (run.Number, r))).ToArray();
-    public static bool Equivalent(LiveResult a, LiveResult b)
-    {
-        ArgumentNullException.ThrowIfNull(a); ArgumentNullException.ThrowIfNull(b);
-        return a with { Intermediates = null } == b with { Intermediates = null } && a.Splits.SequenceEqual(b.Splits);
-    }
     private static LiveEventKind EventKind(LiveResult r) => r.Status switch
     {
         LiveStatus.DNS => LiveEventKind.DNS, LiveStatus.DNF => LiveEventKind.DNF, LiveStatus.DSQ => LiveEventKind.DSQ,

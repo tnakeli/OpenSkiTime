@@ -2,13 +2,16 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Net;
 using System.Text;
+using System.Text.Json.Nodes;
 using OpenSkiTime.LiveTiming.LoadTest;
 
 // Usage: --origin <https://server> (--session <id> | --control <blob container SAS URL>) [--viewers 900] [--ramp-seconds 120]
-//        [--minutes 40] [--no-page] [--label <name>] [--output <folder>] [--whoami <URL answering with the caller's address>]
+//        [--minutes 40] [--no-page] [--legacy] [--label <name>] [--output <folder>] [--whoami <URL answering with the caller's address>]
+// --legacy subscribes like a page opened before viewer synchronization (Watch, a full State after every change).
 // With --control, several generators started ahead of the race wait for the blob session.txt (the session ID), stop when
 // the blob stop appears and upload their results under results/<label>/. Every run stops after --minutes or on
-// Ctrl+C/SIGTERM and then writes report.md, states.csv.gz and attempts.csv.gz.
+// Ctrl+C/SIGTERM, compares every viewer's final state with the server's state and then writes report.md, states.csv.gz and
+// attempts.csv.gz. It exits with 1 when a viewer's final state differs; stop the run only after the last publish.
 var options = new Dictionary<string, string>(StringComparer.Ordinal);
 for (var i = 0; i < args.Length; i++)
 {
@@ -20,7 +23,7 @@ var session = Guid.Empty;
 if (!options.TryGetValue("origin", out var originText) || !Uri.TryCreate(originText, UriKind.Absolute, out var origin)
     || (control is null && !(options.TryGetValue("session", out var sessionText) && Guid.TryParse(sessionText, out session))))
 {
-    Console.Error.WriteLine("Usage: --origin <https://server> (--session <id> | --control <container SAS URL>) [--viewers 900] [--ramp-seconds 120] [--minutes 40] [--no-page] [--label <name>] [--output <folder>] [--whoami <URL>]");
+    Console.Error.WriteLine("Usage: --origin <https://server> (--session <id> | --control <container SAS URL>) [--viewers 900] [--ramp-seconds 120] [--minutes 40] [--no-page] [--legacy] [--label <name>] [--output <folder>] [--whoami <URL>]");
     return 2;
 }
 int Number(string name, int fallback) => options.TryGetValue(name, out var v) ? int.Parse(v, CultureInfo.InvariantCulture) : fallback;
@@ -73,7 +76,9 @@ stop.CancelAfter(duration);
 var recorder = new LoadRecorder();
 var started = DateTime.UtcNow;
 Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{started:HH:mm:ss} {label}: {viewers} viewers on {origin} session {session}, ramp {ramp.TotalSeconds:0} s, at most {duration.TotalMinutes:0} min"));
+var legacy = options.ContainsKey("legacy");
 var tasks = new List<Task>();
+var simulated = new List<Viewer>();
 var status = Task.Run(async () =>
 {
     using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
@@ -82,7 +87,8 @@ var status = Task.Run(async () =>
 });
 for (var i = 0; i < viewers && !stop.IsCancellationRequested; i++)
 {
-    var viewer = new Viewer(i, origin, session, http, recorder, !options.ContainsKey("no-page"));
+    var viewer = new Viewer(i, origin, session, http, recorder, !options.ContainsKey("no-page"), legacy);
+    simulated.Add(viewer);
     tasks.Add(Task.Run(() => viewer.RunAsync(stop.Token)));
     try { await Task.Delay(ramp / viewers, stop.Token); }
     catch (OperationCanceledException) { }
@@ -92,8 +98,19 @@ await status;
 var ended = DateTime.UtcNow;
 Console.WriteLine(recorder.Status());
 
+// Every viewer must end at the authoritative state, field for field (source ticks included).
+// An unreachable server (for example an outage at the end) leaves nothing to compare; the results are still saved.
+JsonNode? authoritative = null;
+try
+{
+    using var response = await http.GetAsync(new Uri(origin, $"/api/sessions/{session}/state"));
+    if (response.IsSuccessStatusCode) { authoritative = JsonNode.Parse(await response.Content.ReadAsStringAsync()); }
+}
+catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { Console.WriteLine("Final state request failed: " + ex.GetType().Name); }
+var final = authoritative is null ? new FinalCheck(false, 0, 0, 0, null) : Compare(simulated, authoritative);
+Console.WriteLine(final.Available ? $"Final state: {final.Equal} equal, {final.Mismatched} different, {final.WithoutState} without state" : "Final state: not available");
 var run = recorder.Snapshot();
-var report = LoadReport.Markdown(run, origin, session, viewers, started, ended);
+var report = LoadReport.Markdown(run, origin, session, viewers, legacy, started, ended, final);
 var files = new Dictionary<string, byte[]>(StringComparer.Ordinal)
 {
     ["report.md"] = Encoding.UTF8.GetBytes(report),
@@ -118,7 +135,36 @@ if (control is not null)
         Console.WriteLine($"Uploaded {name}: {(int)response.StatusCode}");
     }
 }
-return 0;
+return final.Mismatched + final.WithoutState > 0 ? 1 : 0;
+
+static FinalCheck Compare(IEnumerable<Viewer> viewers, JsonNode authoritative)
+{
+    int equal = 0, different = 0, missing = 0; string? example = null;
+    foreach (var viewer in viewers)
+    {
+        if (viewer.Final is not { } shown) { missing++; continue; }
+        if (JsonNode.DeepEquals(shown, authoritative)) { equal++; continue; }
+        different++;
+        example ??= Difference(shown, authoritative, "$");
+    }
+    return new(true, equal, different, missing, example);
+}
+
+// The path and both values of the first difference between two JSON trees.
+static string Difference(JsonNode? shown, JsonNode? expected, string path)
+{
+    if (shown is JsonObject a && expected is JsonObject b)
+    {
+        foreach (var name in a.Select(x => x.Key).Union(b.Select(x => x.Key)))
+        { if (!JsonNode.DeepEquals(a[name], b[name])) { return Difference(a[name], b[name], path + "." + name); } }
+    }
+    if (shown is JsonArray x && expected is JsonArray y && x.Count == y.Count)
+    {
+        for (var i = 0; i < x.Count; i++) { if (!JsonNode.DeepEquals(x[i], y[i])) { return Difference(x[i], y[i], string.Create(CultureInfo.InvariantCulture, $"{path}[{i}]")); } }
+    }
+    static string Text(JsonNode? node) { var text = node?.ToJsonString() ?? "null"; return text.Length > 120 ? text[..120] + "…" : text; }
+    return $"{path}: viewer {Text(shown)}, server {Text(expected)}";
+}
 
 static byte[] Gzip(string text)
 {

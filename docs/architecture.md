@@ -50,7 +50,7 @@ All project names below have the `OpenSkiTime.` prefix. Source is under `src/`; 
 | `LiveTiming.Worker` | Separate process hosting publishing work. |
 | `LiveTiming.Radio` | Optional race radio: Finnish verbalization, slot validation, event detection, batching, producer, budget, prompts, engine and provider adapters. No timing, persistence or device dependency. See [race radio](race-radio.md). |
 | `LiveTiming.RadioWorker` | Separate process hosting the race radio, owned by the control panel like the publisher workers. |
-| `LiveTiming.Server` | ASP.NET Core REST/SignalR server, browser assets and bounded in-memory sessions. Runs locally or in a container. |
+| `LiveTiming.Server` | ASP.NET Core REST/SignalR server, browser assets and bounded in-memory sessions. Sends viewers each session's changes in revision order as server-computed deltas (see [viewer synchronization](live-timing.md#viewer-synchronization)). Runs locally or in a container. |
 | `LiveTiming.Harness` | Synthetic live integration/acceptance tooling. |
 | `LiveTiming.LoadTest` | Viewer load generator speaking the live page's SignalR protocol; see [viewer load test](perf-test/live-timing-load-test.md). |
 

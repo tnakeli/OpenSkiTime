@@ -2,7 +2,9 @@
 (() => {
   const id = location.pathname.split('/')[2];
   const get = name => document.getElementById(name);
-  let state, selectedRun, followedRun, socket, retry, attempt = 0, waiting = false, stale = false, watchPending = false;
+  // sync: what the current connection has shown so far (live-sync.js); stale: the server has no state and the last results
+  // stay; ended: the session was deleted.
+  let state, selectedRun, followedRun, socket, retry, attempt = 0, waiting = false, stale = false, ended = false, sync = null, lastResync = 0;
   // The latest finisher (or DNF/DSQ) is highlighted for ten seconds when it changes, not on the first view.
   const flashMs = 10000;
   let latestKey = null, flashUntil = 0, flashTimer;
@@ -190,7 +192,7 @@
     const focused = focusKey();
     get('results').replaceChildren(); get('runs').replaceChildren();
     get('filters').hidden = !next;
-    if (!next) { liveRadio.update(id, null); get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = 'Session ended or awaiting publisher'; get('course').hidden = false; get('track').replaceChildren(); get('forerunners').hidden = true; get('summary').hidden = true; get('updated').textContent = ''; title(); return; }
+    if (!next) { liveRadio.update(id, null); get('name').textContent = 'Live timing unavailable'; get('metadata').textContent = ''; get('course').textContent = ended ? 'Session ended' : 'Awaiting publisher'; get('course').hidden = false; get('track').replaceChildren(); get('forerunners').hidden = true; get('summary').hidden = true; get('updated').textContent = ''; title(); return; }
     get('name').textContent = next.competition.name; title(next.competition.name);
     get('metadata').textContent = `${next.competition.place} · ${next.competition.discipline} · ${next.competition.date}`;
     // A viewer may look at another run; when the race moves on to a new current run, every viewer follows it.
@@ -390,6 +392,22 @@
     try { closing.close(); } catch { /* Already closed. */ }
     schedule();
   }
+  const send = (current, message) => current.send(JSON.stringify(message) + '\u001e');
+  // One synchronization step on the current connection: draw again when the shown state or its status changed, and ask for
+  // the complete state after a random 0.5–5 s (at least 3 s after the previous request) when a gap was found, so that a
+  // server-side fault never makes every viewer ask at once.
+  function apply(current, step) {
+    if (socket !== current) return;
+    sync = step.sync;
+    if (step.show) { stale = sync.phase === 'awaiting' && !!sync.state; ended = sync.phase === 'deleted'; render(ended ? null : sync.state); }
+    if (step.resync) {
+      const delay = Math.max(500 + Math.random() * 4500, lastResync + 3000 - Date.now());
+      setTimeout(() => {
+        if (socket !== current || sync.connection !== current || sync.resyncSince == null) return;
+        lastResync = Date.now(); send(current, {type: 1, target: 'Resync', arguments: []});
+      }, delay);
+    }
+  }
   async function connect() {
     clearTimeout(retry); waiting = false;
     try {
@@ -404,14 +422,21 @@
         heard = Date.now(); pending += event.data; const messages = pending.split('\u001e'); pending = messages.pop();
         for (const raw of messages) {
           if (!raw) continue; const message = JSON.parse(raw);
-          if (!handshaken) { if (message.error) { drop(current); return; } handshaken = true; attempt = 0; watchPending = true; connection('Live'); current.send(JSON.stringify({type:1,target:'Watch',arguments:[id],invocationId:'1'}) + '\u001e'); }
+          if (!handshaken) {
+            if (message.error) { drop(current); return; }
+            handshaken = true; attempt = 0; sync = liveSyncConnect(sync, current); connection('Live');
+            send(current, {type: 1, target: 'WatchSync', arguments: [id, liveSyncVersion], invocationId: '1'});
+          }
           else if (message.type === 1 && message.target === 'Radio') liveRadio.update(id, message.arguments[0]);
           else if (message.type === 1 && message.target === 'Viewers') viewers(message.arguments[0]);
-          else if (message.type === 1 && message.target === 'State') {
-            // After a service restart the server is empty until the publisher restores it; keep showing the last results meanwhile.
-            const next = message.arguments[0]; stale = watchPending && !next && !!state; watchPending = false;
-            render(stale ? state : next);
-          }
+          // Every (re)subscription gets the complete state or an explicit status; after a service restart the server is
+          // empty until the publisher restores it, and the last results stay visible meanwhile.
+          else if (message.type === 1 && message.target === 'Sync') apply(current, liveSyncFull(sync, current, message.arguments[0]));
+          else if (message.type === 1 && message.target === 'Delta') apply(current, liveSyncDelta(sync, current, message.arguments[0], Date.now()));
+          else if (message.type === 1 && message.target === 'Beacon') apply(current, liveSyncBeacon(sync, current, message.arguments[0], Date.now()));
+          // An older server has no WatchSync: subscribe as earlier pages did and take its complete states.
+          else if (message.type === 3 && message.invocationId === '1' && message.error) send(current, {type: 1, target: 'Watch', arguments: [id], invocationId: '2'});
+          else if (message.type === 1 && message.target === 'State') apply(current, liveSyncLegacy(sync, current, message.arguments[0]));
           else if (message.type === 7) drop(current);
         }
       };

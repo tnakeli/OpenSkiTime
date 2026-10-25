@@ -3,15 +3,16 @@ using System.Text;
 
 namespace OpenSkiTime.LiveTiming.LoadTest;
 
-/// <summary>Thread-safe record of every connection and every received State message of a run, in UTC ticks.</summary>
+/// <summary>Thread-safe record of every connection and every received hub message of a run, in UTC ticks.</summary>
 public sealed class LoadRecorder
 {
     private readonly Lock _gate = new();
-    private readonly List<StateSample> _states = [];
+    private readonly List<MessageSample> _messages = [];
     private readonly List<ConnectionAttempt> _attempts = [];
     private readonly List<long> _pageLoads = [];
     private readonly Dictionary<string, int> _pageFailures = [];
     private readonly HashSet<ConnectionAttempt> _open = [];
+    private int _gaps, _resyncs;
 
     public ConnectionAttempt Begin(int viewer)
     {
@@ -24,7 +25,11 @@ public sealed class LoadRecorder
         ArgumentNullException.ThrowIfNull(attempt);
         lock (_gate) { attempt.EndedTicks = DateTime.UtcNow.Ticks; _open.Remove(attempt); }
     }
-    public void State(StateSample sample) { lock (_gate) { _states.Add(sample); } }
+    public void Message(MessageSample sample) { lock (_gate) { _messages.Add(sample); } }
+    /// <summary>A viewer found a gap, an unknown generation or a disagreeing beacon.</summary>
+    public void Gap() { lock (_gate) { _gaps++; } }
+    /// <summary>A viewer asked for the complete state.</summary>
+    public void Resync() { lock (_gate) { _resyncs++; } }
     public void PageLoaded(long ticks) { lock (_gate) { _pageLoads.Add(ticks); } }
     public void PageFailed(string reason)
     {
@@ -38,25 +43,28 @@ public sealed class LoadRecorder
         {
             var watching = _open.Count(x => x.FirstStateTicks is not null);
             var failed = _attempts.Count(x => x.Failure is not null);
-            var latest = _states.Count == 0 ? -1 : _states[^1].Version;
+            var latest = _messages.Where(x => x.Version >= 0).Select(x => x.Version).DefaultIfEmpty(-1).Last();
             return string.Create(CultureInfo.InvariantCulture,
-                $"{DateTime.UtcNow:HH:mm:ss} watching {watching}, opening {_open.Count - watching}, states {_states.Count}, latest version {latest}, failed connections {failed}, page loads {_pageLoads.Count} (failed {_pageFailures.Values.Sum()})");
+                $"{DateTime.UtcNow:HH:mm:ss} watching {watching}, opening {_open.Count - watching}, messages {_messages.Count}, latest version {latest}, gaps {_gaps}, resyncs {_resyncs}, failed connections {failed}, page loads {_pageLoads.Count} (failed {_pageFailures.Values.Sum()})");
         }
     }
 
     public LoadRun Snapshot()
     {
-        lock (_gate) { return new([.. _states], [.. _attempts], [.. _pageLoads], new(_pageFailures)); }
+        lock (_gate) { return new([.. _messages], [.. _attempts], [.. _pageLoads], new(_pageFailures), _gaps, _resyncs); }
     }
 }
 
-public sealed record LoadRun(StateSample[] States, ConnectionAttempt[] Attempts, long[] PageLoads, Dictionary<string, int> PageFailures)
+public sealed record LoadRun(MessageSample[] Messages, ConnectionAttempt[] Attempts, long[] PageLoads, Dictionary<string, int> PageFailures, int Gaps, int Resyncs)
 {
-    /// <summary>Raw samples for later analysis: one line per received State message.</summary>
+    /// <summary>Messages that carry race data or a status: State, Sync and Delta.</summary>
+    public IEnumerable<MessageSample> States => Messages.Where(x => x.Kind is "State" or "Sync" or "Delta");
+
+    /// <summary>Raw samples for later analysis: one line per received hub message (version -1 when it carries no race data).</summary>
     public string StatesCsv()
     {
-        var builder = new StringBuilder("viewer,version,received_utc_ticks,updated_utc_ticks,bytes,first\n");
-        foreach (var s in States) { builder.Append(CultureInfo.InvariantCulture, $"{s.Viewer},{s.Version},{s.ReceivedTicks},{s.UpdatedTicks},{s.Bytes},{(s.First ? 1 : 0)}\n"); }
+        var builder = new StringBuilder("viewer,version,received_utc_ticks,updated_utc_ticks,bytes,first,kind\n");
+        foreach (var s in Messages) { builder.Append(CultureInfo.InvariantCulture, $"{s.Viewer},{s.Version},{s.ReceivedTicks},{s.UpdatedTicks},{s.Bytes},{(s.First ? 1 : 0)},{s.Kind}\n"); }
         return builder.ToString();
     }
 

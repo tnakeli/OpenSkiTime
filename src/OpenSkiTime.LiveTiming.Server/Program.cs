@@ -22,6 +22,8 @@ builder.Logging.AddFilter(PublisherAudit.Category, LogLevel.Information);
 builder.Services.Configure<JsonOptions>(o => { foreach (var c in LiveJson.Options.Converters) { o.SerializerOptions.Converters.Add(c); } });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SessionStore>();
+builder.Services.AddSingleton<LiveFeed>();
+builder.Services.AddHostedService<LiveBeacon>();
 builder.Services.AddSingleton<PublisherKeys>();
 builder.Services.AddSingleton<RadioBroadcaster>();
 builder.Services.AddHostedService<RadioMonitor>();
@@ -99,29 +101,28 @@ app.MapPost("/api/sessions", (HttpContext context, SessionStore store, Publisher
     return Results.Ok(session);
 }).RequireRateLimiting("creation");
 app.MapGet("/api/sessions/{id:guid}/state", (Guid id, SessionStore store) => store.Read(id) is { } state ? Results.Ok(state) : Results.NotFound());
-app.MapPut("/api/sessions/{id:guid}/state", async (Guid id, LiveSnapshot state, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio) =>
+// Viewers get every accepted change in revision order (LiveFeed): a delta when it can represent the change, else the state.
+app.MapPut("/api/sessions/{id:guid}/state", async (Guid id, LiveSnapshot state, HttpContext context, SessionStore store, LiveFeed feed, RadioBroadcaster radio) =>
 {
     if (Authorize(context, store, id) is not { } expires) { return Results.Unauthorized(); }
-    store.Replace(id, expires, state);
-    await hub.Clients.Group(id.ToString()).SendAsync("State", state);
+    await feed.PublishAsync(id, () => store.Replace(id, expires, state));
     await radio.SendAsync(id); // A new state can make queued radio clips stale.
     return Results.Ok();
 });
 // Operator load report for the publisher of this session; never public, as it describes the whole server.
 app.MapGet("/api/sessions/{id:guid}/stats", (Guid id, HttpContext context, SessionStore store, ServerStats stats) =>
     Authorize(context, store, id) is null ? Results.Unauthorized() : Results.Ok(stats.Read(id, store.Read(id) is not null)));
-app.MapPost("/api/sessions/{id:guid}/events", async (Guid id, LiveEvent update, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio) =>
+app.MapPost("/api/sessions/{id:guid}/events", async (Guid id, LiveEvent update, HttpContext context, SessionStore store, LiveFeed feed, RadioBroadcaster radio) =>
 {
     if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
-    var state = store.Apply(id, update);
-    await hub.Clients.Group(id.ToString()).SendAsync("State", state);
+    await feed.PublishAsync(id, () => store.Apply(id, update));
     await radio.SendAsync(id);
     return Results.Ok();
 });
-app.MapPost("/api/sessions/{id:guid}/pause", async (Guid id, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio) =>
+app.MapPost("/api/sessions/{id:guid}/pause", async (Guid id, HttpContext context, SessionStore store, LiveFeed feed, RadioBroadcaster radio) =>
 {
     if (Authorize(context, store, id) is null) { return Results.Unauthorized(); }
-    await hub.Clients.Group(id.ToString()).SendAsync("State", store.Pause(id));
+    await feed.PublishAsync(id, () => store.Pause(id));
     await radio.SendAsync(id);
     return Results.Ok();
 });
@@ -188,11 +189,10 @@ static DateTimeOffset? Authorize(HttpContext context, SessionStore store, Guid i
     var header = context.Request.Headers.Authorization.ToString();
     return header.StartsWith("Bearer ", StringComparison.Ordinal) ? store.Authorize(id, header[7..]) : null;
 }
-static async Task<IResult> Delete(Guid id, HttpContext context, SessionStore store, IHubContext<LiveHub> hub, RadioBroadcaster radio)
+static async Task<IResult> Delete(Guid id, HttpContext context, SessionStore store, LiveFeed feed, RadioBroadcaster radio)
 {
     if (Authorize(context, store, id) is not { } expires) { return Results.Unauthorized(); }
-    store.Delete(id, expires); // Radio clips are part of the session and are removed with it.
-    await hub.Clients.Group(id.ToString()).SendAsync("State", (LiveSnapshot?)null);
+    await feed.DeleteAsync(id, () => store.Delete(id, expires)); // Radio clips are part of the session and are removed with it.
     await radio.SendAsync(id, force: true);
     return Results.NoContent();
 }

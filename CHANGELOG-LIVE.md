@@ -8,6 +8,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-25
+
+Live protocol: 2
+
+### Changed
+
+- Race pages receive each change as a small delta instead of the complete results after every update, which cuts the server's outbound traffic for large audiences. Every page still converges to the published results: a page that misses a change notices it (at the latest from a sync message every 30 seconds) and fetches the complete state again.
+- Pages opened before this release keep working unchanged and receive the complete results after every update. That compatibility path will be removed in a later release.
+
+### Fixed
+
+- A race deleted while a page was disconnected now shows **Session ended** when the page reconnects, instead of keeping the last results as waiting for the publisher indefinitely. (A server restart in between still forgets the deletion.)
+- A page that subscribed while results were being published, or results published at the same moment, could briefly receive an older state after a newer one; every page now receives a race's updates in order.
+
 ## [0.8.1] - 2026-10-25
 
 Live protocol: 2
