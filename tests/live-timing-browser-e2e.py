@@ -313,10 +313,11 @@ def main():
             expect(page.locator('#head th:not(.fav)')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Run 1', 'Run 2', 'Total', '+/−', 'Difference'])
             expect(page.locator('#head th', has_text='+/−')).to_have_attribute('title', 'Places gained or lost since Run 1')
             expect(page.locator('#results tr')).to_have_count(2)
-            # Each run time has its run rank in brackets; Pr shows the places gained since Run 1 (2nd after Run 1, now 1st).
-            expect(page.locator('tr[data-bib="5"] td:not(.fav)')).to_have_text(['1', '5', 'TEST5 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:01.00 (2)', '0:59.00 (1)', '2:00.00', '1', '+0:00.00'])
-            expect(page.locator('tr[data-bib="5"] td.gain .pr')).to_have_class('pr up')
-            expect(page.locator('tr[data-bib="5"] td.gain .pr')).to_have_attribute('title', '1 place up since Run 1')
+            # Each run time has its run rank in brackets. +/− follows the provisional standing: bib 5 was 2nd after Run 1 and
+            # leads now, but the Run 1 leader (bib 1, on course) still counts ahead, so it has not gained a place yet.
+            expect(page.locator('tr[data-bib="5"] td:not(.fav)')).to_have_text(['1', '5', 'TEST5 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:01.00 (2)', '0:59.00 (1)', '2:00.00', '0', '+0:00.00'])
+            expect(page.locator('tr[data-bib="5"] td.gain .pr')).to_have_class('pr same')
+            expect(page.locator('tr[data-bib="5"] td.gain .pr')).to_have_attribute('title', 'Same place as after Run 1 · provisional: 1 racer ahead after Run 1 still to come')
             expect(page.locator('tr[data-bib="5"] .pos.best')).to_have_text(['(1)'])
             # On course without a published start instant: the running time still ticks, from when this viewer saw the start.
             expect(page.locator('tr[data-bib="1"] td:not(.fav)')).to_have_text(['—', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:00.12 (1)', re.compile(r'^0:0\d\.\d$'), '—', '', '—'])
@@ -337,8 +338,8 @@ def main():
             # name over nation and club, Run 1 over Run 2, total over difference. Neither the page nor the table scrolls sideways.
             page.set_viewport_size({'width': 390, 'height': 844})
             expect(page.locator('.table')).to_have_class(re.compile('compact'))
-            expect(page.locator('tr[data-bib="5"] td:not(.fav)').first.locator('.line')).to_have_text(['1', '5', '1'])
-            expect(page.locator('tr[data-bib="5"] td:not(.fav)').first.locator('.pr.up')).to_have_count(1)
+            expect(page.locator('tr[data-bib="5"] td:not(.fav)').first.locator('.line')).to_have_text(['1', '5', '0'])
+            expect(page.locator('tr[data-bib="5"] td:not(.fav)').first.locator('.pr.same')).to_have_count(1)
             expect(page.locator('tr[data-bib="5"] td.name .line')).to_have_text(['TEST5', 'Synthetic', re.compile(r'FIN · Test Club$')])
             expect(page.locator('tr[data-bib="5"] td.name .nation .code')).to_have_text('FIN')
             expect(page.locator('tr[data-bib="5"] td.runs .line')).to_have_text(['1:01.00 (2)', '0:59.00 (1)'])
@@ -348,6 +349,15 @@ def main():
             assert page.evaluate("(() => { const t = document.querySelector('.table'); return t.scrollWidth <= t.clientWidth; })()"), 'phone table scrolls sideways'
             page.set_viewport_size({'width': 1100, 'height': 844})
             expect(page.locator('.table')).not_to_have_class(re.compile('compact'))
+            # The Run 1 leader finishes behind bib 5: bib 5 has now gained a place for good, and bib 1 lost one.
+            second['version'] += 1
+            second['runs'][1]['results'][1].update(status='Finished', hundredths=6100, rank=2, difference=200, totalHundredths=12112, totalRank=2, totalDifference=112)
+            request('PUT', f'/api/sessions/{sid}/state', second, token)
+            expect(page.locator('tr[data-bib="5"] td.gain')).to_have_text('1')
+            expect(page.locator('tr[data-bib="5"] td.gain .pr')).to_have_class('pr up')
+            expect(page.locator('tr[data-bib="5"] td.gain .pr')).to_have_attribute('title', '1 place up since Run 1')
+            expect(page.locator('tr[data-bib="1"] td.gain')).to_have_text('-1')
+            expect(page.locator('tr[data-bib="1"] td.gain .pr')).to_have_class('pr down')
             page.locator('#runs button', has_text='Run 1').click()
             request('PUT', f'/api/sessions/{sid}/state', state, token)
             expect(page.locator('#runs button')).to_have_count(1)
