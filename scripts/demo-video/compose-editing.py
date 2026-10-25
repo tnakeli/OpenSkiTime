@@ -1,8 +1,9 @@
 """Compose the competitor editing tutorial videos from CompetitorEditingVideoTests recordings.
 
-Each recording directory, written by tests/OpenSkiTime.Desktop.E2E/CompetitorEditingVideoTests.cs, holds raw.mp4
-(1920x1032 screen), chapters.json ([{"start", "end", "title", "caption", "speed"}]), keys.json ([{"at", "label"}],
-shortcuts to show as key badges), window.json (the recorded window's screen area) and optionally pdf-pages/*.png
+Each recording directory, written by tests/OpenSkiTime.Desktop.E2E/CompetitorEditingVideoTests.cs, holds raw.mkv
+(1920x1032 screen, frames stamped with Unix time), chapters.json ([{"start", "end", "title", "caption", "speed"}]) and
+keys.json ([{"at", "label"}], shortcuts to show as key badges) in seconds of the recording clock, window.json (the
+recorded window's screen area and clockStart, the Unix time of the clock's zero) and optionally pdf-pages/*.png
 (rendered pages of the generated entry lists, shown before the closing card).
 --landscape is a recording with maximized windows and gives <name>-16x9.mp4 (1920x1080, YouTube); --portrait is one made
 with OPENSKITIME_EDITING_VIDEO_WIDTH (a narrow window, so the Save and Undo buttons stay in the frame) and gives
@@ -125,8 +126,15 @@ def outro(layout, path):
     card(layout, path, lines, 4)
 
 
+def probe_start(path):
+    out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=start_time', '-of', 'csv=p=0', str(path)],
+                         check=True, capture_output=True, text=True).stdout
+    return float(out.strip())
+
+
 def segment(layout, raw, path, speed, chapter, index, keys):
-    a, b = chapter['start'], chapter['end']
+    """chapter and keys are in seconds of the video (clock times already shifted to the first captured frame)."""
+    a, b = max(chapter['start'], 0), chapter['end']
     seconds = (b - a) / speed
     tag = f'{speed:g}× faster' if speed > 1.3 else ''
     filters = [f'setpts=(PTS-STARTPTS)/{speed}', f'fps={FPS}', *layout.frame(), *layout.band(chapter['title'], chapter['caption'], index)]
@@ -177,6 +185,10 @@ def showcase(layout, pages, path, index, seconds=7):
 def compose(layout, recording, output, tempo):
     chapters = json.loads((recording / 'chapters.json').read_text(encoding='utf-8'))
     keys = json.loads((recording / 'keys.json').read_text(encoding='utf-8'))
+    # Clock time t is video time t - shift: the first frame was captured `shift` seconds after the clock started.
+    shift = probe_start(recording / 'raw.mkv') - json.loads((recording / 'window.json').read_text(encoding='utf-8'))['clockStart']
+    chapters = [dict(c, start=c['start'] - shift, end=c['end'] - shift) for c in chapters]
+    keys = [dict(k, at=k['at'] - shift) for k in keys]
     # A fresh work folder per composition: nothing that already exists is deleted or overwritten.
     work = Path(tempfile.mkdtemp(prefix='compose-editing-', dir=recording))
     parts = [work / '00-intro.mp4']
@@ -185,7 +197,7 @@ def compose(layout, recording, output, tempo):
     for index, chapter in enumerate(chapters, 1):
         speed = float(chapter.get('speed', 1)) * tempo
         parts.append(work / f'{index:02d}.mp4')
-        total += segment(layout, recording / 'raw.mp4', parts[-1], speed, chapter, index, keys)
+        total += segment(layout, recording / 'raw.mkv', parts[-1], speed, chapter, index, keys)
     pages = sorted((recording / 'pdf-pages').glob('*.png')) if (recording / 'pdf-pages').exists() else []
     if pages:
         parts.append(work / '98-pdf.mp4')

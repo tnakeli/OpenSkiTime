@@ -16,8 +16,9 @@ namespace OpenSkiTime.Desktop.E2E;
 // and pasted into the competitor grid (a full entry list, club racers without FIS codes in another column order, a
 // club-transfer update of one column and race entries), editing in the grid, undo of a single staged change, multi-row
 // entry editing and the entry-list PDFs. The spreadsheet uses the grid's own column headings. A chapter log (title,
-// caption, speed), the moments of shown shortcuts (keys.json) and the recorded window area (window.json) are written for
-// scripts/demo-video/compose-editing.py.
+// caption, speed), the moments of shown shortcuts (keys.json) and the recorded window area with the Unix time of the
+// clock's zero (window.json) are written for scripts/demo-video/compose-editing.py. The screen recording (raw.mkv) stamps
+// every frame with its Unix capture time, so the composer aligns these times with the first captured frame.
 // Opt-in: OPENSKITIME_DESKTOP_E2E=1 and OPENSKITIME_EDITING_VIDEO=<output directory>. OPENSKITIME_EDITING_VIDEO_WIDTH
 // records in a window of that width at the left of the screen instead of maximized windows, for the vertical video,
 // which shows the whole window including the Save and Undo buttons. OPENSKITIME_DEMO_LETTERHEAD names
@@ -120,8 +121,9 @@ public sealed class CompetitorEditingVideoTests
             office.Pause(900);
         }
 
+        var clockStart = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
         clock.Start();
-        using var recorder = DemoVideoTests.ScreenRecorder.Start(Path.Combine(output, "raw.mp4"));
+        using var recorder = DemoVideoTests.ScreenRecorder.Start(Path.Combine(output, "raw.mkv"), wallClock: true);
         try
         {
             Begin("Copy from LibreOffice Calc", "Select the entry list in the spreadsheet and copy it");
@@ -200,7 +202,7 @@ public sealed class CompetitorEditingVideoTests
             File.WriteAllText(Path.Combine(output, "keys.json"), JsonSerializer.Serialize(keys, s_json));
             var bounds = app.Window.BoundingRectangle;
             File.WriteAllText(Path.Combine(output, "window.json"), JsonSerializer.Serialize(new
-            { x = bounds.Left, y = bounds.Top, w = bounds.Width, h = bounds.Height, maximized = area is null }, s_json));
+            { x = bounds.Left, y = bounds.Top, w = bounds.Width, h = bounds.Height, maximized = area is null, clockStart }, s_json));
             File.WriteAllText(Path.Combine(output, "series-file.txt"), file);
         }
     }
