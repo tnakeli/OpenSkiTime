@@ -17,5 +17,7 @@ public sealed class LiveHub(SessionStore store, ServerStats stats) : Hub
         stats.Watching(Context.ConnectionId, id);
         await Clients.Caller.SendAsync("State", store.Read(id));
         await Clients.Caller.SendAsync("Radio", store.Announce(id));
+        // The public viewer count of the race page, this viewer included; the sampler sends later changes to the group.
+        await Clients.Caller.SendAsync("Viewers", stats.Viewers(id));
     }
 }

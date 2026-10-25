@@ -1,11 +1,13 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.SignalR;
 
 namespace OpenSkiTime.LiveTiming.Server;
 
 /// <summary>
 /// Operator load report. The hub reports which session each viewer connection watches; a sampler records the viewer
 /// counts of active sessions and the process CPU every five seconds; HTTP response times are kept for five minutes.
-/// RAM only and bounded: one entry per connection, samples only for stored sessions, a capped response ring.
+/// RAM only and bounded: one entry per connection, samples only for stored sessions, a capped response ring. Each sample
+/// also yields the stored sessions whose viewer count changed since the previous sample, for the public viewer count.
 /// </summary>
 public sealed class ServerStats(TimeProvider time)
 {
@@ -17,6 +19,7 @@ public sealed class ServerStats(TimeProvider time)
     private readonly Dictionary<string, Guid?> _connections = [];
     private readonly Dictionary<Guid, int> _viewers = [];
     private readonly Dictionary<Guid, Queue<(DateTimeOffset At, int Count)>> _samples = [];
+    private readonly Dictionary<Guid, int> _announced = [];
     private readonly Queue<(DateTimeOffset At, double Ms)> _responses = new();
     private TimeSpan _cpuTime;
     private long _cpuAt;
@@ -39,6 +42,7 @@ public sealed class ServerStats(TimeProvider time)
             if (_connections.Remove(connection, out var session) && session is { } watched) { Leave(watched); }
         }
     }
+    public int Viewers(Guid session) { lock (_gate) { return _viewers.GetValueOrDefault(session); } }
     private void Leave(Guid session)
     {
         if (_viewers.GetValueOrDefault(session) <= 1) { _viewers.Remove(session); } else { _viewers[session]--; }
@@ -52,8 +56,11 @@ public sealed class ServerStats(TimeProvider time)
             while (_responses.Count > MaxResponses || (_responses.Count > 0 && now - _responses.Peek().At > ResponseWindow)) { _responses.Dequeue(); }
         }
     }
-    /// <summary>Records the viewers of every stored session and the CPU use since the previous sample; forgets other sessions.</summary>
-    public void Sample(IReadOnlyCollection<Guid> sessions)
+    /// <summary>
+    /// Records the viewers of every stored session and the CPU use since the previous sample; forgets other sessions.
+    /// Returns the stored sessions that have viewers and whose count changed since the previous sample.
+    /// </summary>
+    public IReadOnlyList<(Guid Session, int Viewers)> Sample(IReadOnlyCollection<Guid> sessions)
     {
         ArgumentNullException.ThrowIfNull(sessions);
         var now = time.GetUtcNow();
@@ -69,12 +76,19 @@ public sealed class ServerStats(TimeProvider time)
             }
             _cpuTime = cpu; _cpuAt = at;
             foreach (var gone in _samples.Keys.Where(x => !sessions.Contains(x)).ToArray()) { _samples.Remove(gone); }
+            foreach (var gone in _announced.Keys.Where(x => !sessions.Contains(x)).ToArray()) { _announced.Remove(gone); }
+            var changed = new List<(Guid, int)>();
             foreach (var session in sessions)
             {
+                var count = _viewers.GetValueOrDefault(session);
                 if (!_samples.TryGetValue(session, out var history)) { _samples[session] = history = new(); }
-                history.Enqueue((now, _viewers.GetValueOrDefault(session)));
+                history.Enqueue((now, count));
                 while (history.Count > 0 && now - history.Peek().At > ViewerWindow) { history.Dequeue(); }
+                // Nobody is left to tell about a session without viewers; its next viewer gets the count when watching.
+                if (count == 0) { _announced.Remove(session); }
+                else if (_announced.GetValueOrDefault(session) != count) { _announced[session] = count; changed.Add((session, count)); }
             }
+            return changed;
         }
     }
     public LiveServerStats Read(Guid session, bool hasState)
@@ -97,12 +111,17 @@ public sealed class ServerStats(TimeProvider time)
     }
 }
 
-public sealed class ServerStatsSampler(SessionStore store, ServerStats stats, TimeProvider time) : BackgroundService
+/// <summary>Samples every five seconds and sends the SignalR "Viewers" count to the viewers of each session whose count changed.</summary>
+public sealed class ServerStatsSampler(SessionStore store, ServerStats stats, IHubContext<LiveHub> hub, TimeProvider time) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(ServerStats.SampleInterval, time);
-        do { stats.Sample(store.Sessions()); }
+        do
+        {
+            foreach (var (session, viewers) in stats.Sample(store.Sessions()))
+            { await hub.Clients.Group(session.ToString()).SendAsync("Viewers", viewers, stoppingToken); }
+        }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 }

@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-25
+
+Live protocol: 2
+
+### Added
+
+- Race page: search racers by name, club, nation or bib, and keep searches as filters with Enter. Select nations and clubs in the race statistics to add them as filters too; several of one kind show the racers of any of them. Filters show as removable chips with the number of racers shown; ranks stay those of the whole race.
+- Favorites: a star on each racer makes them a favorite in the viewer's own browser (never sent to the server). **★ Favorites** shows only them, and the front page lists the favorites with their results in every race being published.
+- The race page footer shows how many viewers are watching the race now.
+
 ### Fixed
 
 - Race page: the banner follows the course from the top: the racer after next, the next racer, then the racers on course from the one who started last down to the one nearest the finish. Both groups were shown in start order.
@@ -126,7 +136,10 @@ Live protocol: 1 (implicit)
 
 - First hosted deployment: public race list, responsive race view, publisher keys for session creation and `security.txt`.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.4.1...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.7.0...HEAD
+[0.7.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.6.0...live-v0.7.0
+[0.6.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.5.0...live-v0.6.0
+[0.5.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.4.1...live-v0.5.0
 [0.4.1]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.4.0...live-v0.4.1
 [0.4.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.3.0...live-v0.4.0
 [0.3.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.2.0...live-v0.3.0

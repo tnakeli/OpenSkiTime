@@ -107,12 +107,12 @@ def main():
                 expect(page.locator('#runs button[aria-pressed="true"]')).to_have_text(f"Run {state['currentRun']}")
                 expect(page.locator('#results tr')).to_have_count(len(run['startOrder']))
                 previous = {r['bib']: r for r in state['runs'][0]['results']} if state['currentRun'] == 2 else {}
-                head = page.locator('#head th').all_inner_texts()
+                head = page.locator('#head th:not(.fav)').all_inner_texts()
                 col = {name: index for index, name in enumerate(head)}
                 checked = 0
                 time_column = 'Finish' if state['currentRun'] == 1 else f"Run {state['currentRun']}"
                 for result in run['results']:
-                    row = page.locator(f'tr[data-bib="{result["bib"]}"] td')
+                    row = page.locator(f'tr[data-bib="{result["bib"]}"] td:not(.fav)')
                     expect_status(page, result['bib'], result['status'], row.nth(col[time_column]))
                     if result['status'] != 'Finished':
                         continue
@@ -149,8 +149,8 @@ def main():
                             if item.get('split'):
                                 expect(row.nth(col['Intermediate 1'])).to_contain_text(item['split'])
                     for a, b in expected['run1Ties']:
-                        ra = page.locator(f'tr[data-bib="{a}"] td').nth(0).inner_text()
-                        rb = page.locator(f'tr[data-bib="{b}"] td').nth(0).inner_text()
+                        ra = page.locator(f'tr[data-bib="{a}"] td:not(.fav)').nth(0).inner_text()
+                        rb = page.locator(f'tr[data-bib="{b}"] td:not(.fav)').nth(0).inner_text()
                         assert ra == rb, f'Run 1 tie {a}/{b} shown as {ra}/{rb}'
                     log.append(f'  run 1 verified against {len(expected["run1"])} independent expectations; ties {expected["run1Ties"]} share ranks')
                 if label.endswith('run2-complete'):
@@ -160,8 +160,8 @@ def main():
                             expect(row.nth(0)).to_have_text(str(item['rank']))
                             expect(row.nth(col['Total'])).to_have_text(item['total'])
                     for a, b in expected['combinedTies']:
-                        ra = page.locator(f'tr[data-bib="{a}"] td').nth(0).inner_text()
-                        rb = page.locator(f'tr[data-bib="{b}"] td').nth(0).inner_text()
+                        ra = page.locator(f'tr[data-bib="{a}"] td:not(.fav)').nth(0).inner_text()
+                        rb = page.locator(f'tr[data-bib="{b}"] td:not(.fav)').nth(0).inner_text()
                         assert ra == rb, f'Combined tie {a}/{b} shown as {ra}/{rb}'
                     log.append(f'  final standings verified against {sum(1 for x in expected["final"] if x["total"])} independent totals; '
                                f'combined ties {expected["combinedTies"]} share ranks')

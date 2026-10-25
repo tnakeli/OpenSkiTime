@@ -76,7 +76,7 @@ def main():
             expect(page.locator('#track li.oncourse .bib')).to_have_text(['5', '4'])
             expect(page.locator('#track li.oncourse .who').last).to_have_text('TUNTURI Helmi')
             expect(page.locator('#track li.oncourse .clock')).to_have_text(['0:15.0', '0:40.0'])
-            expect(page.locator('#results tr').first.locator('td').nth(5)).to_have_text('0:53.67')
+            expect(page.locator('#results tr').first.locator('td:not(.fav)').nth(5)).to_have_text('0:53.67')
             page.get_by_role('button', name='Run 2', exact=True).click()
             expect(page.locator('#updated')).to_contain_text('Run 2')
             page.get_by_role('button', name='Run 1', exact=True).click()

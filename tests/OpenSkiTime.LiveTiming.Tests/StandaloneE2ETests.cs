@@ -147,8 +147,10 @@ public sealed class StandaloneE2ETests
         using var http = new HttpClient { BaseAddress = new(server.Endpoint), Timeout = TimeSpan.FromSeconds(3) };
         // The report describes the whole server: without the session's publisher token it is refused.
         Assert.Equal(HttpStatusCode.Unauthorized,(await http.GetAsync($"api/sessions/{session.SessionId}/stats")).StatusCode);
-        using var first = await Watch(http,session.SessionId); Assert.NotNull(await ReceiveState(first));
-        using var second = await Watch(http,session.SessionId); Assert.NotNull(await ReceiveState(second));
+        // Each race page shows how many viewers watch it: the count on watching, then every change within a sample.
+        using var first = await Watch(http,session.SessionId); await UntilViewers(first,1);
+        using var second = await Watch(http,session.SessionId); await UntilViewers(second,2);
+        await UntilViewers(first,2);
         // Fetched with the health check every five seconds, also while results keep coming.
         for (var i = 1; i <= 3; i++) { state = SyntheticRace.Update(state,i,LiveStatus.OnCourse); publisher.Offer(state); await Task.Delay(400); }
         await ProcessFixture.Until(() => publisher.Health.Server is { Viewers.Current: 2 });
@@ -161,6 +163,7 @@ public sealed class StandaloneE2ETests
         // A viewer who leaves is no longer counted now, but stays in the hour's highest count.
         await first.CloseAsync(WebSocketCloseStatus.NormalClosure,null,CancellationToken.None);
         await ProcessFixture.Until(() => publisher.Health.Server is { Viewers: { Current: 1, Max: 2 } });
+        await UntilViewers(second,1);
         // A server that lost the session's state says so in the report, and the publisher restores it.
         await server.Kill(); await server.Start();
         using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
@@ -258,6 +261,23 @@ public sealed class StandaloneE2ETests
         var buffer=new byte[4096]; await socket.ReceiveAsync(buffer,CancellationToken.None);
         await socket.SendAsync(Encoding.UTF8.GetBytes($"{{\"type\":1,\"target\":\"Watch\",\"arguments\":[\"{id}\"],\"invocationId\":\"1\"}}\u001e"),WebSocketMessageType.Text,true,CancellationToken.None);
         return socket;
+    }
+    private static async Task UntilViewers(ClientWebSocket socket,int expected)
+    {
+        using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(15)); var pending=""; var bytes=new byte[65536];
+        while(true)
+        {
+            var read=await socket.ReceiveAsync(bytes,timeout.Token); pending+=Encoding.UTF8.GetString(bytes,0,read.Count);
+            if(!read.EndOfMessage) { continue; }
+            var parts=pending.Split(''); pending=parts[^1];
+            foreach(var part in parts[..^1])
+            {
+                using var json=JsonDocument.Parse(part);
+                if(json.RootElement.TryGetProperty("target",out var target)&&target.GetString()=="Viewers"
+                    &&json.RootElement.GetProperty("arguments")[0].GetInt32()==expected)
+                { return; }
+            }
+        }
     }
     private static async Task<LiveSnapshot?> ReceiveState(ClientWebSocket socket)
     {

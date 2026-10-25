@@ -4,7 +4,7 @@
   --surface: #FFFFFF; --surface-head: #EEF2F7; --text: #111827; --text-2: #475569;
   --accent: #1D4ED8; --accent-hover: #1E40AF; --on-accent: #FFFFFF; --accent-text: #1D4ED8; --link: #1D4ED8;
   --selected: #DBEAFE; --info: #EFF6FF; --border: #CBD5E1; --line: #E2E8F0; --live: #16A34A; --waiting: #D97706;
-  --flash: #FEF3C7; --flash-edge: #D97706; --error: #B91C1C; --finish: #DCFCE7;
+  --flash: #FEF3C7; --flash-edge: #D97706; --error: #B91C1C; --finish: #DCFCE7; --star: #B45309;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text); background: var(--surface);
 }
@@ -13,12 +13,12 @@
     --surface: #101923; --surface-head: #172A39; --text: #E6EDF3; --text-2: #A9BBC8;
     --accent: #2563EB; --accent-hover: #1D4ED8; --on-accent: #FFFFFF; --accent-text: #93C5FD; --link: #93C5FD;
     --selected: #203849; --info: #203849; --border: #4A6172; --line: #2D404E; --live: #4ADE80; --waiting: #FBBF24;
-    --flash: #4A3A0C; --flash-edge: #FBBF24; --error: #FCA5A5; --finish: #173A26;
+    --flash: #4A3A0C; --flash-edge: #FBBF24; --error: #FCA5A5; --finish: #173A26; --star: #FACC15;
   }
 }
 body { margin: 0; line-height: 1.35; }
 a { color: var(--link); }
-a:focus-visible, button:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 2px; }
 
 main { max-width: 1200px; margin: auto; padding: 6px 12px 12px; }
 
@@ -88,6 +88,24 @@ tr.flash td:last-child { box-shadow: inset -2px 0 0 var(--flash-edge), inset 0 2
 td .clock { color: var(--accent-text); font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { #track li { transition: none; } }
 
+/* Results filter: the search, favorites only, and the kept searches, clubs and nations as removable chips. */
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 6px; scroll-margin-top: 8px; }
+.filters[hidden] { display: none; }
+#search { flex: 1 1 200px; max-width: 320px; min-height: 32px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 14px; }
+#favoritesOnly, #addFilter, .chip { border-radius: 4px; margin-left: 0; }
+#addFilter[hidden] { display: none; }
+.chip { background: var(--selected); }
+.chip.clear { background: transparent; color: var(--link); font-weight: 500; }
+#chips { display: contents; }
+#matches { color: var(--text-2); font-size: 13px; }
+/* Favorite star of each racer; a favorite's row is marked by its filled star only. */
+th.fav, td.fav { width: 1%; padding-left: 2px; padding-right: 0; }
+button.star { min-height: 30px; min-width: 30px; padding: 0; margin: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-2); font-size: 18px; line-height: 1; font-weight: 400; }
+button.star:hover { color: var(--star); border-color: transparent; }
+button.star[aria-pressed=true], button.star[aria-pressed=true]:hover { background: transparent; color: var(--star); }
+td.none { text-align: center; color: var(--text-2); font-weight: 400; padding: 14px 8px; }
+
 .table { overflow-x: auto; border-top: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; font-size: 15px; }
 th { text-align: left; color: var(--text-2); background: var(--surface-head); font-size: 13px; font-weight: 600; white-space: nowrap; }
@@ -121,7 +139,13 @@ tr.finished td:first-child { color: var(--accent-text); }
 .summary details[hidden] { display: none; }
 .summary summary { cursor: pointer; font-weight: 600; color: var(--link); padding: 4px 0; }
 .groups { list-style: none; margin: 2px 0 6px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 18px; }
-.groups li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.groups li { display: flex; border-bottom: 1px solid var(--line); }
+.summary .hint { margin: 2px 0; font-size: 13px; }
+/* Each nation and club is a button that filters the results by it. */
+.groups button.pick { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 30px; margin: 0; padding: 3px 4px;
+  border: 0; border-radius: 0; background: transparent; color: var(--text); font-size: 14px; font-weight: 400; text-align: left; }
+.groups button.pick:hover { color: var(--link); text-decoration: underline; }
+.groups button.pick[aria-pressed=true] { background: var(--selected); color: var(--text); }
 .groups .count { font-variant-numeric: tabular-nums; font-weight: 600; }
 #empty { color: var(--text-2); }
 
@@ -130,7 +154,24 @@ tr.finished td:first-child { color: var(--accent-text); }
 #races a { font-size: 17px; font-weight: 600; padding: 4px 0; overflow-wrap: anywhere; }
 #races span { color: var(--text-2); font-size: 14px; }
 
+/* The front page's favorites: each favorite racer with the results in every race published here. */
+.favorites { margin: 8px 0 14px; padding: 6px 8px 8px; border: 1px solid var(--line); border-left: 4px solid var(--star); }
+.favorites h2 { margin: 0; font-size: 16px; }
+.favorites .note { margin: 2px 0 4px; }
+#favoriteList { list-style: none; margin: 0; padding: 0; }
+#favoriteList > li { padding: 6px 0; border-top: 1px solid var(--line); }
+#favoriteList .who { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+#favoriteList .muted { color: var(--text-2); font-size: 13px; }
+#favoriteList .note { margin: 2px 0 0 38px; }
+.entries { list-style: none; margin: 2px 0 0 38px; padding: 0; }
+.entries li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; padding: 2px 0; }
+.entries a { font-weight: 600; overflow-wrap: anywhere; }
+.entries .runs { font-variant-numeric: tabular-nums; }
+
 footer { max-width: 1200px; margin: auto; padding: 12px 12px 24px; display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--text-2); }
+footer .viewers { font-weight: 600; }
+footer .viewers[hidden] { display: none; }
+footer .viewers::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--live); }
 
 @media (max-width: 600px) {
   main { padding: 6px 10px 10px; }
@@ -143,4 +184,6 @@ footer { max-width: 1200px; margin: auto; padding: 12px 12px 24px; display: flex
   td, th { padding: 6px 5px; }
   .banner { font-size: 14px; }
   #track li { gap: 0 8px; padding-right: 6px; }
+  #search { max-width: none; }
+  .entries, #favoriteList .note { margin-left: 0; }
 }
