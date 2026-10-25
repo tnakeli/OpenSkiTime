@@ -201,7 +201,7 @@ def wait_until_ready(container_id, token, timeout_seconds, interval_seconds=10):
         time.sleep(interval_seconds)
 
 
-def publish(record, files, caption, alt_text=None, cover=None):
+def publish(record, files, caption, alt_text=None, cover=None, story=False):
     """Creates the media containers, waits for processing and publishes; returns the post permalink."""
     token, user = record['token'], record['user_id']
     with tempfile.TemporaryDirectory(prefix='ost-instagram-') as directory, Staging() as staging:
@@ -210,7 +210,11 @@ def publish(record, files, caption, alt_text=None, cover=None):
                 return {'image_url': staging.url(to_jpeg(path, directory)), **extra}
             return {'media_type': 'VIDEO' if extra.get('is_carousel_item') else 'REELS', 'video_url': staging.url(path), **extra}
 
-        if len(files) == 1:
+        if story:
+            # A story has no caption; its media type replaces the image or reel type.
+            container = call('POST', f'/{user}/media', token, {**item(files[0]), 'media_type': 'STORIES'})['id']
+            wait_until_ready(container, token, 600 if media_kind(files[0]) == 'video' else 300)
+        elif len(files) == 1:
             params = item(files[0], caption=caption)
             if alt_text and media_kind(files[0]) == 'image':
                 params['alt_text'] = alt_text
@@ -314,6 +318,19 @@ def command_publish(args, files, cover=None):
     print(f'Published: {publish(record, files, caption, getattr(args, "alt_text", None), cover)}')
 
 
+def command_story(args):
+    path = args.files[0]
+    if not Path(path).is_file():
+        raise InstagramError(f'{path}: file not found')
+    media_kind(path)
+    record = load_credential()
+    print(f"story to @{record['username']}: {path}")
+    if not args.yes:
+        print('Preview only; nothing was uploaded. Add --yes to publish.')
+        return
+    print(f'Published: {publish(record, [path], None, story=True)}')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Publish to the OpenSkiTime Instagram account.')
     commands = parser.add_subparsers(dest='command', required=True)
@@ -331,6 +348,9 @@ def main(argv=None):
             command.add_argument('--alt-text', help='accessibility text for a single image')
         else:
             command.add_argument('--cover', help='cover image for the reel')
+    story = commands.add_parser('story', help='publish one image or video (at most 60 s) as a story for 24 hours')
+    story.add_argument('files', nargs=1)
+    story.add_argument('--yes', action='store_true', help='publish; without it only a preview is printed')
     args = parser.parse_args(argv)
     try:
         if args.command == 'login':
@@ -339,6 +359,8 @@ def main(argv=None):
             command_status(args)
         elif args.command == 'refresh':
             command_refresh(args)
+        elif args.command == 'story':
+            command_story(args)
         elif args.command == 'reel':
             if media_kind(args.files[0]) != 'video':
                 raise InstagramError('A reel needs a video file.')

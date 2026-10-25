@@ -73,6 +73,7 @@ python scripts/social/instagram.py status            # account, 24 h publishing 
 python scripts/social/instagram.py post shot.png --caption-file caption.txt --alt-text "..."
 python scripts/social/instagram.py post a.png b.png --caption "..."   # carousel, 2–20 items
 python scripts/social/instagram.py reel clip.mp4 --caption-file caption.txt --cover cover.png
+python scripts/social/instagram.py story clip.mp4                  # one image or video (max. 60 s), 24 hours, no caption
 python scripts/social/instagram.py refresh           # extend the token by 60 days
 ```
 
