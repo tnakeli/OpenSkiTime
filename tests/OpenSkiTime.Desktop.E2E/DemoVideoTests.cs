@@ -136,7 +136,7 @@ public sealed class DemoVideoTests
     }
 
     // A new folder for this recording outside the user profile, so no path on screen shows the account name.
-    private static string DemoRoot()
+    internal static string DemoRoot()
     {
         var configured = Environment.GetEnvironmentVariable("OPENSKITIME_DEMO_ROOT");
         var parent = Path.GetFullPath(string.IsNullOrWhiteSpace(configured) ? @"C:\OpenSkiTimeDemo" : configured);
@@ -170,16 +170,18 @@ public sealed class DemoVideoTests
         { throw new InvalidOperationException("The live-timing browser run failed."); }
     }
 
-    private sealed class ScreenRecorder : IDisposable
+    internal sealed class ScreenRecorder : IDisposable
     {
         private readonly Process _ffmpeg;
         private ScreenRecorder(Process ffmpeg) => _ffmpeg = ffmpeg;
 
-        public static ScreenRecorder Start(string path)
+        // wallClock stamps every frame with the Unix time of its capture (Matroska output), so a recording can be aligned
+        // with audio and browser frames captured by other processes.
+        public static ScreenRecorder Start(string path, bool wallClock = false)
         {
             var start = new ProcessStartInfo("ffmpeg",
-                $"-y -loglevel error -f gdigrab -framerate 30 -offset_x 0 -offset_y 0 -video_size 1920x1032 -draw_mouse 1 -i desktop " +
-                $"-c:v libx264 -preset ultrafast -crf 16 -pix_fmt yuv420p \"{path}\"")
+                $"-y -loglevel error {(wallClock ? "-use_wallclock_as_timestamps 1 " : "")}-f gdigrab -framerate 30 -offset_x 0 -offset_y 0 " +
+                $"-video_size 1920x1032 -draw_mouse 1 -i desktop {(wallClock ? "-copyts " : "")}-c:v libx264 -preset ultrafast -crf 16 -pix_fmt yuv420p \"{path}\"")
             { UseShellExecute = false, RedirectStandardInput = true, CreateNoWindow = true };
             var process = Process.Start(start) ?? throw new InvalidOperationException("ffmpeg did not start.");
             Thread.Sleep(1500);
