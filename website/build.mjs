@@ -14,8 +14,10 @@ const social = [{ name: 'YouTube', url: 'https://www.youtube.com/@OpenSkiTime' }
 const image = `${site}/assets/overview.png`;
 // Sharing previews use a 1.91:1 card; the structured data keeps the full application screenshot.
 const shareImage = `${site}/assets/og-image.png`;
-// The demo video plays on YouTube. The page shows a local poster and links out, so no third-party content loads with the site.
-const video = { id: 'VgQcExvV3S0', url: 'https://www.youtube.com/watch?v=VgQcExvV3S0', poster: 'demo-video.jpg', uploadDate: '2026-10-14', duration: 'PT2M31S', name: 'OpenSkiTime demo: a two-run FIS slalom from entries to results', description: 'A complete two-run alpine slalom with 100 synthetic athletes, recorded from the running application: FIS calendar, Excel entries, FIS draw, simulated timing, a referee DSQ, Run 2 start order, live results, FIS XML and PDF reports.' };
+// The videos play on YouTube. The page shows a local poster and links out, so no third-party content loads with the site.
+const video = { id: '5m10JrVdtv0', url: 'https://www.youtube.com/watch?v=5m10JrVdtv0', poster: 'demo-video.jpg', uploadDate: '2026-10-25', duration: 'PT2M31S', length: '2:31', name: 'OpenSkiTime demo: a two-run FIS slalom from entries to results', description: 'A complete two-run alpine slalom with 100 synthetic athletes, recorded from the running application: FIS calendar, Excel entries, FIS draw, simulated timing, a referee DSQ, Run 2 start order, live results, FIS XML and PDF reports.' };
+const liveVideo = { id: 'W4O_gWhQhyM', url: 'https://www.youtube.com/watch?v=W4O_gWhQhyM', poster: 'live-radio-video.jpg', uploadDate: '2026-10-25', duration: 'PT1M', length: '1:00', name: 'OpenSkiTime live timing with AI race radio', description: 'The live timing control panel and radio settings, then the live race page with the course banner, a DNF and the first finish while two AI hosts comment in Finnish. Four synthetic racers and simulated timing.' };
+const radioCredit = 'https://wapice.com/insights/ai-radio-hosts-live-event-commentary/';
 // [source, route, language, full title, description]. Descriptions stay under 160 characters so search results show them whole.
 const pages = [
   ['index', '/', 'en', 'OpenSkiTime – Free alpine ski race timing software', 'Free, open-source alpine ski race timing software for Windows: start lists, ALGE timing, FIS XML results, PDF reports and live results. Works offline.'],
@@ -92,7 +94,13 @@ const videoText = {
   en: { eyebrow: 'SEE A WHOLE RACE', heading: 'A two-run slalom.<br>In two and a half minutes.', intro: 'From the FIS calendar and an Excel entry list to the draw, timing, a referee DSQ, live results, FIS XML and PDF reports. Recorded from the running application; captions explain each step.', bar: 'OpenSkiTime / Demo', watch: 'Watch on YouTube', alt: 'Play the OpenSkiTime demo video on YouTube: combined Run 2 ranking of a fictional women’s slalom', caption: 'Opens YouTube. 100 synthetic athletes and simulated timing; no sound.' },
   fi: { eyebrow: 'KATSO KOKO KILPAILU', heading: 'Kahden kierroksen pujottelu<br>kahdessa ja puolessa minuutissa.', intro: 'FIS-kalenterista ja Excelin osallistujalistasta arvontaan, ajanottoon, tuomarin hylkäykseen, live-tuloksiin, FIS XML:ään ja PDF-raportteihin. Tallennettu käynnissä olevasta ohjelmasta; englanninkieliset tekstit selittävät vaiheet.', bar: 'OpenSkiTime / Esittely', watch: 'Katso YouTubessa', alt: 'Toista OpenSkiTime-esittelyvideo YouTubessa: kuvitteellisen naisten pujottelun yhdistetyt tulokset toisen kierroksen jälkeen', caption: 'Avautuu YouTubeen. 100 kuvitteellista urheilijaa ja simuloitu ajanotto; ei ääntä.' }
 };
-const videoHtml = lang => { const v = videoText[lang]; return `<div class="section-heading"><div><p class="eyebrow">${v.eyebrow}</p><h2>${v.heading}</h2></div><p>${v.intro}</p></div><figure class="product-shot"><div class="window-bar"><span></span><span></span><span></span><p>${v.bar}</p><b>2:31</b></div><a class="video-link" href="${video.url}"><img src="/assets/${video.poster}" width="1440" height="810" alt="${escape(v.alt)}" loading="lazy"><span class="play-button">${v.watch} <span aria-hidden="true">▶</span></span></a><figcaption>${v.caption}</figcaption></figure>`; };
+const liveVideoText = {
+  en: { eyebrow: 'LIVE TIMING WITH RACE RADIO', heading: 'Live results.<br>With a voice.', intro: 'Viewers follow the race in any browser: the next racers, everyone on course and the latest finish. Press Radio and two AI hosts comment on starts, finishes and DNFs in Finnish within seconds. The organizer turns the radio on in the live timing control panel.', bar: 'OpenSkiTime / Live timing', watch: 'Watch on YouTube', alt: 'Play the OpenSkiTime live timing video on YouTube: live race page with the course banner, a DNF and the first finish of a fictional slalom', caption: 'Opens YouTube. Four synthetic racers and simulated timing; AI-generated commentary in Finnish, with sound.', credit: `Race radio: thanks &amp; inspired by Lassi — <a href="${radioCredit}">AI radio hosts for live event commentary ↗</a>` },
+  fi: { eyebrow: 'LIVE-TULOKSET JA KILPAILURADIO', heading: 'Live-tulokset.<br>Äänen kanssa.', intro: 'Yleisö seuraa kilpailua selaimessa: seuraavat lähtijät, radalla olevat ja viimeisin maaliintulo. Radio-painikkeesta kaksi tekoälyjuontajaa kommentoi lähdöt, maaliintulot ja keskeytykset suomeksi sekunneissa. Järjestäjä kytkee radion päälle live timingin ohjauspaneelista.', bar: 'OpenSkiTime / Live-tulokset', watch: 'Katso YouTubessa', alt: 'Toista OpenSkiTimen live-tulosvideo YouTubessa: kuvitteellisen pujottelun live-sivu, keskeytys ja ensimmäinen maaliintulo', caption: 'Avautuu YouTubeen. Neljä kuvitteellista laskijaa ja simuloitu ajanotto; tekoälyn suomenkielinen selostus, äänellä.', credit: `Kilpailuradio: kiitos ja inspiraatio Lassille — <a href="${radioCredit}">AI radio hosts for live event commentary ↗</a>` }
+};
+const videoSection = (item, v) => `<div class="section-heading"><div><p class="eyebrow">${v.eyebrow}</p><h2>${v.heading}</h2></div><p>${v.intro}</p></div><figure class="product-shot"><div class="window-bar"><span></span><span></span><span></span><p>${v.bar}</p><b>${item.length}</b></div><a class="video-link" href="${item.url}"><img src="/assets/${item.poster}" width="1440" height="810" alt="${escape(v.alt)}" loading="lazy"><span class="play-button">${v.watch} <span aria-hidden="true">▶</span></span></a><figcaption>${v.caption}</figcaption></figure>${v.credit ? `<p class="small">${v.credit}</p>` : ''}`;
+const videoHtml = lang => videoSection(video, videoText[lang]);
+const liveVideoHtml = lang => videoSection(liveVideo, liveVideoText[lang]);
 const faqHtml = lang => `<div class="faq">${faq[lang].map(([q, a]) => `<details><summary>${escape(q)}</summary><p>${escape(a)}</p></details>`).join('')}</div>`;
 // JSON-LD is a data block, not a script: browsers do not execute it and the CSP needs no script-src.
 const jsonLd = value => `<script type="application/ld+json">${JSON.stringify(value).replace(/</g, '\\u003c')}</script>`;
@@ -115,7 +123,7 @@ const software = lang => ({
     },
     { '@type': 'Person', '@id': `${site}/#maintainer`, name: maintainer.name, email: `mailto:${maintainer.email}`, url: maintainer.github, sameAs: [maintainer.github] },
     { '@type': 'SoftwareSourceCode', codeRepository: repo, programmingLanguage: 'C#', runtimePlatform: '.NET 10', license: `${repo}/blob/master/LICENSE`, targetProduct: { '@id': `${site}/#software` } },
-    { '@type': 'VideoObject', '@id': `${site}/#demo-video`, name: video.name, description: video.description, inLanguage: 'en', thumbnailUrl: `${site}/assets/${video.poster}`, uploadDate: video.uploadDate, duration: video.duration, url: video.url, embedUrl: `https://www.youtube-nocookie.com/embed/${video.id}`, about: { '@id': `${site}/#software` } },
+    ...[[video, 'demo-video'], [liveVideo, 'live-video']].map(([v, id]) => ({ '@type': 'VideoObject', '@id': `${site}/#${id}`, name: v.name, description: v.description, inLanguage: 'en', thumbnailUrl: `${site}/assets/${v.poster}`, uploadDate: v.uploadDate, duration: v.duration, url: v.url, embedUrl: `https://www.youtube-nocookie.com/embed/${v.id}`, about: { '@id': `${site}/#software` } })),
     { '@type': 'FAQPage', mainEntity: faq[lang].map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
   ]
 });
@@ -139,12 +147,12 @@ await mkdir(path.join(output, 'assets'), { recursive: true });
 for (const name of ['site.css', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'robots.txt', 'staticwebapp.config.json', 'indexnow-key.txt']) {
   await copyFile(path.join(root, name), path.join(output, name));
 }
-for (const name of [video.poster, 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png']) {
+for (const name of [video.poster, liveVideo.poster, 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png']) {
   await copyFile(path.join(root, '..', 'docs', 'screenshots', name), path.join(output, 'assets', name));
 }
 for (const [name, route, lang, title, description] of pages) {
   const t = text[lang];
-  const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang));
+  const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang)).replace('{{liveVideo}}', liveVideoHtml(lang));
   const translated = Object.values(alternates).includes(route);
   const head = [
     `<title>${escape(title)}</title>`,

@@ -26,10 +26,11 @@ for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide
   if (page === 'index.html' || page === 'fi/index.html') {
     assert.match(html, /<link rel="alternate" hreflang="fi" href="https:\/\/openskiti\.me\/fi\/">/);
     assert.match(html, /<link rel="alternate" hreflang="x-default" href="https:\/\/openskiti\.me\/">/);
-    // The demo video links out to YouTube; the page itself loads no third-party frame.
-    assert.match(html, /<a class="video-link" href="https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}">/, `Missing demo video link in ${page}`);
+    // The demo and live timing videos link out to YouTube; the page itself loads no third-party frame.
+    assert.equal([...html.matchAll(/<a class="video-link" href="https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}">/g)].length, 2, `Missing video links in ${page}`);
     assert(!/<iframe\b/i.test(html), `Unexpected iframe in ${page}`);
-    assert(JSON.parse(scripts[0][2])['@graph'].some(node => node['@type'] === 'VideoObject'), `Missing VideoObject in ${page}`);
+    assert.equal(JSON.parse(scripts[0][2])['@graph'].filter(node => node['@type'] === 'VideoObject').length, 2, `Missing VideoObject in ${page}`);
+    assert.match(html, /href="https:\/\/wapice\.com\/insights\/ai-radio-hosts-live-event-commentary\/"/, `Missing race radio credit in ${page}`);
   }
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
   for (const [, attr, value] of html.matchAll(/\b(href|src)="([^"]+)"/g)) {
