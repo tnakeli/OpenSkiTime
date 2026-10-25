@@ -55,10 +55,11 @@ internal sealed class SyntheticRace
     public static readonly int[][] EqualPointsGroups = [[13, 14, 15], [39, 40], [69, 70, 71]];
     public const int PointsAthletes = 92;
 
-    public SeriesValues Series { get; } = new("Synthetic Alpine Cup 2026", "Synthetic Fell", "Synthetic Ski Club",
-        RaceDate, RaceDate, "FIN", "2026/27");
+    public SeriesValues Series { get; }
 
-    public CompetitionValues Competition { get; } = new("Synthetic Women's Slalom", ShortLabel, RaceDate, Discipline.Slalom,
+    public CompetitionValues Competition { get; }
+
+    private static CompetitionValues CreateCompetition(DateOnly date) => new("Synthetic Women's Slalom", ShortLabel, date, Discipline.Slalom,
         RaceType.Fis, 2, 1, "9123", CourseName: "Synthetic Fell Slalom", StartAltitudeMeters: 520, FinishAltitudeMeters: 380,
         VerticalDropMeters: 140, HomologationNumber: "99999/12/26",
         Calendar: new(2027, "Synthetic Fell", "FIN", "FIS", "W", new("SYNTHDELEGATE", "Tanja", "SWE", "9001")), CourseLengthMeters: 560);
@@ -70,8 +71,13 @@ internal sealed class SyntheticRace
     public IReadOnlyList<(string A, string B)> Run1Ties { get; }
     public IReadOnlyList<(string A, string B)> CombinedTies { get; }
 
-    public SyntheticRace(int seed = DefaultSeed)
+    // raceDate moves the series and competition to another day (a real-time recording on today's clock); the default
+    // keeps the fixed RaceDate that the deterministic tests rely on.
+    public SyntheticRace(int seed = DefaultSeed, DateOnly? raceDate = null)
     {
+        var date = raceDate ?? RaceDate;
+        Series = new("Synthetic Alpine Cup 2026", "Synthetic Fell", "Synthetic Ski Club", date, date, "FIN", "2026/27");
+        Competition = CreateCompetition(date);
         var random = new SplitMix(seed);
         Athletes = CreateAthletes(random);
         var run1 = new Dictionary<string, SyntheticRun>();
