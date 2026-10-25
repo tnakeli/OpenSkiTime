@@ -224,9 +224,9 @@ public sealed class DesktopApp : IDisposable
         return path;
     }
 
-    public System.Drawing.Bitmap RenderWindow()
+    public System.Drawing.Bitmap RenderWindow(Window? window = null)
     {
-        var handle = Window.Properties.NativeWindowHandle.Value;
+        var handle = (window ?? Window).Properties.NativeWindowHandle.Value;
         GetWindowRect(handle, out var rect);
         var bitmap = new System.Drawing.Bitmap(rect.Right - rect.Left, rect.Bottom - rect.Top);
         using var graphics = System.Drawing.Graphics.FromImage(bitmap);

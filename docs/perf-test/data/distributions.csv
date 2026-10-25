@@ -1,0 +1,7 @@
+metric,group,n,p50,p95,max,unit
+Connect to first state,Connections,900,8.3,15.0,326.7,ms
+Fan-out spread after first viewer,Delivery,278100,100.8,266.8,700.3,ms
+Slowest viewer per update,Delivery,309,237.9,338.4,700.3,ms
+Desktop publish to viewer,Delivery,278100,338.2,528.7,1180.8,ms
+State message size,Delivery,278100,53.0,64.5,65.6,kB
+Restart: drop to next state,Restart,901,1508.2,7441.5,11874.4,ms
