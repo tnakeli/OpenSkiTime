@@ -261,23 +261,45 @@
     const earlier = next.runs.filter(r => r.number < run.number).map(r => r.number).sort((a, b) => a - b);
     const later = run.number > 1, totals = later && run.results.some(r => r.totalHundredths != null);
     const rank = r => totals ? r.totalRank : r.rank, gap = r => totals ? r.totalDifference : r.difference;
+    // Every time but the one the Rank column ranks shows its rank at that point in brackets: a run time its published run
+    // rank, an intermediate or sector time its rank among this run's times there (computed here).
+    const ranked = (text, place) => {
+      if (place == null) return text;
+      const part = document.createDocumentFragment(); part.append(text, ' ', element('span', place === 1 ? 'pos best' : 'pos', `(${place})`)); return part;
+    };
     // No status column: the run's time column says DNS, DNF, DSQ or NPS, and a racer on course has the running time.
-    const runTime = r => r.status === 'Finished' ? time(r.hundredths) : r.status === 'OnCourse' ? {started: r.startedAt, seen: seen(run.number, r.bib)}
+    const runTime = r => r.status === 'Finished' ? ranked(time(r.hundredths), totals ? r.rank : null) : r.status === 'OnCourse' ? {started: r.startedAt, seen: seen(run.number, r.bib)}
       : r.status === 'Ready' ? '—' : r.status;
-    // An earlier run shows its time, or its status when the racer did not finish it.
-    const earlierRun = x => !x ? '—' : x.status === 'Finished' ? time(x.hundredths) : ['Ready', 'OnCourse'].includes(x.status) ? '—' : x.status;
+    // An earlier run shows its time and run rank, or its status when the racer did not finish it.
+    const earlierRun = x => !x ? '—' : x.status === 'Finished' ? ranked(time(x.hundredths), x.rank) : ['Ready', 'OnCourse'].includes(x.status) ? '—' : x.status;
     const difference = r => gap(r) == null ? '—' : '+' + time(gap(r));
+    // Places gained or lost since the previous run's standings (+/−, the FIS "Pr"), once the racer has a combined rank.
+    const placesTitle = `Places gained or lost since Run ${run.number - 1}`;
+    const placesGained = x => {
+      const change = livePositionChange(livePreviousRank(next, run.number, x.r.bib), x.r.status === 'Finished' ? x.r.totalRank : null);
+      if (change == null) return '';
+      const e = element('span', change > 0 ? 'pr up' : change < 0 ? 'pr down' : 'pr same', String(change));
+      e.title = change === 0 ? `Same place as after Run ${run.number - 1}` : `${Math.abs(change)} ${Math.abs(change) === 1 ? 'place' : 'places'} ${change > 0 ? 'up' : 'down'} since Run ${run.number - 1}`;
+      return e;
+    };
     const nations = nationsShown, clubs = next.competitors.some(c => c.club);
     const splitHeads = liveSplitHeaders(splits, splitMode), compact = narrow.matches;
-    const splitValues = x => liveSplitValues(x.r, splits, splitMode).map(time);
+    const splitTable = new Map(run.results.map(r => [r.bib, liveSplitValues(r, splits, splitMode)]));
+    const splitRanks = splitHeads.map((_, i) => { const values = run.results.map(r => splitTable.get(r.bib)[i]), ranks = liveTimeRanks(values); return new Map(run.results.map((r, j) => [r.bib, ranks[j]])); });
+    const splitValues = x => (splitTable.get(x.r.bib) || liveSplitValues(x.r, splits, splitMode)).map((v, i) => v == null ? time(v) : ranked(time(v), splitRanks[i].get(x.r.bib)));
     // Each column: its heading (one entry per line of a stacked cell) and the value of a row {r: result, c: competitor,
     // before: earlier runs}. The last column ("result") leads with the time that decides the standings.
     const favoriteColumn = {head: element('span', 'sr', 'Favorite'), className: 'fav', value: x => star(x.c)};
     const columns = compact ? [
       favoriteColumn,
-      {head: ['Rank', 'Bib'], value: x => [rank(x.r) || '—', {text: String(x.r.bib), className: 'muted'}]},
-      {head: ['Name', 'Club'], className: 'name', value: x => [{text: x.c.lastName, className: 'last'}, x.c.firstName, ...(x.c.club ? [{text: x.c.club, className: 'muted'}] : [])]},
-      ...(nations ? [{head: 'Nation', className: 'nation', value: x => [...nation(x.c.nation).childNodes], title: x => liveNation(x.c.nation).name}] : []),
+      // Places gained sit under rank and bib, and the nation beside the club under the name, which leaves the width to the times.
+      {head: ['Rank', 'Bib', ...(totals ? ['+/−'] : [])], headTitle: placesTitle, value: x => { const pr = totals ? placesGained(x) : ''; return [rank(x.r) || '—', {text: String(x.r.bib), className: 'muted'}, ...(pr ? [pr] : [])]; }},
+      {head: ['Name', nations ? 'Nation · Club' : 'Club'], className: 'name', value: x => {
+        const lines = [{text: x.c.lastName, className: 'last'}, x.c.firstName], from = element('span', 'muted');
+        if (nations && x.c.nation) { const n = element('span', 'nation'); n.title = liveNation(x.c.nation).name; n.append(nation(x.c.nation)); from.append(n); }
+        if (x.c.club) from.append(from.childNodes.length ? ' · ' : '', x.c.club);
+        return from.childNodes.length ? [...lines, from] : lines;
+      }},
       ...(splits ? [{head: splitHeads.map(h => h.replace('Intermediate', 'Int.').replace('Sector', 'Sec.')), num: true, className: 'splits', value: splitValues}] : []),
       ...(later ? [{head: [...earlier.map(n => `Run ${n}`), `Run ${run.number}`], num: true, className: 'runs', value: x => [...x.before.map(b => earlierRun(b.result)), runTime(x.r)]},
         {head: ['Total', 'Difference'], num: true, className: 'result', value: x => [time(x.r.totalHundredths), difference(x.r)]}]
@@ -292,9 +314,10 @@
       ...splitHeads.map((head, i) => ({head, num: true, value: x => splitValues(x)[i]})),
       {head: later ? `Run ${run.number}` : 'Finish', num: true, value: x => runTime(x.r)},
       ...(later ? [{head: 'Total', num: true, value: x => time(x.r.totalHundredths)}] : []),
+      ...(totals ? [{head: '+/−', headTitle: placesTitle, num: true, className: 'gain', value: placesGained}] : []),
       {head: 'Difference', num: true, value: x => difference(x.r)}
     ];
-    get('head').replaceChildren(...columns.map(column => { const th = document.createElement('th'); if (column.num) th.className = 'num'; if (column.className === 'fav') th.classList.add('fav'); fill(th, column.head); return th; }));
+    get('head').replaceChildren(...columns.map(column => { const th = document.createElement('th'); if (column.num) th.className = 'num'; if (column.className === 'fav') th.classList.add('fav'); if (column.headTitle) th.title = column.headTitle; fill(th, column.head); return th; }));
     document.querySelector('.table').classList.toggle('compact', compact);
     const rows = liveResultOrder(run.startOrder.map(bib => run.results.find(r => r.bib === bib) || {bib, status:'Ready'}), run.startOrder, rank);
     // The filter hides rows only; ranks and differences stay those of the whole race.

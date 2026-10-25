@@ -46,3 +46,26 @@ test('from Run 2 on each racer carries the earlier run results in run order', ()
   assert.deepEqual(plain(context.liveEarlierRuns(snapshot, 2, 1)), [{ number: 1, result: { bib: 1, status: 'Finished', hundredths: 5100 } }]);
   assert.deepEqual(plain(context.liveEarlierRuns(snapshot, 2, 3)), [{ number: 1, result: null }]);
 });
+
+test('times rank among the times at their point: equal times share a rank, a missing time has none', () => {
+  assert.deepEqual(plain(context.liveTimeRanks([2161, null, 2134, 2161, 2200, 2134])), [3, null, 1, 3, 5, 1]);
+  assert.deepEqual(plain(context.liveTimeRanks([])), []);
+  assert.deepEqual(plain(context.liveTimeRanks([null])), [null]);
+});
+
+test('places gained come from the standing after the previous run: Run 1 rank, later the combined rank', () => {
+  const snapshot = { runs: [
+    { number: 1, results: [{ bib: 1, status: 'Finished', rank: 15 }, { bib: 2, status: 'DNF', rank: null }, { bib: 3, status: 'Finished', rank: 1 }] },
+    { number: 2, results: [{ bib: 1, status: 'Finished', rank: 3, totalRank: 1 }, { bib: 3, status: 'Finished', rank: 9, totalRank: 4 }] },
+    { number: 3, results: [] }] };
+  assert.equal(context.livePreviousRank(snapshot, 2, 1), 15);
+  assert.equal(context.livePreviousRank(snapshot, 2, 2), null);
+  assert.equal(context.livePreviousRank(snapshot, 2, 9), null);
+  assert.equal(context.livePreviousRank(snapshot, 3, 3), 4);
+  assert.equal(context.livePreviousRank(snapshot, 1, 1), null);
+  assert.equal(context.livePositionChange(15, 1), 14);
+  assert.equal(context.livePositionChange(1, 4), -3);
+  assert.equal(context.livePositionChange(7, 7), 0);
+  assert.equal(context.livePositionChange(null, 2), null);
+  assert.equal(context.livePositionChange(3, null), null);
+});

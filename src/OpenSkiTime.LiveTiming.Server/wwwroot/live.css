@@ -4,7 +4,7 @@
   --surface: #FFFFFF; --surface-head: #EEF2F7; --text: #111827; --text-2: #475569;
   --accent: #1D4ED8; --accent-hover: #1E40AF; --on-accent: #FFFFFF; --accent-text: #1D4ED8; --link: #1D4ED8;
   --selected: #DBEAFE; --info: #EFF6FF; --border: #CBD5E1; --line: #E2E8F0; --live: #16A34A; --waiting: #D97706;
-  --flash: #FEF3C7; --flash-edge: #D97706; --error: #B91C1C; --finish: #DCFCE7; --star: #B45309;
+  --flash: #FEF3C7; --flash-edge: #D97706; --error: #B91C1C; --finish: #DCFCE7; --star: #B45309; --gain: #15803D;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text); background: var(--surface);
 }
@@ -13,7 +13,7 @@
     --surface: #101923; --surface-head: #172A39; --text: #E6EDF3; --text-2: #A9BBC8;
     --accent: #2563EB; --accent-hover: #1D4ED8; --on-accent: #FFFFFF; --accent-text: #93C5FD; --link: #93C5FD;
     --selected: #203849; --info: #203849; --border: #4A6172; --line: #2D404E; --live: #4ADE80; --waiting: #FBBF24;
-    --flash: #4A3A0C; --flash-edge: #FBBF24; --error: #FCA5A5; --finish: #173A26; --star: #FACC15;
+    --flash: #4A3A0C; --flash-edge: #FBBF24; --error: #FCA5A5; --finish: #173A26; --star: #FACC15; --gain: #4ADE80;
   }
 }
 body { margin: 0; line-height: 1.35; }
@@ -104,6 +104,22 @@ th.fav, td.fav { width: 1%; padding-left: 2px; padding-right: 0; }
 button.star { min-height: 30px; min-width: 30px; padding: 0; margin: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-2); font-size: 18px; line-height: 1; font-weight: 400; }
 button.star:hover { color: var(--star); border-color: transparent; }
 button.star[aria-pressed=true], button.star[aria-pressed=true]:hover { background: transparent; color: var(--star); }
+/* The rank of a time at its timing point, in brackets after it; the fastest is bold. */
+.pos { display: inline-block; min-width: 2.6em; text-align: left; color: var(--text-2); font-size: 13px; font-weight: 400; }
+.pos.best { color: var(--text); font-weight: 700; }
+/* Phones: the rank stays beside its time in a smaller type, and time columns are packed tighter. A rank that still does
+   not fit wraps under its time, so the table never needs sideways scrolling. */
+.compact td.num { white-space: normal; }
+.compact td.num, .compact th.num { padding-left: 3px; padding-right: 3px; }
+.compact td.num .line { white-space: nowrap; }
+.compact .pos, .compact .pr { min-width: 0; font-size: 11px; white-space: nowrap; letter-spacing: -0.02em; }
+.compact .pr::after { margin-left: 2px; font-size: 9px; }
+/* Places gained (green, up), lost (red, down) or kept (grey) since the previous run, as in the FIS "Pr" column (+/− here). */
+.pr { font-weight: 600; white-space: nowrap; }
+.pr::after { display: inline-block; margin-left: 4px; font-size: 11px; }
+.pr.up::after { content: "▲"; color: var(--gain); }
+.pr.down::after { content: "▼"; color: var(--error); }
+.pr.same::after { content: "◀"; color: var(--text-2); }
 td.none { text-align: center; color: var(--text-2); font-weight: 400; padding: 14px 8px; }
 
 .table { overflow-x: auto; border-top: 1px solid var(--border); }
@@ -124,8 +140,7 @@ tr.finished td:first-child { color: var(--accent-text); }
 .compact th, .compact td { vertical-align: middle; }
 .compact td.name { font-weight: 400; overflow-wrap: anywhere; }
 .compact td.name .last { font-weight: 700; }
-.compact td.nation { text-align: center; }
-.compact td.nation .flag { margin: 0; font-size: 17px; }
+.compact td.name .nation { white-space: nowrap; }
 .compact td.result .line:first-child { font-weight: 700; }
 .compact .muted { color: var(--text-2); font-weight: 400; }
 
