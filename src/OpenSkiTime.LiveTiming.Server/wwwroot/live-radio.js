@@ -1,12 +1,13 @@
 /* Optional race radio. The control appears only while the server announces a healthy radio, starts paused and never
-   autoplays. Clips play one at a time with short pauses; starting or resuming joins at the live edge. */
+   autoplays. Clips play one at a time with short pauses; starting or resuming joins at the live edge, and a conversation
+   that waited longer than the live edge behind others is skipped. */
 const liveRadio = (() => {
   const button = document.getElementById('radio'), audio = new Audio();
   // lineWait covers the worker's slowest successful next line: speech (15 s) plus an upload to each of two servers (10 s each).
   const lineGap = 350, batchGap = 1200, liveEdge = 15000, lineWait = 40000, wait = {};
   // offset maps server times to this browser's clock (browser minus server).
   let session = null, clips = [], playing = false, current = null, timer = null, offset = 0;
-  let lastBatch = null, lastClip = null, lastInterruptible = true, lastEnded = 0, nextLine = 0;
+  let lastBatch = null, lastClip = null, lastInterruptible = true, lastEnded = 0, nextLine = 0, lastPriority = 5;
   const done = new Set(), skippedBatches = new Set(), seenAt = new Map(), seenLines = new Set();
   // Background music: the operator's tracks play in order while the radio plays and dip under speech. A Web Audio gain
   // fades also where the media element volume is fixed (iOS); without Web Audio the element volume is used.
@@ -63,11 +64,15 @@ const liveRadio = (() => {
   // Clips the server still lists are valid for the latest results; a batch interrupted by urgent news is not resumed.
   function pick() {
     const now = Date.now();
+    // The hosts' own talk (priority 4-5) gives way to race news at its next line, also inside a sentence pair: a result
+    // must not wait for a long chat to end.
+    if (lastBatch && lastPriority >= 4 && clips.some(c => c.line === 0 && c.priority <= 3 && c.batchId !== lastBatch && !done.has(c.clipId)
+      && !skippedBatches.has(c.batchId) && Date.parse(c.expiresAt) + offset > now && now - (seenAt.get(c.clipId) ?? now) <= liveEdge)) skippedBatches.add(lastBatch);
     const open = clips.filter(c => !done.has(c.clipId) && !skippedBatches.has(c.batchId) && Date.parse(c.expiresAt) + offset > now);
     const sameBatch = open.filter(c => c.batchId === lastBatch);
     // Lines of a conversation play strictly in order; a missing line is never skipped over.
     const expected = sameBatch.find(c => c.line === nextLine);
-    if (!lastInterruptible) {
+    if (!lastInterruptible && !skippedBatches.has(lastBatch)) {
       if (expected) return expected;
       // The next line of an unfinished sentence pair may still be on its way. A batch whose played line the server no
       // longer lists went stale (the worker drops it by the same rules) and never finishes.
@@ -76,6 +81,9 @@ const liveRadio = (() => {
       if (alive && now - lastEnded < lineWait) return wait;
       skippedBatches.add(lastBatch);
     } else if (sameBatch.length && !expected) { skippedBatches.add(lastBatch); }
+    // A conversation that could not start within the live edge of its arrival (others were playing) is no longer news:
+    // it is skipped with its replies, so speech never drifts behind the race while the radio plays.
+    open.forEach(c => { if (c.line === 0 && c.batchId !== lastBatch && now - (seenAt.get(c.clipId) ?? now) > liveEdge) skippedBatches.add(c.batchId); });
     // A new conversation starts only at its opening line: a reply whose opening never arrived is not played alone.
     const startable = open.filter(c => !skippedBatches.has(c.batchId) && (c === expected || (c.line === 0 && c.batchId !== lastBatch)));
     if (!startable.length) return null;
@@ -108,7 +116,7 @@ const liveRadio = (() => {
     const ended = current; current = null;
     if (!ended) return;
     unduck();
-    lastBatch = ended.batchId; lastClip = ended.clipId; lastInterruptible = ended.interruptible || ended.line === ended.lineCount - 1; lastEnded = Date.now(); nextLine = ended.line + 1;
+    lastBatch = ended.batchId; lastClip = ended.clipId; lastInterruptible = ended.interruptible || ended.line === ended.lineCount - 1; lastEnded = Date.now(); nextLine = ended.line + 1; lastPriority = ended.priority;
     if (playing) timer = setTimeout(next, lineGap);
   }
   audio.addEventListener('ended', finish);

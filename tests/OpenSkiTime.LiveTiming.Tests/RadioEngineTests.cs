@@ -342,6 +342,157 @@ public sealed class RadioEngineTests
         Assert.Contains(new RadioCondition(RadioConditionKind.NextStarter, 1, 1), rig.Sink.Clips.Single().Conditions);
     }
 
+    // Before the start the producer talks after a silence; the first start then arrives while that talk is generated.
+    private static async Task<Task> TalkBeforeTheStartAsync(Rig rig, TaskCompletionSource busy)
+    {
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.Time.Advance(TimeSpan.FromSeconds(91));
+        var talk = rig.Engine.StepAsync(CancellationToken.None);
+        await busy.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        return talk;
+    }
+    private static async Task StartTheRaceAsync(Rig rig)
+    {
+        rig.State = RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State);
+        rig.Time.Advance(RadioEngine.NewsCheckInterval);
+    }
+
+    [Fact]
+    public async Task TalkGivesWayToRaceNewsWhileItsModelCallIsRunning()
+    {
+        var busy = new TaskCompletionSource();
+        var rig = new Rig
+        {
+            Llm = new(async (r, ct) =>
+            {
+                if (!FakeLlm.IsProducer(r)) { throw new RadioProviderException("down"); }
+                busy.TrySetResult(); await Task.Delay(Timeout.Infinite, ct); return "";
+            })
+        };
+        var talk = await TalkBeforeTheStartAsync(rig, busy);
+        await StartTheRaceAsync(rig);
+        await talk.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains("Radio talk cut for race news", rig.Log);
+        Assert.Empty(rig.Sink.Clips);
+        // The cancelled call may have been billed: its reservation stays as spend. No template talk replaces it.
+        Assert.True(rig.Budget.Spent > 0m);
+        Assert.Null(rig.Engine.Health.Error);
+        // The start is said on the next passes, after its batch delay, not after the talk.
+        await rig.Engine.StepAsync(CancellationToken.None);
+        rig.Time.Advance(TimeSpan.FromSeconds(3)); await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.StartsWith("Ensimmäinen kierros on alkanut.", rig.Sink.Clips.First().Transcript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TalkGivesWayToRaceNewsWhileItsSpeechIsSynthesized()
+    {
+        var busy = new TaskCompletionSource();
+        var rig = new Rig
+        {
+            Llm = new((_, _) => throw new RadioProviderException("down")),
+            Tts = new(async (text, ct) =>
+            {
+                if (!text.StartsWith("Seuraavana lähtövuorossa", StringComparison.Ordinal)) { return; }
+                busy.TrySetResult(); await Task.Delay(Timeout.Infinite, ct);
+            })
+        };
+        var talk = await TalkBeforeTheStartAsync(rig, busy);
+        await StartTheRaceAsync(rig);
+        // The speech request is cancelled with the talk, so the engine does not wait for it.
+        await talk.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains("Radio talk cut for race news", rig.Log);
+        Assert.Empty(rig.Sink.Clips);
+        await rig.Engine.StepAsync(CancellationToken.None);
+        rig.Time.Advance(TimeSpan.FromSeconds(3)); await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.StartsWith("Ensimmäinen kierros on alkanut.", rig.Sink.Clips.First().Transcript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TalkAlreadyUploadedIsNotCutSoViewersNeverWaitForAMissingLine()
+    {
+        var second = new TaskCompletionSource();
+        var busy = new TaskCompletionSource();
+        var rig = new Rig
+        {
+            Llm = new((r, _) => FakeLlm.IsProducer(r) ? throw new RadioProviderException("down")
+                : Task.FromResult(FakeLlm.IsCuration(r) ? Echo(r) : Script(("Aino", "Hyvää huomenta kaikille.", false), ("Kalle", "Kohta päästään vauhtiin.", true)))),
+            Tts = new(async (text, _) => { if (text.StartsWith("Kohta", StringComparison.Ordinal)) { await second.Task; } }),
+            Sink = new() { OnUpload = clip => { if (clip.Line == 0) { busy.TrySetResult(); } return Task.CompletedTask; } }
+        };
+        var talk = await TalkBeforeTheStartAsync(rig, busy);
+        await StartTheRaceAsync(rig);
+        second.SetResult();
+        await talk.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain("Radio talk cut for race news", rig.Log);
+        Assert.Equal(["Hyvää huomenta kaikille.", "Kohta päästään vauhtiin."], rig.Sink.Clips.Select(x => x.Transcript));
+    }
+
+    [Fact]
+    public async Task AStartGivesWayToAFinishBeforeNamingTheNextRacerInTheGate()
+    {
+        Rig? rig = null;
+        rig = new Rig
+        {
+            Llm = new((_, _) => throw new RadioProviderException("down")),
+            // While "Radalla nyt …" is uploaded, the racer already on course finishes.
+            Sink = new()
+            {
+                OnUpload = clip =>
+                {
+                    if (clip.Line == 0 && clip.Transcript.StartsWith("Radalla nyt", StringComparison.Ordinal))
+                    { rig!.State = RadioRace.Set(rig.State, 1, LiveStatus.Finished, 4701, rig.Time.GetUtcNow()); rig.Engine.Offer(rig.State); }
+                    return Task.CompletedTask;
+                }
+            }
+        };
+        rig.State = RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.State = RadioRace.Set(rig.State, 2, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.Time.Advance(EventBatcher.Delays[3]); await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Equal(["Radalla nyt numero kaksi, Veeti Hankiranta, Rinneseura."], rig.Sink.Clips.Select(x => x.Transcript));
+        Assert.Contains("Radio batch cut at an interruptible line for urgent news", rig.Log);
+        // The finish follows at once.
+        rig.Time.Advance(EventBatcher.Delays[2]); await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Contains("maalissa", rig.Sink.Clips.ElementAt(1).Transcript, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TalkDuringARunIsAtMostTwoLines()
+    {
+        var rig = new Rig
+        {
+            Llm = new((r, _) => Task.FromResult(FakeLlm.IsCuration(r) ? Echo(r) : Script(("Aino", "Hyvää päivää.", false), ("Kalle", "Aurinko paistaa.", false),
+                ("Aino", "Rinne on kova.", false), ("Kalle", "Yleisöä on paljon.", true))))
+        };
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        rig.State = RadioRace.Set(rig.State, 1, LiveStatus.OnCourse, at: rig.Time.GetUtcNow());
+        rig.Engine.Offer(rig.State); await rig.Engine.StepAsync(CancellationToken.None);
+        for (var i = 0; i < 6; i++) { rig.Time.Advance(TimeSpan.FromSeconds(6)); await rig.Engine.StepAsync(CancellationToken.None); }
+        var talk = rig.Sink.Clips.Where(x => x.Priority == 5).ToArray();
+        Assert.Equal(["Hyvää päivää.", "Aurinko paistaa."], talk.Select(x => x.Transcript));
+        Assert.True(talk[^1].Interruptible);
+        Assert.Contains(rig.Llm.Requests, r => r.System.Contains($"Hard cap {RadioEngine.TalkLinesDuringRun} lines", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NewsDuringARunIsAtMostThreeLinesWithTheNewsFirst()
+    {
+        var rig = new Rig
+        {
+            Llm = new((_, _) => Task.FromResult(Script(("Aino", "Maalissa {racer:1}, aika {time:1}.", false), ("Kalle", "Hän johtaa.", false),
+                ("Aino", "Hieno suoritus.", false), ("Kalle", "Aurinko paistaa.", false), ("Aino", "Rinne on kova.", true))))
+        };
+        await rig.FirstFinishAsync();
+        await rig.Engine.StepAsync(CancellationToken.None);
+        Assert.Equal(RadioEngine.NewsLinesDuringRun, rig.Sink.Clips.Count);
+        Assert.True(rig.Sink.Clips.Last().Interruptible);
+        var system = rig.Llm.Requests.First().System;
+        Assert.Contains($"Hard cap {RadioEngine.NewsLinesDuringRun} lines", system, StringComparison.Ordinal);
+        Assert.Contains("The FIRST line states the most important event", system, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task UploadFailureIsReportedWithoutStoppingTheRadio()
     {

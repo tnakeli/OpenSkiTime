@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Fixed
 
 - Race page: the banner follows the course from the top: the racer after next, the next racer, then the racers on course from the one who started last down to the one nearest the finish. Both groups were shown in start order.
+- Race radio: speech no longer drifts behind the race while the radio plays. A conversation that could not start within 15 seconds of its arrival because others were playing is skipped, as when joining. The hosts' own talk stops at its next sentence when race news arrives.
 
 ## [0.6.0] - 2026-10-24
 

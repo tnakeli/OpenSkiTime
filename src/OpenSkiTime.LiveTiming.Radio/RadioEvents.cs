@@ -18,6 +18,8 @@ public sealed record RadioEvent(RadioEventKind Kind, int Priority, int Run, int[
 public static class RadioEventDetector
 {
     private static readonly RacePhase[] Live = [RacePhase.RunInProgress, RacePhase.Interrupted];
+    /// <summary>Seconds a start announcement stays sayable.</summary>
+    public const int StartLifetime = 15;
 
     public static IReadOnlyList<RadioEvent> Detect(LiveSnapshot? previous, LiveSnapshot current, DateTimeOffset now)
     {
@@ -32,7 +34,8 @@ public static class RadioEventDetector
         RadioEvent Make(RadioEventKind kind, int priority, int[] bibs, int seconds, int relevance, RacePhase[]? phases = null, params RadioCondition[] conditions)
             => new(kind, priority, run.Number, bibs, now, TimeSpan.FromSeconds(seconds), phases ?? [], conditions, relevance);
         // A start names the racer on course and the next one in the start gate (the first still waiting in the start order).
-        // It is stale once the racer has left the course or the next racer is no longer next.
+        // It is stale once the racer has left the course or the next racer is no longer next, and old after StartLifetime:
+        // "Radalla nyt …" said half a run late no longer matches the picture.
         var statuses = run.Results.ToDictionary(x => x.Bib, x => x.Status);
         var gate = run.StartOrder.Where(x => statuses.GetValueOrDefault(x, LiveStatus.Ready) == LiveStatus.Ready).Take(1).ToArray();
         RadioEvent Started(RadioEventKind kind, int priority, int bib, int seconds, int relevance) => Make(kind, priority, [bib, .. gate], seconds, relevance, Live,
@@ -45,7 +48,7 @@ public static class RadioEventDetector
             {
                 // A racer is named only while on course ("Radalla on nyt ..."); a start already finished is not news.
                 var first = run.Results.Where(x => x.Status == LiveStatus.OnCourse && x.StartedAt is not null).OrderBy(x => x.StartedAt).FirstOrDefault();
-                events.Add(first is null ? Make(RadioEventKind.RunStarted, 3, [], 90, 6, Live) : Started(RadioEventKind.RunStarted, 3, first.Bib, 90, 6));
+                events.Add(first is null ? Make(RadioEventKind.RunStarted, 3, [], StartLifetime, 6, Live) : Started(RadioEventKind.RunStarted, 3, first.Bib, StartLifetime, 6));
                 if (first is not null) { named.Add(first.Bib); }
             }
             if (before is null) { return events; }
@@ -74,7 +77,8 @@ public static class RadioEventDetector
                     var kind = place == 1 && finishers > 1 && !shared ? RadioEventKind.NewLeader : place <= 3 ? RadioEventKind.Podium : RadioEventKind.Finish;
                     // A finish announcement states the place, so it is stale once anyone moves the racer down.
                     var placed = new RadioCondition(totals ? RadioConditionKind.TotalRank : RadioConditionKind.Rank, run.Number, result.Bib, Value: place);
-                    events.Add(Make(kind, kind == RadioEventKind.Finish ? 3 : 2, [result.Bib], kind == RadioEventKind.Finish ? 75 : 120,
+                    // Results come before starts: a finish is priority 2 like a new leader, a podium place or a DNF.
+                    events.Add(Make(kind, 2, [result.Bib], kind == RadioEventKind.Finish ? 75 : 120,
                         kind == RadioEventKind.NewLeader ? 8 : kind == RadioEventKind.Podium ? 5 : 2, conditions: [Status(result.Bib, LiveStatus.Finished), placed]));
                     break;
                 case LiveStatus.DNF or LiveStatus.DSQ:
@@ -86,10 +90,11 @@ public static class RadioEventDetector
                     events.Add(Make(RadioEventKind.DNS, 4, [result.Bib], 60, 1, conditions: Status(result.Bib, LiveStatus.DNS)));
                     break;
                 case LiveStatus.OnCourse when was == LiveStatus.Ready && !named.Contains(result.Bib):
-                    // In a later run the leaders start last: their start is bigger news than a routine start. A run lasts
-                    // 45-80 s with one or two racers on course, so every start is announced promptly.
+                    // In a later run the leaders start last: their start is bigger news than a routine start. A routine
+                    // start (priority 3) gives way to results: a finish or DNF waiting is said first, and the start
+                    // conversation ends at its interruptible line instead of going on to the next racer in the gate.
                     events.Add(run.Number > 1 && TopAfterEarlierRuns(current, run.Number, result.Bib)
-                        ? Started(RadioEventKind.TopStart, 2, result.Bib, 60, 5) : Started(RadioEventKind.Start, 2, result.Bib, 45, 2));
+                        ? Started(RadioEventKind.TopStart, 2, result.Bib, StartLifetime, 5) : Started(RadioEventKind.Start, 3, result.Bib, StartLifetime, 2));
                     break;
             }
         }
@@ -117,7 +122,7 @@ public sealed class EventBatcher
     // events of the same moment (a finish and the next start). Generation and speech add about 3 s.
     public static readonly IReadOnlyDictionary<int, TimeSpan> Delays = new Dictionary<int, TimeSpan>
     {
-        [1] = TimeSpan.FromSeconds(0.5), [2] = TimeSpan.FromSeconds(1.5), [3] = TimeSpan.FromSeconds(3),
+        [1] = TimeSpan.FromSeconds(0.5), [2] = TimeSpan.FromSeconds(1.5), [3] = TimeSpan.FromSeconds(2),
         [4] = TimeSpan.FromSeconds(8), [5] = TimeSpan.FromSeconds(20)
     };
     public const int MaxBatch = 6;

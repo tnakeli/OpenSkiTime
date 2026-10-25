@@ -93,7 +93,11 @@ assert.deepEqual(played.slice(-1), ['c1'], 'waits for the next line of an unfini
 await advance(30000);
 assert.deepEqual(played.slice(-1), ['c1'], 'a slow but successful next line is still awaited');
 await advance(8000);
-assert.deepEqual(played.slice(-1), ['d1']);
+// The conversation queued behind it for 43 s is no longer news and is skipped; a fresh one plays.
+assert.deepEqual(played.slice(-1), ['c1'], 'a conversation that waited past the live edge is skipped');
+radio.update('s', { available: true, clips: [clip('c1', 'b3', 0, 3, 3, 5, false), clip('d1', 'b5', 0, 1, 4, 7), clip('d3', 'b16', 0, 1, 4, 23)] });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['d3']);
 // A conversation whose played line the server withdraws went stale: the next conversation follows at once.
 await end(); await advance(1200);
 radio.update('s', { available: true, clips: [clip('x1', 'b14', 0, 2, 3, 21, false)], serverTime: new Date(now).toISOString() });
@@ -132,6 +136,34 @@ assert.deepEqual(played.slice(-1), ['n1']);
 radio.update('s', { available: true, clips: [clip('orphan', 'b11', 1, 2, 3, 15)], serverTime: new Date(now).toISOString() });
 await advance(1500);
 assert.deepEqual(played.slice(-1), ['n1']);
+// While the radio plays, speech never drifts behind the race: a result (priority 2) goes before a waiting start
+// (priority 3), and a start that waited longer than the live edge behind a long conversation is skipped.
+await advance(1200);
+radio.update('s', { available: true, clips: [clip('long', 'b20', 0, 1, 3, 40)], serverTime: new Date(now).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['long']);
+radio.update('s', { available: true, clips: [clip('long', 'b20', 0, 1, 3, 40), clip('start', 'b21', 0, 2, 3, 41), clip('gate', 'b21', 1, 2, 3, 42),
+  clip('dnf', 'b22', 0, 1, 2, 43)], serverTime: new Date(now).toISOString() });
+await advance(5000); await end(); await advance(1200);
+assert.deepEqual(played.slice(-1), ['dnf'], 'the result goes first');
+await advance(11000); await end(); await advance(1200);
+assert.deepEqual(played.slice(-1), ['dnf'], 'the start that waited 17 s is skipped with its gate line');
+radio.update('s', { available: true, clips: [clip('start', 'b21', 0, 2, 3, 41), clip('gate', 'b21', 1, 2, 3, 42), clip('next', 'b23', 0, 1, 3, 44)],
+  serverTime: new Date(now).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['next']);
+await end(); await advance(1200);
+// The hosts' own talk (priority 5) gives way to race news at its next line, even inside a sentence pair.
+radio.update('s', { available: true, clips: [clip('t0', 'b30', 0, 3, 5, 50, false), clip('t1', 'b30', 1, 3, 5, 51, false), clip('t2', 'b30', 2, 3, 5, 52)],
+  serverTime: new Date(now).toISOString() });
+await advance(1200);
+assert.deepEqual(played.slice(-1), ['t0']);
+radio.update('s', { available: true, clips: [clip('t0', 'b30', 0, 3, 5, 50, false), clip('t1', 'b30', 1, 3, 5, 51, false), clip('t2', 'b30', 2, 3, 5, 52),
+  clip('fin', 'b31', 0, 1, 2, 53)], serverTime: new Date(now).toISOString() });
+await end(); await advance(1200);
+assert.deepEqual(played.slice(-1), ['fin'], 'the finish cuts the talk');
+await end(); await advance(5000);
+assert.deepEqual(played.slice(-1), ['fin'], 'the rest of the talk is dropped');
 // Pressing Radio with nothing queued plays a short silent sound inside the click (iOS Safari audio unlock).
 const before = unlocked;
 listeners['button:click'](); listeners['button:click']();

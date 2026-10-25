@@ -20,10 +20,13 @@ public sealed class RadioRulesTests
         Assert.Equal([1, 2], started.Bibs);
         Assert.Equal([new RadioCondition(RadioConditionKind.Status, 1, 1, LiveStatus.OnCourse), new RadioCondition(RadioConditionKind.NextStarter, 1, 2)],
             started.Conditions);
-        // Every later start is announced promptly with the next racer in the start gate.
+        // Every later start is announced promptly with the next racer in the start gate, below results (priority 3) and
+        // only for a short time: "Radalla nyt …" said half a run late no longer matches the picture.
         var second = RadioRace.Set(onCourse, 2, LiveStatus.OnCourse);
         var start2 = Assert.Single(RadioEventDetector.Detect(onCourse, second, now));
-        Assert.Equal((RadioEventKind.Start, 2), (start2.Kind, start2.Priority));
+        Assert.Equal((RadioEventKind.Start, 3), (start2.Kind, start2.Priority));
+        Assert.Equal(TimeSpan.FromSeconds(RadioEventDetector.StartLifetime), start2.Lifetime);
+        Assert.Equal(TimeSpan.FromSeconds(RadioEventDetector.StartLifetime), started.Lifetime);
         Assert.Equal([2, 3], start2.Bibs);
         Assert.True(RadioPlayback.Playable(second, now, now.AddSeconds(30), start2.Phases, start2.Conditions));
         Assert.False(RadioPlayback.Playable(RadioRace.Set(second, 3, LiveStatus.OnCourse), now, now.AddSeconds(30), start2.Phases, start2.Conditions));
@@ -51,7 +54,8 @@ public sealed class RadioRulesTests
         var fourth = RadioRace.Set(RadioRace.Set(leader, 3, LiveStatus.Finished, 4900), 4, LiveStatus.Finished, 5000);
         var events = RadioEventDetector.Detect(leader, fourth, now);
         Assert.Equal([RadioEventKind.Podium, RadioEventKind.Finish], events.Select(x => x.Kind));
-        Assert.Equal(3, events[1].Priority);
+        // Results come before starts: any finish has priority 2.
+        Assert.Equal(2, events[1].Priority);
         var corrected = RadioRace.Set(fourth, 4, LiveStatus.Finished, 4990);
         Assert.Equal(RadioEventKind.Correction, Assert.Single(RadioEventDetector.Detect(fourth, corrected, now)).Kind);
         var dns = RadioRace.Set(corrected, 5, LiveStatus.DNS);
@@ -71,7 +75,7 @@ public sealed class RadioRulesTests
         Assert.Equal(t0 + EventBatcher.Delays[3], batcher.Deadline);
         Assert.Null(batcher.TakeDue(t0 + EventBatcher.Delays[3] / 2));
         // A higher priority shortens the delay from its own arrival.
-        var urgent = t0 + TimeSpan.FromSeconds(1);
+        var urgent = t0 + TimeSpan.FromSeconds(0.25);
         batcher.Add(Event(2, urgent), urgent);
         Assert.Equal(urgent + EventBatcher.Delays[2], batcher.Deadline);
         Assert.True(urgent + EventBatcher.Delays[2] < t0 + EventBatcher.Delays[3]);
