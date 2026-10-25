@@ -322,7 +322,7 @@ public sealed partial class MainViewModel
             try
             {
                 foreach (var device in capture)
-                { inputs.Add(new(TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, () => _simulator = new()), device.Options)); }
+                { inputs.Add(new(TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, () => _simulator = new(), followReplay: true), device.Options)); }
                 await timing.FollowStartOrderAsync(FollowTimingOrder);
                 await HoldTimingChannelsAsync(timing);
                 await timing.StartAsync(inputs, TimingOperator);

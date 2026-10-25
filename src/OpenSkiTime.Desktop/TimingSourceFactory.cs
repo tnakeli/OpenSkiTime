@@ -9,8 +9,9 @@ namespace OpenSkiTime.Desktop;
 internal static class TimingSourceFactory
 {
     // algePassword returns the password for an ALGE Results username (typed or remembered); it is only called for ALGE Results.
+    // followReplay: live capture keeps reading a replay file as lines are appended; a device read stops at its end.
     public static ITimingSource Create(TimingConnection connection, CaptureOptions options, HttpClient http,
-        Func<string, string> algePassword, Func<SimulatorTimingSource>? simulator = null)
+        Func<string, string> algePassword, Func<SimulatorTimingSource>? simulator = null, bool followReplay = false)
     {
         ArgumentNullException.ThrowIfNull(connection); ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(http); ArgumentNullException.ThrowIfNull(algePassword);
@@ -30,7 +31,7 @@ internal static class TimingSourceFactory
                 return simulator?.Invoke() ?? throw new DomainValidationException("The simulator is available for live training capture only (primary timing or B Clock).");
             case TimingSourceType.ReplayFile:
                 if (!File.Exists(connection.ReplayPath)) { throw new DomainValidationException("Enter the path to an existing raw ALGE ASCII file."); }
-                return new ReplayFileTimingSource(connection.ReplayPath);
+                return new ReplayFileTimingSource(connection.ReplayPath, followReplay);
             default: throw new DomainValidationException("Unsupported timing source.");
         }
     }

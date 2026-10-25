@@ -47,6 +47,37 @@ public sealed class TimingDeviceReadTests
     }
 
     [Fact]
+    public async Task FollowedReplayDeliversAppendedBytesUntilCancelledWhileAPlainReplayEndsAtTheEndOfTheFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "openskitime-replay-follow-" + Guid.NewGuid().ToString("N") + ".txt");
+        try
+        {
+            // The writer keeps the file open for appending, as a pacing tool does.
+            await using var writer = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite);
+            await writer.WriteAsync(Encoding.ASCII.GetBytes(" 0001 C0 12:00:00.0000\r")); await writer.FlushAsync();
+
+            var plain = new List<byte>();
+            await new ReplayFileTimingSource(path).ReceiveAsync(x => { plain.AddRange(x.Bytes); return ValueTask.CompletedTask; }, _ => { }, CancellationToken.None);
+            Assert.Equal(" 0001 C0 12:00:00.0000\r", Encoding.ASCII.GetString([.. plain]));
+
+            var followed = new List<byte>(); var gate = new object(); string? status = null;
+            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var reading = new ReplayFileTimingSource(path, follow: true, TimeSpan.FromMilliseconds(10))
+                .ReceiveAsync(x => { lock (gate) { followed.AddRange(x.Bytes); } return ValueTask.CompletedTask; }, x => status = x, stop.Token);
+            string Text() { lock (gate) { return Encoding.ASCII.GetString([.. followed]); } }
+            while (Text().Length < 23) { await Task.Delay(10, stop.Token); }
+            Assert.False(reading.IsCompleted);
+            await writer.WriteAsync(Encoding.ASCII.GetBytes(" 0002 C1 12:01:00.5000\r")); await writer.FlushAsync();
+            while (Text().Length < 46) { await Task.Delay(10, stop.Token); }
+            Assert.Equal(" 0001 C0 12:00:00.0000\r 0002 C1 12:01:00.5000\r", Text());
+            Assert.Equal("REPLAY · test data · following file", status);
+            await stop.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public async Task HandRoleUsesOneChannelAndTheRoleFixesThePosition()
     {
         var source = new ScriptedSource("0001 C3 12:01:00.12\r");
