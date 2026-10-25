@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Viewer load generator for a live timing server: many simulated browsers speaking the same SignalR JSON protocol
+       as wwwroot/live.js. Runs on Windows or as a Linux container next to the server under test. No package dependencies. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ContainerRepository>openskitime-live-loadtest</ContainerRepository>
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/runtime:10.0</ContainerBaseImage>
+    <ContainerUser>1654</ContainerUser>
+  </PropertyGroup>
+</Project>

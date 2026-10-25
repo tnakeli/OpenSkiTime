@@ -52,6 +52,7 @@ All project names below have the `OpenSkiTime.` prefix. Source is under `src/`; 
 | `LiveTiming.RadioWorker` | Separate process hosting the race radio, owned by the control panel like the publisher workers. |
 | `LiveTiming.Server` | ASP.NET Core REST/SignalR server, browser assets and bounded in-memory sessions. Runs locally or in a container. |
 | `LiveTiming.Harness` | Synthetic live integration/acceptance tooling. |
+| `LiveTiming.LoadTest` | Viewer load generator speaking the live page's SignalR protocol; see [viewer load test](perf-test/live-timing-load-test.md). |
 
 ```mermaid
 flowchart TB

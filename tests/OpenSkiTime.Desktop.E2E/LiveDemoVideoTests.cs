@@ -151,7 +151,7 @@ public sealed class LiveDemoVideoTests
 
     // One simulator impulse: the device time into the simulation time box, then the test button. Elements are looked up
     // again on every attempt, because the timing view may rebuild them while it updates.
-    private static void Pulse(DesktopApp app, string button, long timeOfDay)
+    internal static void Pulse(DesktopApp app, string button, long timeOfDay)
     {
         var text = new TimeOnly(timeOfDay).ToString("HH:mm:ss.ffff", CultureInfo.InvariantCulture);
         Retry(() =>
