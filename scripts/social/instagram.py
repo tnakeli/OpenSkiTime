@@ -324,6 +324,10 @@ def command_publish(args, files, cover=None):
 
 
 def main(argv=None):
+    # Captions often contain emoji, which a Windows console code page cannot print; the preview must not fail on them.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8', errors='replace')
     parser = argparse.ArgumentParser(description='Publish to the OpenSkiTime Instagram account.')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('login', help='save an access token to Credential Manager')
