@@ -292,6 +292,11 @@ public partial class DesktopWorkflowTests
             Assert.True(workspace.Timing.IsSimulation);
             await WaitTimingAsync(vm, () => workspace.Timing.Snapshot!.Observations.Count == 2);
             Assert.Equal([0, 1], workspace.Timing.Snapshot!.Observations.Select(x => x.Observation.Channel ?? -1));
+            // Live capture follows the file: a line appended by another process while connected is captured too.
+            await using (var writer = new FileStream(replay, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+            { await writer.WriteAsync(System.Text.Encoding.ASCII.GetBytes(" 0003 C0 12:02:00.0000\r")); }
+            await WaitTimingAsync(vm, () => workspace.Timing.Snapshot!.Observations.Count == 3);
+            Assert.Equal([0, 1, 0], workspace.Timing.Snapshot!.Observations.Select(x => x.Observation.Channel ?? -1));
             await vm.DisconnectTimingCommand.ExecuteAsync(null);
         }
         finally { Directory.Delete(root, recursive: true); }

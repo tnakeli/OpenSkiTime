@@ -67,17 +67,25 @@ public sealed class SimulatorTimingSource : ITimingSource
     public ValueTask DisposeAsync() { _input.Writer.TryComplete(); return ValueTask.CompletedTask; }
 }
 
-public sealed class ReplayFileTimingSource(string path) : ITimingSource
+// Reads a raw ALGE ASCII file. With follow (live capture), the end of the file is not the end of the source: bytes
+// appended later by another process are delivered as they arrive, like a device line, until capture stops. A device
+// read never follows, so it completes at the end of the file.
+public sealed class ReplayFileTimingSource(string path, bool follow = false, TimeSpan? pollInterval = null) : ITimingSource
 {
     public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(receive); ArgumentNullException.ThrowIfNull(status);
-        status("REPLAY · test data");
-        await using var file = File.OpenRead(path);
+        status(follow ? "REPLAY · test data · following file" : "REPLAY · test data");
+        // The writer of a followed file keeps it open for appending.
+        await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, useAsync: true);
         var buffer = new byte[257]; // Deliberately arbitrary; framing must survive packet boundaries.
-        int read;
-        while ((read = await file.ReadAsync(buffer, ct)) > 0)
-        { await receive(new("alge-ascii/v1", "Replay", "1", buffer.AsSpan(0, read).ToArray())); }
+        while (true)
+        {
+            var read = await file.ReadAsync(buffer, ct);
+            if (read > 0) { await receive(new("alge-ascii/v1", "Replay", "1", buffer.AsSpan(0, read).ToArray())); continue; }
+            if (!follow) { return; }
+            await Task.Delay(pollInterval ?? TimeSpan.FromMilliseconds(100), ct);
+        }
     }
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
