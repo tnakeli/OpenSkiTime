@@ -71,6 +71,17 @@ class PreviewTests(unittest.TestCase):
             self.assertEqual(code, 1)
             load.assert_not_called()
 
+    def test_story_preview_needs_no_caption(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clip = Path(directory) / 'clip.mp4'
+            clip.write_bytes(b'x')
+            output = io.StringIO()
+            with mock.patch.object(instagram, 'load_credential', return_value={'username': 'openskitime', 'user_id': '1', 'token': 't'}), \
+                    mock.patch.object(instagram, 'publish') as publish, contextlib.redirect_stdout(output):
+                self.assertEqual(instagram.main(['story', str(clip)]), 0)
+            publish.assert_not_called()
+            self.assertIn('story to @openskitime', output.getvalue())
+
     def test_reel_requires_video(self):
         with contextlib.redirect_stderr(io.StringIO()) as error:
             self.assertEqual(instagram.main(['reel', 'cover.png', '--caption', 'x']), 1)
@@ -101,6 +112,29 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(link, 'https://www.instagram.com/p/x/')
         self.assertEqual(calls, [('POST', '/1/media'), ('GET', '/c1'), ('POST', '/1/media_publish'), ('GET', '/m1')])
         staging.__exit__.assert_called_once()
+
+    def test_story_is_one_stories_container_without_caption(self):
+        created = []
+
+        def fake_call(method, path, token, params=None, base=None):
+            if path == '/1/media':
+                created.append(params)
+                return {'id': 'c1'}
+            if path == '/c1':
+                return {'status_code': 'FINISHED'}
+            if path == '/1/media_publish':
+                return {'id': 'm1'}
+            if path == '/m1':
+                return {}
+            raise AssertionError(path)
+
+        staging = mock.MagicMock()
+        staging.__enter__.return_value.url.return_value = 'https://example.invalid/blob.mp4?sas'
+        with mock.patch.object(instagram, 'call', side_effect=fake_call), \
+                mock.patch.object(instagram, 'Staging', return_value=staging):
+            link = instagram.publish({'token': 't', 'user_id': '1'}, ['clip.mp4'], '', story=True)
+        self.assertEqual(created, [{'media_type': 'STORIES', 'video_url': 'https://example.invalid/blob.mp4?sas'}])
+        self.assertEqual(link, '(media id m1)')
 
     def test_processing_error_publishes_nothing(self):
         def fake_call(method, path, token, params=None, base=None):

@@ -11,6 +11,7 @@ and deleted after publishing. Without --yes a publish command only prints what i
     python scripts/social/instagram.py post photo.png --caption-file caption.txt [--alt-text ...] [--yes]
     python scripts/social/instagram.py post a.png b.png c.png --caption "..." [--yes]   (carousel)
     python scripts/social/instagram.py reel clip.mp4 --caption-file caption.txt [--cover cover.png] [--yes]
+    python scripts/social/instagram.py story clip.mp4 [--yes]   (one image or video, no caption)
 """
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -201,16 +202,21 @@ def wait_until_ready(container_id, token, timeout_seconds, interval_seconds=10):
         time.sleep(interval_seconds)
 
 
-def publish(record, files, caption, alt_text=None, cover=None):
-    """Creates the media containers, waits for processing and publishes; returns the post permalink."""
+def publish(record, files, caption, alt_text=None, cover=None, story=False):
+    """Creates the media containers, waits for processing and publishes; returns the post permalink.
+    A story is one image or video without a caption."""
     token, user = record['token'], record['user_id']
     with tempfile.TemporaryDirectory(prefix='ost-instagram-') as directory, Staging() as staging:
         def item(path, **extra):
             if media_kind(path) == 'image':
-                return {'image_url': staging.url(to_jpeg(path, directory)), **extra}
-            return {'media_type': 'VIDEO' if extra.get('is_carousel_item') else 'REELS', 'video_url': staging.url(path), **extra}
+                return {'image_url': staging.url(to_jpeg(path, directory)), **({'media_type': 'STORIES'} if story else {}), **extra}
+            kind = 'STORIES' if story else 'VIDEO' if extra.get('is_carousel_item') else 'REELS'
+            return {'media_type': kind, 'video_url': staging.url(path), **extra}
 
-        if len(files) == 1:
+        if story:
+            container = call('POST', f'/{user}/media', token, item(files[0]))['id']
+            wait_until_ready(container, token, 600 if media_kind(files[0]) == 'video' else 300)
+        elif len(files) == 1:
             params = item(files[0], caption=caption)
             if alt_text and media_kind(files[0]) == 'image':
                 params['alt_text'] = alt_text
@@ -287,6 +293,8 @@ def command_refresh(_):
 
 
 def read_caption(args):
+    if args.command == 'story':
+        return ''
     if args.caption_file:
         return Path(args.caption_file).read_text(encoding='utf-8').strip()
     return (args.caption or '').strip()
@@ -304,14 +312,15 @@ def command_publish(args, files, cover=None):
     if problems:
         raise InstagramError('; '.join(problems))
     record = load_credential()
-    kind = 'reel' if args.command == 'reel' else 'carousel' if len(files) > 1 else 'image post'
+    story = args.command == 'story'
+    kind = 'story' if story else 'reel' if args.command == 'reel' else 'carousel' if len(files) > 1 else 'image post'
     print(f"{kind} to @{record['username']}: {', '.join(str(path) for path in files)}"
           + (f' (cover {cover})' if cover else ''))
-    print(f'Caption ({len(caption)} characters):\n{caption}\n')
+    print('Stories have no caption.\n' if story else f'Caption ({len(caption)} characters):\n{caption}\n')
     if not args.yes:
         print('Preview only; nothing was uploaded. Add --yes to publish.')
         return
-    print(f'Published: {publish(record, files, caption, getattr(args, "alt_text", None), cover)}')
+    print(f'Published: {publish(record, files, caption, getattr(args, "alt_text", None), cover, story)}')
 
 
 def main(argv=None):
@@ -331,6 +340,9 @@ def main(argv=None):
             command.add_argument('--alt-text', help='accessibility text for a single image')
         else:
             command.add_argument('--cover', help='cover image for the reel')
+    story = commands.add_parser('story', help='publish one image or video (up to 60 s) as a story')
+    story.add_argument('files', nargs=1)
+    story.add_argument('--yes', action='store_true', help='publish; without it only a preview is printed')
     args = parser.parse_args(argv)
     try:
         if args.command == 'login':

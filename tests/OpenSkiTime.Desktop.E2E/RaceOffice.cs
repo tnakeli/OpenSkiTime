@@ -550,21 +550,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         // The competition menu opens with the section; dismiss it, or the next click only closes the menu.
         app.Press(VirtualKeyShort.ESCAPE);
         Pause(400);
-        if (!string.IsNullOrWhiteSpace(letterhead))
-        {
-            var settings = app.ByName("PDF settings");
-            DesktopApp.Invoke(settings);
-            Pause(600);
-            app.Click("Choose PDF background");
-            OpenFileDialog("Choose A4 PDF background", letterhead);
-            SetNumber(FieldAfter("A4 content margins (mm)", "Top"), 40);
-            SetNumber(FieldAfter("A4 content margins (mm)", "Bottom"), 24);
-            Pause(400);
-            app.Click("Save profile");
-            Pause(800);
-            DesktopApp.Invoke(app.ByName("PDF settings"));
-            Pause(400);
-        }
+        if (!string.IsNullOrWhiteSpace(letterhead)) { ChoosePdfBackground(letterhead); }
         app.Click("Generate All");
         string? summary = null;
         app.WaitUntil(() => (summary = app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text))
@@ -575,6 +561,32 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         if (!counts.Success || counts.Groups[1].Value == "0" || counts.Groups[2].Value != "0")
         { throw new InvalidOperationException("PDF generation did not succeed: " + summary); }
         Pause(2000);
+    }
+
+    // Opens PDF Factory and saves the letterhead as the series' PDF background, without generating anything.
+    public void UsePdfBackground(string letterhead)
+    {
+        app.Click("PDF Factory");
+        Pause(600);
+        app.Press(VirtualKeyShort.ESCAPE);
+        Pause(400);
+        ChoosePdfBackground(letterhead);
+    }
+
+    private void ChoosePdfBackground(string letterhead)
+    {
+        var settings = app.ByName("PDF settings");
+        DesktopApp.Invoke(settings);
+        Pause(600);
+        app.Click("Choose PDF background");
+        OpenFileDialog("Choose A4 PDF background", letterhead);
+        SetNumber(FieldAfter("A4 content margins (mm)", "Top"), 40);
+        SetNumber(FieldAfter("A4 content margins (mm)", "Bottom"), 24);
+        Pause(400);
+        app.Click("Save profile");
+        Pause(800);
+        DesktopApp.Invoke(app.ByName("PDF settings"));
+        Pause(400);
     }
 
     public void SelectTab(string header)
