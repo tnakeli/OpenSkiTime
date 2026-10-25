@@ -290,11 +290,11 @@ def main():
             expect(page.locator('#splitMode button[data-mode="intermediate"]')).to_have_attribute('aria-pressed', 'true')
             page.locator('#splitMode button[data-mode="sector"]').click()
             expect(page.locator('#head th:not(.fav)')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Sector 1', 'Sector 2', 'Finish', 'Difference'])
-            expect(page.locator('tr[data-bib="1"] td:not(.fav)')).to_have_text(['1', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '0:21.34', '0:38.78', '1:00.12', '+0:00.00'])
+            expect(page.locator('tr[data-bib="1"] td:not(.fav)')).to_have_text(['1', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '0:21.34 (1)', '0:38.78 (1)', '1:00.12', '+0:00.00'])
             page.reload()
             expect(page.locator('#connection')).to_have_text('Live')
             expect(page.locator('#splitMode button[data-mode="sector"]')).to_have_attribute('aria-pressed', 'true')
-            expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('0:38.78')
+            expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('0:38.78 (1)')
             expect(page.locator('tr[data-bib="2"] button.star')).to_have_attribute('aria-pressed', 'true')
             page.locator('#splitMode button[data-mode="intermediate"]').click()
             expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('1:00.12')
@@ -310,11 +310,16 @@ def main():
                 {'bib': 1, 'status': 'OnCourse', 'hundredths': None, 'rank': None, 'difference': None, 'at': '2026-10-02T11:02:00Z'}]})
             request('PUT', f'/api/sessions/{sid}/state', second, token)
             expect(page.locator('#runs button[aria-pressed="true"]')).to_have_text('Run 2')
-            expect(page.locator('#head th:not(.fav)')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Run 1', 'Run 2', 'Total', 'Difference'])
+            expect(page.locator('#head th:not(.fav)')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Run 1', 'Run 2', 'Total', '+/−', 'Difference'])
+            expect(page.locator('#head th', has_text='+/−')).to_have_attribute('title', 'Places gained or lost since Run 1')
             expect(page.locator('#results tr')).to_have_count(2)
-            expect(page.locator('tr[data-bib="5"] td:not(.fav)')).to_have_text(['1', '5', 'TEST5 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:01.00', '0:59.00', '2:00.00', '+0:00.00'])
+            # Each run time has its run rank in brackets; Pr shows the places gained since Run 1 (2nd after Run 1, now 1st).
+            expect(page.locator('tr[data-bib="5"] td:not(.fav)')).to_have_text(['1', '5', 'TEST5 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:01.00 (2)', '0:59.00 (1)', '2:00.00', '1', '+0:00.00'])
+            expect(page.locator('tr[data-bib="5"] td.gain .pr')).to_have_class('pr up')
+            expect(page.locator('tr[data-bib="5"] td.gain .pr')).to_have_attribute('title', '1 place up since Run 1')
+            expect(page.locator('tr[data-bib="5"] .pos.best')).to_have_text(['(1)'])
             # On course without a published start instant: the running time still ticks, from when this viewer saw the start.
-            expect(page.locator('tr[data-bib="1"] td:not(.fav)')).to_have_text(['—', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:00.12', re.compile(r'^0:0\d\.\d$'), '—', '—'])
+            expect(page.locator('tr[data-bib="1"] td:not(.fav)')).to_have_text(['—', '1', 'TEST1 Synthetic', re.compile(r'FIN$'), 'Test Club', '1:00.12 (1)', re.compile(r'^0:0\d\.\d$'), '—', '', '—'])
             expect(page.locator('#track li.oncourse .time')).to_have_text([re.compile(r'^0:0\d\.\d$')])
             page.locator('#runs button', has_text='Run 1').click()
             expect(page.locator('#head th:not(.fav)').nth(5)).to_have_text('Intermediate 1')
@@ -324,20 +329,21 @@ def main():
             expect(page.locator('#updated')).to_contain_text('Run 1')
             expect(page.locator('#runs button[aria-pressed="true"]')).to_have_text('Run 1')
             page.locator('#runs button', has_text='Run 2').click()
-            expect(page.locator('#head th:not(.fav)')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Run 1', 'Intermediate 1', 'Run 2', 'Total', 'Difference'])
-            expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('0:20.50')
+            expect(page.locator('#head th:not(.fav)')).to_have_text(['Rank', 'Bib', 'Competitor', 'Nation', 'Club', 'Run 1', 'Intermediate 1', 'Run 2', 'Total', '+/−', 'Difference'])
+            expect(page.locator('tr[data-bib="1"] td:not(.fav)').nth(6)).to_have_text('0:20.50 (1)')
             expect(page.locator('#runCounts li')).to_have_text(['Run 1 6 starters · 2 finished · 1 DNS · 1 DNF · 1 DSQ · 1 to start',
                                                                'Run 2 2 starters · 1 finished · 0 DNS · 0 DNF · 0 DSQ · 1 on course'])
-            # A phone gets two-line cells instead of the wide table: rank over bib, last name over first name and club,
-            # Run 1 over Run 2, total over difference. Neither the page nor the table scrolls sideways.
+            # A phone gets stacked cells instead of the wide table: rank over bib over places gained, last name over first
+            # name over nation and club, Run 1 over Run 2, total over difference. Neither the page nor the table scrolls sideways.
             page.set_viewport_size({'width': 390, 'height': 844})
             expect(page.locator('.table')).to_have_class(re.compile('compact'))
-            expect(page.locator('tr[data-bib="5"] td:not(.fav)').first.locator('.line')).to_have_text(['1', '5'])
-            expect(page.locator('tr[data-bib="5"] td.name .line')).to_have_text(['TEST5', 'Synthetic', 'Test Club'])
-            expect(page.locator('tr[data-bib="5"] td.nation .code')).to_have_text('FIN')
-            expect(page.locator('tr[data-bib="5"] td.runs .line')).to_have_text(['1:01.00', '0:59.00'])
+            expect(page.locator('tr[data-bib="5"] td:not(.fav)').first.locator('.line')).to_have_text(['1', '5', '1'])
+            expect(page.locator('tr[data-bib="5"] td:not(.fav)').first.locator('.pr.up')).to_have_count(1)
+            expect(page.locator('tr[data-bib="5"] td.name .line')).to_have_text(['TEST5', 'Synthetic', re.compile(r'FIN · Test Club$')])
+            expect(page.locator('tr[data-bib="5"] td.name .nation .code')).to_have_text('FIN')
+            expect(page.locator('tr[data-bib="5"] td.runs .line')).to_have_text(['1:01.00 (2)', '0:59.00 (1)'])
             expect(page.locator('tr[data-bib="5"] td.result .line')).to_have_text(['2:00.00', '+0:00.00'])
-            expect(page.locator('tr[data-bib="1"] td.splits .line')).to_have_text(['0:20.50'])
+            expect(page.locator('tr[data-bib="1"] td.splits .line')).to_have_text(['0:20.50 (1)'])
             assert page.evaluate('document.documentElement.scrollWidth') <= 390
             assert page.evaluate("(() => { const t = document.querySelector('.table'); return t.scrollWidth <= t.clientWidth; })()"), 'phone table scrolls sideways'
             page.set_viewport_size({'width': 1100, 'height': 844})
@@ -390,7 +396,7 @@ def main():
             assert not navigations, f'Updates caused page navigation: {navigations}'
             assert not failures, f'Browser errors: {failures}'
             browser.close()
-        print('PASS: offline responsive Chromium (desktop columns and two-line phone cells), nation flags/codes (hidden for one nation, flag font where needed), start gate/on course/finish banner, race statistics with several nation and club filters, name/club/nation/bib search kept as filter chips and keeping focus through updates, favorite stars in local storage with a favorites-only filter and the front-page favorites list synced across tabs, live viewer count, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ in the time column with a ten-second highlight, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
+        print('PASS: offline responsive Chromium (desktop columns and two-line phone cells), nation flags/codes (hidden for one nation, flag font where needed), start gate/on course/finish banner, race statistics with several nation and club filters, name/club/nation/bib search kept as filter chips and keeping focus through updates, favorite stars in local storage with a favorites-only filter and the front-page favorites list synced across tabs, live viewer count, forerunner progress without times, live start/intermediate/finish/DNS/DNF/DSQ in the time column with a ten-second highlight, intermediate/sector toggle remembered across reload, Run 2 with Run 1 and total columns, time ranks in brackets and the +/- places-gained column, and current-run following, stop/resume, silent-socket and process restart/self-reconnect/retained state/full resync, deletion; zero refreshes or browser errors.')
     finally:
         if process and process.poll() is None:
             process.kill()

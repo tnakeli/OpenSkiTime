@@ -125,8 +125,8 @@ def main():
                     if state['currentRun'] == 1:
                         expect(row.nth(col['Finish'])).to_have_text(fmt(result['hundredths']))
                     else:
-                        expect(row.nth(col['Run 1'])).to_have_text(fmt(previous[result['bib']]['hundredths']))
-                        expect(row.nth(col['Run 2'])).to_have_text(fmt(result['hundredths']))
+                        expect(row.nth(col['Run 1'])).to_have_text(f"{fmt(previous[result['bib']]['hundredths'])} ({previous[result['bib']]['rank']})")
+                        expect(row.nth(col['Run 2'])).to_have_text(f"{fmt(result['hundredths'])} ({result['rank']})")
                         expect(row.nth(col['Total'])).to_have_text(fmt(result['totalHundredths']))
                     checked += 1
                 label = path.stem
@@ -141,7 +141,7 @@ def main():
                 # Completed runs against the independent expectations.
                 if label.endswith('run1-complete'):
                     for item in expected['run1']:
-                        row = page.locator(f'tr[data-bib="{item["bib"]}"] td')
+                        row = page.locator(f'tr[data-bib="{item["bib"]}"] td:not(.fav)')
                         expect_status(page, item['bib'], item['status'], row.nth(col['Finish']))
                         if item['status'] == 'Finished':
                             expect(row.nth(0)).to_have_text(str(item['rank']))
@@ -155,7 +155,7 @@ def main():
                     log.append(f'  run 1 verified against {len(expected["run1"])} independent expectations; ties {expected["run1Ties"]} share ranks')
                 if label.endswith('run2-complete'):
                     for item in expected['final']:
-                        row = page.locator(f'tr[data-bib="{item["bib"]}"] td')
+                        row = page.locator(f'tr[data-bib="{item["bib"]}"] td:not(.fav)')
                         if item['total']:
                             expect(row.nth(0)).to_have_text(str(item['rank']))
                             expect(row.nth(col['Total'])).to_have_text(item['total'])

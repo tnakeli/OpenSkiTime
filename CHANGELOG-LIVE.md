@@ -8,6 +8,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-25
+
+Live protocol: 2
+
+### Added
+
+- Race page: every time shows its rank at that point in brackets, the fastest in bold: intermediate and sector times among the run's times there, and run times by their run rank.
+- From Run 2 on, a **+/−** column shows the places gained or lost since the previous run, like the "Pr" column of FIS live timing (▲ up, ▼ down, ◀ unchanged).
+
+### Changed
+
+- On phones, places gained sit under rank and bib, and the nation is shown with the club under the name, leaving room for the times and their ranks.
+
 ## [0.7.0] - 2026-10-25
 
 Live protocol: 2
@@ -136,7 +149,8 @@ Live protocol: 1 (implicit)
 
 - First hosted deployment: public race list, responsive race view, publisher keys for session creation and `security.txt`.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.7.0...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.0...HEAD
+[0.8.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.7.0...live-v0.8.0
 [0.7.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.6.0...live-v0.7.0
 [0.6.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.5.0...live-v0.6.0
 [0.5.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.4.1...live-v0.5.0
