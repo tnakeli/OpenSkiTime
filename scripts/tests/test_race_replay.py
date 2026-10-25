@@ -101,6 +101,13 @@ class CsvTests(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     race_replay.read_run(write_csv(folder, 'run.csv', text))
 
+    def test_intermediate_columns_keep_their_numbers(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = write_csv(folder, 'run.csv', 'Bib,Status,Time,Inter2\n4,Finished,52.40,40.88\n')
+            self.assertEqual(race_replay.read_run(path), [(4, None, 'FINISHED', 524_000, [None, 408_800])])
+            with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+                race_replay.read_run(write_csv(folder, 'zero.csv', 'Bib,Status,Time,Inter0\n4,Finished,52.40,16.30\n'))
+
     def test_start_list_supplies_the_apps_bibs_for_every_run_and_its_order_for_run_1(self):
         with tempfile.TemporaryDirectory() as folder:
             start_list = race_replay.read_start_list(write_csv(folder, 'list.tsv',

@@ -27,6 +27,7 @@ import argparse
 import csv
 import datetime
 from pathlib import Path
+import re
 import sys
 import time
 
@@ -68,8 +69,12 @@ def read_run(path):
             if status not in ('FINISHED', 'DNF', 'DNS', 'DSQ'):
                 raise ValueError(f'Status {status!r} is not Finished, DNF, DNS or DSQ.')
             run_time = parse_time(row.get('time', '')) if status in ('FINISHED', 'DSQ') else None
-            names = sorted((k for k in row if k.startswith('inter')), key=lambda k: int(k[5:]))
-            inters = [parse_time(row[k]) if row[k] and status != 'DNS' else None for k in names]
+            # InterN is intermediate N on its own channel; a missing column leaves that intermediate blank.
+            numbered = {int(m[1]): k for k in row if (m := re.fullmatch(r'inter(\d+)', k))}
+            if any(n < 1 for n in numbered):
+                raise ValueError('Intermediate columns are Inter1, Inter2, ...')
+            inters = [parse_time(row[numbered[n]]) if n in numbered and row[numbered[n]] and status != 'DNS' else None
+                      for n in range(1, max(numbered, default=0) + 1)]
             if any(x is not None and (run_time is not None and x >= run_time or i and inters[i - 1] is not None and x <= inters[i - 1])
                    for i, x in enumerate(inters)):
                 raise ValueError('Intermediate times must increase and stay below the run time.')
