@@ -86,3 +86,7 @@ secrets/
 ALFP*.zip
 AL????*.csv
 fis-points-list.zip
+
+# Python
+__pycache__/
+*.pyc
