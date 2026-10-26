@@ -4,6 +4,47 @@ How many people can follow one race on the cloud live timing server, measured on
 `live.openskiti.me` with the real desktop application publishing, and how much viewer synchronization with
 server-computed deltas changes that. All race data was synthetic.
 
+## Viewer synchronization in production — 2026-10-25, live 0.9.0
+
+The cloud test below was repeated the same evening (21:04–21:35 UTC) after live 0.9.0 was deployed: the same production
+replica (0.5 vCPU, 1 GiB), the same desktop publisher and 100-racer slalom (a start every 15 s), 900 viewers from five
+Azure Container Instances with five different public addresses (now following the race page's delta rules), and a forced
+revision restart after the last finish. Data: [`data-0.9/`](data-0.9/) (`compare.csv` puts both runs side by side).
+
+| Measure | live 0.8 (full state per update) | live 0.9 (deltas) |
+|---|---:|---:|
+| Viewers connected at the first attempt; failures or drops during the race | 900; 0 | 900; 0 |
+| Updates published by the desktop | 309 | 310, all sent as deltas |
+| Viewers whose final state equals `GET /state`, field for field | – | 900 / 900 |
+| Traffic received by all viewers | 14.8 GB | 0.66 GB (deltas 529 MB, full states on (re)subscription 95 MB, radio 33 MB, beacons 5.6 MB) |
+| Network out of the server, Azure Monitor | 15.0 GB | 0.75 GB |
+| Peak traffic to viewers (30 s window) / network out (minute) | 138 Mbit/s / 825 MB | 15 Mbit/s / 64 MB (the minute 900 viewers connected); about 30 MB a minute while racing |
+| Update message size p50 / p95 / max | 53.0 / 64.5 / 65.6 kB | 0.7 / 7.8 / 65.6 kB (the max is the restored state after the restart) |
+| Fan-out spread p50 / p95 | 101 / 267 ms | 22 / 64 ms |
+| Slowest viewer of an update, p50 / p95 | 238 / 338 ms | 64 / 155 ms |
+| Desktop publish to viewer p50 / p95 (clock-corrected, see below) | 338 / 529 ms | 259 / 367 ms |
+| Publisher response p95 (control panel Server load, during the race) | up to 202 ms | up to 43 ms |
+| Server CPU in the race, peak / average (5 s samples, share of 0.5 vCPU) | 39 % / 13 % | 21 % / 10 % |
+| Server working set, max in the race | 296 MB | 251 MB |
+| Restart: drop to next state p50 / p95 / max | 1.5 / 7.4 / 11.9 s | 2.0 / 7.7 / 13.1 s (the viewers' jittered 0.5–15 s reconnect) |
+| Gaps found / resync requests | – | 0 / 0 |
+
+- **Traffic fell by 95 %**, both as received by the viewers and as measured by Azure. All 310 updates were deltas: in
+  this race no finish moved more than half the field. A full state is now sent only once per (re)subscription.
+- **Delivery got faster everywhere.** With a few kilobytes per viewer instead of 53 kB, the server finishes each
+  fan-out sooner: the spread fell by about three quarters, and the publisher's own requests (which return after the
+  fan-out) by the same proportion. The heavier tail seen in the local comparison below came from the load generator
+  sharing the server's computer; with remote generators the tail improved too.
+- **Recovery is unchanged:** the restart closed all 900 connections; viewers came back within the same jittered backoff,
+  got `Awaiting` until the control panel restored the race (one full state of a new generation) and ended equal to the
+  server's state.
+- **Clock:** the desktop-to-viewer delay depends on the publishing computer's clock. Measured against
+  `time.windows.com` at the end of the run it was 1.15 s ahead and then resynchronized (later samples within 1 ms),
+  so the delay is corrected by 1.15 s and is indicative only. Fan-out spread does not depend on it.
+- Not covered, as before: race radio clips, several races at once, real mobile networks, fields larger than 100.
+
+![Live timing control panel at the last finish of the live 0.9.0 run](screenshots-0.9/02-last-finish.png)
+
 ## Viewer synchronization: local before/after — 2026-10-25
 
 The same synthetic 100-racer slalom (290 updates: starts and intermediates as events, finishes as full states that
@@ -41,8 +82,8 @@ therefore not comparable with the cloud run below; bytes are.
 - **The median fan-out halved, but its tail grew** (p95 63 ms, p99 113 ms against 49 ms and 63 ms). The tail grows with
   the delta size (p99 91 ms for deltas under 2 kB, 154 ms above 10 kB). The cause is not isolated: in this local run the
   load generator kept and merged a JSON tree per viewer on the same processors as the server, which a browser does once
-  per page; the server's thread-pool queue stayed at 0. Measure the tail again with remote generators before relying on
-  it.
+  per page; the server's thread-pool queue stayed at 0. With remote generators in the production run above, the tail
+  fell too (p95 267 → 64 ms), so the local tail reflects the shared computer rather than the server.
 - No viewer lost a message on these healthy loopback connections, so gap detection and resync were exercised by the
   automated tests (C# process tests, Node tests of `live-sync.js`, Chromium end-to-end), not by this run.
 
@@ -157,7 +198,7 @@ load generator has finished, so that its final comparison sees the last state.
 The cloud run cost well under one euro: five Container Instances for about 75 minutes, a Basic container registry and a
 storage account for a few hours, all deleted afterwards.
 
-## Files of the 2026-10-25 run
+## Files of the 2026-10-25 runs
 
 - [live-timing-load-test-2026-10-25.pdf](live-timing-load-test-2026-10-25.pdf) — printable report with charts.
 - `data/` — aggregated results: `timeline.csv` (30 s windows), `server-load.csv` (control panel Server load every 5 s,
@@ -165,6 +206,9 @@ storage account for a few hours, all deleted afterwards.
   The raw per-message samples (2.4 MB) are not kept in the repository.
 - `screenshots/` — the control panel when published, with 900 viewers before the first start, at the last finish and
   after the server restart.
+- `data-0.9/` and `screenshots-0.9/` — the same for the live 0.9.0 run, plus `compare.csv` (both runs side by side) and
+  `messages-by-kind.csv` (messages and megabytes per SignalR target). `distributions.csv` adds the time from a restart
+  drop to results again.
 - `scripts/perf-test/analyze-load-run.py <run folder> <clock correction ms>` combines the generators' raw
   `results/<label>/*.csv.gz` and `server-load.tsv` into `summary.json`; `scripts/perf-test/make-load-report.py
   docs/perf-test <report.html>` builds the printable report from `data/`, which Edge or Chrome prints to PDF
