@@ -1,0 +1,20 @@
+measure,live_0_8,live_0_9,unit
+"Viewers, all connected at the first attempt",900,900,viewers
+Updates published by the desktop,309,310,updates
+Failed or dropped connections during the race,0,0,connections
+Viewers whose final state equals the server state,,900,viewers
+Traffic received by all viewers,14.8,0.66,GB
+Network out of the server (Azure Monitor),15.0,0.75,GB
+"Peak network out (Azure Monitor, per minute)",825,64.4,MB/min
+Peak traffic to viewers (30 s window),138.4,15.3,Mbit/s
+"Update message size, p50",53.0,0.7,kB
+"Update message size, p95",64.5,7.8,kB
+"Fan-out spread, p50",100.8,22.1,ms
+"Fan-out spread, p95",266.8,63.8,ms
+"Slowest viewer per update, p50",237.9,64.1,ms
+"Desktop publish to viewer, p50 (clock-corrected)",338.2,258.8,ms
+"Desktop publish to viewer, p95 (clock-corrected)",528.7,366.7,ms
+"Server CPU during the race, peak (5 s samples)",39,21,% of 0.5 vCPU
+"Server CPU during the race, average",13.3,9.5,% of 0.5 vCPU
+"Server working set, max during the race",296,251,MB
+"Restart: back to the next state, p95",7441.5,7667.4,ms

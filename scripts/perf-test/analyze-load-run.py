@@ -49,15 +49,27 @@ for label in labels:
                              'first': int(r['first_state_utc_ticks']) if r['first_state_utc_ticks'] else None,
                              'ended': int(r['ended_utc_ticks']) if r['ended_utc_ticks'] else None, 'failure': r['failure'] or None})
 
-broadcast = [s for s in states if not s[6] and s[2] >= 0]
-first_of = {}
-for s in broadcast:
-    first_of[s[2]] = min(first_of.get(s[2], s[3]), s[3])
-spread = [(s[3] - first_of[s[2]]) / TICKS_MS for s in broadcast]
-per_version = defaultdict(list)
-for s in broadcast:
-    per_version[s[2]].append(s)
-worst = sorted(((v, len(xs), max(x[3] for x in xs) - first_of[v], max(x[5] for x in xs)) for v, xs in per_version.items()), key=lambda x: -x[2])
+# One update is one publisher version received by every viewer within seconds. A race restored after a server restart
+# carries a version seen before, so receipts more than 10 s apart start a separate update: (version, cluster).
+by_version = defaultdict(list)
+for s in states:
+    if not s[6] and s[2] >= 0:
+        by_version[s[2]].append(s)
+per_version, update_of = defaultdict(list), {}
+for v, xs in by_version.items():
+    xs.sort(key=lambda s: s[3])
+    cluster = 0
+    for i, s in enumerate(xs):
+        if i and s[3] - xs[i - 1][3] > 10 * 10_000_000:
+            cluster += 1
+        per_version[(v, cluster)].append(s)
+broadcast = [s for xs in per_version.values() for s in xs]
+first_of = {k: min(s[3] for s in xs) for k, xs in per_version.items()}
+for k, xs in per_version.items():
+    for s in xs:
+        update_of[id(s)] = k
+spread = [(s[3] - first_of[update_of[id(s)]]) / TICKS_MS for s in broadcast]
+worst = sorted(((k[0], len(xs), max(x[3] for x in xs) - first_of[k], max(x[5] for x in xs)) for k, xs in per_version.items()), key=lambda x: -x[2])
 e2e = [(s[3] - s[4]) / TICKS_MS + clock_ms for s in broadcast if abs(s[3] - s[4]) < 600 * 10_000_000]
 
 # Drops: a watching connection that ended with a failure before the end of the run; the time to the next state on a
@@ -94,12 +106,12 @@ step = 30 * 10_000_000
 t = start - start % step
 while t < end:
     inb = [s for s in states if t <= s[3] < t + step]
-    sp = [(s[3] - first_of[s[2]]) / TICKS_MS for s in inb if not s[6] and s[2] >= 0]
+    sp = [(s[3] - first_of[update_of[id(s)]]) / TICKS_MS for s in inb if id(s) in update_of]
     lat = [(s[3] - s[4]) / TICKS_MS + clock_ms for s in inb if not s[6] and s[2] >= 0 and abs(s[3] - s[4]) < 600 * 10_000_000]
     mid = t + step
     watching = sum(1 for a in attempts if a['first'] is not None and a['first'] < mid and (a['ended'] is None or a['ended'] >= mid))
     buckets.append({'utc': utc(t).strftime('%H:%M:%S'), 'watching': watching, 'messages': len(inb), 'mbit_s': sum(s[5] for s in inb) * 8 / 30 / 1e6,
-                    'updates': len({s[2] for s in inb if not s[6] and s[2] >= 0}), 'spread_p95': pct(sp, 95), 'spread_max': max(sp) if sp else None,
+                    'updates': len({update_of[id(s)] for s in inb if id(s) in update_of}), 'spread_p95': pct(sp, 95), 'spread_max': max(sp) if sp else None,
                     'latency_p50': pct(lat, 50), 'latency_p95': pct(lat, 95),
                     'drops': sum(1 for d in drops if t <= d['at'] < t + step)})
     t += step
