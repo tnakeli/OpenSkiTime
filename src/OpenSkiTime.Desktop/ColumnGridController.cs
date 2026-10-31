@@ -29,7 +29,7 @@ internal sealed class ColumnGridController<T> where T : class
             textValue?.Invoke(item, filter.Key) ?? Text(value(item, filter.Key)), filter.Value));
         foreach (var column in grid.Columns.OfType<DataGridTextColumn>())
         {
-            if (column.Header is not string { Length: > 0 } label || column.Binding is not Binding binding) { continue; }
+            if (column.Header is not string { Length: > 0 } label || column.Binding is not ReflectionBinding binding) { continue; }
             var key = string.IsNullOrEmpty(column.SortMemberPath) ? binding.Path : column.SortMemberPath;
             if (string.IsNullOrEmpty(key)) { continue; }
             column.SortMemberPath = key;

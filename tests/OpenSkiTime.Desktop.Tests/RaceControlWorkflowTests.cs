@@ -39,12 +39,12 @@ public partial class DesktopWorkflowTests
             var row = vm.TimestampRows.Single(x => x.Cells.Any(c => c?.Key == timestampKey));
             view.FindControl<DataGrid>("TimestampsGrid")!.ScrollIntoView(row, null);
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            ((Window)view.GetVisualRoot()!).UpdateLayout();
+            ((Window)TopLevel.GetTopLevel(view)!).UpdateLayout();
         }
         var target = timestampKey is null ? view.FindControl<Border>("StartDropTarget")!
             : view.FindControl<DataGrid>("TimestampsGrid")!.GetVisualDescendants().OfType<Border>()
                 .First(x => x.Tag is TimingTimestampCell cell && cell.Key == timestampKey && x.Bounds.Width > 0);
-        var data = new DataObject(); data.Set(TimingView.CompetitorDragFormat, racer);
+        using var data = TimingView.CreateCompetitorDragData(racer);
         var over = new DragEventArgs(DragDrop.DragOverEvent, data, target, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = target };
         target.RaiseEvent(over);
         Assert.Equal(DragDropEffects.Move, over.DragEffects);
@@ -63,11 +63,11 @@ public partial class DesktopWorkflowTests
         var targetItem = vm.AtStartRows.Single(x => x.Bib == targetBib);
         grid.ScrollIntoView(targetItem, null);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        ((Window)view.GetVisualRoot()!).UpdateLayout();
+        ((Window)TopLevel.GetTopLevel(view)!).UpdateLayout();
         var row = grid.GetVisualDescendants().OfType<DataGridRow>()
             .Single(x => x.DataContext is TimingGridRow racerRow && racerRow.Bib == targetBib);
         Assert.True(DragDrop.GetAllowDrop(row));
-        var data = new DataObject(); data.Set(TimingView.CompetitorDragFormat, racer);
+        using var data = TimingView.CreateCompetitorDragData(racer);
         vm.IsTimingDragging = true;
         var lower = new DragEventArgs(DragDrop.DragOverEvent, data, row,
             new Avalonia.Point(2, row.Bounds.Height - 2), KeyModifiers.None) { Source = row };
@@ -79,7 +79,7 @@ public partial class DesktopWorkflowTests
         Assert.Equal(DragDropEffects.Move, over.DragEffects);
         Assert.Contains("timingDropAbove", row.Classes);
         Assert.DoesNotContain("timingDropBelow", row.Classes);
-        CaptureDraw((Window)view.GetVisualRoot()!, Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR"), "race-start-reorder-hover.png");
+        CaptureDraw((Window)TopLevel.GetTopLevel(view)!, Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR"), "race-start-reorder-hover.png");
         var drop = new DragEventArgs(DragDrop.DropEvent, data, row, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = row };
         row.RaiseEvent(drop);
         await view.PendingTimingDrop;
@@ -91,12 +91,12 @@ public partial class DesktopWorkflowTests
     {
         var button = view.FindControl<Button>("StatusDrop" + status)!;
         Assert.True(DragDrop.GetAllowDrop(button));
-        var data = new DataObject(); data.Set(TimingView.CompetitorDragFormat, racer);
+        using var data = TimingView.CreateCompetitorDragData(racer);
         var over = new DragEventArgs(DragDrop.DragOverEvent, data, button, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = button };
         button.RaiseEvent(over);
         Assert.Equal(DragDropEffects.Move, over.DragEffects);
         Assert.Contains("timingStatusDropTarget", button.Classes);
-        CaptureDraw((Window)view.GetVisualRoot()!, Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR"), "race-status-drop-hover.png");
+        CaptureDraw((Window)TopLevel.GetTopLevel(view)!, Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR"), "race-status-drop-hover.png");
         var drop = new DragEventArgs(DragDrop.DropEvent, data, button, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = button };
         button.RaiseEvent(drop);
         await view.PendingTimingDrop;

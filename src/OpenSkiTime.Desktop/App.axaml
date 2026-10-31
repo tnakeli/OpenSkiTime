@@ -80,6 +80,18 @@
     <Color x:Key="SystemAccentColorLight1">#2563EB</Color>
     <Color x:Key="SystemAccentColorLight2">#60A5FA</Color>
     <Color x:Key="SystemAccentColorLight3">#BFDBFE</Color>
+    <!-- Avalonia 12 draws window decorations over an extended client area. The main window supplies its own title,
+         so keep only the minimize, maximize and close buttons: the drawn title would overlap the logo, and the
+         fullscreen button would cover the Settings menu. -->
+    <ControlTheme x:Key="{x:Type WindowDrawnDecorations}" TargetType="WindowDrawnDecorations"
+                  BasedOn="{StaticResource {x:Type WindowDrawnDecorations}}">
+      <Style Selector="^ /template/ Panel#PART_TitleTextPanel > TextBlock">
+        <Setter Property="IsVisible" Value="False" />
+      </Style>
+      <Style Selector="^ /template/ Button#PART_FullScreenButton">
+        <Setter Property="IsVisible" Value="False" />
+      </Style>
+    </ControlTheme>
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />

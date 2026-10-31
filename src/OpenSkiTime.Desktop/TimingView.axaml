@@ -209,7 +209,7 @@
      </Grid>
      <Grid ColumnDefinitions="180,8,*,8,Auto">
       <StackPanel><TextBlock Text="OPERATOR" Classes="eyebrow" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
-      <StackPanel Grid.Column="2"><TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="eyebrow" /><TextBox Text="{Binding TimingReason}" Watermark="Default classification note is recorded when empty" /></StackPanel>
+      <StackPanel Grid.Column="2"><TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="eyebrow" /><TextBox Text="{Binding TimingReason}" PlaceholderText="Default classification note is recorded when empty" /></StackPanel>
       <Button Grid.Column="4" Name="SaveTimingClassification" Content="Save classification" Classes="primaryAction" Command="{Binding SaveTimingClassificationCommand}" VerticalAlignment="Bottom" />
      </Grid>
     </StackPanel>

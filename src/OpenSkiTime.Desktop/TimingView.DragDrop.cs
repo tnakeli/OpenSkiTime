@@ -8,7 +8,8 @@ namespace OpenSkiTime.Desktop;
 
 public sealed partial class TimingView
 {
-    public const string CompetitorDragFormat = "OpenSkiTime.TimingCompetitor";
+    public static readonly DataFormat<TimingDragCompetitor> CompetitorDragFormat =
+        DataFormat.CreateInProcessFormat<TimingDragCompetitor>("OpenSkiTime.TimingCompetitor");
     private TimingDragCompetitor? _pressedCompetitor;
     private PointerPressedEventArgs? _press;
     private Point _pressPoint;
@@ -16,6 +17,13 @@ public sealed partial class TimingView
     private Control? _dropHighlight;
     private string? _dropHighlightClass;
     public Task PendingTimingDrop { get; private set; } = Task.CompletedTask;
+
+    internal static DataTransfer CreateCompetitorDragData(TimingDragCompetitor competitor)
+    {
+        var data = new DataTransfer();
+        data.Add(DataTransferItem.Create(CompetitorDragFormat, competitor));
+        return data;
+    }
 
     private void ConfigureDragging()
     {
@@ -73,9 +81,9 @@ public sealed partial class TimingView
         string? dragError = null;
         try
         {
-            var data = new DataObject(); data.Set(CompetitorDragFormat, competitor);
+            using var data = CreateCompetitorDragData(competitor);
             e.Pointer.Capture(null);
-            await DragDrop.DoDragDrop(trigger, data, DragDropEffects.Move);
+            await DragDrop.DoDragDropAsync(trigger, data, DragDropEffects.Move);
             await PendingTimingDrop;
         }
         catch (InvalidOperationException ex) { dragError = $"Could not drag Bib {competitor.Bib}: {ex.Message}"; }
@@ -114,7 +122,7 @@ public sealed partial class TimingView
     private void ShowDropTarget(object? sender, DragEventArgs e)
     {
         e.DragEffects = DragDropEffects.None;
-        if (_viewModel is not { } vm || e.Data.Get(CompetitorDragFormat) is not TimingDragCompetitor item) { return; }
+        if (_viewModel is not { } vm || e.DataTransfer.TryGetValue(CompetitorDragFormat) is not { } item) { return; }
         if (StatusTarget(e.Source) is { Tag: string status } button)
         {
             var statusProblem = vm.StatusDropProblem(item, status);
@@ -174,7 +182,7 @@ public sealed partial class TimingView
     {
         e.DragEffects = DragDropEffects.None;
         HighlightDrop(null);
-        if (_viewModel is not { } vm || e.Data.Get(CompetitorDragFormat) is not TimingDragCompetitor item) { return; }
+        if (_viewModel is not { } vm || e.DataTransfer.TryGetValue(CompetitorDragFormat) is not { } item) { return; }
         if (StatusTarget(e.Source) is { Tag: string status })
         {
             e.Handled = true;

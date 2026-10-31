@@ -1,7 +1,8 @@
+using System.Runtime.CompilerServices;
 using Xunit;
 
 // Real-window tests share one mouse, keyboard, clipboard and desktop; they must never run concurrently.
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
+[assembly: CollectionBehavior(CollectionBehavior.CollectionPerAssembly)]
 
 namespace OpenSkiTime.Desktop.E2E;
 
@@ -9,7 +10,10 @@ namespace OpenSkiTime.Desktop.E2E;
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class DesktopE2EFactAttribute : FactAttribute
 {
-    public DesktopE2EFactAttribute()
+    public DesktopE2EFactAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable(DesktopApp.EnableVariable) != "1")
         { Skip = $"Set {DesktopApp.EnableVariable}=1 on an interactive Windows desktop to run real-window tests."; }

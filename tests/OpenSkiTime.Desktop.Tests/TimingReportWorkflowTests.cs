@@ -156,7 +156,7 @@ public partial class DesktopWorkflowTests
                 Assert.Empty(vm.ReportImages); Assert.Empty(vm.ReportImportPreview);
                 Assert.NotNull(emptyDialog.FindControl<Button>("OpenReceiptImagesButton"));
                 Assert.DoesNotContain(emptyDialog.GetVisualDescendants().OfType<TextBox>(),
-                    x => x.Watermark is "Operator" or "Reason for change");
+                    x => x.PlaceholderText is "Operator" or "Reason for change");
 
                 await vm.ImportReportImageBytesAsync(await File.ReadAllBytesAsync(fixture), "Clipboard.png");
                 Assert.Equal(4, vm.ReportImportPreview.Count);
@@ -192,7 +192,7 @@ public partial class DesktopWorkflowTests
                 if (!string.IsNullOrWhiteSpace(visualOutput))
                 {
                     using var bitmap = new RenderTargetBitmap(new PixelSize(980, 680), new Vector(96, 96));
-                    bitmap.Render(window); bitmap.Save(Path.Combine(visualOutput, "timing-report-replacement.png"));
+                    bitmap.Render(window); bitmap.Save(Path.Combine(visualOutput, "timing-report-replacement.png"), PngBitmapEncoderOptions.Default);
                 }
                 Assert.True(await vm.FlushTimingReportAsync(), vm.StatusMessage);
                 await vm.LoadTimingReportCommand.ExecuteAsync(null);
@@ -240,7 +240,7 @@ public partial class DesktopWorkflowTests
          {
             tabs.SelectedIndex = i; window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
             using var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
-            bitmap.Render(window); bitmap.Save(Path.Combine(output, $"timing-report-{size.Width}-{i}.png"));
+            bitmap.Render(window); bitmap.Save(Path.Combine(output, $"timing-report-{size.Width}-{i}.png"), PngBitmapEncoderOptions.Default);
          }
         }
         tabs.SelectedIndex = 1;

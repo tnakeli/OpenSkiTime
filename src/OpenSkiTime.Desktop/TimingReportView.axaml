@@ -24,7 +24,7 @@
       </StackPanel></Border>
       <ItemsControl ItemsSource="{Binding ReportRuns}"><ItemsControl.ItemTemplate><DataTemplate>
        <Grid ColumnDefinitions="55,Auto,*" Margin="0,3"><TextBlock Text="{Binding Run, StringFormat='Run {0}'}" VerticalAlignment="Center"/>
-        <CheckBox Grid.Column="1" Content="All times from System A" IsChecked="{Binding AllResultsA}" Margin="0,0,12,0"/><TextBox Grid.Column="2" Text="{Binding Comment}" Watermark="Run comments / timing problems"/></Grid>
+        <CheckBox Grid.Column="1" Content="All times from System A" IsChecked="{Binding AllResultsA}" Margin="0,0,12,0"/><TextBox Grid.Column="2" Text="{Binding Comment}" PlaceholderText="Run comments / timing problems"/></Grid>
       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
       <TextBlock Text="Replacement times needing explanation" FontWeight="SemiBold"/>
       <TextBlock Text="If any times came from another source, add one row for each replacement." Classes="supportingText"/>
@@ -35,7 +35,7 @@
         <TextBox Grid.Column="1" Text="{Binding Bib}" Margin="0,0,6,0"/>
         <Grid Grid.Column="2" ColumnDefinitions="160,*" Margin="0,0,6,0">
          <ComboBox ItemsSource="{Binding Reasons}" SelectedItem="{Binding Reason, Mode=OneWay}" SelectionChanged="ReplacementReason_SelectionChanged" PlaceholderText="Choose reason" Margin="0,0,6,0"/>
-         <TextBox Grid.Column="1" Text="{Binding Reason}" Watermark="Reason / details"/>
+         <TextBox Grid.Column="1" Text="{Binding Reason}" PlaceholderText="Reason / details"/>
         </Grid>
         <ComboBox Grid.Column="3" ItemsSource="{Binding Sources}" SelectedItem="{Binding TimeFrom}" Margin="0,0,6,0"/>
         <Button Grid.Column="4" Content="Remove" Classes="dangerAction" Click="RemoveReplacement_Click"/>
@@ -69,10 +69,10 @@
        <StackPanel Width="110" Margin="0,0,12,0"><TextBlock Text="FIS TIMING LEVEL" Classes="eyebrow"/><ComboBox Name="TimingReportLevel" ItemsSource="{Binding ReportLevels}" SelectedItem="{Binding ReportLevel}">
         <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Choose the level for the alpine race category:&#10;&#10;0 - Olympic Winter Games, World Ski Championships and World Cup, including World Cup qualification and speed events (OWG, WSC, WC, WQUA, COM).&#10;&#10;1 - Continental Cups: Australian New Zealand, European (including speed and qualification), Far East, Nor-Am and South American; Universiade and Junior World Championships (ANC, EC, ECOM, EQUA, FEC, NAC, SAC, UVS, WJC).&#10;&#10;2 - National Championships (NC).&#10;&#10;3 - FIS and FIS qualification, junior, national junior, university and CIT races; Youth Olympic Winter Games, Asian Winter Games, military/police and European Youth Olympic Festival (FIS, FQUA, JUN, NJC, NJR, UNI, CIT, CITWC, YOG, AWG, CISM, EYOF).&#10;&#10;4 - Entry League FIS races (ENL).&#10;&#10;FIS Timing Booklet 2.67, section 1.1, page 4. Alpine categories; Para Alpine has a separate table."/></ToolTip.Tip>
        </ComboBox></StackPanel>
-       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="ELECTRONIC SYNC" Classes="eyebrow"/><TextBox Text="{Binding ReportSync}" Watermark="HH:mm:ss.0000"/></StackPanel>
-       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="HAND SYNC" Classes="eyebrow"/><TextBox Text="{Binding ReportHandSync}" Watermark="HH:mm:ss.00"/></StackPanel>
-       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="A SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckA}" Watermark="HH:mm:ss.0000"/></StackPanel>
-       <StackPanel Width="165"><TextBlock Text="B SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckB}" Watermark="HH:mm:ss.0000"/></StackPanel>
+       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="ELECTRONIC SYNC" Classes="eyebrow"/><TextBox Text="{Binding ReportSync}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
+       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="HAND SYNC" Classes="eyebrow"/><TextBox Text="{Binding ReportHandSync}" PlaceholderText="HH:mm:ss.00"/></StackPanel>
+       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="A SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckA}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
+       <StackPanel Width="165"><TextBlock Text="B SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckB}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
       </WrapPanel>
       <WrapPanel>
        <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Enter the separate start timer's time from the same common-impulse synchronization check as A and B. Check at least one minute after synchronization, with a maximum 0.001 s difference. Synchronize before racing; never re-synchronize during a run.&#10;&#10;FIS Timing Booklet 2.67, section 3, page 8."/></ToolTip.Tip>

@@ -41,7 +41,7 @@ The project uses Tesseract 5.2.0 for offline receipt OCR. The Tesseract.Sharp Nu
 When running tests locally on Linux, OCR tests are excluded:
 
 ```bash
-dotnet test OpenSkiTime.slnx -c Release --filter "FullyQualifiedName !~ TimingReceiptOcrTests"
+dotnet test OpenSkiTime.slnx -c Release --filter-not-class "*TimingReceiptOcrTests"
 ```
 
 ### Timy USB Support — Windows only
@@ -58,6 +58,8 @@ The headless Avalonia testing environment on Linux has limitations with complex 
 
 ## Testing
 
+The test projects use xUnit.net v3 on Microsoft.Testing.Platform. The root `global.json` opts `dotnet test` into that platform, so VSTest-only options such as `--logger` are not available. The VSTest `--filter` syntax selects no tests. Use `--filter-method "*Name*"` (wildcards only at the start and end) or `--filter-class`, and exclude classes with `--filter-not-class "*ClassName"`. Filter one test project at a time: a project in which the filter selects no tests fails the run. To write a TRX report, add `--report-xunit-trx`; the reports land in each test project's `bin/<configuration>/<framework>/TestResults` directory.
+
 ### Running all tests
 
 ```bash
@@ -67,7 +69,7 @@ dotnet test OpenSkiTime.slnx -c Release
 ### Running specific test class
 
 ```bash
-dotnet test OpenSkiTime.slnx -c Release --filter "FullyQualifiedName~TimingAssignmentPreviewTests"
+dotnet test tests/OpenSkiTime.Tests -c Release --filter-method "*TimingAssignmentPreviewTests*"
 ```
 
 ### Desktop UI tests (Avalonia headless)
@@ -84,11 +86,11 @@ The synthetic 100-athlete two-run slalom (`tests/OpenSkiTime.Tests/FullRace/Synt
 
 | Suite | Command | Notes |
 |---|---|---|
-| Application boundary (always on) | `dotnet test tests/OpenSkiTime.Tests -c Release --filter "FullyQualifiedName~FullRace"` | The reference race, and the same race with race-day changes (points saved with the series, bibs from 101 with skipped numbers, a start position moved with a reason, three timed forerunners per run). Set `OPENSKITIME_FULL_RACE_REPORT=<absolute dir>` to keep the reference race's `.ost` files and the expected-vs-actual report in a new timestamped subfolder. |
-| View coverage screenshots | `OPENSKITIME_VIEW_COVERAGE=<absolute dir> dotnet test tests/OpenSkiTime.Desktop.Tests -c Release --filter "FullyQualifiedName~GenerateViewCoverageScreenshotsFromFullRace"` | Headless renderings of every main view at 1280×800 and 1920×1080. Set `OPENSKITIME_VIEW_COVERAGE_SIZES` (for example `1366x768,1280x720`) for other window sizes in device-independent units; 1920×1080 at 150 % display scaling is 1280x720. |
-| Live Timing browser | `OPENSKITIME_LIVE_FULL_RACE=<dir> dotnet test tests/OpenSkiTime.Desktop.Tests -c Release --filter "FullyQualifiedName~ExportLiveSnapshotsOfTheFullRace"`, then `python tests/live-timing-full-race-e2e.py --snapshots <dir> --screenshots <dir>` | Needs a Release build of `OpenSkiTime.LiveTiming.Server`, Python Playwright and Chromium. Loopback only. |
-| Real Windows desktop | `dotnet build src/OpenSkiTime.Desktop -c Release`, then `OPENSKITIME_DESKTOP_E2E=1 dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --filter "FullyQualifiedName~OperatorRunsTheFullRace"` | FlaUI drives the built executable with mouse and keyboard on an interactive desktop (~45 min). Do not use the computer while it runs. Local data is redirected with `OPENSKITIME_LOCAL_DATA`, so the operator's own FIS cache and preferences are never used. Not part of `OpenSkiTime.slnx`. |
-| Demonstration video | `OPENSKITIME_DESKTOP_E2E=1 OPENSKITIME_DEMO_VIDEO=<dir> OPENSKITIME_DEMO_LIVE_SNAPSHOTS=<dir> dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --filter "FullyQualifiedName~RecordDemonstration"`, then `python scripts/demo-video/compose.py --recording <dir> --output <file.mp4>` | Records the real application with ffmpeg (gdigrab) and composes chapters and captions. Keep the screen awake and unlocked. The application runs in a new folder under `OPENSKITIME_DEMO_ROOT` (default `C:\OpenSkiTimeDemo`, refused inside the user profile); an unrecorded warm-up confirms one file dialog there, so recorded file dialogs, exports and the letterhead stay in that folder. Only the FIS calendar's technical-delegate columns are blurred. |
-| Live timing video | `OPENSKITIME_DESKTOP_E2E=1 OPENSKITIME_LIVE_DEMO_VIDEO=<dir> OPENSKITIME_LIVE_DEMO_PYTHON=<python.exe> dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --filter "FullyQualifiedName~RecordLiveTimingDemonstration"`, write `<dir>/cut.json`, then `python scripts/demo-video/compose-live.py --recording <dir> --output <dir> [--music <mp3>]` | A one-minute recording of the live timing control panel and the live page with the race radio playing: four racers timed in real time, two of them DNF. The radio uses this user's current radio configuration (or `OPENSKITIME_LIVE_DEMO_RADIO_SETTINGS`) and keys from Credential Manager, so real providers are billed. The Python needs Playwright and PyAudioWPatch; the page audio is recorded from WASAPI loopback, so mute other sounds. Produces 16:9 (YouTube) and 9:16 (Reels, Shorts) videos. |
+| Application boundary (always on) | `dotnet test tests/OpenSkiTime.Tests -c Release --filter-method "*FullRace*"` | The reference race, and the same race with race-day changes (points saved with the series, bibs from 101 with skipped numbers, a start position moved with a reason, three timed forerunners per run). Set `OPENSKITIME_FULL_RACE_REPORT=<absolute dir>` to keep the reference race's `.ost` files and the expected-vs-actual report in a new timestamped subfolder. |
+| View coverage screenshots | `OPENSKITIME_VIEW_COVERAGE=<absolute dir> dotnet test tests/OpenSkiTime.Desktop.Tests -c Release --filter-method "*GenerateViewCoverageScreenshotsFromFullRace*"` | Headless renderings of every main view at 1280×800 and 1920×1080. Set `OPENSKITIME_VIEW_COVERAGE_SIZES` (for example `1366x768,1280x720`) for other window sizes in device-independent units; 1920×1080 at 150 % display scaling is 1280x720. |
+| Live Timing browser | `OPENSKITIME_LIVE_FULL_RACE=<dir> dotnet test tests/OpenSkiTime.Desktop.Tests -c Release --filter-method "*ExportLiveSnapshotsOfTheFullRace*"`, then `python tests/live-timing-full-race-e2e.py --snapshots <dir> --screenshots <dir>` | Needs a Release build of `OpenSkiTime.LiveTiming.Server`, Python Playwright and Chromium. Loopback only. |
+| Real Windows desktop | `dotnet build src/OpenSkiTime.Desktop -c Release`, then `OPENSKITIME_DESKTOP_E2E=1 dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --filter-method "*OperatorRunsTheFullRace*"` | FlaUI drives the built executable with mouse and keyboard on an interactive desktop (~45 min). Do not use the computer while it runs. Local data is redirected with `OPENSKITIME_LOCAL_DATA`, so the operator's own FIS cache and preferences are never used. Not part of `OpenSkiTime.slnx`. |
+| Demonstration video | `OPENSKITIME_DESKTOP_E2E=1 OPENSKITIME_DEMO_VIDEO=<dir> OPENSKITIME_DEMO_LIVE_SNAPSHOTS=<dir> dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --filter-method "*RecordDemonstration*"`, then `python scripts/demo-video/compose.py --recording <dir> --output <file.mp4>` | Records the real application with ffmpeg (gdigrab) and composes chapters and captions. Keep the screen awake and unlocked. The application runs in a new folder under `OPENSKITIME_DEMO_ROOT` (default `C:\OpenSkiTimeDemo`, refused inside the user profile); an unrecorded warm-up confirms one file dialog there, so recorded file dialogs, exports and the letterhead stay in that folder. Only the FIS calendar's technical-delegate columns are blurred. |
+| Live timing video | `OPENSKITIME_DESKTOP_E2E=1 OPENSKITIME_LIVE_DEMO_VIDEO=<dir> OPENSKITIME_LIVE_DEMO_PYTHON=<python.exe> dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --filter-method "*RecordLiveTimingDemonstration*"`, write `<dir>/cut.json`, then `python scripts/demo-video/compose-live.py --recording <dir> --output <dir> [--music <mp3>]` | A one-minute recording of the live timing control panel and the live page with the race radio playing: four racers timed in real time, two of them DNF. The radio uses this user's current radio configuration (or `OPENSKITIME_LIVE_DEMO_RADIO_SETTINGS`) and keys from Credential Manager, so real providers are billed. The Python needs Playwright and PyAudioWPatch; the page audio is recorded from WASAPI loopback, so mute other sounds. Produces 16:9 (YouTube) and 9:16 (Reels, Shorts) videos. |
 
 On a machine with a short screen-saver timeout, the real-window suites keep the display awake for their own duration and end this session's running non-secure screen saver; a locked session or a password-protected screen saver is never bypassed, and the suites then stop with a clear message. File dialogs are only used for new files in temporary folders, verified with a marker file; a replace prompt is always declined. The suites run one test at a time.

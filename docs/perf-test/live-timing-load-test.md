@@ -177,7 +177,7 @@ race. After a forced server restart, all 900 viewers reconnected within 12 secon
    address are refused.
 4. Run the publisher: `OPENSKITIME_DESKTOP_E2E=1`, `OPENSKITIME_LIVE_PERF=<output folder>`,
    `OPENSKITIME_LIVE_PERF_VIEWERS=900`, then
-   `dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --no-build --filter FullyQualifiedName~LivePerformanceTests`.
+   `dotnet test tests/OpenSkiTime.Desktop.E2E -c Release --no-build --filter-method "*LivePerformanceTests*"`.
    When `session-url.txt` appears, upload the session ID as the blob `session.txt`. The race starts when the panel
    reports 900 viewers. `OPENSKITIME_LIVE_PERF_CLOUD=http://localhost:5080` and `OPENSKITIME_LIVE_PERF_RACERS=3` give a
    short rehearsal against a local server.

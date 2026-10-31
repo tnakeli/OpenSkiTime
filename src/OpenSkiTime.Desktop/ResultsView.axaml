@@ -76,7 +76,7 @@
             <Button Content="Stop waiting" Command="{Binding StopResultsSubmissionPollingCommand}" IsEnabled="{Binding IsSubmissionBusy}" Classes="secondaryAction" />
           </WrapPanel>
           <StackPanel Classes="field" MaxWidth="440" HorizontalAlignment="Left"><TextBlock Text="SUBMISSION ID (UUID)" Classes="fieldLabel" />
-            <TextBox Text="{Binding ResultSubmissionId}" Watermark="Returned UUID · paste to resume a test submission" IsReadOnly="{Binding IsSubmissionBusy}" /></StackPanel>
+            <TextBox Text="{Binding ResultSubmissionId}" PlaceholderText="Returned UUID · paste to resume a test submission" IsReadOnly="{Binding IsSubmissionBusy}" /></StackPanel>
           <TextBlock Text="{Binding ResultSubmissionStatus}" TextWrapping="Wrap" />
           <Expander Header="FIS API response" IsExpanded="True">
             <TextBox Name="FisSubmissionResponseBox" Text="{Binding ResultSubmissionResponse}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" MaxHeight="260" />

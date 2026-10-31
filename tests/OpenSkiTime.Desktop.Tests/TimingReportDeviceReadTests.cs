@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using OpenSkiTime.Application;
@@ -193,7 +194,7 @@ public partial class DesktopWorkflowTests
             {
                 Directory.CreateDirectory(output);
                 using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new Avalonia.PixelSize((int)window.Width, (int)window.Height), new Avalonia.Vector(96, 96));
-                bitmap.Render(window); bitmap.Save(Path.Combine(output, "timing-observation-device-dialog.png"));
+                bitmap.Render(window); bitmap.Save(Path.Combine(output, "timing-observation-device-dialog.png"), PngBitmapEncoderOptions.Default);
             }
         }
         finally { window.Close(); }

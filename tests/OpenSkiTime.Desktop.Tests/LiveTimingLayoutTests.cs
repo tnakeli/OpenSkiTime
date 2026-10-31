@@ -120,6 +120,6 @@ public sealed class LiveTimingLayoutTests
         if (string.IsNullOrWhiteSpace(output)) { return; }
         Directory.CreateDirectory(output);
         using var bitmap = new RenderTargetBitmap(new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height), new Vector(96, 96));
-        bitmap.Render(window); bitmap.Save(Path.Combine(output, file));
+        bitmap.Render(window); bitmap.Save(Path.Combine(output, file), PngBitmapEncoderOptions.Default);
     }
 }

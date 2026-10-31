@@ -25,7 +25,7 @@
               <StackPanel Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="FIRST BIB" Classes="fieldLabel" /><NumericUpDown Name="DrawFirstBibInput" Value="{Binding DrawFirstBib}" Minimum="1" Maximum="99999" FormatString="0" /></StackPanel>
               <StackPanel Grid.Column="2" Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="FIRST GROUP" Classes="fieldLabel" /><NumericUpDown Value="{Binding FirstDrawGroup}" Minimum="1" Maximum="15" FormatString="0" /></StackPanel>
               <StackPanel Grid.Column="4" Classes="field" IsEnabled="{Binding IsFirstDrawRun}"><TextBlock Text="SKIPPED BIBS" Classes="fieldLabel" />
-                <TextBox Name="DrawSkippedBibsInput" Text="{Binding DrawSkippedBibsText}" Watermark="Missing bibs, e.g. 13, 27, 40-42" ToolTip.Tip="These bib numbers are not handed out; assignment continues with the next number." /></StackPanel>
+                <TextBox Name="DrawSkippedBibsInput" Text="{Binding DrawSkippedBibsText}" PlaceholderText="Missing bibs, e.g. 13, 27, 40-42" ToolTip.Tip="These bib numbers are not handed out; assignment continues with the next number." /></StackPanel>
               <Button Grid.Column="6" Name="AssignBibsButton" Content="Assign bibs" Command="{Binding AssignBibsCommand}" IsEnabled="{Binding CanAssignBibs}" Classes="secondaryAction" VerticalAlignment="Bottom"
                       ToolTip.Tip="Give the start list new bibs in its current order from the first bib, skipping the listed numbers. Possible until timing begins." />
             </Grid>
@@ -114,8 +114,8 @@
               <Run Text="{Binding SelectedDrawRow.Entry.Entrant.Athlete.Surname, FallbackValue=''}" />
               <Run Text="{Binding SelectedDrawRow.Entry.Position, StringFormat=' · position {0}', FallbackValue=''}" />
             </TextBlock>
-            <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="MOVE TO" Classes="fieldLabel" /><TextBox Name="DrawMoveToInput" Text="{Binding DrawMoveToPosition}" Watermark="Position" /></StackPanel>
-            <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="REASON" Classes="fieldLabel" /><TextBox Name="DrawMoveReasonInput" Text="{Binding DrawMoveReason}" Watermark="For example: start penalty" /></StackPanel>
+            <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="MOVE TO" Classes="fieldLabel" /><TextBox Name="DrawMoveToInput" Text="{Binding DrawMoveToPosition}" PlaceholderText="Position" /></StackPanel>
+            <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="REASON" Classes="fieldLabel" /><TextBox Name="DrawMoveReasonInput" Text="{Binding DrawMoveReason}" PlaceholderText="For example: start penalty" /></StackPanel>
             <Button Grid.Column="6" Name="MoveDrawEntryButton" Content="Move" Command="{Binding MoveDrawEntryCommand}" Classes="secondaryAction" VerticalAlignment="Bottom"
                     ToolTip.Tip="Moves the selected competitor to the position. The bib stays with the competitor; use Assign bibs to renumber." />
           </Grid>

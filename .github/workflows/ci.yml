@@ -78,7 +78,7 @@ jobs:
           node-version: '22'
       - name: Audit all NuGet dependencies (including test tools)
         run: dotnet restore OpenSkiTime.slnx -p:SecurityAudit=true
-      - run: dotnet test OpenSkiTime.slnx -c Release --logger "trx;LogFileName=tests.trx"
+      - run: dotnet test OpenSkiTime.slnx -c Release --report-xunit-trx
       - name: Compile and verify a review installer
         shell: pwsh
         run: |
@@ -121,7 +121,7 @@ jobs:
       - name: Audit all NuGet dependencies (including test tools)
         run: dotnet restore OpenSkiTime.slnx -p:SecurityAudit=true
       - name: Run tests (excluding Windows-only, OCR, and headless UI tests)
-        run: dotnet test OpenSkiTime.slnx -c Release --logger "trx;LogFileName=tests.trx" --filter "FullyQualifiedName !~ TimingReceiptOcrTests & FullyQualifiedName !~ TimyUsbTests & FullyQualifiedName !~ CredentialStorageTests & FullyQualifiedName !~ DesktopWorkflowTests"
+        run: dotnet test OpenSkiTime.slnx -c Release --report-xunit-trx --filter-not-class "*TimingReceiptOcrTests" "*TimyUsbTests" "*CredentialStorageTests" "*DesktopWorkflowTests"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:

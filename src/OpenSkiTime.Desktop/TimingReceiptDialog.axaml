@@ -45,19 +45,19 @@
        <ScrollViewer MaxHeight="330" HorizontalScrollBarVisibility="Disabled">
         <WrapPanel IsEnabled="{Binding CanEditReportDevice}">
          <StackPanel Width="200" Margin="0,0,8,4"><TextBlock Text="DEVICE" Classes="eyebrow"/><ComboBox Name="ReportDeviceSourcePicker" ItemsSource="{Binding ReportDeviceSources}" SelectedItem="{Binding ReportDeviceSource}" HorizontalAlignment="Stretch"/></StackPanel>
-         <StackPanel Name="ReportDeviceUsbFields" Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceUsb}"><TextBlock Text="USB ID" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceUsbId}" Watermark="Blank = first Timy"/></StackPanel>
+         <StackPanel Name="ReportDeviceUsbFields" Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceUsb}"><TextBlock Text="USB ID" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceUsbId}" PlaceholderText="Blank = first Timy"/></StackPanel>
          <StackPanel Name="ReportDeviceSerialFields" Width="200" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceSerial}"><TextBlock Text="COM PORT" Classes="eyebrow"/>
           <Grid ColumnDefinitions="*,Auto"><ComboBox Name="ReportDevicePortPicker" ItemsSource="{Binding ReportDevicePorts}" SelectedItem="{Binding ReportDevicePort}" HorizontalAlignment="Stretch"/><Button Grid.Column="1" Content="Refresh" Classes="secondaryAction" Command="{Binding RefreshReportDevicePortsCommand}" Margin="4,0,0,0"/></Grid></StackPanel>
          <StackPanel Width="110" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceSerial}"><TextBlock Text="BAUD" Classes="eyebrow"/><ComboBox ItemsSource="{Binding ReportDeviceBauds}" SelectedItem="{Binding ReportDeviceBaud}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="USERNAME" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceAlgeUsername}"/></StackPanel>
-         <StackPanel Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="PASSWORD" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceAlgePassword}" PasswordChar="•" Watermark="Empty = saved"/></StackPanel>
+         <StackPanel Width="160" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="PASSWORD" Classes="eyebrow"/><TextBox Text="{Binding ReportDeviceAlgePassword}" PasswordChar="•" PlaceholderText="Empty = saved"/></StackPanel>
          <CheckBox Content="Remember password" IsChecked="{Binding ReportDeviceRememberPassword}" IsVisible="{Binding IsReportDeviceAlge}" VerticalAlignment="Bottom" Margin="0,0,8,4"/>
          <Button Content="Fetch devices" Classes="secondaryAction" Command="{Binding FetchReportDeviceAlgeDevicesCommand}" IsEnabled="{Binding !IsReportDeviceAlgeFetching}" IsVisible="{Binding IsReportDeviceAlge}" VerticalAlignment="Bottom" Margin="0,0,8,4"/>
          <StackPanel Name="ReportDeviceAlgeFields" Width="200" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceAlge}"><TextBlock Text="DEVICE" Classes="eyebrow"/>
-          <TextBox Text="{Binding ReportDeviceAlgeStartDevice}" IsVisible="{Binding !HasReportDeviceAlgeDevices}" Watermark="MT1 device ID"/>
+          <TextBox Text="{Binding ReportDeviceAlgeStartDevice}" IsVisible="{Binding !HasReportDeviceAlgeDevices}" PlaceholderText="MT1 device ID"/>
           <ComboBox ItemsSource="{Binding ReportDeviceAlgeDevices}" SelectedItem="{Binding SelectedReportDeviceAlgeStart}" IsVisible="{Binding HasReportDeviceAlgeDevices}" PlaceholderText="Choose MT1 device" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="200" Margin="0,0,8,4"><StackPanel.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="IsReportDeviceAlge"/><Binding Path="IsReportDeviceB"/></MultiBinding></StackPanel.IsVisible><TextBlock Text="FINISH DEVICE" Classes="eyebrow"/>
-          <TextBox Text="{Binding ReportDeviceAlgeFinishDevice}" IsVisible="{Binding !HasReportDeviceAlgeDevices}" Watermark="Blank = same device"/>
+          <TextBox Text="{Binding ReportDeviceAlgeFinishDevice}" IsVisible="{Binding !HasReportDeviceAlgeDevices}" PlaceholderText="Blank = same device"/>
           <ComboBox ItemsSource="{Binding ReportDeviceAlgeDevices}" SelectedItem="{Binding SelectedReportDeviceAlgeFinish}" IsVisible="{Binding HasReportDeviceAlgeDevices}" PlaceholderText="Same device" HorizontalAlignment="Stretch"/></StackPanel>
          <TextBlock Text="{Binding ReportDeviceAlgeStatus}" IsVisible="{Binding IsReportDeviceAlge}" VerticalAlignment="Bottom" Margin="0,0,8,8" Classes="supportingText"/>
          <StackPanel Name="ReportDeviceReplayFields" Width="330" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceReplay}"><TextBlock Text="RAW ALGE ASCII FILE" Classes="eyebrow"/>
@@ -65,7 +65,7 @@
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceB}"><TextBlock Text="START CH" Classes="eyebrow"/><ComboBox Name="ReportDeviceStartChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceStartChannel}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceB}"><TextBlock Text="FINISH CH" Classes="eyebrow"/><ComboBox Name="ReportDeviceFinishChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceFinishChannel}" HorizontalAlignment="Stretch"/></StackPanel>
          <StackPanel Width="90" Margin="0,0,8,4" IsVisible="{Binding IsReportDeviceHand}"><TextBlock Text="CHANNEL" Classes="eyebrow"/><ComboBox Name="ReportDeviceHandChannelPicker" ItemsSource="{Binding ReportDeviceChannels}" SelectedItem="{Binding ReportDeviceHandChannel}" HorizontalAlignment="Stretch"/></StackPanel>
-         <StackPanel Width="120" Margin="0,0,8,4"><TextBlock Text="DEVICE DATE" Classes="eyebrow"/><TextBox Name="ReportDeviceDateBox" Text="{Binding ReportDeviceDate}" Watermark="YYYY-MM-DD"/></StackPanel>
+         <StackPanel Width="120" Margin="0,0,8,4"><TextBlock Text="DEVICE DATE" Classes="eyebrow"/><TextBox Name="ReportDeviceDateBox" Text="{Binding ReportDeviceDate}" PlaceholderText="YYYY-MM-DD"/></StackPanel>
         </WrapPanel>
        </ScrollViewer>
        <WrapPanel Grid.Row="1" Margin="0,4,0,4">

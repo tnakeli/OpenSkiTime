@@ -6,7 +6,7 @@ rows, statuses, intermediate times, run and combined times, ranks, ties and diff
 checked against independent expectations (expected.json). Offline; loopback only; synthetic data only.
 
 Run:
-  OPENSKITIME_LIVE_FULL_RACE=<dir> dotnet test tests/OpenSkiTime.Desktop.Tests -c Release --filter "FullyQualifiedName~ExportLiveSnapshotsOfTheFullRace"
+  OPENSKITIME_LIVE_FULL_RACE=<dir> dotnet test tests/OpenSkiTime.Desktop.Tests -c Release --filter-method "*ExportLiveSnapshotsOfTheFullRace*"
   python tests/live-timing-full-race-e2e.py --snapshots <dir> --screenshots <dir>
 Requires: pip install playwright; python -m playwright install chromium; a Release build of OpenSkiTime.LiveTiming.Server.
 """

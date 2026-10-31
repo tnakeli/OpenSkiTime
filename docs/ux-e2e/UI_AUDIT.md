@@ -3,7 +3,7 @@
 Audited on 2026-10-09 against the completed synthetic 100-athlete race (`SyntheticRace`), rendered by the real Avalonia views at 1280×800 and 1920×1080. Screenshots are regenerated with:
 
 ```bash
-OPENSKITIME_VIEW_COVERAGE=<absolute dir> dotnet test tests/OpenSkiTime.Desktop.Tests -c Release --filter "FullyQualifiedName~GenerateViewCoverageScreenshotsFromFullRace"
+OPENSKITIME_VIEW_COVERAGE=<absolute dir> dotnet test tests/OpenSkiTime.Desktop.Tests -c Release --filter-method "*GenerateViewCoverageScreenshotsFromFullRace*"
 ```
 
 Before/after sets for this branch were written to `artifacts/ux-e2e/screenshots/before` and `.../after` (generated, not committed). Real-window screenshots from the Windows desktop session are listed in [TEST_REPORT.md](TEST_REPORT.md).
