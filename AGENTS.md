@@ -20,6 +20,19 @@
   open-source project. Keep developer planning, architecture notes and agent
   instructions under docs/ or other appropriate development files.
 - Do not expose internal agent workflows or development planning in user-facing documentation.
+
+## UI guidelines (desktop)
+
+- Keep density: this is a power-user race office tool, not a web page. Controls are 30 px high (`ControlHeight`), body text 13 px, labels 12 px. Do not enlarge them per view.
+- Use the tokens in `src/OpenSkiTime.Desktop/Styles/Tokens.axaml` and the shared styles in `App.axaml`; never raw colours, sizes or radii in views. Add a token there before using a new value. `QuietTextBrush` is for white and header surfaces only (below 4.5:1 on the canvas).
+- Group fields in cards (`Border.card` with a `Grid.cardHeader` + `TextBlock.cardTitle`) on the canvas. Field labels use `TextBlock.fieldLabel`, upper case, as everywhere else.
+- Lay out forms on the 12-column grid: cards span columns of one 12-column `Grid` (`ColumnSpacing="12"`), fields inside a card sit in `local:FormRow` rows with `Grid.Column`/`Grid.ColumnSpan`, so edges line up between rows. Size spans to the content (short for codes, nations and counts, wide for names); no free-stretching boxes. Forms are left aligned and at most `ContentMaxWidth` (1240 px) wide.
+- Grids: `DataGrid.raceGrid`, columns sized to content (`Width="Auto"`) so values are never cut; a narrow window scrolls. Short categorical values use `local:ChipTextColumn` so sorting and filter headers keep working.
+- Measured values (altitudes, lengths) use `Border.statField` with the unit inside the field, not in the label.
+- Actions: one action bar at the bottom of a form, destructive action (`dangerAction`) on the left, primary action (`primaryAction`) on the right.
+- Remove text that does not help the operator: no eyebrows, subtitles or format hints that a placeholder or the value already shows.
+- Keep control names, bindings and visibility rules when restyling a view; tests and E2E automation find controls by name and label.
+
 ## Agent workflow
 
 - Before making substantial changes, inspect the relevant existing code, tests, and documentation.
