@@ -32,6 +32,16 @@ public partial class DesktopWorkflowTests
             var window = new MainWindow { DataContext = vm, Width = 1280, Height = 1000, WindowState = Avalonia.Controls.WindowState.Normal };
             window.Show(); window.UpdateLayout();
 
+            // Every field on a form row has the same height: text, choice, number and search fields.
+            static bool Nested(Control x) => x.GetVisualAncestors().Any(a => a is NumericUpDown or AutoCompleteBox or ComboBox
+                || (a is Border b && b.Classes.Contains("statField")));
+            var fields = window.GetVisualDescendants().OfType<Control>()
+                .Where(x => x is TextBox or ComboBox or NumericUpDown or AutoCompleteBox)
+                .Where(x => x.IsEffectivelyVisible && x.FindAncestorOfType<FormRow>() is not null && !Nested(x)).ToArray();
+            Assert.True(fields.Length >= 10);
+            var heights = fields.GroupBy(x => x.Bounds.Height).ToArray();
+            Assert.True(heights.Length == 1, string.Join("; ", heights.Select(g => $"{g.Key}px: {string.Join(", ", g.Select(x => x.GetType().Name).Distinct())}")));
+
             Assert.Equal("150", vm.CompetitionVerticalDrop);
             vm.CompetitionStartAltitude = "600";
             Assert.Equal("220", vm.CompetitionVerticalDrop);

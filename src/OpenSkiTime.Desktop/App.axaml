@@ -243,6 +243,16 @@
     <Style Selector="ComboBox">
       <Setter Property="Padding" Value="8,4,8,4" />
     </Style>
+    <!-- Fluent gives the number box a 32 px spinner and a roomier inner padding; keep it at the field height of
+         the text and choice fields next to it. -->
+    <Style Selector="NumericUpDown /template/ ButtonSpinner#PART_Spinner">
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    </Style>
+    <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,4,6,4" />
+    </Style>
     <Style Selector="ComboBox:focus, NumericUpDown:focus">
       <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
     </Style>
