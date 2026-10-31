@@ -33,7 +33,7 @@ public sealed class WeatherBrowseClient(HttpClient client)
         return result?.Results ?? [];
     }
 
-    public async Task<IReadOnlyList<WeatherHour>> BrowseAsync(WeatherPlace place, DateOnly raceDate, DateTimeOffset retrievedAt,
+    public async Task<IReadOnlyList<WeatherHour>> BrowseAsync(WeatherPlace place, DateOnly date, DateTimeOffset retrievedAt,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(place);
@@ -47,10 +47,10 @@ public sealed class WeatherBrowseClient(HttpClient client)
         {
             if (!DateTime.TryParseExact(hourly.Time[i], "yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
             { throw new DomainValidationException("Weather service returned an invalid local time."); }
-            if (DateOnly.FromDateTime(time) == raceDate)
+            if (DateOnly.FromDateTime(time) == date)
             { hours.Add(new(time, forecast.Timezone, hourly.Temperature[i], hourly.Code[i], url, retrievedAt)); }
         }
-        if (hours.Count == 0) { throw new DomainValidationException("Race date is outside the available forecast. Enter weather manually."); }
+        if (hours.Count == 0) { throw new DomainValidationException("The date is outside the available forecast. Enter weather manually."); }
         return hours;
     }
 }

@@ -25,7 +25,7 @@ public static class ReportStatusService
     {
         ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(descriptor);
         return descriptor.CompetitionId is null
-            ? Convert.ToHexString(SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { Version = 1, source.Series.Revision, source.Settings.Profile })))
+            ? Convert.ToHexString(SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { Version = 2, source.Series.Revision, source.Settings.Profile })))
             : source.SourceVersion;
     }
     public static PdfReportStatus GetStatus(PdfReportSource source, PdfReportDescriptor descriptor)

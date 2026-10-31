@@ -57,10 +57,12 @@ public partial class DesktopWorkflowTests
             Assert.Equal(includeRules, vm.ResultsReady);
             if (includeRules)
             {
-                Assert.Contains("F 731", vm.ResultsRuleValues); Assert.Contains("Category adder 7.00", vm.ResultsRuleValues);
-                Assert.Contains("Minimum 29.00", vm.ResultsRuleValues); Assert.Contains("1327", vm.ResultsRuleSource);
+                var figures = Assert.IsType<PenaltyRuleFigures>(vm.ResultsRuleFigures);
+                Assert.Equal("731", figures.F); Assert.Equal("7.00", figures.Adder);
+                Assert.Equal("29.00", figures.Minimum); Assert.Contains("1327", vm.ResultsRuleSource);
                 Assert.Equal(5, vm.ResultTopTen.Count); Assert.Equal(5, vm.ResultBestStarted.Count);
-                Assert.Contains("(A + B − C) / 10", vm.ResultsPenaltySummary);
+                var sums = Assert.IsType<PenaltySumFigures>(vm.ResultsPenaltyFigures);
+                Assert.NotEmpty(sums.Calculated); Assert.NotEmpty(sums.Applied);
                 Assert.All(vm.ResultRows.Where(x => x.Status == "Finished"), x => Assert.NotEmpty(x.RacePoints));
             }
             else

@@ -10,7 +10,7 @@ namespace OpenSkiTime.Desktop;
 public sealed partial class MainViewModel
 {
     public ObservableCollection<FisCourseHomologation> CompetitionHomologations { get; } = [];
-    public bool HasCompetitionHomologations => IsCompetitionFis && CompetitionHomologations.Count > 0;
+    public bool HasCompetitionHomologations => CompetitionHomologations.Count > 0;
     [ObservableProperty] private FisCourseHomologation? _selectedCompetitionHomologation;
     [ObservableProperty] private bool _isHomologationBusy;
     [ObservableProperty]
@@ -26,7 +26,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task BrowseCompetitionHomologationsAsync()
     {
-        if (IsHomologationBusy || !IsCompetitionEditing || !IsCompetitionFis) { return; }
+        if (IsHomologationBusy || !IsCompetitionEditing) { return; }
         var context = CourseContext(); IsHomologationBusy = true;
         CompetitionHomologationStatus = "Fetching FIS homologations…";
         try

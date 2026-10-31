@@ -212,11 +212,11 @@ public sealed class CompetitorEditingVideoTests
         office.Navigate("Competitions");
         app.Click("Add competition");
         office.Pause(400);
-        const string form = "ACTIVE RACE / DETAILS";
+        const string form = "New competition";
         app.SetText(office.FieldAfter(form, "SHORT NAME *"), GiantSlalom);
         app.SetText(office.FieldAfter(form, "EVENT NAME *"), "Synthetic Women's Giant Slalom");
         office.Select(office.FieldAfter(form, "DISCIPLINE"), nameof(OpenSkiTime.Domain.Discipline.GiantSlalom));
-        office.Select(office.FieldAfter("LOCATION", "GENDER"), OpenSkiTime.Application.CompetitionGenderLabels.Format(race.Competition.Calendar!.Gender));
+        office.Select(office.FieldAfter(form, "GENDER"), OpenSkiTime.Application.CompetitionGenderLabels.Format(race.Competition.Calendar!.Gender));
         app.Click("Save competition");
         app.WaitUntil(() => app.TryByName(GiantSlalom) is not null && app.TryByName("Edit competition") is not null, "giant slalom saved");
         office.Pause(400);

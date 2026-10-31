@@ -4,94 +4,24 @@
              x:Class="OpenSkiTime.Desktop.App"
              RequestedThemeVariant="Light">
   <Application.Resources>
-    <local:GenderLabelConverter x:Key="GenderLabelConverter" />
-    <!-- Race Signal theme. Semantic tokens only: views refer to these keys, never to raw colours. -->
-    <SolidColorBrush x:Key="CanvasBrush">#F1F5F9</SolidColorBrush>
-    <SolidColorBrush x:Key="SurfaceBrush">#FFFFFF</SolidColorBrush>
-    <SolidColorBrush x:Key="SubtleSurfaceBrush">#F8FAFC</SolidColorBrush>
-    <SolidColorBrush x:Key="HeaderSurfaceBrush">#EEF2F7</SolidColorBrush>
-    <SolidColorBrush x:Key="HoverBrush">#F1F5F9</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyBrush">#14234A</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyRaisedBrush">#22356A</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyHoverBrush">#2D4482</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyPressedBrush">#0D1834</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyBorderBrush">#3E5291</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyHoverBorderBrush">#6C80BD</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyDisabledBrush">#1A2B57</SolidColorBrush>
-    <SolidColorBrush x:Key="NavyDisabledBorderBrush">#2E3F70</SolidColorBrush>
-    <SolidColorBrush x:Key="OnNavyTextBrush">#FFFFFF</SolidColorBrush>
-    <SolidColorBrush x:Key="OnNavyMutedTextBrush">#C3CEE6</SolidColorBrush>
-    <SolidColorBrush x:Key="OnNavyDisabledTextBrush">#8796BC</SolidColorBrush>
-    <SolidColorBrush x:Key="OnNavyAccentBrush">#2563EB</SolidColorBrush>
-    <SolidColorBrush x:Key="OnNavyAccentHoverBrush">#3B82F6</SolidColorBrush>
-    <SolidColorBrush x:Key="BorderBrush">#CBD5E1</SolidColorBrush>
-    <SolidColorBrush x:Key="LineBrush">#E2E8F0</SolidColorBrush>
-    <SolidColorBrush x:Key="TextBrush">#111827</SolidColorBrush>
-    <SolidColorBrush x:Key="MutedTextBrush">#475569</SolidColorBrush>
-    <SolidColorBrush x:Key="DisabledTextBrush">#64748B</SolidColorBrush>
-    <SolidColorBrush x:Key="DisabledSurfaceBrush">#F1F5F9</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentBrush">#1D4ED8</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentHoverBrush">#1E40AF</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentPressedBrush">#1E3A8A</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentTintBrush">#EFF6FF</SolidColorBrush>
-    <SolidColorBrush x:Key="SuccessBrush">#166534</SolidColorBrush>
-    <SolidColorBrush x:Key="SuccessTintBrush">#DCFCE7</SolidColorBrush>
-    <SolidColorBrush x:Key="WarningBrush">#92400E</SolidColorBrush>
-    <SolidColorBrush x:Key="WarningTintBrush">#FEF3C7</SolidColorBrush>
-    <SolidColorBrush x:Key="PendingCellBrush">#FEF3C7</SolidColorBrush>
-    <SolidColorBrush x:Key="ErrorBrush">#B91C1C</SolidColorBrush>
-    <SolidColorBrush x:Key="ErrorTintBrush">#FEE2E2</SolidColorBrush>
-    <SolidColorBrush x:Key="ErrorBorderBrush">#FCA5A5</SolidColorBrush>
-    <!-- Attention on the dark timing banner (B clock and device clock warnings). -->
-    <SolidColorBrush x:Key="BannerWarningBrush">#F3C969</SolidColorBrush>
-    <SolidColorBrush x:Key="BannerWarningTextBrush">#3B2C00</SolidColorBrush>
-    <!-- Connection and publishing dots on light surfaces: connected / problem. Text always states the state too. -->
-    <SolidColorBrush x:Key="LiveOkBrush">#16A34A</SolidColorBrush>
-    <!-- Forerunners in timing: their own tint so they are never read as competitors. -->
-    <SolidColorBrush x:Key="ForerunnerBrush">#EDE9FE</SolidColorBrush>
-    <SolidColorBrush x:Key="ForerunnerTextBrush">#4C1D95</SolidColorBrush>
-    <SolidColorBrush x:Key="SelectionBrush">#DBEAFE</SolidColorBrush>
-    <SolidColorBrush x:Key="SelectionTextBrush">#111827</SolidColorBrush>
-    <!-- Selected text inside inputs: light highlight that keeps the text readable. -->
-    <SolidColorBrush x:Key="TextSelectionBrush">#BFDBFE</SolidColorBrush>
-    <SolidColorBrush x:Key="FocusBrush">#1D4ED8</SolidColorBrush>
-    <!-- The OpenSkiTime mark keeps its own colour. -->
-    <SolidColorBrush x:Key="BrandBrush">#087E78</SolidColorBrush>
-    <Thickness x:Key="PageInset">12,8,12,8</Thickness>
-    <Thickness x:Key="SectionInset">16,12</Thickness>
-    <CornerRadius x:Key="SurfaceRadius">4</CornerRadius>
-    <CornerRadius x:Key="ControlRadius">3</CornerRadius>
-    <x:Double x:Key="TitleSize">17</x:Double>
-    <x:Double x:Key="SectionSize">15</x:Double>
-    <x:Double x:Key="BodySize">13</x:Double>
-    <x:Double x:Key="MetaSize">11</x:Double>
-    <x:Double x:Key="ControlHeight">30</x:Double>
-    <!-- Fluent's expander headers default to 48 px. -->
-    <x:Double x:Key="ExpanderMinHeight">34</x:Double>
-    <Thickness x:Key="ExpanderHeaderPadding">12,0,12,0</Thickness>
-    <Thickness x:Key="ExpanderContentPadding">12,8</Thickness>
-    <FontFamily x:Key="TimeFontFamily">Cascadia Mono,Consolas,DejaVu Sans Mono,monospace</FontFamily>
-    <!-- Fluent derives check boxes, toggles, sliders and focus accents from the system accent. Pin it to the
-         OpenSkiTime accent so every control uses one colour instead of the Windows blue. -->
-    <Color x:Key="SystemAccentColor">#1D4ED8</Color>
-    <Color x:Key="SystemAccentColorDark1">#1E40AF</Color>
-    <Color x:Key="SystemAccentColorDark2">#1E3A8A</Color>
-    <Color x:Key="SystemAccentColorDark3">#172554</Color>
-    <Color x:Key="SystemAccentColorLight1">#2563EB</Color>
-    <Color x:Key="SystemAccentColorLight2">#60A5FA</Color>
-    <Color x:Key="SystemAccentColorLight3">#BFDBFE</Color>
-    <!-- Avalonia 12 draws window decorations over an extended client area. The main window supplies its own title,
-         so keep only the minimize, maximize and close buttons: the drawn title would overlap the logo, and the
-         fullscreen button would cover the Settings menu. -->
-    <ControlTheme x:Key="{x:Type WindowDrawnDecorations}" TargetType="WindowDrawnDecorations"
-                  BasedOn="{StaticResource {x:Type WindowDrawnDecorations}}">
-      <Style Selector="^ /template/ Panel#PART_TitleTextPanel > TextBlock">
-        <Setter Property="IsVisible" Value="False" />
-      </Style>
-      <Style Selector="^ /template/ Button#PART_FullScreenButton">
-        <Setter Property="IsVisible" Value="False" />
-      </Style>
-    </ControlTheme>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://OpenSkiTime.Desktop/Styles/Tokens.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <local:GenderLabelConverter x:Key="GenderLabelConverter" />
+      <!-- Avalonia 12 draws window decorations over an extended client area. The main window supplies its own title,
+           so keep only the minimize, maximize and close buttons: the drawn title would overlap the logo, and the
+           fullscreen button would cover the Settings menu. -->
+      <ControlTheme x:Key="{x:Type WindowDrawnDecorations}" TargetType="WindowDrawnDecorations"
+                    BasedOn="{StaticResource {x:Type WindowDrawnDecorations}}">
+        <Style Selector="^ /template/ Panel#PART_TitleTextPanel > TextBlock">
+          <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^ /template/ Button#PART_FullScreenButton">
+          <Setter Property="IsVisible" Value="False" />
+        </Style>
+      </ControlTheme>
+    </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
@@ -102,11 +32,116 @@
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
 
-    <Style Selector="Border.workSurface">
+    <!-- Cards: white surfaces on the canvas. A work surface wraps a whole section; a card groups one set of fields. -->
+    <Style Selector="Border.workSurface, Border.card">
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadius}" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Padding" Value="{DynamicResource CardInset}" />
+    </Style>
+    <!-- Card header row: control height, so a title with an action button lines up with a title without one. -->
+    <Style Selector="Grid.cardHeader">
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    </Style>
+    <!-- A card's closing option (share to all races): docked to the bottom edge, so cards side by side line up. -->
+    <Style Selector="CheckBox.cardFooter">
+      <Setter Property="Margin" Value="0,10,0,0" />
+    </Style>
+    <Style Selector="TextBlock.cardTitle">
+      <Setter Property="FontSize" Value="{DynamicResource CardTitleSize}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- Chip: a short categorical value (discipline, category, active race). -->
+    <Style Selector="Border.chip">
+      <Setter Property="Background" Value="{DynamicResource ChipBlueBrush}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ChipRadius}" />
+      <Setter Property="Padding" Value="8,1" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.chip > TextBlock">
+      <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource ChipBlueTextBrush}" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="Border.chip.green">
+      <Setter Property="Background" Value="{DynamicResource ChipGreenBrush}" />
+    </Style>
+    <Style Selector="Border.chip.green > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ChipGreenTextBrush}" />
+    </Style>
+    <Style Selector="Border.chip.red">
+      <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+    </Style>
+    <Style Selector="Border.chip.red > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+    </Style>
+    <!-- Something to review, not an error (an outdated PDF). -->
+    <Style Selector="Border.chip.warning">
+      <Setter Property="Background" Value="{DynamicResource WarningTintBrush}" />
+    </Style>
+    <Style Selector="Border.chip.warning > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+    </Style>
+    <!-- Stat field: a compact measured value (altitudes, lengths) with its label and unit in one tile. -->
+    <Style Selector="Border.statField">
+      <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+      <Setter Property="Padding" Value="8,3,6,3" />
+    </Style>
+    <Style Selector="Border.statField:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource MutedTextBrush}" />
+    </Style>
+    <Style Selector="Border.statField:focus-within">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Padding" Value="7,2,5,2" />
+    </Style>
+    <Style Selector="Border.statField TextBox, Border.statField TextBox:focus, Border.statField TextBox:pointerover">
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="0,1,4,1" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontSize" Value="{DynamicResource SectionSize}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Border.statField TextBox /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <!-- Figure: a read-only calculated value (penalty rule values and sums) in a tile shaped like a stat field. The
+         result of a calculation (applied penalty) uses the accent tint. -->
+    <Style Selector="Border.figure">
+      <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+      <Setter Property="Padding" Value="8,3,6,3" />
+    </Style>
+    <Style Selector="Border.figure.result">
+      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.figureValue">
+      <Setter Property="FontSize" Value="{DynamicResource SectionSize}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="0,3,0,0" />
+    </Style>
+    <Style Selector="TextBlock.unit">
+      <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Border.subtleSurface">
       <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
@@ -120,6 +155,28 @@
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       <Setter Property="BorderThickness" Value="3,0,0,0" />
       <Setter Property="Padding" Value="10,8" />
+    </Style>
+    <!-- Warning note (migrated settings to review): pale warning with a strong warning edge. -->
+    <Style Selector="Border.warningNote">
+      <Setter Property="Background" Value="{DynamicResource WarningTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+    <!-- Error note (storage alarm, B signal missing): pale error with a strong error edge. -->
+    <Style Selector="Border.errorNote">
+      <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+    <Style Selector="Border.errorNote TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Border.warningNote > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style Selector="TextBlock.sectionTitle">
       <Setter Property="FontSize" Value="{DynamicResource SectionSize}" />
@@ -144,7 +201,7 @@
       <Setter Property="Spacing" Value="4" />
     </Style>
     <Style Selector="TextBlock.fieldLabel">
-      <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
+      <Setter Property="FontSize" Value="{DynamicResource LabelSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     </Style>
@@ -226,6 +283,18 @@
       <Setter Property="Padding" Value="6,4" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- Row marker (NEW, DEL, ● pending, + new row): a narrow centred column that fits its longest marker. -->
+    <Style Selector="TextBlock.markerCell">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <!-- Person name rule in hand-built grid cells: the surname is bold. -->
+    <Style Selector="TextBlock.surname">
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
     <Style Selector="TextBlock.gridCell.changed">
       <Setter Property="Background" Value="{DynamicResource PendingCellBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
@@ -245,6 +314,16 @@
     <Style Selector="ComboBox">
       <Setter Property="Padding" Value="8,4,8,4" />
     </Style>
+    <!-- Fluent gives the number box a 32 px spinner and a roomier inner padding; keep it at the field height of
+         the text and choice fields next to it. -->
+    <Style Selector="NumericUpDown /template/ ButtonSpinner#PART_Spinner">
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    </Style>
+    <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,4,6,4" />
+    </Style>
     <Style Selector="ComboBox:focus, NumericUpDown:focus">
       <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
     </Style>
@@ -252,13 +331,25 @@
       <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
       <Setter Property="BorderThickness" Value="2" />
     </Style>
+    <!-- Searchable choice (nations): looks and sizes like a text box; the inner text box carries the field styles. -->
+    <Style Selector="AutoCompleteBox">
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+      <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
+      <Setter Property="MaxDropDownHeight" Value="280" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    </Style>
     <Style Selector="CheckBox">
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
     <Style Selector="Expander">
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
-      <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadius}" />
     </Style>
     <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
       <Setter Property="FontWeight" Value="SemiBold" />
@@ -442,6 +533,22 @@
     <Style Selector="TabItem:selected /template/ Border#PART_SelectedPipe">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     </Style>
+    <!-- Page tabs (Settings): the first tab label starts on the page edge, so tabs and cards share the left edge. -->
+    <Style Selector="TabControl.pageTabs">
+      <Setter Property="Padding" Value="0,12,0,0" />
+    </Style>
+    <Style Selector="TabControl.pageTabs > TabItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,24,0" />
+    </Style>
+    <Style Selector="StackPanel.tabPage">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+    <!-- A row of links under a card's text: the first link starts on the text edge. -->
+    <Style Selector="WrapPanel.links > HyperlinkButton">
+      <Setter Property="Padding" Value="0,4" />
+      <Setter Property="Margin" Value="0,0,16,0" />
+    </Style>
     <!-- Row splitters between stacked panes: a visible grip so operators can find and resize them. -->
     <Style Selector="GridSplitter.paneSplitter">
       <Setter Property="Background" Value="Transparent" />
@@ -461,8 +568,9 @@
     <Style Selector="DataGrid.raceGrid">
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
       <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadius}" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="FontFeatures" Value="+tnum" />
       <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource LineBrush}" />
@@ -474,10 +582,10 @@
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridColumnHeader">
       <Setter Property="Background" Value="{DynamicResource HeaderSurfaceBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
-      <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
+      <Setter Property="Foreground" Value="{DynamicResource QuietTextBrush}" />
+      <Setter Property="FontSize" Value="{DynamicResource ColumnHeaderSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
       <Setter Property="Fill" Value="{DynamicResource HoverBrush}" />
@@ -490,16 +598,23 @@
       <Setter Property="FontSize" Value="14" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:selected">
-      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="Background" Value="{DynamicResource RowSelectionBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:selected /template/ Border#RowBorder">
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="BorderThickness" Value="4,0,0,0" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
-      <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="Fill" Value="{DynamicResource RowSelectionBrush}" />
       <Setter Property="Opacity" Value="1" />
+    </Style>
+    <!-- Timing keeps the stronger selection tint until the timing view has its own review. -->
+    <Style Selector="DataGrid.timingGrid DataGridRow:selected">
+      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    </Style>
+    <Style Selector="DataGrid.timingGrid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
     </Style>
     <Style Selector="DataGrid.raceGrid DataGridCell:selected">
       <Setter Property="Background" Value="Transparent" />

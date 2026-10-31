@@ -65,6 +65,32 @@ public partial class DesktopWorkflowTests
             Assert.DoesNotContain(vm.RankingRows, x => x.IsForerunner);
             Assert.Equal(3, workspace.Timing!.Snapshot!.Results.Count);
 
+            // Forerunners reorder among themselves in At start (dragging A above B starts A after B); the order is saved
+            // with the run's forerunners. They never mix with the competitors.
+            var keyA = vm.AtStartRows.Single(x => x.BibText == "F · A").Bib;
+            var keyB = vm.AtStartRows.Single(x => x.BibText == "F · B").Bib;
+            var firstCompetitor = vm.AtStartRows.First(x => !x.IsForerunner).Bib;
+            Assert.NotNull(vm.StartQueueDropProblem(vm.CreateTimingDrag(keyA)!, firstCompetitor));
+            Assert.NotNull(vm.StartQueueDropProblem(vm.CreateTimingDrag(firstCompetitor)!, keyA));
+            Assert.Null(vm.StartQueueDropProblem(vm.CreateTimingDrag(keyA)!, keyB));
+            await vm.DropStartQueueAsync(vm.CreateTimingDrag(keyA)!, keyB, visuallyAbove: true);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(["F · A", "F · B"], vm.AtStartRows.Where(x => x.IsForerunner).Select(x => x.BibText)); // next starter at the bottom
+            Assert.Equal(["B", "A"], (await workspace.ReadRaceInformationAsync(competition.Id))!.Values.Runs.Single(x => x.Number == 1).Forerunners!.Select(x => x.Letter));
+            Assert.Equal(["B", "A"], workspace.Timing.Snapshot!.Forerunners.Select(x => x.ForerunnerLetter));
+            // Ctrl+Down on A (an earlier start) moves it back before B.
+            vm.SelectTimingBibs([keyA], keyA);
+            await vm.MoveStartRowCommand.ExecuteAsync("down");
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(["A", "B"], workspace.Timing.Snapshot!.Forerunners.Select(x => x.ForerunnerLetter));
+            Assert.Equal(["A", "B"], vm.TimingForerunners.Select(x => x.Letter));
+            // In the dialog the draft order changes; Cancel keeps the saved order.
+            vm.ShowForerunnerEditor = true;
+            vm.MoveTimingForerunner(vm.TimingForerunners[1], 0);
+            Assert.Equal(["B", "A"], vm.TimingForerunners.Select(x => x.Letter));
+            await vm.CancelTimingForerunnersCommand.ExecuteAsync(null);
+            Assert.Equal(["A", "B"], vm.TimingForerunners.Select(x => x.Letter));
+
             // The same forerunners are the run's forerunners in Results.
             var saved = (await workspace.ReadRaceInformationAsync(competition.Id))!.Values;
             Assert.Equal([("A", "SYNTHRUNNER", "FIN"), ("B", "SYNTHSECOND", "FIN")],

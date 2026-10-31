@@ -20,6 +20,24 @@
   open-source project. Keep developer planning, architecture notes and agent
   instructions under docs/ or other appropriate development files.
 - Do not expose internal agent workflows or development planning in user-facing documentation.
+
+## UI guidelines (desktop)
+
+- Keep density: this is a power-user race office tool, not a web page. Controls are 30 px high (`ControlHeight`), body text 13 px, labels 12 px. Do not enlarge them per view.
+- Use the tokens in `src/OpenSkiTime.Desktop/Styles/Tokens.axaml` and the shared styles in `App.axaml`; never raw colours, sizes or radii in views. Add a token there before using a new value. `QuietTextBrush` is for white and header surfaces only (below 4.5:1 on the canvas).
+- Group fields in cards (`Border.card` with a `Grid.cardHeader` + `TextBlock.cardTitle`) on the canvas. Field labels use `TextBlock.fieldLabel`, upper case, as everywhere else.
+- One page column per view: every header row, card, grid and action bar of a view shares the same left and right edge. Form views (event series, settings) wrap their whole content in one `local:PageColumn` (left aligned, at most `ContentMaxWidth`, 1240 px); a grid inside it scrolls horizontally when wider. Views led by a list or grid (competitions, competitors, timing) use the full width for everything, editor cards and expander content included. Never cap only part of a view.
+- Lay out forms on the 12-column grid: cards span columns of one 12-column `Grid` (`ColumnSpacing="12"`), fields inside a card sit in `local:FormRow` rows with `Grid.Column`/`Grid.ColumnSpan`. Every row ends on column 12 or on an edge of a field in the row above, so right edges line up too. Size spans to the content (short for codes, nations and counts, wide for names) within that rule; no free-stretching boxes.
+- Cards side by side are equally tall; a closing option such as a share-to-all checkbox is docked to the bottom (`DockPanel.Dock="Bottom"`, `CheckBox.cardFooter`) so it lines up across the row.
+- Grids: `DataGrid.raceGrid`, columns sized to content (`Width="Auto"`) so values are never cut; a narrow window scrolls. Large editable grids (competitors, timing) keep declared widths with a `MinWidth` floor instead, so columns do not jump while virtualized rows scroll in. Short categorical values use `local:ChipTextColumn` so sorting and filter headers keep working.
+- Optional sections that stay folded (`Expander`) look like cards through the Expander tokens; keep their content on the 12-column grid inside `ContentMaxWidth`.
+- Person name rule, everywhere a person is shown (desktop views, live page, PDF reports): surname in bold capitals, then the first name in regular weight ("**KORPI** Sofia"). Desktop grids use `local:CompetitorNameColumn` (one column) or `local:SurnameColumn` (separate surname column) and `local:CompetitorNameBlock` outside grids; the live page uses `personName()`; PDF tables use `PersonName`. Row models carry `Surname` and `FirstName` next to the plain `Name` used for sorting, filters and copying. The official FIS form replicas (timing report form, referee report) keep the FIS layout.
+- Measured values (altitudes, lengths) use `Border.statField` with the unit inside the field, not in the label.
+- Choices: a fixed list is a `ComboBox`; a code list that may grow (FIS categories) is an editable `ComboBox`; a long list (nations) is an `AutoCompleteBox` that searches by code and name. Lists of FIS codes live in `FisReferenceData` and are suggestions, never a restriction.
+- Actions: one action bar at the bottom of a form, destructive action (`dangerAction`) on the left, primary action (`primaryAction`) on the right.
+- Remove text that does not help the operator: no eyebrows, subtitles or format hints that a placeholder or the value already shows.
+- Keep control names, bindings and visibility rules when restyling a view; tests and E2E automation find controls by name and label.
+
 ## Agent workflow
 
 - Before making substantial changes, inspect the relevant existing code, tests, and documentation.

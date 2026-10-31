@@ -1,16 +1,22 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="using:OpenSkiTime.Desktop" xmlns:app="using:OpenSkiTime.Application"
  x:Class="OpenSkiTime.Desktop.TimingReportPersonView" x:CompileBindings="False">
- <StackPanel Spacing="8">
-  <Grid ColumnDefinitions="*,8,*,8,90,8,110">
-   <StackPanel Classes="field"><TextBlock Text="FIRST NAME" Classes="fieldLabel"/><TextBox Text="{Binding FirstName}" MaxLength="150"/></StackPanel>
-   <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="SURNAME" Classes="fieldLabel"/><TextBox Text="{Binding LastName}" MaxLength="150"/></StackPanel>
-   <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel"/><TextBox Text="{Binding Nation}" MaxLength="3"/></StackPanel>
-   <StackPanel Grid.Column="6" Classes="field"><TextBlock Text="FIS NUMBER" Classes="fieldLabel"/><TextBox Text="{Binding Number}" MaxLength="30"/></StackPanel>
-  </Grid>
-  <Grid ColumnDefinitions="2*,8,*,8,2*">
-   <StackPanel Classes="field"><TextBlock Text="EMAIL" Classes="fieldLabel"/><TextBox Text="{Binding Email}" MaxLength="250"/></StackPanel>
-   <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="PHONE" Classes="fieldLabel"/><TextBox Text="{Binding Phone}" MaxLength="80"/></StackPanel>
-   <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="COMPANY" Classes="fieldLabel"/><TextBox Text="{Binding Company}" MaxLength="200"/></StackPanel>
-  </Grid>
+ <!-- One timing report person on the 12-column grid: every row ends on column 12 or on an edge of the row above. -->
+ <StackPanel Spacing="{DynamicResource FormGap}">
+  <local:FormRow>
+   <StackPanel Grid.Column="0" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="SURNAME" Classes="fieldLabel"/><TextBox Text="{Binding LastName}" MaxLength="150"/></StackPanel>
+   <StackPanel Grid.Column="4" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="FIRST NAME" Classes="fieldLabel"/><TextBox Text="{Binding FirstName}" MaxLength="150"/></StackPanel>
+   <StackPanel Grid.Column="8" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel"/>
+    <AutoCompleteBox Text="{Binding Nation, Mode=TwoWay}" ItemsSource="{x:Static app:FisReferenceData.Nations}"
+                     ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1"/></StackPanel>
+   <StackPanel Grid.Column="10" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="FIS NUMBER" Classes="fieldLabel"/><TextBox Text="{Binding Number}" MaxLength="30"/></StackPanel>
+  </local:FormRow>
+  <local:FormRow>
+   <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field"><TextBlock Text="EMAIL" Classes="fieldLabel"/><TextBox Text="{Binding Email}" MaxLength="250"/></StackPanel>
+   <StackPanel Grid.Column="8" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="PHONE" Classes="fieldLabel"/><TextBox Text="{Binding Phone}" MaxLength="80"/></StackPanel>
+  </local:FormRow>
+  <local:FormRow>
+   <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field"><TextBlock Text="COMPANY" Classes="fieldLabel"/><TextBox Text="{Binding Company}" MaxLength="200"/></StackPanel>
+  </local:FormRow>
  </StackPanel>
 </UserControl>

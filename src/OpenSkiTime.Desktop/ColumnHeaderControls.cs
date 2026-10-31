@@ -11,7 +11,9 @@ namespace OpenSkiTime.Desktop;
 
 internal sealed class ColumnHeaderControls
 {
-    private const double HeaderFontSize = 11;
+    // Matches ColumnHeaderSize and ColumnHeaderLetterSpacing in Styles/Tokens.axaml.
+    private const double HeaderFontSize = 11.5;
+    private const double HeaderLetterSpacing = 0.4;
     // Icons (2 × 14) plus the Fluent column header padding on both sides.
     private const double ChromeWidth = 28 + 16;
 
@@ -36,7 +38,7 @@ internal sealed class ColumnHeaderControls
     {
         ArgumentNullException.ThrowIfNull(label);
         var widest = label.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(word => new TextLayout(word, Typeface.Default, HeaderFontSize, null).Width)
+            .Select(word => new TextLayout(word, Typeface.Default, HeaderFontSize, null, letterSpacing: HeaderLetterSpacing).Width)
             .DefaultIfEmpty(0).Max();
         return Math.Ceiling(widest + ChromeWidth);
     }
@@ -51,7 +53,7 @@ internal sealed class ColumnHeaderControls
         Content = new Grid { ColumnDefinitions = ColumnDefinitions.Parse("*,14,14") };
         // Long labels may wrap between words, never inside one: a narrow column used to stack "RK" or "BIB" one
         // letter per line. Columns reserve RequiredWidth so the longest word and both icons stay visible.
-        var title = new TextBlock { Text = label, FontSize = HeaderFontSize, LineHeight = 14,
+        var title = new TextBlock { Text = label, FontSize = HeaderFontSize, LetterSpacing = HeaderLetterSpacing, LineHeight = 14,
             TextWrapping = TextWrapping.WrapWithOverflow, VerticalAlignment = VerticalAlignment.Center };
         Content.Children.Add(title);
         Button Icon(string name, int position)

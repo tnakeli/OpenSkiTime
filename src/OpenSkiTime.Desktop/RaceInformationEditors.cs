@@ -64,6 +64,10 @@ public sealed partial class RaceRunEditor : ObservableObject
         StartTemperature = Format(run.Weather?.StartTemperature); FinishTemperature = Format(run.Weather?.FinishTemperature);
         UnlocatedTemperature = Format(run.Weather?.UnlocatedTemperature);
         WeatherSource = run.Weather?.Source ?? "";
+        // The provenance records the applied forecast's temperature and whether the forecast filled the place-unspecified
+        // field. The field stays forecast-owned after reopening only while it still holds that value.
+        ForecastTemperature = ForecastIn(WeatherSource);
+        _forecastOwnsUnlocated = WeatherSource.EndsWith(FilledMarker, StringComparison.Ordinal) && SameNumber(UnlocatedTemperature, ForecastTemperature);
         foreach (var runner in run.Forerunners ?? [])
         { Forerunners.Add(new() { Letter = runner.Letter, FirstName = runner.Person.FirstName, LastName = runner.Person.LastName, Nation = runner.Person.Nation }); }
     }
@@ -96,13 +100,48 @@ public sealed partial class RaceRunEditor : ObservableObject
     [RelayCommand] private void RemoveForerunner()
     { if (SelectedForerunner is { } row) { Forerunners.Remove(row); } }
 
+    private const string ForecastPrefix = "Open-Meteo forecast · ";
+    private const string FilledMarker = " · filled air place unspecified";
+
+    // True only while the place-unspecified temperature holds a value the forecast put there. Typing in the field ends
+    // that ownership, so a later forecast never replaces a value the operator entered, even an equal one.
+    private bool _forecastOwnsUnlocated;
+    private bool _fillingFromForecast;
+    partial void OnUnlocatedTemperatureChanged(string value)
+    {
+        if (_fillingFromForecast) { return; }
+        _forecastOwnsUnlocated = false;
+        // The saved provenance must not claim the field either, or reopening would hand it back to the forecast.
+        if (WeatherSource.EndsWith(FilledMarker, StringComparison.Ordinal)) { WeatherSource = WeatherSource[..^FilledMarker.Length]; }
+    }
+
+    private void FillUnlocated(string value)
+    {
+        _fillingFromForecast = true;
+        try { UnlocatedTemperature = value; } finally { _fillingFromForecast = false; }
+    }
+
+    // "4" and "4.0" are the same forecast value (a saved decimal may come back without its trailing zero).
+    private static bool SameNumber(string a, string b)
+        => decimal.TryParse(a.Replace(',', '.'), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var x)
+            && decimal.TryParse(b, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var y) && x == y;
+
+    private static string ForecastIn(string source) => source.StartsWith(ForecastPrefix, StringComparison.Ordinal)
+        ? source.Split(" · ").FirstOrDefault(x => x.EndsWith(" °C", StringComparison.Ordinal))?[..^3] ?? "" : "";
+
     public void ApplyForecast(WeatherHour hour)
     {
         ArgumentNullException.ThrowIfNull(hour);
         if (string.IsNullOrWhiteSpace(Conditions)) { Conditions = hour.Conditions; }
-        // A model grid-cell temperature is not a measured start/finish temperature.
+        // A model grid-cell temperature is not a measured start/finish temperature, so it goes to the
+        // place-unspecified field: into an empty field, or replacing a value an earlier forecast put there. A value the
+        // operator typed is never replaced. An hour without a temperature removes the earlier forecast's value.
         ForecastTemperature = hour.Temperature?.ToString("0.0", CultureInfo.InvariantCulture) ?? "unavailable";
-        WeatherSource = $"Open-Meteo forecast · {hour.LocalTime:yyyy-MM-dd HH:mm} {hour.Timezone} · {ForecastTemperature} °C · retrieved {hour.RetrievedAt:O} · {hour.Source}";
+        var mayFill = string.IsNullOrWhiteSpace(UnlocatedTemperature) || _forecastOwnsUnlocated;
+        if (mayFill) { FillUnlocated(hour.Temperature is null ? "" : ForecastTemperature); }
+        _forecastOwnsUnlocated = mayFill && hour.Temperature is not null;
+        WeatherSource = $"{ForecastPrefix}{hour.LocalTime:yyyy-MM-dd HH:mm} {hour.Timezone} · {ForecastTemperature} °C · retrieved {hour.RetrievedAt.ToUniversalTime():yyyy-MM-dd HH:mm} UTC"
+            + (_forecastOwnsUnlocated ? FilledMarker : "");
     }
 
     public void FillEmpty(string field, string value)

@@ -1,99 +1,240 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:local="using:OpenSkiTime.Desktop" x:Class="OpenSkiTime.Desktop.TimingReportView" x:CompileBindings="False">
- <UserControl.Resources>
-  <x:Double x:Key="DataGridSortIconMinWidth">10</x:Double>
- </UserControl.Resources>
- <UserControl.Styles>
-  <Style Selector="DataGridColumnHeader"><Setter Property="Padding" Value="5,0"/></Style>
- </UserControl.Styles>
- <Grid RowDefinitions="Auto,Auto,*,Auto">
-  <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-   <StackPanel><TextBlock Text="Timing report" Classes="sectionTitle"/><TextBlock Text="{Binding ReportIdentity}" Classes="supportingText"/></StackPanel>
-  </Grid>
-  <StackPanel Grid.Row="1" Margin="0,0,0,8">
-   <TextBlock Text="{Binding ReportStatus}" Classes="supportingText" TextWrapping="Wrap"/>
-  </StackPanel>
-  <TabControl Name="TimingReportTabs" Grid.Row="2">
+ <!-- A view led by its tabs: full width. The state card stays on top; the overview (runs, replacements, approval)
+      and the times (synchronization, first/last finishers) each have their own tab. -->
+ <DockPanel>
+  <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,8">
+   <StackPanel Spacing="4">
+    <StackPanel Orientation="Horizontal" Spacing="10">
+     <TextBlock Text="Timing report" Classes="cardTitle"/>
+     <Border Classes="chip" IsVisible="{Binding ReportIdentity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Text="{Binding ReportIdentity}"/></Border>
+    </StackPanel>
+    <TextBlock Text="{Binding ReportStatus}" Classes="supportingText" TextWrapping="Wrap"
+               IsVisible="{Binding ReportStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+   </StackPanel>
+  </Border>
+
+  <TabControl Name="TimingReportTabs" Classes="pageTabs">
    <TabItem Header="Overview">
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-     <StackPanel Spacing="12" Margin="4,8">
-      <Border Classes="subtleSurface" Padding="10"><StackPanel Spacing="6">
-       <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ReportEquipmentSummary}" TextWrapping="Wrap"/>
-        <Button Grid.Column="1" Content="Edit in Settings" Classes="secondaryAction" Command="{Binding ShowTimingReportSettingsCommand}" IsEnabled="{Binding !IsReportBusy}"/></Grid>
-       <TextBlock Text="{Binding ReportSoftware}" Classes="supportingText"/>
-      </StackPanel></Border>
-      <ItemsControl ItemsSource="{Binding ReportRuns}"><ItemsControl.ItemTemplate><DataTemplate>
-       <Grid ColumnDefinitions="55,Auto,*" Margin="0,3"><TextBlock Text="{Binding Run, StringFormat='Run {0}'}" VerticalAlignment="Center"/>
-        <CheckBox Grid.Column="1" Content="All times from System A" IsChecked="{Binding AllResultsA}" Margin="0,0,12,0"/><TextBox Grid.Column="2" Text="{Binding Comment}" PlaceholderText="Run comments / timing problems"/></Grid>
-      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-      <TextBlock Text="Replacement times needing explanation" FontWeight="SemiBold"/>
-      <TextBlock Text="If any times came from another source, add one row for each replacement." Classes="supportingText"/>
-      <Grid ColumnDefinitions="85,85,*,260,80" Margin="0,0,0,4"><TextBlock Text="RUN" Classes="fieldLabel"/><TextBlock Grid.Column="1" Text="BIB" Classes="fieldLabel"/><TextBlock Grid.Column="2" Text="REASON" Classes="fieldLabel"/><TextBlock Grid.Column="3" Text="SOURCE OF THE REPLACEMENT TIME" Classes="fieldLabel" ToolTip.Tip="Data source for replacement of system A time" TextWrapping="Wrap"/></Grid>
-      <ItemsControl Name="ReportReplacementRows" ItemsSource="{Binding ReportMissed}"><ItemsControl.ItemTemplate><DataTemplate>
-       <Grid ColumnDefinitions="85,85,*,260,80" Margin="0,2">
-        <ComboBox ItemsSource="{Binding Runs}" SelectedItem="{Binding Run}" Margin="0,0,6,0"/>
-        <TextBox Grid.Column="1" Text="{Binding Bib}" Margin="0,0,6,0"/>
-        <Grid Grid.Column="2" ColumnDefinitions="160,*" Margin="0,0,6,0">
-         <ComboBox ItemsSource="{Binding Reasons}" SelectedItem="{Binding Reason, Mode=OneWay}" SelectionChanged="ReplacementReason_SelectionChanged" PlaceholderText="Choose reason" Margin="0,0,6,0"/>
-         <TextBox Grid.Column="1" Text="{Binding Reason}" PlaceholderText="Reason / details"/>
+     <StackPanel Classes="tabPage">
+      <!-- Both cards of the row are equally tall. -->
+      <Grid ColumnDefinitions="*,*,*,*,*,*,*,*,*,*,*,*" ColumnSpacing="12">
+       <Border Grid.Column="0" Grid.ColumnSpan="5" Classes="card">
+        <StackPanel Spacing="{DynamicResource FormGap}">
+         <Grid Classes="cardHeader" ColumnDefinitions="*,Auto">
+          <TextBlock Text="Equipment and officials" Classes="cardTitle"/>
+          <Button Grid.Column="1" Content="Edit in Settings" Classes="secondaryAction" Command="{Binding ShowTimingReportSettingsCommand}" IsEnabled="{Binding !IsReportBusy}"/>
+         </Grid>
+         <TextBlock Text="{Binding ReportEquipmentSummary}" TextWrapping="Wrap"/>
+         <TextBlock Text="{Binding ReportSoftware}" Classes="supportingText"/>
+        </StackPanel>
+       </Border>
+
+       <Border Grid.Column="5" Grid.ColumnSpan="7" Classes="card">
+        <StackPanel Spacing="{DynamicResource FormGap}">
+         <Grid Classes="cardHeader"><TextBlock Text="Runs" Classes="cardTitle"/></Grid>
+         <ItemsControl ItemsSource="{Binding ReportRuns}">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="{DynamicResource FormGap}"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate><DataTemplate>
+           <local:FormRow>
+            <TextBlock Grid.Column="0" Grid.ColumnSpan="1" Text="{Binding Run, StringFormat='Run {0}'}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <CheckBox Grid.Column="1" Grid.ColumnSpan="4" Content="All times from System A" IsChecked="{Binding AllResultsA}"/>
+            <TextBox Grid.Column="5" Grid.ColumnSpan="7" Text="{Binding Comment}" PlaceholderText="Run comments / timing problems"/>
+           </local:FormRow>
+          </DataTemplate></ItemsControl.ItemTemplate>
+         </ItemsControl>
+        </StackPanel>
+       </Border>
+      </Grid>
+
+      <Border Classes="card">
+       <StackPanel Spacing="{DynamicResource FormGap}">
+        <Grid Classes="cardHeader" ColumnDefinitions="*,Auto">
+         <TextBlock Text="Replacement times" Classes="cardTitle"/>
+         <Button Grid.Column="1" Content="Add replacement" Classes="secondaryAction" Command="{Binding AddReportReplacementCommand}" IsEnabled="{Binding CanAddReportReplacement}"/>
         </Grid>
-        <ComboBox Grid.Column="3" ItemsSource="{Binding Sources}" SelectedItem="{Binding TimeFrom}" Margin="0,0,6,0"/>
-        <Button Grid.Column="4" Content="Remove" Classes="dangerAction" Click="RemoveReplacement_Click"/>
+        <local:FormRow>
+         <TextBlock Grid.Column="0" Grid.ColumnSpan="1" Text="RUN" Classes="fieldLabel"/>
+         <TextBlock Grid.Column="1" Grid.ColumnSpan="1" Text="BIB" Classes="fieldLabel"/>
+         <TextBlock Grid.Column="2" Grid.ColumnSpan="6" Text="REASON" Classes="fieldLabel"/>
+         <TextBlock Grid.Column="8" Grid.ColumnSpan="2" Text="TIME SOURCE" Classes="fieldLabel" ToolTip.Tip="Data source for replacement of system A time"/>
+        </local:FormRow>
+        <ItemsControl Name="ReportReplacementRows" ItemsSource="{Binding ReportMissed}">
+         <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="{DynamicResource FormGap}"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+         <ItemsControl.ItemTemplate><DataTemplate>
+          <local:FormRow>
+           <ComboBox Grid.Column="0" Grid.ColumnSpan="1" ItemsSource="{Binding Runs}" SelectedItem="{Binding Run}" HorizontalAlignment="Stretch"/>
+           <TextBox Grid.Column="1" Grid.ColumnSpan="1" Text="{Binding Bib}"/>
+           <ComboBox Grid.Column="2" Grid.ColumnSpan="2" ItemsSource="{Binding Reasons}" SelectedItem="{Binding Reason, Mode=OneWay}" SelectionChanged="ReplacementReason_SelectionChanged"
+                     PlaceholderText="Choose reason" HorizontalAlignment="Stretch"/>
+           <TextBox Grid.Column="4" Grid.ColumnSpan="4" Text="{Binding Reason}" PlaceholderText="Reason / details"/>
+           <ComboBox Grid.Column="8" Grid.ColumnSpan="2" ItemsSource="{Binding Sources}" SelectedItem="{Binding TimeFrom}" HorizontalAlignment="Stretch"/>
+           <Button Grid.Column="10" Grid.ColumnSpan="2" Content="Remove" Classes="dangerAction" Click="RemoveReplacement_Click"
+                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+          </local:FormRow>
+         </DataTemplate></ItemsControl.ItemTemplate>
+        </ItemsControl>
+       </StackPanel>
+      </Border>
+
+      <!-- Both cards of the row are equally tall. -->
+      <Grid ColumnDefinitions="*,*,*,*,*,*,*,*,*,*,*,*" ColumnSpacing="12">
+       <Border Grid.Column="0" Grid.ColumnSpan="5" Classes="card">
+        <StackPanel Spacing="{DynamicResource FormGap}">
+         <Grid Classes="cardHeader"><TextBlock Text="Approval" Classes="cardTitle"/></Grid>
+         <CheckBox Content="I reviewed the report and verified the timestamps against the original timing records." IsChecked="{Binding ReportReviewed}"/>
+         <CheckBox Content="We certify that the timing and calculations adhered to the FIS rules." IsChecked="{Binding ReportCertified}"/>
+         <StackPanel Classes="field">
+          <TextBlock Text="APPROVED XML" Classes="fieldLabel"/>
+          <ComboBox ItemsSource="{Binding ReportApprovals}" SelectedItem="{Binding SelectedReportApproval}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate>
+           <TextBlock><Run Text="{Binding Revision, StringFormat='XML revision {0}'}"/><Run Text="  "/><Run Text="{Binding ApprovedAt}"/></TextBlock>
+          </DataTemplate></ComboBox.ItemTemplate></ComboBox>
+         </StackPanel>
+        </StackPanel>
+       </Border>
+
+       <Border Grid.Column="5" Grid.ColumnSpan="7" Classes="card">
+        <StackPanel Spacing="{DynamicResource FormGap}">
+         <Grid Classes="cardHeader" ColumnDefinitions="Auto,10,Auto,*,Auto,8,Auto">
+          <TextBlock Text="FIS upload" Classes="cardTitle"/>
+          <Border Grid.Column="2" Classes="chip red"><TextBlock Text="TEST MODE"/></Border>
+          <Button Grid.Column="4" Content="Check FIS status" Classes="secondaryAction" Command="{Binding CheckTimingReportSubmissionCommand}" IsEnabled="{Binding !IsReportBusy}"/>
+          <Button Grid.Column="6" Content="Stop FIS check" Classes="secondaryAction" Command="{Binding StopTimingReportStatusCheckCommand}" IsEnabled="{Binding IsReportBusy}"/>
+         </Grid>
+         <TextBlock Text="{Binding ReportSubmissionStatus}" FontWeight="SemiBold" TextWrapping="Wrap"
+                    IsVisible="{Binding ReportSubmissionStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        </StackPanel>
+       </Border>
+      </Grid>
+
+      <Expander Header="Report history" HorizontalAlignment="Stretch">
+       <local:FormRow>
+        <ComboBox Grid.Column="0" Grid.ColumnSpan="8" ItemsSource="{Binding ReportHistory}" SelectedItem="{Binding SelectedReportHistory}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate>
+         <TextBlock><Run Text="{Binding Revision, StringFormat='Revision {0}'}"/><Run Text="  "/><Run Text="{Binding Operator}"/><Run Text=" · "/><Run Text="{Binding Reason}"/></TextBlock>
+        </DataTemplate></ComboBox.ItemTemplate></ComboBox>
+        <Button Grid.Column="8" Grid.ColumnSpan="4" Content="Restore selected as a new revision" Classes="secondaryAction" Command="{Binding RestoreReportRevisionCommand}"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+       </local:FormRow>
+      </Expander>
+
+      <!-- What still blocks approval, next to the action bar. -->
+      <Border Classes="warningNote" IsVisible="{Binding ReportValidation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+       <TextBlock Name="TimingReportValidationText" Text="{Binding ReportValidation}" TextWrapping="Wrap"/>
+      </Border>
+
+      <!-- Actions: approval is the primary step; export and send use the selected approved XML. -->
+      <Border Classes="card" Padding="12,10">
+       <Grid ColumnDefinitions="*,Auto,8,Auto,8,Auto">
+        <Button Grid.Column="1" Content="Export approved XML" Classes="secondaryAction" Command="{Binding ExportTimingReportCommand}"/>
+        <Button Grid.Column="3" Name="SendTimingReportTestButton" Content="Send XML · test mode" Classes="secondaryAction" Command="{Binding SendTimingReportTestCommand}" IsEnabled="{Binding !IsReportBusy}"/>
+        <Button Grid.Column="5" Name="ApproveTimingReportButton" Content="Create approved XML" Command="{Binding ApproveTimingReportCommand}" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction"/>
        </Grid>
-      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-      <Button Content="Add replacement" Classes="secondaryAction" Command="{Binding AddReportReplacementCommand}" IsEnabled="{Binding CanAddReportReplacement}" HorizontalAlignment="Left"/>
-      <CheckBox Content="I reviewed the report and verified the timestamps against the original timing records." IsChecked="{Binding ReportReviewed}"/>
-      <CheckBox Content="We certify that the timing and calculations adhered to the FIS rules." IsChecked="{Binding ReportCertified}"/>
-      <TextBlock Text="{Binding ReportValidation}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap"/>
-      <WrapPanel><Button Name="ApproveTimingReportButton" Content="Create approved XML" Command="{Binding ApproveTimingReportCommand}" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction" Margin="0,0,6,4"/>
-       <Button Content="Export approved XML" Classes="secondaryAction" Command="{Binding ExportTimingReportCommand}" Margin="0,0,6,4"/>
-       <Button Name="SendTimingReportTestButton" Content="Send XML · test mode" Classes="secondaryAction" Command="{Binding SendTimingReportTestCommand}" IsEnabled="{Binding !IsReportBusy}" Margin="0,0,6,4"/>
-       <Button Content="Check FIS status" Classes="secondaryAction" Command="{Binding CheckTimingReportSubmissionCommand}" IsEnabled="{Binding !IsReportBusy}" Margin="0,0,6,4"/>
-       <Button Content="Stop FIS check" Classes="secondaryAction" Command="{Binding StopTimingReportStatusCheckCommand}" IsEnabled="{Binding IsReportBusy}" Margin="0,0,6,4"/>
-      </WrapPanel>
-      <ComboBox ItemsSource="{Binding ReportApprovals}" SelectedItem="{Binding SelectedReportApproval}"><ComboBox.ItemTemplate><DataTemplate>
-       <TextBlock><Run Text="{Binding Revision, StringFormat='XML revision {0}'}"/><Run Text="  "/><Run Text="{Binding ApprovedAt}"/></TextBlock>
-      </DataTemplate></ComboBox.ItemTemplate></ComboBox>
-      <TextBlock Text="{Binding ReportSubmissionStatus}" TextWrapping="Wrap" Classes="supportingText"/>
-      <Expander Header="Report history"><StackPanel Spacing="6"><ComboBox ItemsSource="{Binding ReportHistory}" SelectedItem="{Binding SelectedReportHistory}"><ComboBox.ItemTemplate><DataTemplate>
-       <TextBlock><Run Text="{Binding Revision, StringFormat='Revision {0}'}"/><Run Text="  "/><Run Text="{Binding Operator}"/><Run Text=" · "/><Run Text="{Binding Reason}"/></TextBlock>
-      </DataTemplate></ComboBox.ItemTemplate></ComboBox><Button Content="Restore selected as a new revision" Classes="secondaryAction" Command="{Binding RestoreReportRevisionCommand}" HorizontalAlignment="Left"/></StackPanel></Expander>
+      </Border>
      </StackPanel>
     </ScrollViewer>
    </TabItem>
+
    <TabItem Header="Times">
-    <ScrollViewer><StackPanel Spacing="10" Margin="4,8">
-      <TextBlock Text="Synchronization" FontWeight="SemiBold"/>
-      <WrapPanel Name="ReportSynchronizationFields" Orientation="Horizontal">
-       <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Synchronize A and B to local time of day using one common source impulse before the first or only run. At least one minute later, send another impulse from the same source and enter each timer's recorded time here. A and B must agree within 0.001 s; otherwise repeat synchronization and the check before racing. Include separate start timers when used. Hand clocks must also be synchronized before the run. Never re-synchronize during a run. Connection time does not establish synchronization.&#10;&#10;FIS Timing Booklet 2.67, section 3, page 8."/></ToolTip.Tip>
-       <StackPanel Width="110" Margin="0,0,12,0"><TextBlock Text="FIS TIMING LEVEL" Classes="eyebrow"/><ComboBox Name="TimingReportLevel" ItemsSource="{Binding ReportLevels}" SelectedItem="{Binding ReportLevel}">
-        <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Choose the level for the alpine race category:&#10;&#10;0 - Olympic Winter Games, World Ski Championships and World Cup, including World Cup qualification and speed events (OWG, WSC, WC, WQUA, COM).&#10;&#10;1 - Continental Cups: Australian New Zealand, European (including speed and qualification), Far East, Nor-Am and South American; Universiade and Junior World Championships (ANC, EC, ECOM, EQUA, FEC, NAC, SAC, UVS, WJC).&#10;&#10;2 - National Championships (NC).&#10;&#10;3 - FIS and FIS qualification, junior, national junior, university and CIT races; Youth Olympic Winter Games, Asian Winter Games, military/police and European Youth Olympic Festival (FIS, FQUA, JUN, NJC, NJR, UNI, CIT, CITWC, YOG, AWG, CISM, EYOF).&#10;&#10;4 - Entry League FIS races (ENL).&#10;&#10;FIS Timing Booklet 2.67, section 1.1, page 4. Alpine categories; Para Alpine has a separate table."/></ToolTip.Tip>
-       </ComboBox></StackPanel>
-       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="ELECTRONIC SYNC" Classes="eyebrow"/><TextBox Text="{Binding ReportSync}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
-       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="HAND SYNC" Classes="eyebrow"/><TextBox Text="{Binding ReportHandSync}" PlaceholderText="HH:mm:ss.00"/></StackPanel>
-       <StackPanel Width="165" Margin="0,0,12,0"><TextBlock Text="A SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckA}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
-       <StackPanel Width="165"><TextBlock Text="B SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckB}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
-      </WrapPanel>
-      <WrapPanel>
-       <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Enter the separate start timer's time from the same common-impulse synchronization check as A and B. Check at least one minute after synchronization, with a maximum 0.001 s difference. Synchronize before racing; never re-synchronize during a run.&#10;&#10;FIS Timing Booklet 2.67, section 3, page 8."/></ToolTip.Tip>
-       <StackPanel Width="200" IsVisible="{Binding ReportHasStartTimerA}" Margin="0,0,12,0"><TextBlock Text="A START TIMER SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckAStart}"/></StackPanel>
-       <StackPanel Width="200" IsVisible="{Binding ReportHasStartTimerB}"><TextBlock Text="B START TIMER SYNC CHECK" Classes="eyebrow"/><TextBox Text="{Binding ReportCheckBStart}"/></StackPanel>
-      </WrapPanel>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+     <StackPanel Classes="tabPage">
+      <Border Classes="card">
+       <StackPanel Spacing="{DynamicResource FormGap}">
+        <Grid Classes="cardHeader"><TextBlock Text="Synchronization" Classes="cardTitle"/></Grid>
+        <local:FormRow Name="ReportSynchronizationFields">
+         <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Synchronize A and B to local time of day using one common source impulse before the first or only run. At least one minute later, send another impulse from the same source and enter each timer's recorded time here. A and B must agree within 0.001 s; otherwise repeat synchronization and the check before racing. Include separate start timers when used. Hand clocks must also be synchronized before the run. Never re-synchronize during a run. Connection time does not establish synchronization.&#10;&#10;FIS Timing Booklet 2.67, section 3, page 8."/></ToolTip.Tip>
+         <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="FIS TIMING LEVEL" Classes="fieldLabel"/>
+          <ComboBox Name="TimingReportLevel" ItemsSource="{Binding ReportLevels}" SelectedItem="{Binding ReportLevel}" HorizontalAlignment="Stretch">
+           <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Choose the level for the alpine race category:&#10;&#10;0 - Olympic Winter Games, World Ski Championships and World Cup, including World Cup qualification and speed events (OWG, WSC, WC, WQUA, COM).&#10;&#10;1 - Continental Cups: Australian New Zealand, European (including speed and qualification), Far East, Nor-Am and South American; Universiade and Junior World Championships (ANC, EC, ECOM, EQUA, FEC, NAC, SAC, UVS, WJC).&#10;&#10;2 - National Championships (NC).&#10;&#10;3 - FIS and FIS qualification, junior, national junior, university and CIT races; Youth Olympic Winter Games, Asian Winter Games, military/police and European Youth Olympic Festival (FIS, FQUA, JUN, NJC, NJR, UNI, CIT, CITWC, YOG, AWG, CISM, EYOF).&#10;&#10;4 - Entry League FIS races (ENL).&#10;&#10;FIS Timing Booklet 2.67, section 1.1, page 4. Alpine categories; Para Alpine has a separate table."/></ToolTip.Tip>
+          </ComboBox></StackPanel>
+         <StackPanel Grid.Column="2" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="ELECTRONIC SYNC" Classes="fieldLabel"/><TextBox Text="{Binding ReportSync}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
+         <StackPanel Grid.Column="4" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="A SYNC CHECK" Classes="fieldLabel"/><TextBox Text="{Binding ReportCheckA}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
+         <StackPanel Grid.Column="6" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="B SYNC CHECK" Classes="fieldLabel"/><TextBox Text="{Binding ReportCheckB}" PlaceholderText="HH:mm:ss.0000"/></StackPanel>
+         <StackPanel Grid.Column="8" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="HAND SYNC" Classes="fieldLabel"/><TextBox Text="{Binding ReportHandSync}" PlaceholderText="HH:mm:ss.00"/></StackPanel>
+        </local:FormRow>
+        <!-- Start timer checks sit under the matching A and B checks. -->
+        <local:FormRow>
+         <local:FormRow.IsVisible><MultiBinding Converter="{x:Static BoolConverters.Or}"><Binding Path="ReportHasStartTimerA"/><Binding Path="ReportHasStartTimerB"/></MultiBinding></local:FormRow.IsVisible>
+         <ToolTip.Tip><TextBlock MaxWidth="430" TextWrapping="Wrap" Text="Enter the separate start timer's time from the same common-impulse synchronization check as A and B. Check at least one minute after synchronization, with a maximum 0.001 s difference. Synchronize before racing; never re-synchronize during a run.&#10;&#10;FIS Timing Booklet 2.67, section 3, page 8."/></ToolTip.Tip>
+         <StackPanel Grid.Column="4" Grid.ColumnSpan="2" Classes="field" IsVisible="{Binding ReportHasStartTimerA}"><TextBlock Text="A START TIMER CHECK" Classes="fieldLabel"/><TextBox Text="{Binding ReportCheckAStart}"/></StackPanel>
+         <StackPanel Grid.Column="6" Grid.ColumnSpan="2" Classes="field" IsVisible="{Binding ReportHasStartTimerB}"><TextBlock Text="B START TIMER CHECK" Classes="fieldLabel"/><TextBox Text="{Binding ReportCheckBStart}"/></StackPanel>
+        </local:FormRow>
+       </StackPanel>
+      </Border>
+
+      <!-- One card per run, two per row and equally tall. -->
       <ItemsControl ItemsSource="{Binding ReportRuns}">
-       <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+       <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" ColumnSpacing="12" RowSpacing="12"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
        <ItemsControl.ItemTemplate><DataTemplate>
-        <Border Classes="subtleSurface" Padding="12" Margin="0,0,12,12" Width="550"><StackPanel Spacing="6">
-         <TextBlock Text="{Binding Run, StringFormat='Run {0}'}" FontWeight="SemiBold"/>
-         <Grid ColumnDefinitions="115,135,135,135" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-          <TextBlock Grid.Column="1" Text="System A"/><TextBlock Grid.Column="2" Text="System B"/><TextBlock Grid.Column="3" Text="Hand"/><TextBlock Grid.Row="1" Text="First / bib"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding First.Bib}"/><TextBlock Grid.Row="2" Text="Start" VerticalAlignment="Center"/><TextBox Margin="1,2" Grid.Row="2" Grid.Column="1" IsReadOnly="True" Text="{Binding First.AStart, Mode=OneWay}"/><TextBox Margin="1,2" Grid.Row="2" Grid.Column="2" Text="{Binding First.BStart}"/><TextBox Margin="1,2" Grid.Row="2" Grid.Column="3" Text="{Binding First.HandStart}"/><TextBlock Grid.Row="3" Text="Finish" VerticalAlignment="Center"/><TextBox Margin="1,2" Grid.Row="3" Grid.Column="1" IsReadOnly="True" Text="{Binding First.AFinish, Mode=OneWay}"/><TextBox Margin="1,2" Grid.Row="3" Grid.Column="2" Text="{Binding First.BFinish}"/><TextBox Margin="1,2" Grid.Row="3" Grid.Column="3" Text="{Binding First.HandFinish}"/><TextBlock Grid.Row="4" Text="Net A"/><TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding First.Net}"/><TextBlock Grid.Row="5" Text="Last / bib"/><TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Last.Bib}"/><TextBlock Grid.Row="6" Text="Start" VerticalAlignment="Center"/><TextBox Margin="1,2" Grid.Row="6" Grid.Column="1" IsReadOnly="True" Text="{Binding Last.AStart, Mode=OneWay}"/><TextBox Margin="1,2" Grid.Row="6" Grid.Column="2" Text="{Binding Last.BStart}"/><TextBox Margin="1,2" Grid.Row="6" Grid.Column="3" Text="{Binding Last.HandStart}"/><TextBlock Grid.Row="7" Text="Finish" VerticalAlignment="Center"/><TextBox Margin="1,2" Grid.Row="7" Grid.Column="1" IsReadOnly="True" Text="{Binding Last.AFinish, Mode=OneWay}"/><TextBox Margin="1,2" Grid.Row="7" Grid.Column="2" Text="{Binding Last.BFinish}"/><TextBox Margin="1,2" Grid.Row="7" Grid.Column="3" Text="{Binding Last.HandFinish}"/><TextBlock Grid.Row="8" Text="Net A"/><TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding Last.Net}"/>         </Grid>
-         <TextBlock Text="{Binding Best}"><ToolTip.Tip><TextBlock Text="{Binding BestExplanation}" MaxWidth="430" TextWrapping="Wrap"/></ToolTip.Tip></TextBlock>
-         <WrapPanel HorizontalAlignment="Right"><Button Content="Read B…" Classes="secondaryAction" Tag="B" CommandParameter="{Binding Run}" Click="ChooseImages_Click" Margin="0,0,6,0"/><Button Content="Hand start…" Classes="secondaryAction" Tag="HandStart" CommandParameter="{Binding Run}" Click="ChooseImages_Click" Margin="0,0,6,0"/><Button Content="Hand finish…" Classes="secondaryAction" Tag="HandFinish" CommandParameter="{Binding Run}" Click="ChooseImages_Click"/></WrapPanel>
+        <Border Classes="card"><StackPanel Spacing="{DynamicResource FormGap}">
+         <Grid Classes="cardHeader"><TextBlock Text="{Binding Run, StringFormat='Run {0}'}" Classes="cardTitle"/></Grid>
+         <!-- Four groups split by rules: first finisher, last finisher, best A, then read/scan. System A comes from the
+              timing records and is read only; B and hand times are typed, or read from a device or a scanned receipt
+              with the buttons under their own column. -->
+         <Grid ColumnDefinitions="3*,3*,3*,3*" ColumnSpacing="10" RowSpacing="4"
+               RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+          <Grid.Styles>
+           <Style Selector="Border.groupRule"><Setter Property="Height" Value="1"/><Setter Property="Background" Value="{DynamicResource LineBrush}"/>
+            <Setter Property="Margin" Value="0,6"/><Setter Property="Grid.ColumnSpan" Value="4"/></Style>
+           <Style Selector="TextBlock.rowLabel"><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Margin" Value="12,0,0,0"/></Style>
+          </Grid.Styles>
+          <TextBlock Grid.Column="1" Text="SYSTEM A" Classes="fieldLabel"/>
+          <TextBlock Grid.Column="2" Text="SYSTEM B" Classes="fieldLabel"/>
+          <TextBlock Grid.Column="3" Text="HAND" Classes="fieldLabel"/>
+
+          <TextBlock Grid.Row="1" Text="FIRST FINISHER" Classes="cardTitle"/>
+          <Border Grid.Row="1" Grid.Column="1" Classes="chip" IsVisible="{Binding First, Converter={x:Static ObjectConverters.IsNotNull}}">
+           <TextBlock Text="{Binding First.Bib, StringFormat='BIB {0}'}"/></Border>
+          <TextBlock Grid.Row="2" Text="Start" Classes="rowLabel"/>
+          <TextBox Grid.Row="2" Grid.Column="1" IsReadOnly="True" Text="{Binding First.AStart, Mode=OneWay}"/>
+          <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding First.BStart}"/>
+          <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding First.HandStart}"/>
+          <TextBlock Grid.Row="3" Text="Finish" Classes="rowLabel"/>
+          <TextBox Grid.Row="3" Grid.Column="1" IsReadOnly="True" Text="{Binding First.AFinish, Mode=OneWay}"/>
+          <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding First.BFinish}"/>
+          <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding First.HandFinish}"/>
+          <TextBlock Grid.Row="4" Text="Net A" Classes="rowLabel"/>
+          <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding First.Net}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <Border Grid.Row="5" Classes="groupRule"/>
+
+          <TextBlock Grid.Row="6" Text="LAST FINISHER" Classes="cardTitle"/>
+          <Border Grid.Row="6" Grid.Column="1" Classes="chip" IsVisible="{Binding Last, Converter={x:Static ObjectConverters.IsNotNull}}">
+           <TextBlock Text="{Binding Last.Bib, StringFormat='BIB {0}'}"/></Border>
+          <TextBlock Grid.Row="7" Text="Start" Classes="rowLabel"/>
+          <TextBox Grid.Row="7" Grid.Column="1" IsReadOnly="True" Text="{Binding Last.AStart, Mode=OneWay}"/>
+          <TextBox Grid.Row="7" Grid.Column="2" Text="{Binding Last.BStart}"/>
+          <TextBox Grid.Row="7" Grid.Column="3" Text="{Binding Last.HandStart}"/>
+          <TextBlock Grid.Row="8" Text="Finish" Classes="rowLabel"/>
+          <TextBox Grid.Row="8" Grid.Column="1" IsReadOnly="True" Text="{Binding Last.AFinish, Mode=OneWay}"/>
+          <TextBox Grid.Row="8" Grid.Column="2" Text="{Binding Last.BFinish}"/>
+          <TextBox Grid.Row="8" Grid.Column="3" Text="{Binding Last.HandFinish}"/>
+          <TextBlock Grid.Row="9" Text="Net A" Classes="rowLabel"/>
+          <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding Last.Net}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <Border Grid.Row="10" Classes="groupRule"/>
+
+          <TextBlock Grid.Row="11" Text="BEST A" Classes="cardTitle"/>
+          <Border Grid.Row="11" Grid.Column="1" Classes="chip" IsVisible="{Binding BestBib, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+           <TextBlock Text="{Binding BestBib, StringFormat='BIB {0}'}"/></Border>
+          <TextBlock Grid.Row="12" Text="Net A" Classes="rowLabel"/>
+          <TextBlock Grid.Row="12" Grid.Column="1" Grid.ColumnSpan="3" Name="ReportBestTime" Text="{Binding BestTime}" FontWeight="SemiBold" VerticalAlignment="Center">
+           <ToolTip.Tip><TextBlock Text="{Binding BestExplanation}" MaxWidth="430" TextWrapping="Wrap"/></ToolTip.Tip></TextBlock>
+          <Border Grid.Row="13" Classes="groupRule"/>
+
+          <TextBlock Grid.Row="14" Text="READ OR SCAN" Classes="cardTitle"/>
+          <Button Grid.Row="14" Grid.Column="2" Content="B times…" Classes="secondaryAction" Tag="B" CommandParameter="{Binding Run}" Click="ChooseImages_Click"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Read System B start and finish times of the first and last finisher."/>
+          <Button Grid.Row="14" Grid.Column="3" Content="Hand start…" Classes="secondaryAction" Tag="HandStart" CommandParameter="{Binding Run}" Click="ChooseImages_Click"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Read hand-timing start times of the first and last finisher."/>
+          <Button Grid.Row="15" Grid.Column="3" Content="Hand finish…" Classes="secondaryAction" Tag="HandFinish" CommandParameter="{Binding Run}" Click="ChooseImages_Click"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Read hand-timing finish times of the first and last finisher."/>
+         </Grid>
         </StackPanel></Border>
        </DataTemplate></ItemsControl.ItemTemplate>
       </ItemsControl>
-     </StackPanel></ScrollViewer>
+     </StackPanel>
+    </ScrollViewer>
    </TabItem>
   </TabControl>
-
- </Grid>
+ </DockPanel>
 </UserControl>

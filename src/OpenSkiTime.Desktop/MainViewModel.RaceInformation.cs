@@ -113,7 +113,7 @@ public sealed partial class MainViewModel
             WeatherPlaces.Clear(); WeatherHours.Clear(); SelectedWeatherHour = null;
             foreach (var place in places) { WeatherPlaces.Add(place); }
             SelectedWeatherPlace = null;
-            WeatherBrowseStatus = places.Count == 0 ? "No locations found. Refine the location name." : "Select the correct location, then browse the race-day forecast.";
+            WeatherBrowseStatus = places.Count == 0 ? "No locations found. Refine the location name." : "Select the correct location, then browse today's forecast.";
         });
     }
 
@@ -122,11 +122,11 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task BrowseWeatherHoursAsync()
     {
-        if (SelectedWeatherPlace is not { } place || ResultsCompetition is not { } competition) { return; }
+        if (SelectedWeatherPlace is not { } place || ResultsCompetition is null) { return; }
         var key = _informationKey;
         await InformationRequestAsync(async () =>
         {
-            var hours = await new WeatherBrowseClient(_informationHttp).BrowseAsync(place, competition.Values.Date, DateTimeOffset.UtcNow);
+            var hours = await new WeatherBrowseClient(_informationHttp).BrowseAsync(place, DateOnly.FromDateTime(DateTime.Now), DateTimeOffset.UtcNow);
             if (key != _informationKey || SelectedWeatherPlace != place) { return; }
             WeatherHours.Clear(); SelectedWeatherHour = null;
             foreach (var hour in hours) { WeatherHours.Add(hour); }

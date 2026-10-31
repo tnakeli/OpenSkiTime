@@ -18,7 +18,7 @@ public sealed partial class TimingView : UserControl
     private MainViewModel? _viewModel;
     private bool _synchronizingSelection;
     private (DataGrid Grid, int[] Bibs)? _contextSelection;
-    private static readonly string[] GridNames = ["AtStartGrid", "RunningGrid", "TimestampsGrid", "RankingGrid"];
+    private static readonly string[] GridNames = ["AtStartGrid", "RunningGrid", "TimestampsGrid", "LatestFinishersGrid", "RankingGrid"];
     private TimingAction[] _actions = [];
     private int _splitCount = -1;
     // One definition drives both the context menus and actual keyboard shortcuts.
@@ -29,12 +29,13 @@ public sealed partial class TimingView : UserControl
         AvaloniaXamlLoader.Load(this);
         DataContextChanged += (_, _) => BindViewModel(DataContext as MainViewModel);
         AttachedToVisualTree += (_, _) => BindViewModel(DataContext as MainViewModel);
-        DetachedFromVisualTree += (_, _) => BindViewModel(null);
+        DetachedFromVisualTree += (_, _) => { BindViewModel(null); CloseDialogs(); };
         SizeChanged += (_, _) => Dispatcher.UIThread.Post(ScrollToNext, DispatcherPriority.Background);
         AddHandler(KeyDownEvent, OnTimingKey, RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, CaptureContextSelection, RoutingStrategies.Tunnel, handledEventsToo: true);
         ConfigureDragging();
         ConfigureManualTimestamps();
+        this.FindControl<DataGrid>("RankingGrid")!.LayoutUpdated += (_, _) => AlignLatestFinishers();
     }
 
     private void BindViewModel(MainViewModel? vm)
@@ -43,7 +44,7 @@ public sealed partial class TimingView : UserControl
         if (_viewModel is not null) { _viewModel.PropertyChanged -= OnViewModelChanged; }
         if (!ReferenceEquals(_viewModel, vm)) { _splitCount = -1; }
         _viewModel = vm;
-        if (vm is not null) { vm.PropertyChanged += OnViewModelChanged; BuildActions(vm); ConfigureColumns(); SynchronizeSelection(); }
+        if (vm is not null) { vm.PropertyChanged += OnViewModelChanged; BuildActions(vm); ConfigureColumns(); SynchronizeSelection(); SyncDialogs(); }
     }
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
@@ -53,6 +54,8 @@ public sealed partial class TimingView : UserControl
         if (e.PropertyName == nameof(MainViewModel.TimingChannelStates)) { UpdateChannelVisibility(); }
         if (e.PropertyName == nameof(MainViewModel.RaceQueueVersion))
         { Dispatcher.UIThread.Post(ScrollToNext, DispatcherPriority.Background); }
+        if (e.PropertyName is nameof(MainViewModel.ShowTimingClassificationEditor) or nameof(MainViewModel.ShowForerunnerEditor))
+        { SyncDialogs(); }
         if (e.PropertyName is nameof(MainViewModel.SelectedTimingRow) or nameof(MainViewModel.IsRefreshingTimingUi)
             && _viewModel?.IsRefreshingTimingUi == false) { SynchronizeSelection(); }
     }
@@ -148,7 +151,7 @@ public sealed partial class TimingView : UserControl
                     var cell = row?.Cells.ElementAtOrDefault(index);
                     var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
                     content.Children.Add(new TextBlock
-                    { Text = cell?.Time ?? "—", FontFamily = new("Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
+                    { Text = cell?.Time ?? "—", FontFamily = new("Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
                     if (cell?.IsManual == true)
                     { content.Children.Add(new TextBlock { Text = "m", FontSize = 9, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Classes = { "manualTimestampMark" } }); }
                     // The timestampCell style's transparent background makes empty cells hit-testable for manual entry.

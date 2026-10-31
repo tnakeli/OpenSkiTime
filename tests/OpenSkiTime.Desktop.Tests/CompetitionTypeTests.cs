@@ -31,9 +31,11 @@ public partial class DesktopWorkflowTests
             vm.SelectedCompetition = Assert.Single(vm.Competitions);
             var window = new MainWindow { DataContext = vm, Width = 1280, Height = 900, WindowState = WindowState.Normal };
             window.Show(); window.UpdateLayout();
-            var input = window.FindControl<TextBox>("CompetitionCategoryInput")!;
+            var input = window.FindControl<ComboBox>("CompetitionCategoryInput")!;
             var rules = window.FindControl<CheckBox>("CompetitionFisCheckBox")!;
-            Assert.Equal("NJR", input.Text); Assert.False(input.IsReadOnly); Assert.True(input.IsEnabled);
+            // An editable choice: the FIS codes are offered, and a code that is not listed can still be typed.
+            Assert.Equal("NJR", input.Text); Assert.True(input.IsEditable); Assert.True(input.IsEffectivelyVisible);
+            Assert.Contains("NJR", input.Items.OfType<string>());
             foreach (var category in new[] { "FIS", "NC", "NJR" })
             {
                 input.Text = category.ToLowerInvariant();
@@ -45,9 +47,9 @@ public partial class DesktopWorkflowTests
                 Assert.Equal(category, Assert.Single(vm.Competitions).Values.Calendar!.Category);
             }
             rules.IsChecked = false; window.UpdateLayout();
-            Assert.False(input.IsEnabled); Assert.Equal("NJR", vm.CompetitionCalendarCategory);
+            Assert.False(input.IsEffectivelyVisible); Assert.Equal("NJR", vm.CompetitionCalendarCategory);
             rules.IsChecked = true; window.UpdateLayout();
-            Assert.True(input.IsEnabled); Assert.Equal("NJR", input.Text);
+            Assert.True(input.IsEffectivelyVisible); Assert.Equal("NJR", input.Text);
             await vm.OpenSeriesCommand.ExecuteAsync(null); vm.ShowCompetitionsCommand.Execute(null);
             vm.SelectedCompetition = Assert.Single(vm.Competitions); window.UpdateLayout();
             Assert.Equal("NJR", input.Text); Assert.True(rules.IsChecked);
@@ -128,8 +130,16 @@ public partial class DesktopWorkflowTests
             await vm.SaveCompetitionCommand.ExecuteAsync(null);
             Assert.Equal(RaceType.Fis, Assert.Single((await workspace.ReadAsync()).Competitions).Values.RaceType);
             picker.IsChecked = false; window.UpdateLayout();
-            Assert.False(window.FindControl<StackPanel>("CompetitionFisCodeField")!.IsVisible);
-            Assert.False(window.FindControl<StackPanel>("CompetitionHomologationField")!.IsVisible);
+            // Without FIS rules only the FIS calendar fields go away; course, homologation, location and TD stay.
+            Assert.False(window.FindControl<StackPanel>("CompetitionFisCodeField")!.IsEffectivelyVisible);
+            Assert.False(window.FindControl<ComboBox>("CompetitionSeasonInput")!.IsEffectivelyVisible);
+            Assert.False(window.FindControl<ComboBox>("CompetitionCategoryInput")!.IsEffectivelyVisible);
+            Assert.False(window.FindControl<Button>("GetCompetitionDataButton")!.IsEffectivelyVisible);
+            Assert.True(window.FindControl<StackPanel>("CompetitionHomologationField")!.IsEffectivelyVisible);
+            Assert.True(window.FindControl<Button>("BrowseCompetitionHomologationsButton")!.IsEffectivelyVisible);
+            Assert.True(window.FindControl<CheckBox>("SaveTdToAllRacesCheckBox")!.IsEffectivelyVisible);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "LOCATION" && x.IsEffectivelyVisible);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "FIRST NAME" && x.IsEffectivelyVisible);
             Assert.Equal("5573", vm.CompetitionFisCode); Assert.Equal("123/10/26", vm.CompetitionHomologation);
             await vm.SaveCompetitionCommand.ExecuteAsync(null);
             Assert.Equal("5573", Assert.Single((await workspace.ReadAsync()).Competitions).Values.FisCode);
@@ -141,7 +151,7 @@ public partial class DesktopWorkflowTests
             await vm.ShowResultsCommand.ExecuteAsync(null); await vm.LoadResultsCommand.ExecuteAsync(null);
             Assert.False(vm.ResultsIsFis);
             var results = window.GetVisualDescendants().OfType<ResultsView>().Single();
-            Assert.False(results.FindControl<Border>("ResultsFisInformation")!.IsVisible);
+            Assert.False(results.FindControl<TabControl>("ResultsTabs")!.IsVisible);
             window.Close();
         }
         finally { Directory.Delete(folder, true); }

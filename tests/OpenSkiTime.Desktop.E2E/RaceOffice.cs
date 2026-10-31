@@ -126,24 +126,24 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         app.Click("Add competition");
         Pause(400);
         var c = race.Competition;
-        const string form = "ACTIVE RACE / DETAILS";
+        const string form = "New competition";
         app.SetText(FieldAfter(form, "SHORT NAME *"), c.ShortLabel); Pause();
         app.SetText(FieldAfter(form, "EVENT NAME *"), c.Name); Pause();
         app.SetText(FieldAfter(form, "FIS CATEGORY"), c.Calendar!.Category);
         SetNumber(FieldAfter(form, "INTERMEDIATES"), c.IntermediateCount);
         app.SetText(FieldAfter(form, "FIS CODEX"), c.FisCode!);
-        Select(FieldAfter("LOCATION", "GENDER"), OpenSkiTime.Application.CompetitionGenderLabels.Format(c.Calendar.Gender));
+        Select(FieldAfter(form, "GENDER"), OpenSkiTime.Application.CompetitionGenderLabels.Format(c.Calendar.Gender));
         var td = c.Calendar.TechnicalDelegate!;
-        app.SetText(FieldAfter("TECHNICAL DELEGATE", "SURNAME"), td.LastName);
-        app.SetText(FieldAfter("TECHNICAL DELEGATE", "FIRST NAME"), td.FirstName);
-        app.SetText(FieldAfter("TECHNICAL DELEGATE", "NATION"), td.Nation);
-        app.SetText(FieldAfter("TECHNICAL DELEGATE", "TD NUMBER"), td.Number);
-        app.SetText(FieldAfter("COURSE AND HOMOLOGATION", "COURSE"), c.CourseName!);
-        app.SetText(FieldAfter("COURSE AND HOMOLOGATION", "HOMOLOGATION"), c.HomologationNumber!);
-        app.SetText(FieldAfter("COURSE AND HOMOLOGATION", "START ALTITUDE · M"), Number(c.StartAltitudeMeters));
-        app.SetText(FieldAfter("COURSE AND HOMOLOGATION", "FINISH ALTITUDE · M"), Number(c.FinishAltitudeMeters));
-        app.SetText(FieldAfter("COURSE AND HOMOLOGATION", "VERTICAL DROP · M"), Number(c.VerticalDropMeters));
-        app.SetText(FieldAfter("COURSE AND HOMOLOGATION", "COURSE LENGTH · M"), Number(c.CourseLengthMeters));
+        app.SetText(FieldAfter("Technical delegate", "SURNAME"), td.LastName);
+        app.SetText(FieldAfter("Technical delegate", "FIRST NAME"), td.FirstName);
+        app.SetText(FieldAfter("Technical delegate", "NATION"), td.Nation);
+        app.SetText(FieldAfter("Technical delegate", "TD NUMBER"), td.Number);
+        app.SetText(FieldAfter("Course and homologation", "COURSE"), c.CourseName!);
+        app.SetText(FieldAfter("Course and homologation", "HOMOLOGATION"), c.HomologationNumber!);
+        app.SetText(FieldAfter("Course and homologation", "START ALTITUDE"), Number(c.StartAltitudeMeters));
+        app.SetText(FieldAfter("Course and homologation", "FINISH ALTITUDE"), Number(c.FinishAltitudeMeters));
+        app.SetText(FieldAfter("Course and homologation", "VERTICAL DROP"), Number(c.VerticalDropMeters));
+        app.SetText(FieldAfter("Course and homologation", "COURSE LENGTH"), Number(c.CourseLengthMeters));
         Pause(500);
         app.Click("Save competition");
         app.WaitUntil(() => app.TryByName(c.ShortLabel) is not null && app.TryByName("Edit competition") is not null, "competition saved");
@@ -344,19 +344,23 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(400);
     }
 
-    // Post-run disqualification through the classification editor: status, gate, reason and judge, then save.
+    // Post-run disqualification through the classification dialog: status, gate, reason and judge, then save and close.
     public void Disqualify(int bib, SyntheticRun plan)
     {
         SelectRow("RankingGrid", bib);
         var toggle = app.ById("EditClassificationToggle");
         if (toggle.Patterns.Toggle.PatternOrDefault?.ToggleState.ValueOrDefault != FlaUI.Core.Definitions.ToggleState.On) { DesktopApp.Invoke(toggle); }
         Pause(400);
-        Select(app.ById("TimingClassificationChoice"), "DSQ");
-        app.SetText(FieldAfter("STATUS", "GATE (OPTIONAL)"), plan.DsqGate!.Value.ToString(CultureInfo.InvariantCulture)); Pause();
-        app.SetText(FieldAfter("STATUS", "DSQ REASON / ICR RULE (OPTIONAL)"), plan.DsqReason!); Pause();
-        app.SetText(FieldAfter("STATUS", "JUDGE (OPTIONAL)"), "Gate judge 3"); Pause();
-        DesktopApp.Invoke(app.ById("SaveTimingClassification"));
+        // The dialog is its own top-level window.
+        var dialog = app.Retry(() => app.Automation.GetDesktop().FindFirstChild(app.By.ByName("Edit classification").And(app.By.ByControlType(ControlType.Window))));
+        Select(app.ById("TimingClassificationChoice", dialog), "DSQ");
+        app.SetText(FieldAfter("STATUS", "GATE (OPTIONAL)", dialog), plan.DsqGate!.Value.ToString(CultureInfo.InvariantCulture)); Pause();
+        app.SetText(FieldAfter("STATUS", "DSQ REASON / ICR RULE (OPTIONAL)", dialog), plan.DsqReason!); Pause();
+        app.SetText(FieldAfter("STATUS", "JUDGE (OPTIONAL)", dialog), "Gate judge 3"); Pause();
+        DesktopApp.Invoke(app.ById("SaveTimingClassification", dialog));
         Pause(800);
+        DesktopApp.Invoke(app.ById("CloseTimingClassification", dialog));
+        Pause(300);
         if (app.Window.FindFirstDescendant(app.By.ByAutomationId("RankingFilterButton_BibText")) is { } filter
             && app.ById("RankingGrid").FindAllDescendants(app.By.ByControlType(ControlType.DataItem)).Length <= 1)
         { DesktopApp.Invoke(filter); Pause(300); } // clear the bib filter again
@@ -443,11 +447,11 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(500);
     }
 
-    // Settings → FIS: refresh the FIS equipment (timing device) homologations from the FIS API.
+    // Settings → Timing report: refresh the FIS equipment (timing device) homologations from the FIS API.
     public void RefreshEquipmentHomologations()
     {
         Navigate("Settings");
-        SelectTab("FIS");
+        SelectTab("Timing report");
         app.Click("Refresh homologations");
         Thread.Sleep(1000);
         app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Button))
@@ -482,12 +486,13 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // The competition jury in Race information: the chief of race is required for the FIS XML.
     public void EnterChiefOfRace(string firstName, string lastName, string nation)
     {
+        SelectTab("Race information");
         // Each cell is edited on its own: double-click starts editing, Enter commits. The row is looked up again for
         // every cell because focusing a cell can scroll the Results page.
         AutomationElement Cell(int column) => app.Retry(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.DataItem))
             .FirstOrDefault(r => r.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(t => t.Name == "Chief of race"))
             ?.FindAllChildren(app.By.ByClassName("DataGridCell")).ElementAtOrDefault(column));
-        foreach (var (column, value) in new[] { (1, firstName), (2, lastName), (3, nation) })
+        foreach (var (column, value) in new[] { (1, lastName), (2, firstName), (3, nation) })
         {
             for (var attempt = 0; attempt < 3; attempt++)
             {
@@ -511,15 +516,16 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // Race information needed for the FIS XML: gates, turning gates, start time and course setter of each run.
     public void CompleteRaceInformation()
     {
-        string[] setters = ["Ola|SYNTHSETTER|NOR", "Ulla|SYNTHSETTER|AUT"];
+        SelectTab("Race information");
+        string[] setters = ["SYNTHSETTER|Ola|NOR", "SYNTHSETTER|Ulla|AUT"];
         for (var run = 1; run <= race.Competition.RunCount; run++)
         {
             var heading = $"Run {run}";
             app.SetText(FieldAfter(heading, "GATES"), run == 1 ? "58" : "60"); Pause();
-            app.SetText(FieldAfter(heading, "TURNS"), run == 1 ? "56" : "58"); Pause();
-            app.SetText(FieldAfter(heading, "START HH:mm"), run == 1 ? "10:00" : "13:00"); Pause();
+            app.SetText(FieldAfter(heading, "TURNING GATES"), run == 1 ? "56" : "58"); Pause();
+            app.SetText(FieldAfter(heading, "START TIME"), run == 1 ? "10:00" : "13:00"); Pause();
             var setter = setters[run - 1].Split('|');
-            var first = FieldAfter(heading, "COURSE SETTER");
+            var first = FieldAfter(heading, "SETTER SURNAME");
             app.SetText(first, setter[0]);
             app.Press(VirtualKeyShort.TAB); Keyboard.Type(setter[1]);
             app.Press(VirtualKeyShort.TAB); Keyboard.Type(setter[2]);
@@ -532,6 +538,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     public void ApproveAndExportXml(string directory)
     {
         Directory.CreateDirectory(directory);
+        SelectTab("FIS XML");
         app.Click("TD approves · create XML");
         app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text))
             .Any(x => x.Name.StartsWith("TD approval saved as immutable revision", StringComparison.Ordinal)), "results approved", TimeSpan.FromSeconds(30));
@@ -622,9 +629,9 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
 
     // The input after `label` that follows the section heading `section`. Labels such as GENDER or COURSE also appear
     // as grid column headers earlier in the tree, so form fields are always located relative to their section.
-    public AutomationElement FieldAfter(string section, string label) => app.Retry(() =>
+    public AutomationElement FieldAfter(string section, string label, AutomationElement? scope = null) => app.Retry(() =>
     {
-        var all = app.Window.FindAllDescendants();
+        var all = (scope ?? app.Window).FindAllDescendants();
         var start = Array.FindIndex(all, x => x.ControlType == ControlType.Text && x.Name == section);
         if (start < 0) { return null; }
         var index = Array.FindIndex(all, start + 1, x => x.ControlType == ControlType.Text && x.Name == label);

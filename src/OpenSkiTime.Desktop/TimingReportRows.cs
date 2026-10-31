@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using OpenSkiTime.Application;
 using OpenSkiTime.Domain;
@@ -48,6 +49,8 @@ public sealed partial class TimingReportRunEditor : ObservableObject
     public string BestUnavailableReason { get; init; } = "no eligible result";
     public string BestExplanation { get; init; } = "Fastest classified result, including the active audited replacement time.";
     public string Best => Source.BestBib is { } bib ? $"Best A: bib {bib} / {TimingTime.Format(Source.BestHundredths)}" : $"Best A: {BestUnavailableReason}";
+    public string BestBib => Source.BestBib?.ToString(CultureInfo.InvariantCulture) ?? "";
+    public string BestTime => Source.BestBib is not null ? TimingTime.Format(Source.BestHundredths) : BestUnavailableReason;
 
     public static TimingReportRunEditor FromTiming(TimingReportRun run, TimingSnapshot snapshot)
     {

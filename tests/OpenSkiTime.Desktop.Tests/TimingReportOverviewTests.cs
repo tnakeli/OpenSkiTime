@@ -60,7 +60,7 @@ public partial class DesktopWorkflowTests
             Assert.Contains("2 - National Championships", help.Text, StringComparison.Ordinal);
             Assert.Contains("3 -", help.Text, StringComparison.Ordinal);
             Assert.Contains("4 -", help.Text, StringComparison.Ordinal);
-            var synchronization = view.FindControl<WrapPanel>("ReportSynchronizationFields")!;
+            var synchronization = view.FindControl<FormRow>("ReportSynchronizationFields")!;
             var syncHelp = Assert.IsType<TextBlock>(ToolTip.GetTip(synchronization));
             Assert.Contains("0.001 s", syncHelp.Text, StringComparison.Ordinal);
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible

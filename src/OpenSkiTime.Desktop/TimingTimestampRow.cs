@@ -19,6 +19,10 @@ public sealed record TimingTimestampCell(Guid ListId, ObservationReview Review, 
 public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IReadOnlyList<TimingTimestampCell?> Cells)
 {
     public string? ForerunnerLetter { get; init; }
+    // Name parts for the person name rule: a regular prefix, the bold surname and the regular rest.
+    public string Prefix { get; init; } = "";
+    public string Surname { get; init; } = "";
+    public string FirstName { get; init; } = "";
     public bool IsForerunner => ForerunnerLetter is not null;
     public string BibText => ForerunnerLetter is { } letter ? $"F · {letter}" : Bib?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
 
@@ -37,8 +41,9 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
         foreach (var pulse in input.Where(x => x.Bib is null).Reverse())
         {
             var kind = pulse.Observation.ManualEntry ? "manual time" : "impulse";
-            rows.Add(new(pulse.Observation.Key, null, pulse.Ignored ? "Ignored " + kind : "Unassigned " + kind,
-                Cells(c => c == pulse.Observation.Channel ? Cell(pulse) : null).ToArray()));
+            var label = pulse.Ignored ? "Ignored " + kind : "Unassigned " + kind;
+            rows.Add(new(pulse.Observation.Key, null, label,
+                Cells(c => c == pulse.Observation.Channel ? Cell(pulse) : null).ToArray()) { Prefix = label });
         }
         var byBib = input.Where(x => x.Bib is not null).GroupBy(x => x.Bib!.Value).ToDictionary(x => x.Key, x => x.ToArray());
         // Forerunners' impulses stay visible and correctable like a competitor's.
@@ -51,7 +56,8 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
                 if (result.IsForerunner && result.Status is TimingStatus.DNS or TimingStatus.DNF)
                 {
                     rows.Add(new($"{result.Bib}:status", result.Bib, $"Forerunner · {result.Name} · {result.Status}", Cells(_ => null).ToArray())
-                    { ForerunnerLetter = result.ForerunnerLetter });
+                    { ForerunnerLetter = result.ForerunnerLetter, Prefix = "Forerunner · ", Surname = result.Entry.Entrant.Athlete.Surname,
+                        FirstName = $"{result.Entry.Entrant.Athlete.FirstName} · {result.Status}" });
                 }
                 continue;
             }
@@ -61,7 +67,8 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
             {
                 rows.Add(new($"{result.Bib}:{i}", result.Bib, (result.IsForerunner ? "Forerunner · " : "") + result.Name + (i == 0 ? "" : " · extra impulse"),
                     Cells(c => channels.Contains(c) && byChannel.TryGetValue(c, out var values) && i < values.Length ? Cell(values[i]) : null).ToArray())
-                { ForerunnerLetter = result.ForerunnerLetter });
+                { ForerunnerLetter = result.ForerunnerLetter, Prefix = result.IsForerunner ? "Forerunner · " : "",
+                    Surname = result.Entry.Entrant.Athlete.Surname, FirstName = result.Entry.Entrant.Athlete.FirstName + (i == 0 ? "" : " · extra impulse") });
             }
         }
         // Use journal arrival order, not device time: clock resets and late packets must not reorder history.

@@ -190,6 +190,9 @@ public partial class DesktopWorkflowTests
                 }
                 Assert.True(await vm.FlushRaceInformationAsync(), vm.RaceInformationStatus);
                 window.Height = 1120;
+                // Race information has its own Results tab.
+                window.GetVisualDescendants().OfType<ResultsView>().Single().FindControl<TabControl>("ResultsTabs")!.SelectedIndex = 2;
+                window.UpdateLayout(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 CaptureDraw(window, output, "07-race-information.png");
                 await vm.ShowPdfFactoryCommand.ExecuteAsync(null);
                 await vm.GenerateAllPdfsCommand.ExecuteAsync(null);

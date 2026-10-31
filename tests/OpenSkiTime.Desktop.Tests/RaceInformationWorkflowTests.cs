@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Headless.XUnit;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
@@ -92,8 +93,10 @@ public partial class DesktopWorkflowTests
             vm.ResultsCategory = "FIS";
             var window = new Window { Width = 1366, Height = 900, Content = new ResultsView { DataContext = vm } };
             window.Show(); window.UpdateLayout();
+            window.GetVisualDescendants().OfType<TabControl>().Single(x => x.Name == "ResultsTabs").SelectedIndex = 2;
+            window.UpdateLayout();
             var jury = window.GetVisualDescendants().OfType<DataGrid>().Single(x => ReferenceEquals(x.ItemsSource, vm.ResultsJury));
-            jury.SelectedIndex = 0; jury.CurrentColumn = jury.Columns[2];
+            jury.SelectedIndex = 0; jury.CurrentColumn = jury.Columns.Single(x => Equals(x.Header, "SURNAME"));
             Assert.True(jury.BeginEdit()); window.UpdateLayout();
             jury.GetVisualDescendants().OfType<TextBox>().Single().Text = "Delegate";
             Assert.True(jury.CommitEdit()); Assert.Equal("Delegate", vm.ResultsJury[0].LastName);
@@ -122,6 +125,44 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
+    public void RaceInformationRunCardsWrapTwoPerRow()
+    {
+        // Four runs (the editor allows up to nine) stay readable: two cards per row, never squeezed onto one row.
+        var runs = Enumerable.Range(1, 4).Select(n => new RaceRunEditor(new(n, new("", "", "")))).ToArray();
+        var view = new RaceInformationView { DataContext = new { ResultsRuns = runs, ResultsJury = Array.Empty<object>() } };
+        var window = new Window { Content = new ScrollViewer { Content = view, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, Width = 1280, Height = 900 };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            var cards = view.GetVisualDescendants().OfType<RaceRunView>().ToArray();
+            Assert.Equal(4, cards.Length);
+            Assert.Equal(2, cards.Select(x => Math.Round(x.TranslatePoint(default, view)!.Value.Y)).Distinct().Count());
+            Assert.All(cards, x => Assert.True(x.Bounds.Width > 500, $"Run card is only {x.Bounds.Width:0} px wide."));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ForecastApplyButtonsWrapInsideTheWeatherCardForNineRuns()
+    {
+        var runs = Enumerable.Range(1, 9).Select(n => new RaceRunEditor(new(n, new("", "", "")))).ToArray();
+        var view = new RaceInformationView { DataContext = new { ResultsRuns = runs, ResultsJury = Array.Empty<object>() } };
+        var window = new Window { Content = new ScrollViewer { Content = view, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, Width = 980, Height = 900 };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            var list = view.FindControl<ItemsControl>("ApplyWeatherButtons")!;
+            var right = list.TranslatePoint(new Point(list.Bounds.Width, 0), view)!.Value.X;
+            var buttons = list.GetVisualDescendants().OfType<Button>().ToArray();
+            Assert.Equal(9, buttons.Length);
+            Assert.All(buttons, b => Assert.True(b.TranslatePoint(new Point(b.Bounds.Width, 0), view)!.Value.X <= right + 0.5, $"{b.Content} is cut off."));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ForecastSelectionAndFisSuggestionsPreserveManualValues()
     {
         var run = new RaceRunEditor(new(1, new("Test", "Setter", "FIN"), Course: "Manual course", Weather: new("Manual condition", "Hard", 0m, -1m)));
@@ -131,6 +172,36 @@ public partial class DesktopWorkflowTests
         Assert.Equal("Manual condition", run.Conditions); Assert.Equal("Hard", run.Snow);
         Assert.Equal(0m, run.Values.Weather!.StartTemperature); Assert.Equal(-1m, run.Values.Weather.FinishTemperature);
         Assert.Contains("3.5 °C", run.WeatherSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Synthetic source", run.WeatherSource, StringComparison.Ordinal);
+        Assert.Equal(3.5m, run.Values.Weather.UnlocatedTemperature);
+        run.ApplyForecast(new(new DateTime(2026, 10, 2, 11, 0, 0), "Europe/Helsinki", 4.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(4.0m, run.Values.Weather.UnlocatedTemperature);
+        // Reopened from the saved values (4.0 comes back as 4): a new forecast still replaces the earlier forecast value.
+        var reopened = new RaceRunEditor(run.Values with { Weather = run.Values.Weather with { UnlocatedTemperature = 4m } });
+        reopened.ApplyForecast(new(new DateTime(2026, 10, 2, 13, 0, 0), "Europe/Helsinki", -1.5m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(-1.5m, reopened.Values.Weather!.UnlocatedTemperature);
+        run.UnlocatedTemperature = "2";
+        run.ApplyForecast(new(new DateTime(2026, 10, 2, 12, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(2m, run.Values.Weather.UnlocatedTemperature);
+        // A typed value equal to a forecast is still the operator's: a later forecast never replaces it, also after reopening.
+        var typed = new RaceRunEditor(new(2, new("", "", ""))) { UnlocatedTemperature = "3.5" };
+        typed.ApplyForecast(new(new DateTime(2026, 10, 2, 10, 0, 0), "Europe/Helsinki", 3.5m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        typed.ApplyForecast(new(new DateTime(2026, 10, 2, 11, 0, 0), "Europe/Helsinki", 4.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(3.5m, typed.Values.Weather!.UnlocatedTemperature);
+        var typedReopened = new RaceRunEditor(typed.Values);
+        typedReopened.ApplyForecast(new(new DateTime(2026, 10, 2, 12, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(3.5m, typedReopened.Values.Weather!.UnlocatedTemperature);
+        // Retyping a forecast-filled value makes it the operator's in the saved provenance too: after save and reopen a
+        // later forecast leaves it alone.
+        var retyped = new RaceRunEditor(new(3, new("", "", "")));
+        retyped.ApplyForecast(new(new DateTime(2026, 10, 2, 10, 0, 0), "Europe/Helsinki", 4.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        retyped.UnlocatedTemperature = "4";
+        var retypedReopened = new RaceRunEditor(retyped.Values);
+        retypedReopened.ApplyForecast(new(new DateTime(2026, 10, 2, 11, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(4m, retypedReopened.Values.Weather!.UnlocatedTemperature);
+        // An hour without a temperature removes the earlier forecast's value instead of leaving it under new provenance.
+        reopened.ApplyForecast(new(new DateTime(2026, 10, 2, 14, 0, 0), "Europe/Helsinki", null, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Null(reopened.Values.Weather!.UnlocatedTemperature);
         run.AddForerunnerCommand.Execute(null); run.AddForerunnerCommand.Execute(null);
         Assert.Equal("A", run.Forerunners[0].Letter); Assert.Equal("B", run.Forerunners[1].Letter);
         run.SelectedForerunner = run.Forerunners[0]; run.RemoveForerunnerCommand.Execute(null);
@@ -148,10 +219,8 @@ public partial class DesktopWorkflowTests
         vm.SelectedWeatherHour = new(new DateTime(2026, 10, 2, 10, 0, 0), "Europe/Helsinki", 3.5m, 0, "Synthetic source", DateTimeOffset.UnixEpoch);
         window.Content = new RaceInformationView { DataContext = vm };
         window.Show(); window.UpdateLayout();
-        window.GetVisualDescendants().OfType<Expander>().Single(x => Equals(x.Header, "Browse weather forecast (optional)")).IsExpanded = true;
-        window.UpdateLayout();
-        var button = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Apply forecast to Run 1"));
-        Assert.NotNull(button.Command); Assert.Same(run, button.CommandParameter);
+        var button = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Apply to Run 1"));
+        Assert.NotNull(button.Command); Assert.Same(run, button.CommandParameter); Assert.True(button.IsEnabled);
         button.Command.Execute(button.CommandParameter);
         Assert.Equal("Clear", run.Conditions); Assert.Contains("3.5 °C", run.WeatherSource, StringComparison.Ordinal);
         Assert.Equal("", run.StartTemperature); Assert.Equal("", run.FinishTemperature);

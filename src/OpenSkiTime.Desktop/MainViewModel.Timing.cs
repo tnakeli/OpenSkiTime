@@ -38,6 +38,8 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public string BibText => Result.IsForerunner ? $"F · {Result.ForerunnerLetter}" : Bib.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public string Code => Result.Entry.Entrant.Athlete.FederationCode ?? "";
     public string Name => Result.Name;
+    public string Surname => Result.Entry.Entrant.Athlete.Surname;
+    public string FirstName => Result.Entry.Entrant.Athlete.FirstName;
     public string Status => Result.Status switch { TimingStatus.OnCourse => "On course", TimingStatus.Review => "No time", _ => Result.Status.ToString() };
     public string Time => Result.Time;
     public string DisplayTime => Result.Status == TimingStatus.Finished ? Time + ClockManualMark : Status;
@@ -49,6 +51,15 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public bool HasSplits => Result.Splits.Any(x => x.ObservationKey is not null);
     private static string WithRank(string time, int? rank) =>
         rank is { } value ? string.Create(CultureInfo.InvariantCulture, $"{time} ({value})") : time;
+}
+
+/// <summary>
+/// The next starter or expected finisher as shown in a queue banner: a lead (bib or forerunner), the name by the
+/// person name rule, or a note (HOLD, nobody waiting) when there is no racer.
+/// </summary>
+public sealed record QueueBanner(string Lead, string Surname, string FirstName, string Note)
+{
+    public static QueueBanner Message(string note) => new("", "", "", note);
 }
 
 public sealed class RunningTimeDisplay : INotifyPropertyChanged
@@ -138,7 +149,53 @@ public sealed partial class MainViewModel
         SelectedTimingRow = TimingRows.FirstOrDefault(x => x.Bib == activeBib)
             ?? TimingRows.FirstOrDefault(x => SelectedTimingBibs.Count > 0 && x.Bib == SelectedTimingBibs[0]);
         OnPropertyChanged(nameof(SelectedTimingIdentity));
+        OnPropertyChanged(nameof(TimingClassificationTarget));
     }
+    // The competitor the classification dialog edits: the single selected competitor, chosen there by bib or name.
+    // Choosing one selects it in every grid; clearing the choice clears the selection, so a save never falls back
+    // to a competitor the dialog no longer shows.
+    public TimingGridRow? TimingClassificationTarget
+    {
+        get => SelectedTimingBibs.Count == 1 ? SelectedTimingRow : null;
+        set
+        {
+            if (value?.Bib == TimingClassificationTarget?.Bib) { return; }
+            SelectTimingBibs(value is null ? [] : [value.Bib], value?.Bib);
+        }
+    }
+
+    /// <summary>Chooses the classification competitor from typed text: a bib, or words of the name in any order.</summary>
+    public bool ChooseTimingClassificationCompetitor(string? text)
+    {
+        var query = (text ?? "").Trim();
+        var lead = query.Split('·', 2)[0].Trim();
+        var candidates = TimingRows.Where(x => !x.IsForerunner).ToArray();
+        var matches = int.TryParse(lead, NumberStyles.None, CultureInfo.InvariantCulture, out var bib)
+            ? candidates.Where(x => x.Bib == bib).ToArray()
+            : candidates.Where(x => MatchesTimingCompetitor(x, query)).ToArray();
+        if (query.Length == 0 || matches.Length != 1)
+        {
+            SetStatus(query.Length == 0 ? "Enter a bib or a name." : matches.Length == 0 ? $"No competitor in this run matches \"{query}\"."
+                : $"\"{query}\" matches {matches.Length} competitors. Enter the bib or more of the name.", error: true);
+            return false;
+        }
+        TimingClassificationTarget = matches[0];
+        return true;
+    }
+
+    /// <summary>Bib prefix, or every typed word found in the surname or first name (case and accents ignored).</summary>
+    public static bool MatchesTimingCompetitor(TimingGridRow row, string? query)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        var text = (query ?? "").Trim();
+        if (text.Length == 0 || row.IsForerunner) { return false; }
+        if (text.All(char.IsAsciiDigit)) { return row.BibText.StartsWith(text, StringComparison.Ordinal); }
+        var compare = CultureInfo.InvariantCulture.CompareInfo;
+        var name = row.Surname + " " + row.FirstName;
+        return text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .All(word => compare.IndexOf(name, word, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0);
+    }
+
     [ObservableProperty] private TimingObservationRow? _selectedTimingObservation;
     [ObservableProperty] private TimingHistoryRow? _selectedTimingHistory;
     public bool HasTimingAlarm => TimingAlarm.Length > 0;
@@ -165,6 +222,7 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(SelectedTimingBibs));
         }
         OnPropertyChanged(nameof(SelectedTimingIdentity));
+        OnPropertyChanged(nameof(TimingClassificationTarget));
         OnPropertyChanged(nameof(SelectedTimingProblem));
         OnPropertyChanged(nameof(HasSelectedTimingProblem));
         ReturnToStartCommand.NotifyCanExecuteChanged();

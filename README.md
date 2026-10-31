@@ -52,11 +52,11 @@ The [draw fairness and verification guide](docs/fis-draw-fairness.md) explains p
 
 ### 5 · Timing and classification
 
-At start and Running show the immediate race state; Timestamps and Ranking retain the full picture. Channel HOLD controls retain incoming impulses for review. Ranking columns support filtering and sorting, and keyboard shortcuts and context actions speed up race control.
+At start, Running and Timestamps show the immediate race state side by side; Ranking keeps the full picture with the two latest finishers pinned above it. Channel HOLD controls retain incoming impulses for review. Ranking columns support filtering and sorting, and keyboard shortcuts and context actions speed up race control.
 
 ![Race-control workspace during a simulated run](docs/screenshots/05-timing.png)
 
-**Edit classification** records DNS, DNF, DSQ or NPS, including after the run or after disconnecting capture. DSQ entries can include a gate, reason or ICR reference, and reporting judge. Corrections record the operator and reason; clearing or undoing a classification adds history and restores the underlying time. Raw input is preserved.
+**Edit classification** in the Ranking heading opens a dialog where you choose a competitor by bib or name and record DNS, DNF, DSQ or NPS, including after the run or after disconnecting capture. DSQ entries can include a gate, reason or ICR reference, and reporting judge. Corrections record the operator and reason; clearing or undoing a classification adds history and restores the underlying time. Raw input is preserved.
 
 ![Classification editor with a saved synthetic disqualification, gate, reason and judge](docs/screenshots/06-classification.png)
 
@@ -64,7 +64,7 @@ See [timing setup and operation](docs/timing.md) and [post-run classification](d
 
 ### 6 · Race information, penalty and XML
 
-Prepare race information before timing begins, or complete it afterwards. Jury members and each run's course setter, course, gates, forerunners, start time, conditions and temperatures are editable. Valid changes save automatically; invalid entries remain visible with a **Not saved** message. An optional weather browser offers race-day forecasts alongside manually entered measured temperatures.
+Prepare race information before timing begins, or complete it afterwards. Jury members and each run's course setter, course, gates, forerunners, start time, conditions and temperatures are editable. Valid changes save automatically; invalid entries remain visible with a **Not saved** message. An optional weather browser offers today's forecast alongside manually entered measured temperatures.
 
 ![Race information with fictional officials, a course setter, forerunner and run conditions](docs/screenshots/07-race-information.png)
 

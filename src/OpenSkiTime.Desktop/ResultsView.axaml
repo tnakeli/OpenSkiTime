@@ -1,89 +1,205 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:OpenSkiTime.Desktop" x:Class="OpenSkiTime.Desktop.ResultsView" x:CompileBindings="False">
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Spacing="8">
-      <Border Classes="workSurface" Padding="{DynamicResource SectionInset}">
-        <StackPanel Spacing="10">
-          <Grid ColumnDefinitions="*,Auto">
-            <StackPanel Spacing="2"><TextBlock Text="RACE / OFFICIAL RESULTS" Classes="eyebrow" />
-              <TextBlock Text="Results &amp; FIS penalty" Classes="sectionTitle" /></StackPanel>
-            <Button Grid.Column="1" Content="Refresh timing" Command="{Binding LoadResultsCommand}"
-                    Classes="secondaryAction" Margin="8,0,0,0" />
-          </Grid>
-          <TextBlock Text="{Binding ResultsState}" Classes="supportingText" />
+  <!-- A view led by its list: full width. The state card stays on top; results, penalty, race information and the
+       FIS XML each have their own tab. -->
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,8">
+      <Grid ColumnDefinitions="*,16,Auto">
+        <StackPanel Spacing="4" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding ResultsCompetition, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <Border Classes="chip"><TextBlock Text="{Binding ResultsCompetition.Values.ShortLabel}" /></Border>
+            <TextBlock Text="{Binding ResultsCompetition.Values.Name}" Classes="cardTitle" />
+          </StackPanel>
+          <TextBlock Name="ResultsStateText" Text="{Binding ResultsState}" Classes="supportingText" TextWrapping="Wrap" />
+        </StackPanel>
+        <Button Grid.Column="2" Name="RefreshResultsButton" Content="Refresh timing" Command="{Binding LoadResultsCommand}"
+                Classes="secondaryAction" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
 
-        </StackPanel>
-      </Border>
-      <Border Name="ResultsFisInformation" Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding ResultsIsFis}"><local:RaceInformationView /></Border>
-      <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding ResultsIsFis}">
-        <StackPanel Spacing="10">
-          <StackPanel Spacing="2"><TextBlock Text="TD REVIEW / PENALTY" Classes="eyebrow" />
-            <TextBlock Text="Penalty calculation" Classes="sectionTitle" /></StackPanel>
-          <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultRows}" AutoGenerateColumns="False" IsReadOnly="True"
-                    Height="260" RowHeight="28" ColumnHeaderHeight="28" HeadersVisibility="Column">
+    <TabControl Name="ResultsTabs" Classes="pageTabs" IsVisible="{Binding ResultsIsFis}">
+      <TabItem Header="Results">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="{Binding ResultsStatistics}" Classes="supportingText" Margin="0,0,0,8"
+                     IsVisible="{Binding ResultsStatistics, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <!-- Columns size to their content so no value is cut; a narrow window scrolls the grid instead. -->
+          <DataGrid Name="ResultsGrid" Classes="raceGrid" ItemsSource="{Binding ResultRows}" AutoGenerateColumns="False" IsReadOnly="True"
+                    RowHeight="28" ColumnHeaderHeight="32" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                    HorizontalGridLinesBrush="{DynamicResource LineBrush}">
             <DataGrid.Columns>
-              <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="70" />
-              <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="75" />
-              <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="90" />
-              <DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" />
-              <DataGridTextColumn Header="RUN 1" Binding="{Binding Run1}" Width="90" />
-              <DataGridTextColumn Header="RUN 2" Binding="{Binding Run2}" Width="90" />
-              <DataGridTextColumn Header="TOTAL" Binding="{Binding Total}" Width="90" />
-              <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="110" />
-              <DataGridTextColumn Header="RACE PTS" Binding="{Binding RacePoints}" Width="100" />
+              <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="Auto" />
+              <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="Auto" />
+              <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="Auto" />
+              <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="Auto" />
+              <DataGridTextColumn Header="RUN 1" Binding="{Binding Run1}" Width="Auto" />
+              <DataGridTextColumn Header="RUN 2" Binding="{Binding Run2}" Width="Auto" />
+              <DataGridTextColumn Header="TOTAL" Binding="{Binding Total}" Width="Auto" FontWeight="SemiBold" />
+              <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="Auto" />
+              <DataGridTextColumn Header="RACE PTS" Binding="{Binding RacePoints}" Width="Auto" />
             </DataGrid.Columns>
           </DataGrid>
-          <TextBlock Text="{Binding ResultsRuleSource}" TextWrapping="Wrap" Classes="supportingText" />
-          <Border Classes="infoNote"><TextBlock Text="{Binding ResultsRuleValues}" TextWrapping="Wrap" /></Border>
-          <TextBlock Text="BEST TEN FINISHERS / A AND C" Classes="fieldLabel" />
-          <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultTopTen}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" Height="340" RowHeight="28" ColumnHeaderHeight="28">
-            <DataGrid.Columns>
-              <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="70" /><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="70" />
-              <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="85" /><DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="140" />
-              <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="80" /><DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="80" />
-              <DataGridTextColumn Header="LIST PTS" Binding="{Binding Listed}" Width="100" /><DataGridTextColumn Header="BEST 5" Binding="{Binding Used}" Width="85" />
-              <DataGridTextColumn Header="RACE PTS" Binding="{Binding RacePoints}" Width="105" /><DataGridTextColumn Header="C PTS" Binding="{Binding PenaltyRacePoints}" Width="85" /><DataGridTextColumn Header="NOTE" Binding="{Binding Note}" Width="190" />
-            </DataGrid.Columns>
-          </DataGrid>
-          <TextBlock Text="BEST FIVE STARTERS / B (INCLUDING DNF, DSQ AND DNS RUN 2)" Classes="fieldLabel" />
-          <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultBestStarted}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" Height="185" RowHeight="28" ColumnHeaderHeight="28">
-            <DataGrid.Columns>
-              <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="70" /><DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="70" />
-              <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="85" /><DataGridTextColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="140" />
-              <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="80" /><DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="80" />
-              <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="90" /><DataGridTextColumn Header="LIST PTS" Binding="{Binding Listed}" Width="100" />
-              <DataGridTextColumn Header="USED PTS" Binding="{Binding Used}" Width="105" /><DataGridTextColumn Header="NOTE" Binding="{Binding Note}" Width="190" />
-            </DataGrid.Columns>
-          </DataGrid>
-          <TextBlock Text="All ties at rank 10 are included. Selected finishers use the points cap where list or race points exceed it." Classes="supportingText" TextWrapping="Wrap" />
-          <Border Classes="infoNote"><TextBlock Text="{Binding ResultsPenaltySummary}" TextWrapping="Wrap" FontWeight="SemiBold" /></Border>
-        </StackPanel>
-      </Border>
-      <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding ResultsIsFis}">
-        <StackPanel Spacing="10">
-          <TextBlock Text="XML file" Classes="sectionTitle" />
-          <WrapPanel>
-            <Button Content="TD approves · create XML" Command="{Binding ApproveFisResultsCommand}" IsEnabled="{Binding ResultsReady}" Classes="primaryAction" Margin="0,0,8,0" />
-            <ComboBox Width="300" ItemsSource="{Binding ResultApprovals}" SelectedItem="{Binding SelectedResultApproval}" DisplayMemberBinding="{Binding XmlFileName}" Margin="0,0,8,0" />
-            <Button Content="Export approved XML" Command="{Binding ExportApprovedXmlCommand}" Classes="secondaryAction" />
-          </WrapPanel>
-          <TextBlock Text="Approval stores the exact XML and race information as an immutable revision in the event file." Classes="supportingText" TextWrapping="Wrap" />
-          <TextBlock Text="FIS upload · TEST MODE" Classes="sectionTitle" />
-          <TextBlock Text="Test mode is always on: FIS validates the upload without forwarding results for processing. Codex 9991 simulates success; 9992 simulates a permission failure. Other codices simulate an unknown race. The approved XML is sent unchanged." Classes="supportingText" TextWrapping="Wrap" />
-          <WrapPanel>
-            <Button Name="SendApprovedXmlTestButton" Content="Send XML · test mode" Command="{Binding SendApprovedXmlTestCommand}" IsEnabled="{Binding CanSendResultsXml}" Classes="primaryAction" Margin="0,0,8,0" />
-            <Button Content="Check status" Command="{Binding CheckResultsSubmissionCommand}" IsEnabled="{Binding CanCheckResultsSubmission}" Classes="secondaryAction" Margin="0,0,8,0" />
-            <Button Content="Stop waiting" Command="{Binding StopResultsSubmissionPollingCommand}" IsEnabled="{Binding IsSubmissionBusy}" Classes="secondaryAction" />
-          </WrapPanel>
-          <StackPanel Classes="field" MaxWidth="440" HorizontalAlignment="Left"><TextBlock Text="SUBMISSION ID (UUID)" Classes="fieldLabel" />
-            <TextBox Text="{Binding ResultSubmissionId}" PlaceholderText="Returned UUID · paste to resume a test submission" IsReadOnly="{Binding IsSubmissionBusy}" /></StackPanel>
-          <TextBlock Text="{Binding ResultSubmissionStatus}" TextWrapping="Wrap" />
-          <Expander Header="FIS API response" IsExpanded="True">
-            <TextBox Name="FisSubmissionResponseBox" Text="{Binding ResultSubmissionResponse}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" MaxHeight="260" />
-          </Expander>
-          <TextBlock Text="Test status expires at FIS after 24 hours. The submission ID and response are retained in this session; copy the UUID to resume after restarting. Polling stops on completion or after two minutes. Member Section token permissions are configured in Settings." Classes="supportingText" TextWrapping="Wrap" />
-        </StackPanel>
-      </Border>
-    </StackPanel>
-  </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+
+      <TabItem Header="Penalty">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Classes="tabPage">
+            <Border Name="PenaltyCard" Classes="card">
+              <StackPanel Spacing="{DynamicResource FormGap}">
+                <Grid Classes="cardHeader"><TextBlock Text="Penalty" Classes="cardTitle" /></Grid>
+                <TextBlock Text="{Binding ResultsRuleSource}" Classes="supportingText" TextWrapping="Wrap" />
+                <local:FormRow IsVisible="{Binding ResultsRuleFigures, Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <Border Grid.Column="0" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="F VALUE" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsRuleFigures.F}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="2" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="POINTS CAP" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsRuleFigures.PointsCap}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="4" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="CORRECTION (Z)" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsRuleFigures.Correction}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="6" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="CATEGORY ADDER" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsRuleFigures.Adder}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="8" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="MINIMUM" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsRuleFigures.Minimum}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="10" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="MAXIMUM" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsRuleFigures.Maximum}" Classes="figureValue" /></StackPanel></Border>
+                </local:FormRow>
+                <local:FormRow IsVisible="{Binding ResultsPenaltyFigures, Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <Border Grid.Column="0" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="A · BEST 5 IN TOP 10" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsPenaltyFigures.A}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="2" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="B · BEST 5 STARTERS" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsPenaltyFigures.B}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="4" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="C · RACE POINTS" Classes="fieldLabel" ToolTip.Tip="Corresponding capped race points of the five selected in A." />
+                    <TextBlock Text="{Binding ResultsPenaltyFigures.C}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="6" Grid.ColumnSpan="2" Classes="figure"><StackPanel>
+                    <TextBlock Text="(A + B − C) / 10" Classes="fieldLabel" /><TextBlock Text="{Binding ResultsPenaltyFigures.Calculated}" Classes="figureValue" /></StackPanel></Border>
+                  <Border Grid.Column="8" Grid.ColumnSpan="4" Classes="figure result"><StackPanel>
+                    <TextBlock Text="APPLIED PENALTY" Classes="fieldLabel" /><TextBlock Name="AppliedPenaltyText" Text="{Binding ResultsPenaltyFigures.Applied}" Classes="figureValue" /></StackPanel></Border>
+                </local:FormRow>
+                <TextBlock Text="{Binding ResultsPenaltyFigures.Note}" Classes="supportingText" TextWrapping="Wrap"
+                           IsVisible="{Binding ResultsPenaltyFigures.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="{DynamicResource FormGap}">
+                <Grid Classes="cardHeader"><TextBlock Text="Best ten finishers · A and C" Classes="cardTitle" /></Grid>
+                <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultTopTen}" AutoGenerateColumns="False" IsReadOnly="True"
+                          RowHeight="28" ColumnHeaderHeight="32" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                          HorizontalGridLinesBrush="{DynamicResource LineBrush}">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="Auto" />
+                    <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="Auto" />
+                    <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="Auto" />
+                    <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="Auto" />
+                    <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="Auto" />
+                    <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="Auto" />
+                    <DataGridTextColumn Header="LIST PTS" Binding="{Binding Listed}" Width="Auto" />
+                    <DataGridTextColumn Header="BEST 5" Binding="{Binding Used}" Width="Auto" />
+                    <DataGridTextColumn Header="RACE PTS" Binding="{Binding RacePoints}" Width="Auto" />
+                    <DataGridTextColumn Header="C PTS" Binding="{Binding PenaltyRacePoints}" Width="Auto" />
+                    <DataGridTextColumn Header="NOTE" Binding="{Binding Note}" Width="Auto" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="All ties at rank 10 are included. Selected finishers use the points cap where list or race points exceed it."
+                           Classes="supportingText" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="{DynamicResource FormGap}">
+                <Grid Classes="cardHeader"><TextBlock Text="Best five starters · B" Classes="cardTitle" /></Grid>
+                <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultBestStarted}" AutoGenerateColumns="False" IsReadOnly="True"
+                          RowHeight="28" ColumnHeaderHeight="32" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                          HorizontalGridLinesBrush="{DynamicResource LineBrush}">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="RK" Binding="{Binding Rank}" Width="Auto" />
+                    <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="Auto" />
+                    <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="Auto" />
+                    <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="Auto" />
+                    <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="Auto" />
+                    <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="Auto" />
+                    <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="Auto" />
+                    <DataGridTextColumn Header="LIST PTS" Binding="{Binding Listed}" Width="Auto" />
+                    <DataGridTextColumn Header="USED PTS" Binding="{Binding Used}" Width="Auto" />
+                    <DataGridTextColumn Header="NOTE" Binding="{Binding Note}" Width="Auto" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="Starters include DNF, DSQ and DNS in run 2." Classes="supportingText" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Race information">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <local:RaceInformationView Name="ResultsRaceInformation" />
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="FIS XML">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Classes="tabPage">
+            <!-- Both cards of the row are equally tall. -->
+            <Grid ColumnDefinitions="*,*,*,*,*,*,*,*,*,*,*,*" ColumnSpacing="12">
+              <Border Grid.Column="0" Grid.ColumnSpan="5" Classes="card">
+                <StackPanel Spacing="{DynamicResource FormGap}">
+                  <Grid Classes="cardHeader"><TextBlock Text="TD approval" Classes="cardTitle" /></Grid>
+                  <TextBlock Text="Approval stores the exact XML and race information as an immutable revision in the event file."
+                             Classes="supportingText" TextWrapping="Wrap" />
+                  <StackPanel Classes="field">
+                    <TextBlock Text="APPROVED XML" Classes="fieldLabel" />
+                    <ComboBox Name="ResultApprovalPicker" ItemsSource="{Binding ResultApprovals}" SelectedItem="{Binding SelectedResultApproval}"
+                              DisplayMemberBinding="{Binding XmlFileName}" HorizontalAlignment="Stretch" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <Border Grid.Column="5" Grid.ColumnSpan="7" Classes="card">
+                <StackPanel Spacing="{DynamicResource FormGap}">
+                  <Grid Classes="cardHeader" ColumnDefinitions="Auto,10,Auto">
+                    <TextBlock Text="FIS upload" Classes="cardTitle" />
+                    <Border Grid.Column="2" Classes="chip red"><TextBlock Text="TEST MODE" /></Border>
+                  </Grid>
+                  <TextBlock Text="FIS validates the upload without forwarding results for processing. Codex 9991 simulates success, 9992 a permission failure; other codices an unknown race. The approved XML is sent unchanged."
+                             Classes="supportingText" TextWrapping="Wrap" />
+                  <local:FormRow>
+                    <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field">
+                      <TextBlock Text="SUBMISSION ID" Classes="fieldLabel" />
+                      <TextBox Name="ResultSubmissionIdInput" Text="{Binding ResultSubmissionId}" PlaceholderText="Paste a returned UUID to resume a test submission"
+                               IsReadOnly="{Binding IsSubmissionBusy}" />
+                    </StackPanel>
+                    <Button Grid.Column="8" Grid.ColumnSpan="2" Content="Check status" Command="{Binding CheckResultsSubmissionCommand}" IsEnabled="{Binding CanCheckResultsSubmission}"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="secondaryAction" />
+                    <Button Grid.Column="10" Grid.ColumnSpan="2" Content="Stop waiting" Command="{Binding StopResultsSubmissionPollingCommand}" IsEnabled="{Binding IsSubmissionBusy}"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="secondaryAction" />
+                  </local:FormRow>
+                  <TextBlock Text="{Binding ResultSubmissionStatus}" FontWeight="SemiBold" TextWrapping="Wrap"
+                             IsVisible="{Binding ResultSubmissionStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                  <StackPanel Classes="field">
+                    <TextBlock Text="FIS API RESPONSE" Classes="fieldLabel" />
+                    <TextBox Name="FisSubmissionResponseBox" Text="{Binding ResultSubmissionResponse}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                             MinHeight="100" MaxHeight="260" />
+                  </StackPanel>
+                  <TextBlock Text="Test status expires at FIS after 24 hours; copy the submission ID to resume after a restart. Polling stops on completion or after two minutes. Member Section token permissions are set in Settings."
+                             Classes="supportingText" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <!-- Actions: approval is the primary step; export and send use the selected approved XML. -->
+            <Border Classes="card" Padding="12,10">
+              <Grid ColumnDefinitions="*,Auto,8,Auto,8,Auto">
+                <Button Grid.Column="1" Content="Export approved XML" Command="{Binding ExportApprovedXmlCommand}" Classes="secondaryAction" />
+                <Button Grid.Column="3" Name="SendApprovedXmlTestButton" Content="Send XML · test mode" Command="{Binding SendApprovedXmlTestCommand}"
+                        IsEnabled="{Binding CanSendResultsXml}" Classes="secondaryAction" />
+                <Button Grid.Column="5" Name="ApproveResultsButton" Content="TD approves · create XML" Command="{Binding ApproveFisResultsCommand}"
+                        IsEnabled="{Binding ResultsReady}" Classes="primaryAction" />
+              </Grid>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
 </UserControl>

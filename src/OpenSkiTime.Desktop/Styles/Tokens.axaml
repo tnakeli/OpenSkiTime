@@ -1,0 +1,138 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- OpenSkiTime design tokens. Views and styles refer to these semantic keys, never to raw colours or sizes.
+       The rules for using them are in AGENTS.md ("UI guidelines"). -->
+
+  <!-- Surfaces -->
+  <SolidColorBrush x:Key="CanvasBrush">#F3F5F9</SolidColorBrush>
+  <SolidColorBrush x:Key="SurfaceBrush">#FFFFFF</SolidColorBrush>
+  <SolidColorBrush x:Key="SubtleSurfaceBrush">#F7F9FC</SolidColorBrush>
+  <SolidColorBrush x:Key="HeaderSurfaceBrush">#F7F9FC</SolidColorBrush>
+  <SolidColorBrush x:Key="HoverBrush">#F3F5F9</SolidColorBrush>
+  <SolidColorBrush x:Key="DisabledSurfaceBrush">#F1F4F8</SolidColorBrush>
+
+  <!-- Navy title bar -->
+  <SolidColorBrush x:Key="NavyBrush">#14234A</SolidColorBrush>
+  <SolidColorBrush x:Key="NavyRaisedBrush">#22356A</SolidColorBrush>
+  <SolidColorBrush x:Key="NavyHoverBrush">#2D4482</SolidColorBrush>
+  <SolidColorBrush x:Key="NavyPressedBrush">#0D1834</SolidColorBrush>
+  <SolidColorBrush x:Key="NavyBorderBrush">#3E5291</SolidColorBrush>
+  <SolidColorBrush x:Key="NavyHoverBorderBrush">#6C80BD</SolidColorBrush>
+  <SolidColorBrush x:Key="NavyDisabledBrush">#1A2B57</SolidColorBrush>
+  <SolidColorBrush x:Key="NavyDisabledBorderBrush">#2E3F70</SolidColorBrush>
+  <SolidColorBrush x:Key="OnNavyTextBrush">#FFFFFF</SolidColorBrush>
+  <SolidColorBrush x:Key="OnNavyMutedTextBrush">#C3CEE6</SolidColorBrush>
+  <SolidColorBrush x:Key="OnNavyDisabledTextBrush">#8796BC</SolidColorBrush>
+  <SolidColorBrush x:Key="OnNavyAccentBrush">#2563EB</SolidColorBrush>
+  <SolidColorBrush x:Key="OnNavyAccentHoverBrush">#3B82F6</SolidColorBrush>
+
+  <!-- Lines: BorderBrush outlines inputs and buttons, LineBrush separates cards, rows and headers. -->
+  <SolidColorBrush x:Key="BorderBrush">#CBD5E1</SolidColorBrush>
+  <SolidColorBrush x:Key="LineBrush">#DDE3ED</SolidColorBrush>
+
+  <!-- Text: ink for values, muted for labels, quiet for column headers and hints (4.5:1 on white and header surfaces,
+       not on the canvas). -->
+  <SolidColorBrush x:Key="TextBrush">#0F1B33</SolidColorBrush>
+  <SolidColorBrush x:Key="MutedTextBrush">#4A5670</SolidColorBrush>
+  <SolidColorBrush x:Key="QuietTextBrush">#667188</SolidColorBrush>
+  <SolidColorBrush x:Key="DisabledTextBrush">#64748B</SolidColorBrush>
+
+  <!-- Accent -->
+  <SolidColorBrush x:Key="AccentBrush">#1D5FE0</SolidColorBrush>
+  <SolidColorBrush x:Key="AccentHoverBrush">#174BB5</SolidColorBrush>
+  <SolidColorBrush x:Key="AccentPressedBrush">#123C91</SolidColorBrush>
+  <SolidColorBrush x:Key="AccentTintBrush">#EEF4FF</SolidColorBrush>
+  <SolidColorBrush x:Key="FocusBrush">#1D5FE0</SolidColorBrush>
+
+  <!-- Selection: race grid rows use the pale row tint with a 4 px accent edge; lists and pressed states the
+       stronger selection tint. -->
+  <SolidColorBrush x:Key="RowSelectionBrush">#EEF4FF</SolidColorBrush>
+  <SolidColorBrush x:Key="SelectionBrush">#DBEAFE</SolidColorBrush>
+  <SolidColorBrush x:Key="SelectionTextBrush">#0F1B33</SolidColorBrush>
+  <!-- Selected text inside inputs: light highlight that keeps the text readable. -->
+  <SolidColorBrush x:Key="TextSelectionBrush">#BFDBFE</SolidColorBrush>
+
+  <!-- Status -->
+  <SolidColorBrush x:Key="SuccessBrush">#166534</SolidColorBrush>
+  <SolidColorBrush x:Key="SuccessTintBrush">#DCFCE7</SolidColorBrush>
+  <SolidColorBrush x:Key="WarningBrush">#92400E</SolidColorBrush>
+  <SolidColorBrush x:Key="WarningTintBrush">#FEF3C7</SolidColorBrush>
+  <SolidColorBrush x:Key="PendingCellBrush">#FEF3C7</SolidColorBrush>
+  <SolidColorBrush x:Key="ErrorBrush">#B42318</SolidColorBrush>
+  <SolidColorBrush x:Key="ErrorTintBrush">#FEE4E2</SolidColorBrush>
+  <SolidColorBrush x:Key="ErrorBorderBrush">#F4A9A1</SolidColorBrush>
+  <!-- Attention on the dark timing banner (B clock and device clock warnings). -->
+  <SolidColorBrush x:Key="BannerWarningBrush">#F3C969</SolidColorBrush>
+  <SolidColorBrush x:Key="BannerWarningTextBrush">#3B2C00</SolidColorBrush>
+  <!-- Connection and publishing dots on light surfaces: connected / problem. Text always states the state too. -->
+  <SolidColorBrush x:Key="LiveOkBrush">#16A34A</SolidColorBrush>
+  <!-- Forerunners in timing: their own tint so they are never read as competitors. -->
+  <SolidColorBrush x:Key="ForerunnerBrush">#EDE9FE</SolidColorBrush>
+  <SolidColorBrush x:Key="ForerunnerTextBrush">#4C1D95</SolidColorBrush>
+
+  <!-- Chips: short categorical values in grids and headers (discipline, category, active race). -->
+  <SolidColorBrush x:Key="ChipBlueBrush">#E6EFFF</SolidColorBrush>
+  <SolidColorBrush x:Key="ChipBlueTextBrush">#174BB5</SolidColorBrush>
+  <SolidColorBrush x:Key="ChipGreenBrush">#E6F5EC</SolidColorBrush>
+  <SolidColorBrush x:Key="ChipGreenTextBrush">#14663F</SolidColorBrush>
+
+  <!-- The OpenSkiTime mark keeps its own colour. -->
+  <SolidColorBrush x:Key="BrandBrush">#087E78</SolidColorBrush>
+
+  <!-- Spacing and shape -->
+  <Thickness x:Key="PageInset">12,8,12,8</Thickness>
+  <Thickness x:Key="SectionInset">16,12</Thickness>
+  <Thickness x:Key="CardInset">16,12,16,14</Thickness>
+  <x:Double x:Key="FormGap">10</x:Double>
+  <x:Double x:Key="ContentMaxWidth">1240</x:Double>
+  <CornerRadius x:Key="SurfaceRadius">10</CornerRadius>
+  <CornerRadius x:Key="ControlRadius">6</CornerRadius>
+  <CornerRadius x:Key="ChipRadius">9</CornerRadius>
+
+  <!-- Type. Dense on purpose: race office operators work with many fields on one screen. -->
+  <!-- Running clock and expected finish time in the timing view: read at a glance. -->
+  <x:Double x:Key="RaceClockSize">18</x:Double>
+  <x:Double x:Key="TitleSize">17</x:Double>
+  <x:Double x:Key="SectionSize">15</x:Double>
+  <x:Double x:Key="CardTitleSize">14</x:Double>
+  <x:Double x:Key="BodySize">13</x:Double>
+  <x:Double x:Key="LabelSize">12</x:Double>
+  <x:Double x:Key="ColumnHeaderSize">11.5</x:Double>
+  <x:Double x:Key="ColumnHeaderLetterSpacing">0.4</x:Double>
+  <x:Double x:Key="MetaSize">11</x:Double>
+  <x:Double x:Key="ControlHeight">30</x:Double>
+  <!-- Fluent's expander headers default to 48 px. -->
+  <x:Double x:Key="ExpanderMinHeight">34</x:Double>
+  <Thickness x:Key="ExpanderHeaderPadding">16,0,12,0</Thickness>
+  <Thickness x:Key="ExpanderContentPadding">16,12,16,14</Thickness>
+  <FontFamily x:Key="TimeFontFamily">Cascadia Mono,Consolas,DejaVu Sans Mono,monospace</FontFamily>
+
+  <!-- Fluent derives check boxes, toggles, sliders and focus accents from the system accent. Pin it to the
+       OpenSkiTime accent so every control uses one colour instead of the Windows blue. -->
+  <Color x:Key="SystemAccentColor">#1D5FE0</Color>
+  <Color x:Key="SystemAccentColorDark1">#174BB5</Color>
+  <Color x:Key="SystemAccentColorDark2">#123C91</Color>
+  <Color x:Key="SystemAccentColorDark3">#0D2C6B</Color>
+  <Color x:Key="SystemAccentColorLight1">#3B78EA</Color>
+  <Color x:Key="SystemAccentColorLight2">#7FA7F2</Color>
+  <Color x:Key="SystemAccentColorLight3">#C6D8FA</Color>
+
+  <!-- Expanders read as cards on the canvas: white header and content, soft line, hover tint on the header. -->
+  <StaticResource x:Key="ExpanderHeaderBackground" ResourceKey="SurfaceBrush" />
+  <StaticResource x:Key="ExpanderHeaderBackgroundPointerOver" ResourceKey="HoverBrush" />
+  <StaticResource x:Key="ExpanderHeaderBackgroundPressed" ResourceKey="HoverBrush" />
+  <StaticResource x:Key="ExpanderHeaderBorderBrush" ResourceKey="LineBrush" />
+  <StaticResource x:Key="ExpanderHeaderBorderBrushPointerOver" ResourceKey="LineBrush" />
+  <StaticResource x:Key="ExpanderHeaderBorderBrushPressed" ResourceKey="LineBrush" />
+  <StaticResource x:Key="ExpanderHeaderForeground" ResourceKey="TextBrush" />
+  <StaticResource x:Key="ExpanderHeaderForegroundPointerOver" ResourceKey="TextBrush" />
+  <StaticResource x:Key="ExpanderHeaderForegroundPressed" ResourceKey="TextBrush" />
+  <StaticResource x:Key="ExpanderContentBackground" ResourceKey="SurfaceBrush" />
+  <StaticResource x:Key="ExpanderContentBorderBrush" ResourceKey="LineBrush" />
+
+  <!-- Keyboard focus: one 2 px accent outline on every focusable control instead of Fluent's black and white pair. -->
+  <SolidColorBrush x:Key="SystemControlFocusVisualPrimaryBrush">#1D5FE0</SolidColorBrush>
+  <SolidColorBrush x:Key="SystemControlFocusVisualSecondaryBrush">Transparent</SolidColorBrush>
+  <Thickness x:Key="SystemControlFocusVisualPrimaryThickness">2</Thickness>
+  <Thickness x:Key="SystemControlFocusVisualSecondaryThickness">0</Thickness>
+</ResourceDictionary>
