@@ -77,6 +77,12 @@
     <Style Selector="Border.chip.green > TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource ChipGreenTextBrush}" />
     </Style>
+    <Style Selector="Border.chip.red">
+      <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+    </Style>
+    <Style Selector="Border.chip.red > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+    </Style>
     <!-- Stat field: a compact measured value (altitudes, lengths) with its label and unit in one tile. -->
     <Style Selector="Border.statField">
       <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />

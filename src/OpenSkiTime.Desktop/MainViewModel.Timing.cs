@@ -38,6 +38,8 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public string BibText => Result.IsForerunner ? $"F · {Result.ForerunnerLetter}" : Bib.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public string Code => Result.Entry.Entrant.Athlete.FederationCode ?? "";
     public string Name => Result.Name;
+    public string Surname => Result.Entry.Entrant.Athlete.Surname;
+    public string FirstName => Result.Entry.Entrant.Athlete.FirstName;
     public string Status => Result.Status switch { TimingStatus.OnCourse => "On course", TimingStatus.Review => "No time", _ => Result.Status.ToString() };
     public string Time => Result.Time;
     public string DisplayTime => Result.Status == TimingStatus.Finished ? Time + ClockManualMark : Status;
@@ -49,6 +51,15 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public bool HasSplits => Result.Splits.Any(x => x.ObservationKey is not null);
     private static string WithRank(string time, int? rank) =>
         rank is { } value ? string.Create(CultureInfo.InvariantCulture, $"{time} ({value})") : time;
+}
+
+/// <summary>
+/// The next starter or expected finisher as shown in a queue banner: a lead (bib or forerunner), the name by the
+/// person name rule, or a note (HOLD, nobody waiting) when there is no racer.
+/// </summary>
+public sealed record QueueBanner(string Lead, string Surname, string FirstName, string Note)
+{
+    public static QueueBanner Message(string note) => new("", "", "", note);
 }
 
 public sealed class RunningTimeDisplay : INotifyPropertyChanged

@@ -148,7 +148,7 @@ public sealed partial class TimingView : UserControl
                     var cell = row?.Cells.ElementAtOrDefault(index);
                     var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
                     content.Children.Add(new TextBlock
-                    { Text = cell?.Time ?? "—", FontFamily = new("Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
+                    { Text = cell?.Time ?? "—", FontFamily = new("Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
                     if (cell?.IsManual == true)
                     { content.Children.Add(new TextBlock { Text = "m", FontSize = 9, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Classes = { "manualTimestampMark" } }); }
                     // The timestampCell style's transparent background makes empty cells hit-testable for manual entry.

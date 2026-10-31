@@ -31,6 +31,8 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _expectedFinishTime = "—";
     [ObservableProperty] private string _nextStartLabel = "No competitor waiting";
     [ObservableProperty] private string _expectedFinishLabel = "No competitor on course";
+    [ObservableProperty] private QueueBanner _nextStartBanner = QueueBanner.Message("No competitor waiting");
+    [ObservableProperty] private QueueBanner _expectedFinishBanner = QueueBanner.Message("No competitor on course");
     [ObservableProperty] private string _onCourseLabel = "ON COURSE · 0";
     [ObservableProperty] private string _finishListLabel = "FINISHED · 0";
     [ObservableProperty] private string _startHoldLabel = "Hold start";
@@ -206,9 +208,16 @@ public sealed partial class MainViewModel
         string Expected(int channel, string empty) => timing!.IsHeld(channel) ? "HOLD · impulses kept unassigned"
             : snapshot.Participants.FirstOrDefault(x => x.Bib == timing.ExpectedBib(channel)) is { } row
                 ? row.IsForerunner ? $"Forerunner {row.ForerunnerLetter} · {row.Name}" : $"{row.Bib} · {row.Name}" : empty;
+        QueueBanner Banner(int channel, string empty) => timing!.IsHeld(channel) ? QueueBanner.Message("HOLD · impulses kept unassigned")
+            : snapshot.Participants.FirstOrDefault(x => x.Bib == timing.ExpectedBib(channel)) is { } row
+                ? new(row.IsForerunner ? $"Forerunner {row.ForerunnerLetter}" : row.Bib.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    row.Entry.Entrant.Athlete.Surname, row.Entry.Entrant.Athlete.FirstName, "")
+                : QueueBanner.Message(empty);
         NextStartLabel = Expected(0, "No starter selected");
+        NextStartBanner = Banner(0, "No starter selected");
         _displayedNextStart = timing.IsHeld(0) ? null : timing.ExpectedBib(0);
         ExpectedFinishLabel = Expected(1, "No competitor expected");
+        ExpectedFinishBanner = Banner(1, "No competitor expected");
         StartHoldLabel = timing!.IsHeld(0) ? "Resume start" : "Hold start";
         FinishHoldLabel = timing.IsHeld(1) ? "Resume finish" : "Hold finish";
     }

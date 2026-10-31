@@ -25,6 +25,7 @@ public sealed class PersonNameDisplayTests
         var column = new CompetitorNameColumn { Header = "COMPETITOR", Binding = new Avalonia.Data.Binding("Name") };
         var grid = new DataGrid { AutoGenerateColumns = false, IsReadOnly = true, ItemsSource = new[] { new Person("Korpi", "Sofia") } };
         grid.Columns.Add(column);
+        grid.Columns.Add(new DataGridTextColumn { Header = "PLAIN", Binding = new Avalonia.Data.Binding("FirstName") });
         var window = new Window { Width = 600, Height = 300, Content = grid };
         window.Show(); Dispatcher.UIThread.RunJobs();
 
@@ -32,6 +33,11 @@ public sealed class PersonNameDisplayTests
         var text = cell.GetVisualDescendants().OfType<TextBlock>().First(x => x.Inlines?.OfType<Run>().Any() == true);
         Assert.Equal([("KORPI", FontWeight.Bold), (" ", FontWeight.Normal), ("Sofia", FontWeight.Normal)], Runs(text));
         Assert.Equal("Name", ((Avalonia.Data.Binding)column.Binding!).Path);
+        // The name cell is laid out like any other text cell of the grid.
+        var plain = grid.GetVisualDescendants().OfType<DataGridCell>().Where(x => x.DataContext is Person)
+            .SelectMany(x => x.GetVisualDescendants().OfType<TextBlock>()).First(x => x.Text == "Sofia" && x.Inlines is not { Count: > 0 });
+        Assert.Equal(plain.Margin, text.Margin);
+        Assert.Equal(plain.VerticalAlignment, text.VerticalAlignment);
         window.Close();
     }
 

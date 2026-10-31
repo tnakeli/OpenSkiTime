@@ -17,11 +17,17 @@ internal static class PersonNameText
     public static IValueConverter Surname { get; } = new FuncValueConverter<object?, string>(
         value => (value as string ?? value?.ToString() ?? string.Empty).ToUpper(CultureInfo.CurrentCulture));
 
-    /// <summary>Fills the text block with a bold surname run and a regular first name run.</summary>
-    public static void Fill(TextBlock text, BindingBase surname, BindingBase firstName)
+    /// <summary>Fills the text block with an optional regular prefix, a bold surname run and a regular first name run.</summary>
+    public static void Fill(TextBlock text, BindingBase surname, BindingBase firstName, BindingBase? prefix = null)
     {
         var inlines = text.Inlines ??= [];
         inlines.Clear();
+        if (prefix is not null)
+        {
+            var lead = new Run();
+            lead.Bind(Run.TextProperty, prefix);
+            inlines.Add(lead);
+        }
         var last = new Run { FontWeight = FontWeight.Bold };
         last.Bind(Run.TextProperty, surname);
         var first = new Run();
@@ -41,15 +47,17 @@ public sealed class CompetitorNameColumn : DataGridTextColumn
 {
     public string SurnamePath { get; set; } = "Surname";
     public string FirstNamePath { get; set; } = "FirstName";
+    /// <summary>Optional regular text before the surname (for example "Forerunner · " or an unassigned impulse).</summary>
+    public string? PrefixPath { get; set; }
 
     protected override Control GenerateElement(DataGridCell cell, object dataItem)
     {
-        // A fresh text block styled like the column's own: the column's Text binding would replace the runs.
-        var template = (TextBlock)base.GenerateElement(cell, dataItem);
-        var text = new TextBlock { Name = template.Name, Theme = template.Theme, Margin = template.Margin,
-            VerticalAlignment = template.VerticalAlignment, HorizontalAlignment = template.HorizontalAlignment };
-        text.Classes.AddRange(template.Classes);
-        PersonNameText.Fill(text, new Binding(SurnamePath) { Converter = PersonNameText.Surname }, new Binding(FirstNamePath));
+        // A text block of its own: the column's text block carries a Text binding that would overwrite the runs.
+        // It takes the grid's cell text style by resource, like the column's own (margin, vertical centring).
+        var text = new TextBlock { Name = "CellTextBlock" };
+        text.Bind(StyledElement.ThemeProperty, text.GetResourceObservable("DataGridCellTextBlockTheme"));
+        PersonNameText.Fill(text, new Binding(SurnamePath) { Converter = PersonNameText.Surname }, new Binding(FirstNamePath),
+            PrefixPath is null ? null : new Binding(PrefixPath));
         return text;
     }
 }
