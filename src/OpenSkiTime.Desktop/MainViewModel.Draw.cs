@@ -40,6 +40,8 @@ public sealed partial class ResultInputRow(StartListEntry entry) : ObservableObj
     public int Bib => entry.Bib;
     public string Code => entry.Entrant.Athlete.FederationCode ?? string.Empty;
     public string Name => entry.Entrant.Athlete.Surname + " " + entry.Entrant.Athlete.FirstName;
+    public string Surname => entry.Entrant.Athlete.Surname;
+    public string FirstName => entry.Entrant.Athlete.FirstName;
     [ObservableProperty] private string _time = string.Empty;
     [ObservableProperty] private string _status = "Finished";
     public RunFinish Read()

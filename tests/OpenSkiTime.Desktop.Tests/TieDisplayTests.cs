@@ -134,8 +134,11 @@ public sealed class TieDisplayTests
             foreach (var row in rows)
             {
                 var item = (DrawStartListRow)row.DataContext!;
+                // The surname is always bold (person name rule); equal points show on the rest of the row.
                 var surname = row.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Text == item.Entry.Entrant.Athlete.Surname);
-                Assert.Equal(item.SharesPoints ? FontWeight.Bold : FontWeight.Normal, surname.FontWeight);
+                Assert.Equal(FontWeight.Bold, surname.FontWeight);
+                var firstName = row.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Text == item.Entry.Entrant.Athlete.FirstName);
+                Assert.Equal(item.SharesPoints ? FontWeight.Bold : FontWeight.Normal, firstName.FontWeight);
             }
             Assert.Contains(rows, x => ((DrawStartListRow)x.DataContext!).SharesPoints);
             Assert.Contains(rows, x => !((DrawStartListRow)x.DataContext!).SharesPoints);
