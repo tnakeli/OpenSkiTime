@@ -13,9 +13,8 @@
       <Setter Property="Margin" Value="0" />
       <Setter Property="Padding" Value="14,6" />
     </Style>
-    <!-- 12 px on the left lines the header text up with the cell text below it. -->
     <Style Selector="DataGrid.columnControls DataGridColumnHeader">
-      <Setter Property="Padding" Value="12,0,4,0" />
+      <Setter Property="Padding" Value="4,0" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
     <!-- Our header supplies both icons; reclaim the native sort icon column. -->

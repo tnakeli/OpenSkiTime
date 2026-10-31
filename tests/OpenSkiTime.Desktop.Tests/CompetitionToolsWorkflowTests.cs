@@ -39,7 +39,10 @@ public partial class DesktopWorkflowTests
             var checkbox = window.FindControl<CheckBox>("SaveCourseToAllRacesCheckBox")!;
             var tdCheckbox = window.FindControl<CheckBox>("SaveTdToAllRacesCheckBox")!;
             Assert.False(tdCheckbox.IsChecked);
-            Assert.True(tdCheckbox.Bounds.X > checkbox.Bounds.X);
+            // Each checkbox sits in the card whose values it shares: course in the course card, TD in the TD card.
+            var courseCard = window.FindControl<StackPanel>("CompetitionCourseDetails")!;
+            Assert.Contains(courseCard, checkbox.GetVisualAncestors());
+            Assert.DoesNotContain(courseCard, tdCheckbox.GetVisualAncestors());
             Assert.Equal("Save Course & Homologation to all Slalom races", checkbox.Content);
             vm.CompetitionDiscipline = Discipline.GiantSlalom;
             Assert.Equal("Save Course & Homologation to all Giant Slalom races", checkbox.Content);

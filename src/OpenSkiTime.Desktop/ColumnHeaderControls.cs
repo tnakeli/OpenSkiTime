@@ -14,7 +14,7 @@ internal sealed class ColumnHeaderControls
     // Matches ColumnHeaderSize and ColumnHeaderLetterSpacing in Styles/Tokens.axaml.
     private const double HeaderFontSize = 11.5;
     private const double HeaderLetterSpacing = 0.4;
-    // Icons (2 × 14) plus the column header padding (12 left, 4 right; see MainWindow.axaml).
+    // Icons (2 × 14) plus the Fluent column header padding on both sides.
     private const double ChromeWidth = 28 + 16;
 
     public Grid Content { get; }
