@@ -92,9 +92,12 @@ public partial class DesktopWorkflowTests
                 }
                 foreach (var header in ranking.GetVisualDescendants().OfType<TextBlock>().Where(x => x.Text is "RK" or "BIB" or "NAT"))
                 { Assert.True(header.Bounds.Height < 20, $"Header {header.Text} wraps ({header.Bounds.Height}px)"); }
-                Assert.Equal(2, timing.GetVisualDescendants().OfType<GridSplitter>().Count(x => x.Classes.Contains("paneSplitter") && x.IsEffectivelyVisible));
+                Assert.Equal(3, timing.GetVisualDescendants().OfType<GridSplitter>().Count(x => x.Classes.Contains("paneSplitter") && x.IsEffectivelyVisible));
                 Assert.True(ranking.Bounds.Height >= 3 * ranking.RowHeight, "The ranking shows fewer than three rows at 1280×800");
-                Assert.Contains("primaryAction", timing.FindControl<Button>("SaveTimingClassification")!.Classes);
+                vm.ShowTimingClassificationEditor = true;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Contains("primaryAction", timing.ClassificationDialog!.FindControl<Button>("SaveTimingClassification")!.Classes);
+                vm.ShowTimingClassificationEditor = false;
 
                 // FIS points use the FIS decimal point regardless of the Windows number format.
                 var previous = CultureInfo.CurrentCulture;

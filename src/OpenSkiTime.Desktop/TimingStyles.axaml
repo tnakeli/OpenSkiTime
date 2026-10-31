@@ -3,14 +3,16 @@
  <Style Selector="Border.timestampCell.timingDropTarget, Border.racePane.timingDropTarget">
   <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="2" />
  </Style>
- <Style Selector="DataGrid#AtStartGrid DataGridRow.timingDropAbove /template/ Border#RowBorder">
+ <Style Selector="DataGrid#AtStartGrid DataGridRow.timingDropAbove /template/ Border#RowBorder, DataGrid#ForerunnersGrid DataGridRow.timingDropAbove /template/ Border#RowBorder">
   <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="0,3,0,0" />
  </Style>
- <Style Selector="DataGrid#AtStartGrid DataGridRow.timingDropBelow /template/ Border#RowBorder">
+ <Style Selector="DataGrid#AtStartGrid DataGridRow.timingDropBelow /template/ Border#RowBorder, DataGrid#ForerunnersGrid DataGridRow.timingDropBelow /template/ Border#RowBorder">
   <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter Property="BorderThickness" Value="0,0,0,3" />
  </Style>
  <Style Selector="DataGrid#AtStartGrid DataGridRow.timingDropAbove /template/ Rectangle#BackgroundRectangle,
-                  DataGrid#AtStartGrid DataGridRow.timingDropBelow /template/ Rectangle#BackgroundRectangle">
+                  DataGrid#AtStartGrid DataGridRow.timingDropBelow /template/ Rectangle#BackgroundRectangle,
+                  DataGrid#ForerunnersGrid DataGridRow.timingDropAbove /template/ Rectangle#BackgroundRectangle,
+                  DataGrid#ForerunnersGrid DataGridRow.timingDropBelow /template/ Rectangle#BackgroundRectangle">
   <Setter Property="Fill" Value="{DynamicResource AccentTintBrush}" /><Setter Property="Opacity" Value="1" />
  </Style>
  <Style Selector="Border.timingDropPreview">
@@ -151,10 +153,9 @@
   <Setter Property="MinWidth" Value="64" /><Setter Property="MinHeight" Value="30" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
   <Setter Property="Padding" Value="12,3" /><Setter Property="FontSize" Value="13" /><Setter Property="FontWeight" Value="Bold" />
  </Style>
- <!-- Correction bar above the classification editor. -->
- <Style Selector="Border.correctionBar">
-  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
-  <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadius}" /><Setter Property="Padding" Value="12,6,8,6" />
+ <!-- Latest finishers above the ranking: a heavier rule separates them from the ranking's column headers. -->
+ <Style Selector="Border.latestFinishers">
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" /><Setter Property="BorderThickness" Value="0,1,0,2" />
  </Style>
  <!-- Forerunner rows: violet tint and italic text, distinct from selection (blue) and pending changes (amber). -->
  <Style Selector="DataGrid.timingGrid DataGridRow.forerunner /template/ Rectangle#BackgroundRectangle">

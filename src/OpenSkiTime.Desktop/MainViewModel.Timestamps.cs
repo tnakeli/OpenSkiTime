@@ -86,13 +86,18 @@ public sealed partial class MainViewModel
         ArgumentNullException.ThrowIfNull(item);
         if (!IsCurrentTimingDrag(item)) { return "Choose a competitor in the current run."; }
         var waiting = workspace.Timing?.Snapshot is { } snapshot ? RaceFlow.Waiting(snapshot) : [];
-        return waiting.Any(x => x.Bib == item.Bib) && waiting.Any(x => x.Bib == targetBib)
-            && item.Bib != targetBib ? null : "Choose another waiting starter to change the order.";
+        if (!waiting.Any(x => x.Bib == item.Bib) || !waiting.Any(x => x.Bib == targetBib) || item.Bib == targetBib)
+        { return "Choose another waiting starter to change the order."; }
+        // Forerunners start before every competitor: they are reordered among themselves, never mixed with competitors.
+        return TimingForerunner.IsKey(item.Bib) == TimingForerunner.IsKey(targetBib) ? null
+            : "Forerunners start before the competitors. Drag a forerunner onto another forerunner to change their order.";
     }
 
     public Task DropStartQueueAsync(TimingDragCompetitor item, int targetBib, bool visuallyAbove) => GuardAsync(async () =>
     {
         if (StartQueueDropProblem(item, targetBib) is { } problem) { throw new DomainValidationException(problem); }
+        // At start lists the next starter at the bottom: above the target means a later start.
+        if (TimingForerunner.IsKey(item.Bib)) { await MoveForerunnerInQueueAsync(item.Bib, targetBib, laterThan: visuallyAbove); return; }
         await workspace.Timing!.MoveWaitingRelativeAsync(item.Bib, targetBib, visuallyAbove, TimingOperator);
         RefreshTiming();
         SetStatus($"Bib {item.Bib} moved {(visuallyAbove ? "above" : "below")} Bib {targetBib} in the start queue.");

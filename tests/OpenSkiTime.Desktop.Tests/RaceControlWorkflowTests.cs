@@ -307,13 +307,14 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "race-live-980.png");
             Assert.True(view.FindControl<DataGrid>("AtStartGrid")!.Bounds.Height > 100);
             Assert.True(view.FindControl<DataGrid>("RunningGrid")!.Bounds.Height > 80);
-            Assert.Equal(4, view.GetVisualDescendants().OfType<DataGrid>().Count(x => x.IsEffectivelyVisible));
+            // At start, On course, Timestamps and Ranking, plus the latest finishers above the ranking once someone finished.
+            Assert.Equal(vm.HasLatestFinishers ? 5 : 4, view.GetVisualDescendants().OfType<DataGrid>().Count(x => x.IsEffectivelyVisible));
             Assert.True(view.FindControl<DataGrid>("RankingGrid")!.Bounds.Height >= 65);
             Assert.Contains(vm.TimestampRows, x => x.Cells.Any(cell => cell?.Review.Ignored == true));
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<CheckBox>(), x => Equals(x.Content, "Show ignored"));
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Correct time") || Equals(x.Content, "Assign finish"));
             // Each queue exposes only contextual classification actions.
-            foreach (var name in new[] { "AtStartGrid", "RunningGrid", "TimestampsGrid", "RankingGrid" })
+            foreach (var name in new[] { "AtStartGrid", "RunningGrid", "TimestampsGrid", "LatestFinishersGrid", "RankingGrid" })
             {
                 var grid = view.FindControl<DataGrid>(name)!;
                 grid.ContextMenu!.Open(grid);
@@ -345,6 +346,15 @@ public partial class DesktopWorkflowTests
             Assert.Equal(5, vm.FinishedTimingRows.Count);
             Assert.Equal(7, vm.RankingRows.Count); // five finishers plus DNS and DNF
             Assert.Equal(vm.FinishedTimingRows[0].Bib, Assert.Single(vm.RankingRows, x => x.IsLatestFinish).Bib);
+            // The two latest finishers (latest first) stay above the ranking with their rank, in line with the ranking columns.
+            Assert.Equal(vm.FinishedTimingRows.Take(2).Select(x => x.Bib), vm.LatestFinisherRows.Select(x => x.Bib));
+            Assert.Equal(vm.LatestFinisherRows.Select(x => vm.RankingRows.Single(r => r.Bib == x.Bib).DisplayRank), vm.LatestFinisherRows.Select(x => x.DisplayRank));
+            Assert.True(vm.LatestFinisherRows[0].IsLatestFinish);
+            window.UpdateLayout(); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            var latestGrid = view.FindControl<DataGrid>("LatestFinishersGrid")!;
+            Assert.True(latestGrid.IsEffectivelyVisible);
+            Assert.Equal(view.FindControl<DataGrid>("RankingGrid")!.Columns.Where(x => x.IsVisible).Select(x => Math.Round(x.ActualWidth)),
+                latestGrid.Columns.Where(x => x.IsVisible).Select(x => Math.Round(x.ActualWidth)));
             Assert.Equal(2, vm.RankingView.Groups!.OfType<DataGridCollectionViewGroup>().Count());
             foreach (var group in vm.RankingRows.GroupBy(x => x.Category))
             {

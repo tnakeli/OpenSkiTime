@@ -19,6 +19,10 @@ public sealed partial class MainViewModel
     public ObservableCollection<TimingGridRow> RunningRows { get; } = [];
     public TimingRankingRows RankingRows { get; } = [];
     public DataGridCollectionView RankingView => _rankingView ??= new(RankingRows);
+    // The two most recent finishers (latest first) as ranked rows, shown above the full ranking so a new finish and
+    // its rank stay visible however the ranking is scrolled, sorted or filtered.
+    public ObservableCollection<TimingGridRow> LatestFinisherRows { get; } = [];
+    public bool HasLatestFinishers => LatestFinisherRows.Count > 0;
     public bool HasTimingCategories => _desk?.Categories.Count > 0;
     public ObservableCollection<TimingGridRow> OnCourseRows { get; } = [];
     public ObservableCollection<TimingGridRow> FinishedTimingRows { get; } = [];
@@ -131,7 +135,8 @@ public sealed partial class MainViewModel
         var snapshot = timing?.Snapshot;
         if (timing is null || snapshot is null || !HasTimingRun)
         {
-            OnCourseRows.Clear(); FinishedTimingRows.Clear(); AtStartRows.Clear(); RunningRows.Clear(); RankingRows.Clear(); _queueSnapshot = null;
+            OnCourseRows.Clear(); FinishedTimingRows.Clear(); AtStartRows.Clear(); RunningRows.Clear(); RankingRows.Clear(); LatestFinisherRows.Clear(); _queueSnapshot = null;
+            OnPropertyChanged(nameof(HasLatestFinishers));
             _displayedLastFinish = null; _displayedNextStart = null;
             return;
         }
@@ -196,6 +201,10 @@ public sealed partial class MainViewModel
                 .ThenBy(x => x.Category, StringComparer.Ordinal).ThenByOfficialResult(RankedTime, x => x.Bib).ThenBy(x => x.Position)
                 .Select(x => x with { DisplayRank = ResultOrder.Rank(RankedTime(x), ranked.Where(y => y.Category == x.Category).Select(RankedTime)) })
                 .Concat(timedForerunners).ToArray()));
+            var rankedByBib = RankingRows.GroupBy(x => x.Bib).ToDictionary(x => x.Key, x => x.First());
+            SyncTimingRows(LatestFinisherRows, FinishedTimingRows.Where(x => x.Result.FinishKey is not null).Take(2)
+                .Select(x => rankedByBib.GetValueOrDefault(x.Bib)).OfType<TimingGridRow>().ToArray());
+            OnPropertyChanged(nameof(HasLatestFinishers));
             RaceQueueVersion++;
             OnPropertyChanged(nameof(RaceQueueVersion));
             OnCourseLabel = $"ON COURSE · {onCourse.Length}";
@@ -235,6 +244,16 @@ public sealed partial class MainViewModel
     [RelayCommand] private async Task MoveStartRowAsync(string direction) => await GuardAsync(async () =>
     {
         if (SelectedTimingRow is not { } row || workspace.Timing is not { } timing) { return; }
+        if (row.IsForerunner)
+        {
+            // Up in At start is a later start: the forerunner swaps with the next waiting forerunner after it (or before it).
+            var forerunners = timing.Snapshot is { } snapshot ? RaceFlow.Waiting(snapshot).Where(x => x.IsForerunner).Select(x => x.Bib).ToList() : [];
+            var index = forerunners.IndexOf(row.Bib);
+            var neighbour = index < 0 ? -1 : index + (direction == "up" ? 1 : -1);
+            if (neighbour < 0 || neighbour >= forerunners.Count) { return; }
+            await MoveForerunnerInQueueAsync(row.Bib, forerunners[neighbour], laterThan: direction == "up");
+            return;
+        }
         await timing.MoveWaitingAsync(row.Bib, direction == "up" ? 1 : -1, TimingOperator);
         RefreshTiming();
     });

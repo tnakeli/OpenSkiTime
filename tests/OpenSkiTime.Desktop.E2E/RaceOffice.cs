@@ -344,19 +344,23 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(400);
     }
 
-    // Post-run disqualification through the classification editor: status, gate, reason and judge, then save.
+    // Post-run disqualification through the classification dialog: status, gate, reason and judge, then save and close.
     public void Disqualify(int bib, SyntheticRun plan)
     {
         SelectRow("RankingGrid", bib);
         var toggle = app.ById("EditClassificationToggle");
         if (toggle.Patterns.Toggle.PatternOrDefault?.ToggleState.ValueOrDefault != FlaUI.Core.Definitions.ToggleState.On) { DesktopApp.Invoke(toggle); }
         Pause(400);
-        Select(app.ById("TimingClassificationChoice"), "DSQ");
-        app.SetText(FieldAfter("STATUS", "GATE (OPTIONAL)"), plan.DsqGate!.Value.ToString(CultureInfo.InvariantCulture)); Pause();
-        app.SetText(FieldAfter("STATUS", "DSQ REASON / ICR RULE (OPTIONAL)"), plan.DsqReason!); Pause();
-        app.SetText(FieldAfter("STATUS", "JUDGE (OPTIONAL)"), "Gate judge 3"); Pause();
-        DesktopApp.Invoke(app.ById("SaveTimingClassification"));
+        // The dialog is its own top-level window.
+        var dialog = app.Retry(() => app.Automation.GetDesktop().FindFirstChild(app.By.ByName("Edit classification").And(app.By.ByControlType(ControlType.Window))));
+        Select(app.ById("TimingClassificationChoice", dialog), "DSQ");
+        app.SetText(FieldAfter("STATUS", "GATE (OPTIONAL)", dialog), plan.DsqGate!.Value.ToString(CultureInfo.InvariantCulture)); Pause();
+        app.SetText(FieldAfter("STATUS", "DSQ REASON / ICR RULE (OPTIONAL)", dialog), plan.DsqReason!); Pause();
+        app.SetText(FieldAfter("STATUS", "JUDGE (OPTIONAL)", dialog), "Gate judge 3"); Pause();
+        DesktopApp.Invoke(app.ById("SaveTimingClassification", dialog));
         Pause(800);
+        DesktopApp.Invoke(app.ById("CloseTimingClassification", dialog));
+        Pause(300);
         if (app.Window.FindFirstDescendant(app.By.ByAutomationId("RankingFilterButton_BibText")) is { } filter
             && app.ById("RankingGrid").FindAllDescendants(app.By.ByControlType(ControlType.DataItem)).Length <= 1)
         { DesktopApp.Invoke(filter); Pause(300); } // clear the bib filter again
@@ -622,9 +626,9 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
 
     // The input after `label` that follows the section heading `section`. Labels such as GENDER or COURSE also appear
     // as grid column headers earlier in the tree, so form fields are always located relative to their section.
-    public AutomationElement FieldAfter(string section, string label) => app.Retry(() =>
+    public AutomationElement FieldAfter(string section, string label, AutomationElement? scope = null) => app.Retry(() =>
     {
-        var all = app.Window.FindAllDescendants();
+        var all = (scope ?? app.Window).FindAllDescendants();
         var start = Array.FindIndex(all, x => x.ControlType == ControlType.Text && x.Name == section);
         if (start < 0) { return null; }
         var index = Array.FindIndex(all, start + 1, x => x.ControlType == ControlType.Text && x.Name == label);

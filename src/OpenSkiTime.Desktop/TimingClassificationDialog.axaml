@@ -1,0 +1,54 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:OpenSkiTime.Desktop" x:Class="OpenSkiTime.Desktop.TimingClassificationDialog" x:CompileBindings="False"
+        Title="Edit classification" Width="780" MinWidth="620" SizeToContent="Height" CanResize="True" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource CanvasBrush}">
+ <!-- Post-run classification of one competitor at a time: choose by bib or name, set the status, save with the
+      correction history. The dialog stays open for the next competitor. -->
+ <StackPanel Margin="12" Spacing="12">
+  <Border Classes="card">
+   <StackPanel Spacing="{DynamicResource FormGap}">
+    <local:FormRow>
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+      <TextBlock Text="COMPETITOR" Classes="fieldLabel" />
+      <AutoCompleteBox Name="TimingClassificationCompetitor" ItemsSource="{Binding TimingRows}" SelectedItem="{Binding TimingClassificationTarget, Mode=TwoWay}"
+                       ValueMemberBinding="{Binding Label}" FilterMode="Custom" ItemFilter="{x:Static local:TimingClassificationDialog.CompetitorFilter}"
+                       MinimumPrefixLength="1" PlaceholderText="Bib or name" ToolTip.Tip="Type a bib or a name and press Enter">
+       <AutoCompleteBox.ItemTemplate>
+        <DataTemplate>
+         <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="{Binding BibText}" MinWidth="32" FontWeight="SemiBold" />
+          <local:CompetitorNameBlock Surname="{Binding Surname}" FirstName="{Binding FirstName}" />
+         </StackPanel>
+        </DataTemplate>
+       </AutoCompleteBox.ItemTemplate>
+      </AutoCompleteBox>
+     </StackPanel>
+     <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field">
+      <TextBlock Text="CURRENT" Classes="fieldLabel" />
+      <TextBlock Name="TimingClassificationCurrent" Text="{Binding TimingClassificationTarget.DisplayTime}" FontWeight="SemiBold"
+                 MinHeight="{DynamicResource ControlHeight}" Padding="0,6,0,0" />
+     </StackPanel>
+     <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
+      <TextBlock Text="STATUS" Classes="fieldLabel" />
+      <ComboBox Name="TimingClassificationChoice" ItemsSource="{Binding TimingClassifications}" SelectedItem="{Binding TimingClassification}" HorizontalAlignment="Stretch" />
+     </StackPanel>
+    </local:FormRow>
+    <local:FormRow IsEnabled="{Binding IsTimingDsq}">
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="GATE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqGate}" /></StackPanel>
+     <StackPanel Grid.Column="2" Grid.ColumnSpan="7" Classes="field"><TextBlock Text="DSQ REASON / ICR RULE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqReason}" /></StackPanel>
+     <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="JUDGE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqJudge}" /></StackPanel>
+    </local:FormRow>
+    <local:FormRow>
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="OPERATOR" Classes="fieldLabel" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
+     <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingReason}" PlaceholderText="Default classification note is recorded when empty" /></StackPanel>
+    </local:FormRow>
+   </StackPanel>
+  </Border>
+  <TextBlock Name="TimingClassificationMessage" TextWrapping="Wrap" IsVisible="False" />
+  <Grid ColumnDefinitions="*,Auto,8,Auto">
+   <Button Grid.Column="1" Name="CloseTimingClassification" Content="Close" Classes="secondaryAction" Click="Close_Click" ToolTip.Tip="Esc" />
+   <Button Grid.Column="3" Name="SaveTimingClassification" Content="Save classification" Classes="primaryAction" Command="{Binding SaveTimingClassificationCommand}"
+           ToolTip.Tip="Enter · saved with operator, reason and time in the correction history" />
+  </Grid>
+ </StackPanel>
+</Window>

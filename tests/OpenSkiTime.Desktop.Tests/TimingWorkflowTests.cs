@@ -369,11 +369,26 @@ public partial class DesktopWorkflowTests
                 Assert.Equal(12, vm.RankingView.OfType<TimingGridRow>().Count());
                 PressRanking(RankingIcon("RankingSort_DisplayTime"));
                 Assert.Equal(2, vm.RankingView.OfType<TimingGridRow>().Last().Bib);
-                vm.ShowTimingClassificationEditor = true;
+                // Edit classification opens a dialog; the competitor is chosen there by bib or name.
+                view.FindControl<Avalonia.Controls.Primitives.ToggleButton>("EditClassificationToggle")!.IsChecked = true;
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(vm.ShowTimingClassificationEditor);
+                var dialog = Assert.IsType<TimingClassificationDialog>(view.ClassificationDialog);
+                Assert.True(dialog.IsVisible);
+                Assert.Equal(1, vm.TimingClassificationTarget!.Bib);
+                Assert.False(vm.ChooseTimingClassificationCompetitor("99"));
+                Assert.True(vm.IsError);
+                Assert.Equal(1, vm.TimingClassificationTarget!.Bib); // a failed lookup keeps the chosen competitor
+                Assert.False(vm.ChooseTimingClassificationCompetitor("athlete")); // every competitor matches
+                Assert.True(vm.ChooseTimingClassificationCompetitor("test03"));
+                Assert.Equal("TEST03", vm.TimingClassificationTarget!.Surname);
+                Assert.Equal(vm.TimingClassificationTarget.Bib, vm.SelectedTimingRow!.Bib);
+                Assert.True(vm.ChooseTimingClassificationCompetitor("1 · TEST00 Athlete"));
+                Assert.Equal(1, vm.SelectedTimingRow!.Bib);
                 vm.TimingClassification = "DSQ";
                 vm.TimingDsqGate = "18"; vm.TimingDsqReason = "629.3"; vm.TimingDsqJudge = "Synthetic judge";
                 Dispatcher.UIThread.RunJobs();
-                var save = view.FindControl<Button>("SaveTimingClassification")!;
+                var save = dialog.FindControl<Button>("SaveTimingClassification")!;
                 Assert.Same(vm.SaveTimingClassificationCommand, save.Command);
                 Assert.True(save.IsEffectivelyEnabled);
                 save.Command!.Execute(save.CommandParameter);
@@ -385,6 +400,7 @@ public partial class DesktopWorkflowTests
                 Assert.Equal("Synthetic judge", dsq.Disqualification.Judge);
                 Assert.Contains("Gate 18", vm.TimingHistory[0].Summary, StringComparison.Ordinal);
                 Assert.Equal(1, vm.SelectedTimingRow!.Bib);
+                Assert.Same(dialog, view.ClassificationDialog); // stays open for the next competitor
 
                 vm.SelectTimingBibs([2], 2);
                 Assert.Equal("", vm.TimingDsqGate);
@@ -399,6 +415,42 @@ public partial class DesktopWorkflowTests
                 vm.TimingClassification = "Clear";
                 await vm.SaveTimingClassificationCommand.ExecuteAsync(null);
                 Assert.Equal(6999, timing.Snapshot.Results.Single(x => x.Bib == 2).Hundredths);
+                // Forerunner dialog: drag a row onto the upper half of another to start it earlier; Cancel keeps the saved order.
+                vm.ShowForerunnerEditor = true;
+                vm.AddTimingForerunnerCommand.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+                var forerunnerDialog = view.ForerunnerDialog!;
+                forerunnerDialog.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+                var forerunnerRows = forerunnerDialog.FindControl<DataGrid>("ForerunnersGrid")!.GetVisualDescendants().OfType<DataGridRow>()
+                    .Where(x => x.Bounds.Height > 0).ToArray();
+                var rowA = forerunnerRows.Single(x => x.DataContext is ForerunnerEditor { Letter: "A" });
+                using (var runnerData = TimingForerunnerDialog.CreateRunnerDragData(vm.TimingForerunners.Single(x => x.Letter == "B")))
+                {
+                    var overA = new DragEventArgs(DragDrop.DragOverEvent, runnerData, rowA, new Avalonia.Point(4, 2), KeyModifiers.None) { Source = rowA };
+                    rowA.RaiseEvent(overA);
+                    Assert.Equal(DragDropEffects.Move, overA.DragEffects);
+                    Assert.Contains("timingDropAbove", rowA.Classes);
+                    rowA.RaiseEvent(new DragEventArgs(DragDrop.DropEvent, runnerData, rowA, new Avalonia.Point(4, 2), KeyModifiers.None) { Source = rowA });
+                }
+                Assert.Equal(["B", "A"], vm.TimingForerunners.Select(x => x.Letter));
+                Assert.DoesNotContain("timingDropAbove", rowA.Classes);
+                await vm.CancelTimingForerunnersCommand.ExecuteAsync(null);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(view.ForerunnerDialog);
+                Assert.Empty(vm.TimingForerunners);
+
+                // Closing the dialog clears the editor state; clearing the state closes the dialog.
+                dialog.Close();
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(vm.ShowTimingClassificationEditor);
+                Assert.Null(view.ClassificationDialog);
+                vm.ShowTimingClassificationEditor = true;
+                Dispatcher.UIThread.RunJobs();
+                var reopened = view.ClassificationDialog!;
+                vm.ShowTimingClassificationEditor = false;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(view.ClassificationDialog);
+                Assert.False(reopened.IsVisible);
                 var listId = timing.ListId!.Value;
                 await workspace.OpenAsync(file);
                 await workspace.Timing!.SelectRunAsync(listId);

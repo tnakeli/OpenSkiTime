@@ -28,26 +28,51 @@ public sealed partial class TimingView
     }
 
     // The time column names the current run; in later runs the previous run and every intermediate get their own column.
+    // The latest finishers grid above the ranking gets the same columns, so its cells line up with the ranking.
     private void ConfigureRankingColumns()
     {
         if (_viewModel is not { } vm) { return; }
-        var grid = this.FindControl<DataGrid>("RankingGrid")!;
-        grid.Columns.Single(x => x.Tag is "runTime").Header = string.Create(CultureInfo.InvariantCulture, $"RUN {vm.TimingRun}");
-        grid.Columns.Single(x => x.Tag is "previousRun").Header = string.Create(CultureInfo.InvariantCulture, $"RUN {Math.Max(1, vm.TimingRun - 1)}");
         var count = vm.TimingCheckpoints.Count;
-        var existing = grid.Columns.Count(x => x.Tag is "intermediate");
-        for (var i = existing; i < count; i++)
+        var existing = 0;
+        foreach (var name in new[] { "RankingGrid", "LatestFinishersGrid" })
         {
-            grid.Columns.Insert(grid.Columns.IndexOf(grid.Columns.Single(x => x.Tag is "runTime")), new DataGridTextColumn
+            var grid = this.FindControl<DataGrid>(name)!;
+            grid.Columns.Single(x => x.Tag is "runTime").Header = string.Create(CultureInfo.InvariantCulture, $"RUN {vm.TimingRun}");
+            grid.Columns.Single(x => x.Tag is "previousRun").Header = string.Create(CultureInfo.InvariantCulture, $"RUN {Math.Max(1, vm.TimingRun - 1)}");
+            var present = grid.Columns.Count(x => x.Tag is "intermediate");
+            if (name == "RankingGrid") { existing = present; }
+            for (var i = present; i < count; i++)
             {
-                Header = string.Create(CultureInfo.InvariantCulture, $"INTERM {i + 1}"), Tag = "intermediate", Width = new DataGridLength(96),
-                Binding = new Binding(string.Create(CultureInfo.InvariantCulture, $"{RankedIntermediatesKey}{i}]"))
-            });
+                grid.Columns.Insert(grid.Columns.IndexOf(grid.Columns.Single(x => x.Tag is "runTime")), new DataGridTextColumn
+                {
+                    Header = string.Create(CultureInfo.InvariantCulture, $"INTERM {i + 1}"), Tag = "intermediate", Width = new DataGridLength(96),
+                    Binding = new Binding(string.Create(CultureInfo.InvariantCulture, $"{RankedIntermediatesKey}{i}]"))
+                });
+            }
+            var splitColumns = grid.Columns.Where(x => x.Tag is "intermediate").ToArray();
+            for (var i = 0; i < splitColumns.Length; i++) { splitColumns[i].IsVisible = i < count; }
         }
-        var splitColumns = grid.Columns.Where(x => x.Tag is "intermediate").ToArray();
-        for (var i = 0; i < splitColumns.Length; i++) { splitColumns[i].IsVisible = i < count; }
         // Header controls are attached per column, so a newly added intermediate column needs them too.
         if (count > existing) { InstallRankingColumnControls(vm); }
+    }
+
+    // Copy the ranking's laid-out column widths, order and visibility to the latest finishers grid (no headers of its own).
+    private void AlignLatestFinishers()
+    {
+        var ranking = this.FindControl<DataGrid>("RankingGrid")!;
+        var latest = this.FindControl<DataGrid>("LatestFinishersGrid")!;
+        if (!latest.IsEffectivelyVisible || ranking.Columns.Count != latest.Columns.Count) { return; }
+        for (var i = 0; i < ranking.Columns.Count; i++)
+        {
+            var source = ranking.Columns[i];
+            var target = latest.Columns[i];
+            if (target.IsVisible != source.IsVisible) { target.IsVisible = source.IsVisible; }
+            if (target.DisplayIndex != source.DisplayIndex) { target.DisplayIndex = source.DisplayIndex; }
+            if (!source.IsVisible || source.ActualWidth <= 0) { continue; }
+            if (target.MinWidth != 0) { target.MinWidth = 0; }
+            if (!target.Width.IsAbsolute || Math.Abs(target.Width.Value - source.ActualWidth) > 0.5)
+            { target.Width = new DataGridLength(source.ActualWidth); }
+        }
     }
 
     private static int? IntermediateIndex(string key) => key.StartsWith(RankedIntermediatesKey, StringComparison.Ordinal)

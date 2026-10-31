@@ -58,13 +58,17 @@
     <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
    </Border>
   </StackPanel>
-  <!-- The start and running queues keep priority during a run (they stay readable at 980×680); the ranking gets the
-       remaining share before the timestamps. Visible grips let the operator rebalance, for example after the run. -->
-  <Grid Grid.Row="2" Name="TimingPanes" ColumnDefinitions="0.9*,8,2*">
+  <!-- Live band: At start, On course and Timestamps side by side; the ranking below. Visible grips let the operator
+       rebalance the panes, for example after the run. -->
+  <Grid Grid.Row="2" Name="TimingPanes">
+   <Grid.ColumnDefinitions>
+    <ColumnDefinition Width="0.8*" MinWidth="200" /><ColumnDefinition Width="6" />
+    <ColumnDefinition Width="1.1*" MinWidth="260" /><ColumnDefinition Width="6" />
+    <ColumnDefinition Width="1.9*" MinWidth="300" />
+   </Grid.ColumnDefinitions>
    <Grid.RowDefinitions>
-    <RowDefinition Height="1.85*" MinHeight="96" /><RowDefinition Height="6" />
-    <RowDefinition Height="0.75*" MinHeight="48" /><RowDefinition Height="6" />
-    <RowDefinition Height="1.4*" MinHeight="80" />
+    <RowDefinition Height="1.1*" MinHeight="120" /><RowDefinition Height="6" />
+    <RowDefinition Height="*" MinHeight="120" />
    </Grid.RowDefinitions>
    <Border Name="StartDropTarget" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
     <Grid Classes="paneHeader" ColumnDefinitions="*,Auto">
@@ -88,6 +92,7 @@
      </DataGrid.Columns>
     </DataGrid>
    </Grid></Border>
+   <GridSplitter Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" VerticalAlignment="Stretch" Classes="paneSplitter" ToolTip.Tip="Drag to resize the panes" />
    <Border Grid.Column="2" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*,Auto">
     <Grid Classes="paneHeader">
      <StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="ON COURSE" Classes="raceHeadingText" /><Border Classes="chip"><TextBlock Text="{Binding RunningRows.Count}" /></Border></StackPanel>
@@ -108,20 +113,20 @@
     </DataGrid>
     <!-- Status actions for the selected competitor; also drop targets when dragging a competitor. -->
     <Border Grid.Row="3" Classes="paneActions">
-     <Grid ColumnDefinitions="Auto,*,Auto">
-      <Button Content="Prepare Run 2" Command="{Binding PrepareNextTimedRunCommand}" IsVisible="{Binding CanPrepareNextTimedRun}" Classes="secondaryAction" />
-      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+     <Grid ColumnDefinitions="*,Auto">
+      <WrapPanel ItemSpacing="6" LineSpacing="6">
        <Button Name="StatusDropDNS" Tag="DNS" Content="DNS" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNS" Classes="statusDrop" ToolTip.Tip="Did not start · Ctrl+D. Drag a competitor here." />
        <Button Name="StatusDropDNF" Tag="DNF" Content="DNF" Command="{Binding ClassifyTimingCommand}" CommandParameter="DNF" Classes="statusDrop" ToolTip.Tip="Did not finish · Ctrl+F. Drag a competitor here." />
        <Button Name="StatusDropDSQ" Tag="DSQ" Content="DSQ" Command="{Binding ClassifyTimingCommand}" CommandParameter="DSQ" Classes="statusDrop" ToolTip.Tip="Disqualified · Ctrl+Q. Drag a competitor here." />
        <Button Name="StatusDropNPS" Tag="NPS" Content="NPS" Command="{Binding ClassifyTimingCommand}" CommandParameter="NPS" Classes="statusDrop" ToolTip.Tip="Not permitted to start · Ctrl+N. Drag a competitor here." />
        <Button Name="StatusDropClear" Tag="Clear" Content="Clear status" Command="{Binding ClassifyTimingCommand}" CommandParameter="Clear" Classes="statusDrop" ToolTip.Tip="Use recorded times · Ctrl+R. Drag a competitor here." />
-      </StackPanel>
+      </WrapPanel>
+      <Button Grid.Column="1" Content="Prepare Run 2" Command="{Binding PrepareNextTimedRunCommand}" IsVisible="{Binding CanPrepareNextTimedRun}" Classes="secondaryAction" VerticalAlignment="Top" Margin="6,0,0,0" />
      </Grid>
     </Border>
    </Grid></Border>
-   <GridSplitter Grid.Row="1" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Classes="paneSplitter" ToolTip.Tip="Drag to resize the panes" />
-   <Border Grid.Row="2" Grid.ColumnSpan="3" Classes="racePane"><Grid RowDefinitions="Auto,*">
+   <GridSplitter Grid.Column="3" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" VerticalAlignment="Stretch" Classes="paneSplitter" ToolTip.Tip="Drag to resize the panes" />
+   <Border Grid.Column="4" Classes="racePane"><Grid RowDefinitions="Auto,*">
     <Grid Classes="paneHeader">
      <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Text="TIMESTAMPS" Classes="raceHeadingText" /><TextBlock Text="· TIME OF DAY" Classes="raceHeadingNote" /></StackPanel>
     </Grid>
@@ -134,13 +139,36 @@
      </DataGrid.Columns>
     </DataGrid>
    </Grid></Border>
-   <GridSplitter Grid.Row="3" Grid.ColumnSpan="3" ResizeDirection="Rows" HorizontalAlignment="Stretch" Classes="paneSplitter" ToolTip.Tip="Drag to resize the panes" />
-   <Border Grid.Row="4" Grid.ColumnSpan="3" Classes="racePane"><Grid RowDefinitions="Auto,*">
-    <Grid Classes="paneHeader" ColumnDefinitions="*,Auto">
+   <GridSplitter Grid.Row="1" Grid.ColumnSpan="5" ResizeDirection="Rows" HorizontalAlignment="Stretch" Classes="paneSplitter" ToolTip.Tip="Drag to resize the panes" />
+   <Border Grid.Row="2" Grid.ColumnSpan="5" Classes="racePane"><Grid RowDefinitions="Auto,Auto,*">
+    <Grid Classes="paneHeader" ColumnDefinitions="*,Auto,Auto">
      <TextBlock Text="RANKING" Classes="raceHeadingText" />
      <TextBlock Grid.Column="1" Text="◆ Latest finisher" Classes="raceHeadingNote" />
+     <!-- Classification after the run: a dialog that edits one competitor at a time, chosen by bib or name. -->
+     <ToggleButton Grid.Column="2" Name="EditClassificationToggle" Content="Edit classification" Classes="secondaryAction" IsChecked="{Binding ShowTimingClassificationEditor}"
+                   MinHeight="24" Padding="10,1" FontSize="12" VerticalAlignment="Center" ToolTip.Tip="DSQ with gate, reason and judge, or another status, saved with the correction history" />
     </Grid>
-    <DataGrid Grid.Row="1" Name="RankingGrid" Classes="raceGrid timingGrid columnControls" ItemsSource="{Binding RankingView}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRowGroup="DescribeCategory" LoadingRow="MarkForerunnerRow"
+    <!-- The two latest finishers stay in view above the full ranking (latest first); the code keeps the columns in
+         line with the ranking grid. -->
+    <Border Grid.Row="1" Name="LatestFinishersPanel" Classes="latestFinishers" IsVisible="{Binding HasLatestFinishers}">
+     <DataGrid Name="LatestFinishersGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding LatestFinisherRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRow="MarkForerunnerRow"
+      AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserResizeColumns="False"
+      HeadersVisibility="None" RowHeight="28" GridLinesVisibility="Horizontal" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"
+      ToolTip.Tip="The two latest finishers with their rank. Right-click or Shift+F10 for status.">
+      <DataGrid.Columns>
+       <DataGridTextColumn Header="" Binding="{Binding FinishMarker}" Width="28" Foreground="{StaticResource AccentBrush}" FontSize="15" />
+       <DataGridTextColumn Header="RK" Binding="{Binding DisplayRank}" Width="42" FontWeight="SemiBold" />
+       <DataGridTextColumn Header="BIB" Binding="{Binding BibText}" Width="56" />
+       <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="130" />
+       <DataGridTextColumn Header="NAT" Binding="{Binding Result.Entry.Entrant.Athlete.Nation}" Width="55" />
+       <DataGridTextColumn Header="CLUB" Binding="{Binding Result.Entry.Entrant.Athlete.Club}" Width="*" MinWidth="100" />
+       <DataGridTextColumn Header="RUN 1" Binding="{Binding PreviousRunRanked}" Width="96" IsVisible="{Binding ShowTimingTotal}" Tag="previousRun" />
+       <local:TimeOrStatusColumn Header="RUN 1" Binding="{Binding DisplayTime}" Width="96" Tag="runTime" FontWeight="SemiBold" />
+       <DataGridTextColumn Header="TOTAL" Binding="{Binding TotalTime}" Width="90" IsVisible="{Binding ShowTimingTotal}" FontWeight="SemiBold" />
+      </DataGrid.Columns>
+     </DataGrid>
+    </Border>
+    <DataGrid Grid.Row="2" Name="RankingGrid" Classes="raceGrid timingGrid columnControls" ItemsSource="{Binding RankingView}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRowGroup="DescribeCategory" LoadingRow="MarkForerunnerRow"
      AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
      ToolTip.Tip="Results in rank order within each category. Drag a competitor onto a timestamp to assign it. Right-click or Shift+F10 for status.">
      <DataGrid.Columns>
@@ -170,53 +198,6 @@
    </Grid>
   </Border>
   <StackPanel Grid.Row="3" Spacing="6" Margin="0,6,0,0">
-   <!-- Forerunners of this run: the same list as in Results. Enter, edit, copy from Run 1, then Save. -->
-   <Border Name="ForerunnerEditor" Classes="card" IsVisible="{Binding ShowForerunnerEditor}">
-    <Grid ColumnDefinitions="*,8,Auto" RowDefinitions="Auto,Auto">
-     <TextBlock Text="{Binding TimingRun, StringFormat='FORERUNNERS · RUN {0}'}" Classes="raceHeadingText" Margin="0,0,0,8" />
-     <TextBlock Grid.Column="2" Text="Start before the competitors · times shown only in Timing · listed in Results" Classes="supportingText" FontSize="12" VerticalAlignment="Center" />
-     <DataGrid Grid.Row="1" Name="ForerunnersGrid" Classes="raceGrid" ItemsSource="{Binding TimingForerunners}" SelectedItem="{Binding SelectedTimingForerunner}"
-               AutoGenerateColumns="False" CanUserSortColumns="False" RowHeight="28" ColumnHeaderHeight="26" MaxHeight="150" GridLinesVisibility="Horizontal">
-      <DataGrid.Columns>
-       <DataGridTextColumn Header="ID" Binding="{Binding Letter}" Width="70" />
-       <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
-       <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" />
-       <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="70" />
-      </DataGrid.Columns>
-     </DataGrid>
-     <StackPanel Grid.Row="1" Grid.Column="2" Spacing="4" VerticalAlignment="Top">
-      <Button Name="AddForerunnerButton" Content="Add" Command="{Binding AddTimingForerunnerCommand}" Classes="secondaryAction" HorizontalAlignment="Stretch" />
-      <Button Content="Remove" Command="{Binding RemoveTimingForerunnerCommand}" Classes="dangerAction" HorizontalAlignment="Stretch" />
-      <Button Name="CopyForerunnersButton" Content="Copy Run 1" Command="{Binding CopyForerunnersFromRunOneCommand}" IsVisible="{Binding CanCopyForerunnersFromRunOne}" Classes="secondaryAction" HorizontalAlignment="Stretch" />
-      <Button Name="SaveForerunnersButton" Content="Save" Command="{Binding SaveTimingForerunnersCommand}" Classes="primaryAction" HorizontalAlignment="Stretch" />
-      <Button Content="Cancel" Command="{Binding CancelTimingForerunnersCommand}" Classes="secondaryAction" HorizontalAlignment="Stretch" />
-     </StackPanel>
-    </Grid>
-   </Border>
-   <Border Classes="correctionBar">
-    <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-     <TextBlock Text="CORRECTION / RECLASSIFICATION" Classes="raceHeadingText" />
-     <Border Grid.Column="1" Classes="stripDivider" />
-     <TextBlock Grid.Column="2" Text="{Binding SelectedTimingIdentity}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-     <ToggleButton Grid.Column="3" Name="EditClassificationToggle" Content="Edit classification" Classes="secondaryAction" IsChecked="{Binding ShowTimingClassificationEditor}" />
-    </Grid>
-   </Border>
-   <Border IsVisible="{Binding ShowTimingClassificationEditor}" Classes="card">
-    <StackPanel Spacing="{DynamicResource FormGap}">
-     <local:FormRow>
-      <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="STATUS" Classes="fieldLabel" /><ComboBox Name="TimingClassificationChoice" ItemsSource="{Binding TimingClassifications}" SelectedItem="{Binding TimingClassification}" /></StackPanel>
-      <StackPanel Grid.Column="2" Grid.ColumnSpan="2" Classes="field" IsEnabled="{Binding IsTimingDsq}"><TextBlock Text="GATE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqGate}" /></StackPanel>
-      <StackPanel Grid.Column="4" Grid.ColumnSpan="5" Classes="field" IsEnabled="{Binding IsTimingDsq}"><TextBlock Text="DSQ REASON / ICR RULE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqReason}" /></StackPanel>
-      <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field" IsEnabled="{Binding IsTimingDsq}"><TextBlock Text="JUDGE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqJudge}" /></StackPanel>
-     </local:FormRow>
-     <local:FormRow>
-      <StackPanel Grid.Column="0" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="OPERATOR" Classes="fieldLabel" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
-      <StackPanel Grid.Column="4" Grid.ColumnSpan="5" Classes="field"><TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingReason}" PlaceholderText="Default classification note is recorded when empty" /></StackPanel>
-      <Button Grid.Column="9" Grid.ColumnSpan="3" Name="SaveTimingClassification" Content="Save classification" Classes="primaryAction" Command="{Binding SaveTimingClassificationCommand}"
-              VerticalAlignment="Bottom" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
-     </local:FormRow>
-    </StackPanel>
-   </Border>
    <Border Name="ManualTimestampEditor" IsVisible="{Binding ShowManualTimestampEditor}" Classes="card">
     <Border.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SaveManualTimestampCommand}" /><KeyBinding Gesture="Escape" Command="{Binding CancelManualTimestampCommand}" /></Border.KeyBindings>
     <StackPanel Spacing="4">

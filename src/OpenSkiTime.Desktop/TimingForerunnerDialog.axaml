@@ -1,0 +1,31 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:OpenSkiTime.Desktop" x:Class="OpenSkiTime.Desktop.TimingForerunnerDialog" x:CompileBindings="False"
+        Title="{Binding TimingRun, StringFormat='Forerunners · Run {0}'}" Width="760" Height="400" MinWidth="560" MinHeight="300"
+        CanResize="True" ShowInTaskbar="False" WindowStartupLocation="CenterOwner" Background="{DynamicResource CanvasBrush}">
+ <!-- Forerunners of this run: the same list as in Results. Enter, edit, copy from Run 1, then Save. -->
+ <Grid Margin="12" RowDefinitions="*,12,Auto">
+  <Border Name="ForerunnerEditor" Classes="card">
+   <Grid RowDefinitions="Auto,*">
+    <TextBlock Text="Start before the competitors in this order · drag a row or Ctrl+Up/Down to reorder · listed in Results" Classes="supportingText" Margin="0,0,0,8" />
+    <DataGrid Grid.Row="1" Name="ForerunnersGrid" Classes="raceGrid" ItemsSource="{Binding TimingForerunners}" SelectedItem="{Binding SelectedTimingForerunner}"
+              AutoGenerateColumns="False" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal">
+     <DataGrid.Columns>
+      <DataGridTextColumn Header="ID" Binding="{Binding Letter}" Width="70" />
+      <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
+      <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" />
+      <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="70" />
+     </DataGrid.Columns>
+    </DataGrid>
+   </Grid>
+  </Border>
+  <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto">
+   <Button Name="RemoveForerunnerButton" Content="Remove" Command="{Binding RemoveTimingForerunnerCommand}" Classes="dangerAction" />
+   <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+    <Button Name="AddForerunnerButton" Content="Add" Command="{Binding AddTimingForerunnerCommand}" Classes="secondaryAction" />
+    <Button Name="CopyForerunnersButton" Content="Copy Run 1" Command="{Binding CopyForerunnersFromRunOneCommand}" IsVisible="{Binding CanCopyForerunnersFromRunOne}" Classes="secondaryAction" />
+    <Button Name="CancelForerunnersButton" Content="Cancel" Command="{Binding CancelTimingForerunnersCommand}" Classes="secondaryAction" ToolTip.Tip="Esc" />
+    <Button Name="SaveForerunnersButton" Content="Save" Command="{Binding SaveTimingForerunnersCommand}" Classes="primaryAction" />
+   </StackPanel>
+  </Grid>
+ </Grid>
+</Window>

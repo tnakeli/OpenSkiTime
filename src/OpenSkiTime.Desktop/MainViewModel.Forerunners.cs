@@ -84,7 +84,18 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task SaveTimingForerunnersAsync() => await GuardAsync(async () =>
     {
-        if (TimingCompetition is not { } competition || workspace.Timing is not { ListId: { } listId }) { return; }
+        var runners = TimingForerunners.Select(x => x.Values).ToArray();
+        TimingForerunner.Validate(runners.Select(ToTiming).ToArray());
+        if (await SaveRunForerunnersAsync(_ => runners) is not { } run) { return; }
+        ShowForerunnerEditor = false;
+        SetStatus(runners.Length == 0 ? $"Run {run}: no forerunners." : $"Run {run} forerunners saved: {string.Join(", ", runners.Select(x => x.Letter))}. They are shown in Results.");
+    });
+
+    // Saves the run's forerunners built from the saved list (the editor's draft, or the saved list in a new order) and
+    // changes the timing queue together with the save. Returns the saved run, or null when no timing run is open.
+    private async Task<int?> SaveRunForerunnersAsync(Func<IReadOnlyList<RaceForerunner>, RaceForerunner[]> build)
+    {
+        if (TimingCompetition is not { } competition || workspace.Timing is not { ListId: { } listId }) { return null; }
         // The run being edited, fixed before any await: switching runs meanwhile must not save into the other run.
         var run = TimingRun;
         var file = workspace.FilePath;
@@ -93,8 +104,6 @@ public sealed partial class MainViewModel
             if (TimingRun != run || TimingCompetition?.Id != competition.Id || workspace.Timing?.ListId != listId || workspace.FilePath != file)
             { throw new DomainValidationException($"The timing run changed before the Run {run} forerunners were saved. Nothing was saved."); }
         }
-        var runners = TimingForerunners.Select(x => x.Values).ToArray();
-        TimingForerunner.Validate(runners.Select(ToTiming).ToArray());
         // Edits waiting in Results are saved first (and must save), then this run's forerunners replace the saved ones.
         if (!await FlushRaceInformationAsync())
         { throw new DomainValidationException("Correct the unsaved Results changes first; the forerunners were not saved."); }
@@ -103,7 +112,9 @@ public sealed partial class MainViewModel
         var current = await workspace.ReadAsync();
         var information = await ReadRaceInformationForAsync(competition);
         EnsureSameRun();
-        if (!information.Runs.Any(x => x.Number == run)) { throw new DomainValidationException($"Run {run} is not part of this competition."); }
+        if (information.Runs.FirstOrDefault(x => x.Number == run) is not { } saved) { throw new DomainValidationException($"Run {run} is not part of this competition."); }
+        var runners = build(saved.Forerunners ?? []);
+        TimingForerunner.Validate(runners.Select(ToTiming).ToArray());
         var updated = information with { Runs = information.Runs.Select(x => x.Number == run ? x with { Forerunners = runners } : x).ToArray() };
         updated.Validate(competition.Values.RunCount);
         // The save and the queue change happen together under the capture state gate: no impulse is attributed while
@@ -123,10 +134,44 @@ public sealed partial class MainViewModel
         }
         InvalidateCompetitionInformation([competition.Id]);
         await LoadTimingForerunnersAsync();
-        ShowForerunnerEditor = false;
         RefreshTiming();
-        SetStatus(runners.Length == 0 ? $"Run {run}: no forerunners." : $"Run {run} forerunners saved: {string.Join(", ", runners.Select(x => x.Letter))}. They are shown in Results.");
+        return run;
+    }
+
+    /// <summary>
+    /// Moves a waiting forerunner in the start queue (At start drag or Ctrl+Up/Down): the run's saved forerunner order
+    /// changes and is saved like an edit in the Forerunners dialog. Forerunners always start before the competitors.
+    /// <paramref name="laterThan"/> places the forerunner after the target in start order (above it in At start).
+    /// </summary>
+    public Task MoveForerunnerInQueueAsync(int key, int targetKey, bool laterThan) => GuardAsync(async () =>
+    {
+        string? moved = null, target = null;
+        var run = await SaveRunForerunnersAsync(saved =>
+        {
+            var list = saved.ToList();
+            var from = list.FindIndex(x => TimingForerunner.KeyOf(x.Letter) == key);
+            var to = list.FindIndex(x => TimingForerunner.KeyOf(x.Letter) == targetKey);
+            if (from < 0 || to < 0 || from == to) { throw new DomainValidationException("Choose another waiting forerunner to change the order."); }
+            var runner = list[from];
+            moved = runner.Letter; target = list[to].Letter;
+            list.RemoveAt(from);
+            list.Insert(list.IndexOf(saved[to]) + (laterThan ? 1 : 0), runner);
+            return list.ToArray();
+        });
+        if (run is not null) { SetStatus($"Forerunner {moved} moved {(laterThan ? "after" : "before")} forerunner {target}. Run {run} forerunner order saved."); }
     });
+
+    /// <summary>Moves a forerunner in the dialog's draft list; Save keeps the new order.</summary>
+    public void MoveTimingForerunner(ForerunnerEditor runner, int index)
+    {
+        ArgumentNullException.ThrowIfNull(runner);
+        var from = TimingForerunners.IndexOf(runner);
+        if (from < 0) { return; }
+        index = Math.Clamp(index, 0, TimingForerunners.Count - 1);
+        // Remove and insert rather than Move: the DataGrid does not redraw its rows for a Move notification.
+        if (index != from) { TimingForerunners.RemoveAt(from); TimingForerunners.Insert(index, runner); }
+        SelectedTimingForerunner = runner;
+    }
 
     [RelayCommand]
     private async Task CancelTimingForerunnersAsync() => await GuardAsync(async () =>

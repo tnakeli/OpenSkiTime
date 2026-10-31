@@ -67,7 +67,9 @@ public partial class DesktopWorkflowTests
                     CaptureDraw(window, folder, "08-timing-run1.png");
                     vm.SelectTimingBibs([outcome.Run1Order[33].Bib], outcome.Run1Order[33].Bib);
                     vm.ShowTimingClassificationEditor = true;
-                    CaptureDraw(window, folder, "09-timing-classification-editor.png");
+                    Dispatcher.UIThread.RunJobs();
+                    var timingView = window.GetVisualDescendants().OfType<TimingView>().Single();
+                    CaptureDialog(timingView.ClassificationDialog!, folder, "09-timing-classification-editor.png");
                     vm.ShowTimingClassificationEditor = false;
                     await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 2));
                     CaptureDraw(window, folder, "10-timing-run2.png");
@@ -75,7 +77,8 @@ public partial class DesktopWorkflowTests
                     vm.TimingForerunners[0].FirstName = "Synthetic"; vm.TimingForerunners[0].LastName = "Forerunner";
                     vm.AddTimingForerunnerCommand.Execute(null);
                     vm.TimingForerunners[1].FirstName = "Synthetic"; vm.TimingForerunners[1].LastName = "Second";
-                    CaptureDraw(window, folder, "10a-timing-forerunner-editor.png");
+                    Dispatcher.UIThread.RunJobs();
+                    CaptureDialog(timingView.ForerunnerDialog!, folder, "10a-timing-forerunner-editor.png");
                     await vm.SaveTimingForerunnersCommand.ExecuteAsync(null);
                     Assert.False(vm.IsError, vm.StatusMessage);
                     CaptureDraw(window, folder, "10b-timing-forerunners-at-start.png");
@@ -118,6 +121,14 @@ public partial class DesktopWorkflowTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    // Timing dialogs size their height to the content; capture them at their laid-out size.
+    private static void CaptureDialog(Window dialog, string folder, string name)
+    {
+        dialog.UpdateLayout();
+        if (double.IsNaN(dialog.Height)) { dialog.Height = Math.Ceiling(dialog.Bounds.Height); }
+        CaptureDraw(dialog, folder, name);
     }
 
     private static (int Width, int Height)[] CoverageSizes()
