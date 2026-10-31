@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Headless.XUnit;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
@@ -121,6 +122,25 @@ public partial class DesktopWorkflowTests
             Assert.Equal("Hard", fresh.ResultsRuns[1].Snow); Assert.Equal("DELEGATE", fresh.ResultsJury[0].LastName);
         }
         finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public void RaceInformationRunCardsWrapTwoPerRow()
+    {
+        // Four runs (the editor allows up to nine) stay readable: two cards per row, never squeezed onto one row.
+        var runs = Enumerable.Range(1, 4).Select(n => new RaceRunEditor(new(n, new("", "", "")))).ToArray();
+        var view = new RaceInformationView { DataContext = new { ResultsRuns = runs, ResultsJury = Array.Empty<object>() } };
+        var window = new Window { Content = new ScrollViewer { Content = view, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, Width = 1280, Height = 900 };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            var cards = view.GetVisualDescendants().OfType<RaceRunView>().ToArray();
+            Assert.Equal(4, cards.Length);
+            Assert.Equal(2, cards.Select(x => Math.Round(x.TranslatePoint(default, view)!.Value.Y)).Distinct().Count());
+            Assert.All(cards, x => Assert.True(x.Bounds.Width > 500, $"Run card is only {x.Bounds.Width:0} px wide."));
+        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]

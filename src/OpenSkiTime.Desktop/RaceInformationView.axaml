@@ -63,9 +63,9 @@
       </Border>
     </Grid>
 
-    <!-- One card per run, side by side and equally tall. -->
+    <!-- One card per run, two per row and equally tall; more runs wrap onto further rows. -->
     <ItemsControl Name="ResultsRunCards" ItemsSource="{Binding ResultsRuns}">
-      <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" ColumnSpacing="12" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" ColumnSpacing="12" RowSpacing="12" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
       <ItemsControl.ItemTemplate><DataTemplate><local:RaceRunView /></DataTemplate></ItemsControl.ItemTemplate>
     </ItemsControl>
   </StackPanel>
