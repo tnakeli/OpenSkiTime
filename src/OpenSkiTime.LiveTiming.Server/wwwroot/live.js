@@ -63,7 +63,7 @@
         const index = favorites.findIndex(x => x.code === f.code && x.lastName === f.lastName && x.firstName === f.firstName);
         saveFavorites(favorites.filter((_, i) => i !== index)); showFavorites(index);
       };
-      who.append(remove, element('strong', '', `${f.lastName} ${f.firstName}`));
+      who.append(remove, personName(f));
       const details = [f.nation, f.club].filter(Boolean).join(' · ');
       if (details) who.append(element('span', 'muted', details));
       const entries = listedRaces.map(race => ({race, result: liveFavoriteResults(raceStates.get(race.sessionId), f)})).filter(e => e.result);
@@ -85,6 +85,8 @@
   }
   // One element with optional class and text.
   const element = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text != null) e.textContent = text; return e; };
+  // The person name rule of OpenSkiTime: surname in bold capitals, then the first name ("KORPI Sofia").
+  const personName = p => { const e = element('span', 'person'); e.append(element('span', 'last', (p.lastName || '').toLocaleUpperCase()), ' ', p.firstName || ''); return e; };
   // Flags are Unicode regional-indicator pairs. Where the platform draws them as two letters (Windows desktops), the page
   // draws them with the bundled Twemoji Country Flags font instead: a drawn flag has coloured pixels, letters do not.
   const nativeFlags = (() => {
@@ -118,7 +120,8 @@
     icon.innerHTML = icons[kind];
     if (code) { place.title = liveNation(code).name; fill(place, [...nation(code).childNodes]); }
     fill(clock, time);
-    li.append(icon, element('span', 'sr', label + ': '), element('span', 'bib', bib), element('span', 'who', name), place, clock, element('span', 'rank', rank));
+    const who = element('span', 'who'); fill(who, name);
+    li.append(icon, element('span', 'sr', label + ': '), element('span', 'bib', bib), who, place, clock, element('span', 'rank', rank));
     return li;
   };
   // Phones get two-line cells (name over club, Run 1 over Run 2, total over difference) instead of a wide table.
@@ -213,9 +216,9 @@
     for (const key of [...seenOnCourse.keys()]) if (!courseKeys.has(key)) seenOnCourse.delete(key);
     // In course order from the top: the racer who started last is highest, the first one (forerunners before racers)
     // is nearest the finish.
-    const onCourse = (current.forerunners || []).filter(f => f.status === 'OnCourse').map(f => ({bib: `F ${f.letter}`, name: `${f.lastName} ${f.firstName}`, nation: nationOf(f), forerunner: true}))
+    const onCourse = (current.forerunners || []).filter(f => f.status === 'OnCourse').map(f => ({bib: `F ${f.letter}`, name: personName(f), nation: nationOf(f), forerunner: true}))
       .concat(current.results.filter(r => r.status === 'OnCourse').sort((a, b) => (Date.parse(a.startedAt) || 0) - (Date.parse(b.startedAt) || 0))
-        .map(r => { const c = competitor(r.bib); return {bib: String(r.bib), name: `${c.lastName} ${c.firstName}`, nation: nationOf(c), clock: {started: r.startedAt, seen: seen(current.number, r.bib)}}; }))
+        .map(r => { const c = competitor(r.bib); return {bib: String(r.bib), name: personName(c), nation: nationOf(c), clock: {started: r.startedAt, seen: seen(current.number, r.bib)}}; }))
       .reverse();
     // Once every starter of the current run is finished or classified, the banner says so; a stopped or stale publisher too.
     const complete = current.startOrder.length > 0 && current.startOrder.every(bib => { const r = current.results.find(x => x.bib === bib); return r && !['Ready', 'OnCourse', 'Review'].includes(r.status); });
@@ -236,12 +239,12 @@
     // above the course), everyone on course and the latest finisher.
     const banner = [];
     if (!stale && !next.paused) {
-      for (const bib of complete ? [] : liveNextStarters(current, 2).reverse()) { const c = competitor(bib); banner.push(bannerRow('next', 'Next', String(bib), `${c.lastName} ${c.firstName}`, nationOf(c), '', '')); }
+      for (const bib of complete ? [] : liveNextStarters(current, 2).reverse()) { const c = competitor(bib); banner.push(bannerRow('next', 'Next', String(bib), personName(c), nationOf(c), '', '')); }
       for (const x of onCourse) banner.push(bannerRow('oncourse', 'On course', x.bib, x.name, x.nation, x.forerunner ? {text: 'forerunner', className: 'muted'} : x.clock, ''));
     }
     if (last) {
       const c = competitor(last.bib), place = totalRanked ? last.totalRank : last.rank, finished = last.status === 'Finished';
-      const finish = bannerRow('finish', 'Last finish', String(last.bib), `${c.lastName} ${c.firstName}`, nationOf(c),
+      const finish = bannerRow('finish', 'Last finish', String(last.bib), personName(c), nationOf(c),
         !finished ? last.status : totalRanked ? [time(last.hundredths), {text: `Total ${time(last.totalHundredths)}`, className: 'muted'}] : time(last.hundredths),
         finished && place ? `#${place}` : '');
       finish.id = 'latest'; finish.classList.toggle('out', !finished); finish.classList.toggle('flash', flashing);
@@ -252,7 +255,8 @@
     const forerunnerState = s => ({Ready:'at start', OnCourse:'on course', Finished:'finished', DNS:'DNS', DNF:'DNF', Review:'checking'})[s] || s;
     const shownRunners = run.forerunners || [];
     get('forerunners').hidden = shownRunners.length === 0;
-    get('forerunners').textContent = shownRunners.length === 0 ? '' : 'Forerunners · ' + shownRunners.map(f => `${f.letter} ${f.lastName} ${f.firstName}: ${forerunnerState(f.status)}`).join(' · ');
+    get('forerunners').replaceChildren(...(shownRunners.length === 0 ? [] : ['Forerunners · ', ...shownRunners.flatMap((f, i) =>
+      [...(i ? [' · '] : []), `${f.letter} `, personName(f), `: ${forerunnerState(f.status)}`])]));
     get('updated').textContent = `Run ${selectedRun} · ${new Date(next.updatedAt).toLocaleTimeString()}`;
     // Split columns appear only when this run has at least one intermediate time; the viewer picks intermediate or sector times.
     const splits = liveSplitCount(run.results);
@@ -300,7 +304,7 @@
       // Places gained sit under rank and bib, and the nation beside the club under the name, which leaves the width to the times.
       {head: ['Rank', 'Bib', ...(totals ? ['+/−'] : [])], headTitle: placesTitle, value: x => { const pr = totals ? placesGained(x) : ''; return [rank(x.r) || '—', {text: String(x.r.bib), className: 'muted'}, ...(pr ? [pr] : [])]; }},
       {head: ['Name', nations ? 'Nation · Club' : 'Club'], className: 'name', value: x => {
-        const lines = [{text: x.c.lastName, className: 'last'}, x.c.firstName], from = element('span', 'muted');
+        const lines = [{text: (x.c.lastName || '').toLocaleUpperCase(), className: 'last'}, x.c.firstName], from = element('span', 'muted');
         if (nations && x.c.nation) { const n = element('span', 'nation'); n.title = liveNation(x.c.nation).name; n.append(nation(x.c.nation)); from.append(n); }
         if (x.c.club) from.append(from.childNodes.length ? ' · ' : '', x.c.club);
         return from.childNodes.length ? [...lines, from] : lines;
@@ -312,7 +316,7 @@
     ] : [
       favoriteColumn,
       {head: 'Rank', value: x => rank(x.r) || '—'}, {head: 'Bib', value: x => x.r.bib},
-      {head: 'Competitor', className: 'name', value: x => `${x.c.lastName} ${x.c.firstName}`},
+      {head: 'Competitor', className: 'name', value: x => personName(x.c)},
       ...(nations ? [{head: 'Nation', className: 'nation', value: x => nation(x.c.nation), title: x => liveNation(x.c.nation).name}] : []),
       ...(clubs ? [{head: 'Club', value: x => x.c.club || ''}] : []),
       ...earlier.map((n, i) => ({head: `Run ${n}`, num: true, value: x => earlierRun(x.before[i].result)})),

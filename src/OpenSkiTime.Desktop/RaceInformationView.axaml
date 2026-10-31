@@ -13,8 +13,8 @@
     <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultsJury}" AutoGenerateColumns="False" Height="200" RowHeight="28" ColumnHeaderHeight="28">
       <DataGrid.Columns>
         <DataGridTextColumn Header="FUNCTION" Binding="{Binding Label}" Width="190" IsReadOnly="True" />
+        <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
         <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" />
-        <DataGridTextColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
         <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="90" />
       </DataGrid.Columns>
     </DataGrid>

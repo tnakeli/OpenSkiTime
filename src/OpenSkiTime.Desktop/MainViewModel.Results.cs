@@ -9,9 +9,18 @@ using CommunityToolkit.Mvvm.Input;
 namespace OpenSkiTime.Desktop;
 
 public sealed record ResultReviewRow(string Rank, int Bib, string Code, string Name, string Run1,
-    string Run2, string Total, string Status, string RacePoints);
+    string Run2, string Total, string Status, string RacePoints)
+{
+    // Name parts for the person name rule.
+    public string Surname { get; init; } = "";
+    public string FirstName { get; init; } = "";
+}
 public sealed record PenaltyReviewRow(int Bib, string Name, string Listed, string Used,
-    string RacePoints, string Note, string Rank = "", string Code = "", string Year = "", string Nation = "", string Status = "", string PenaltyRacePoints = "");
+    string RacePoints, string Note, string Rank = "", string Code = "", string Year = "", string Nation = "", string Status = "", string PenaltyRacePoints = "")
+{
+    public string Surname { get; init; } = "";
+    public string FirstName { get; init; } = "";
+}
 
 public sealed partial class MainViewModel
 {
@@ -196,7 +205,7 @@ public sealed partial class MainViewModel
                 TimingTime.Format(row.TotalHundredths), row.Status == TimingStatus.Finished ? "Finished"
                     : row.Status + " " + row.StatusRun.ToString(CultureInfo.InvariantCulture),
                 penalty is not null && penalty.RacePoints.TryGetValue(row.Entry.Bib, out var points)
-                    ? points.ToString("0.00", CultureInfo.InvariantCulture) : ""));
+                    ? points.ToString("0.00", CultureInfo.InvariantCulture) : "") { Surname = athlete.Surname, FirstName = athlete.FirstName });
         }
     }
 
@@ -243,7 +252,8 @@ public sealed partial class MainViewModel
         item.SubstitutedMaximum ? "Maximum substituted" : "", item.Competitor.Rank?.ToString(CultureInfo.InvariantCulture) ?? "—",
         item.Competitor.Entry.Entrant.Athlete.FederationCode ?? "",
         item.Competitor.Entry.Entrant.Athlete.BirthYear?.ToString(CultureInfo.InvariantCulture) ?? "",
-        item.Competitor.Entry.Entrant.Athlete.Nation ?? "", item.Competitor.Status.ToString());
+        item.Competitor.Entry.Entrant.Athlete.Nation ?? "", item.Competitor.Status.ToString())
+        { Surname = item.Competitor.Entry.Entrant.Athlete.Surname, FirstName = item.Competitor.Entry.Entrant.Athlete.FirstName };
 
     private FisPenaltyResult CalculateCurrentPenalty()
     {

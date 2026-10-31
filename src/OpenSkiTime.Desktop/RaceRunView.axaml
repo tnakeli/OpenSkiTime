@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+<UserControl xmlns:local="using:OpenSkiTime.Desktop" xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="OpenSkiTime.Desktop.RaceRunView" x:CompileBindings="False">
   <Border Classes="subtleSurface" Padding="10,8">
     <StackPanel Spacing="6">
@@ -30,8 +30,8 @@
                 AutoGenerateColumns="False" MinHeight="62" MaxHeight="230" RowHeight="28" ColumnHeaderHeight="28">
         <DataGrid.Columns>
           <DataGridTextColumn Header="ID" Binding="{Binding Letter}" Width="85" />
+          <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
           <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" />
-          <DataGridTextColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
           <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="90" />
         </DataGrid.Columns>
       </DataGrid>

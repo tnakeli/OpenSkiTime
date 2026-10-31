@@ -61,7 +61,7 @@ button.radio[hidden] { display: none; }
   border-bottom: 1px solid var(--line); border-left: 4px solid transparent; transition: background-color .6s, box-shadow .6s; }
 #track .icon { display: flex; justify-content: center; color: var(--text-2); }
 #track .bib { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-#track .who { font-weight: 700; overflow-wrap: anywhere; }
+#track .who { font-weight: 400; overflow-wrap: anywhere; }
 #track .nation { display: flex; flex-direction: column; align-items: center; font-size: 11px; line-height: 1.1; color: var(--text-2); }
 #track .nation .flag { margin: 0; font-size: 18px; }
 #track .time { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -128,7 +128,9 @@ th { text-align: left; color: var(--text-2); background: var(--surface-head); fo
 th[hidden] { display: none; }
 td, th { padding: 7px 8px; border-bottom: 1px solid var(--line); line-height: 1.25; }
 td:first-child { font-weight: 700; }
-td.name { font-weight: 600; }
+td.name { font-weight: 400; }
+/* Person name rule: surname in bold capitals, first name regular. */
+.last { font-weight: 700; text-transform: uppercase; }
 td.nation { white-space: nowrap; }
 .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 tr.oncourse { background: var(--selected); }

@@ -242,6 +242,10 @@
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     </Style>
+    <!-- Person name rule in hand-built grid cells: the surname is bold. -->
+    <Style Selector="TextBlock.surname">
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
     <Style Selector="TextBlock.gridCell.changed">
       <Setter Property="Background" Value="{DynamicResource PendingCellBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />

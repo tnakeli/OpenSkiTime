@@ -139,15 +139,30 @@ internal static class ReportComponents
         });
     }
     public static void Heading(ColumnDescriptor column, string text) => column.Item().PaddingTop(6).PaddingBottom(4).Text(text).SemiBold().FontSize(9);
-    public static void Table(IContainer container, string[] headers, IEnumerable<string[]> rows, float[]? widths = null)
+    // Cells are text or a PersonName; string[] rows pass as object[] rows.
+    public static void Table(IContainer container, string[] headers, IEnumerable<object[]> rows, float[]? widths = null)
     {
         container.Table(table =>
         {
             table.ColumnsDefinition(columns => { for (var i = 0; i < headers.Length; i++) { columns.RelativeColumn(widths?[i] ?? 1); } });
             table.Header(header => { foreach (var text in headers) { header.Cell().Background("#EAF0F2").Padding(3).Text(text).SemiBold(); } });
             foreach (var row in rows)
-            { foreach (var value in row) { table.Cell().BorderBottom(0.25f).BorderColor("#CCD7DC").Padding(3).Text(value); } }
+            {
+                foreach (var value in row)
+                {
+                    var cell = table.Cell().BorderBottom(0.25f).BorderColor("#CCD7DC").Padding(3);
+                    if (value is PersonName person) { cell.Text(text => Person(text, person)); }
+                    else { cell.Text(value?.ToString() ?? ""); }
+                }
+            }
         });
+    }
+    /// <summary>The person name rule: surname in bold capitals, then the first name in regular weight.</summary>
+    public static void Person(TextDescriptor text, PersonName person)
+    {
+        text.Span(person.Surname.ToUpperInvariant()).Bold();
+        if (!string.IsNullOrWhiteSpace(person.FirstName)) { text.Span(" " + person.FirstName); }
+        if (!string.IsNullOrWhiteSpace(person.Suffix)) { text.Span(" " + person.Suffix); }
     }
     public static void ManualLine(ColumnDescriptor column, string label, float height = 28)
         => column.Item().PaddingTop(8).Height(height).BorderBottom(0.5f).Text(label);
@@ -168,8 +183,8 @@ internal static class EntriesDocument
         }
         column.Item().PaddingTop(6).Text("Entries: " + data.Groups.Sum(x => x.Entries.Count));
     }
-    private sealed record EntryColumn(string Header, float Width, Func<EntryReportRow, string> Value);
-    private static string Name(EntryReportRow x) => x.Athlete.Surname + " " + x.Athlete.FirstName;
+    private sealed record EntryColumn(string Header, float Width, Func<EntryReportRow, object> Value);
+    private static PersonName Name(EntryReportRow x) => new(x.Athlete.Surname, x.Athlete.FirstName);
     private static EntryColumn[] StartColumns() =>
     [
         new("Pos", 0.5f, x => ReportComponents.Number(x.Position)), new("Bib", 0.5f, x => ReportComponents.Number(x.Bib)),
@@ -206,7 +221,13 @@ internal static class OfficialResultsDocument
         {
             column.Item().Text("Category: " + information.Category);
             foreach (var official in information.Jury.Where(x => x.Person.LastName.Length > 0))
-            { column.Item().Text(RaceInformation.JuryFunctionLabel(official.Function) + ": " + official.Person.LastName + " " + official.Person.FirstName + " " + official.Person.Nation); }
+            {
+                column.Item().Text(text =>
+                {
+                    text.Span(RaceInformation.JuryFunctionLabel(official.Function) + ": ");
+                    ReportComponents.Person(text, new(official.Person.LastName, official.Person.FirstName, official.Person.Nation));
+                });
+            }
             foreach (var run in information.Runs)
             { column.Item().Text($"Run {run.Number} | {run.Course} | Gates {run.Gates} / Turns {run.TurningGates} | Start {run.StartTime} | Homologation {run.Homologation}"); }
         }
@@ -214,9 +235,9 @@ internal static class OfficialResultsDocument
         {
             ReportComponents.Heading(column, GenderLabels.Format(final.Race.FirstList.Plan.Gender));
             ReportComponents.Table(column.Item(), ["Rank", "Bib", "Code", "Name", "Year", "Nation", "Run 1", "Run 2", "Total", "Status", "Race pts"],
-                final.Race.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.StatusRun).ThenBy(x => x.Entry.Position).Select(x => new[]
+                final.Race.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.StatusRun).ThenBy(x => x.Entry.Position).Select(x => new object[]
                 { ReportComponents.Number(x.Rank), ReportComponents.Number(x.Entry.Bib), x.Entry.Entrant.Athlete.FederationCode ?? "",
-                    x.Entry.Entrant.Athlete.Surname + " " + x.Entry.Entrant.Athlete.FirstName, ReportComponents.Number(x.Entry.Entrant.Athlete.BirthYear),
+                    new PersonName(x.Entry.Entrant.Athlete.Surname, x.Entry.Entrant.Athlete.FirstName), ReportComponents.Number(x.Entry.Entrant.Athlete.BirthYear),
                     x.Entry.Entrant.Athlete.Nation ?? "", TimingTime.Format(x.Run1Hundredths), TimingTime.Format(x.Run2Hundredths),
                     TimingTime.Format(x.TotalHundredths), x.Status == TimingStatus.Finished ? "" : x.Status + " R" + x.StatusRun,
                     final.Penalty is { } p && p.RacePoints.TryGetValue(x.Entry.Bib, out var rp) ? rp.ToString("0.00", CultureInfo.InvariantCulture) : "" }),
@@ -239,15 +260,15 @@ internal static class PenaltyCalculationDocument
             ReportComponents.Heading(column, GenderLabels.Format(final.Race.FirstList.Plan.Gender) + " | FIS list " + final.Race.FirstList.Plan.PointsList.Code);
             ReportComponents.Heading(column, "Top ten classified");
             ReportComponents.Table(column.Item(), ["Rank", "Bib", "Name", "Listed points", "Race points", "Selected for A / C"],
-                final.Race.Rows.Where(x => x.Rank <= 10).OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).Select(x => new[]
-                { ReportComponents.Number(x.Rank), ReportComponents.Number(x.Entry.Bib), x.Entry.Entrant.Athlete.Surname + " " + x.Entry.Entrant.Athlete.FirstName,
+                final.Race.Rows.Where(x => x.Rank <= 10).OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).Select(x => new object[]
+                { ReportComponents.Number(x.Rank), ReportComponents.Number(x.Entry.Bib), new PersonName(x.Entry.Entrant.Athlete.Surname, x.Entry.Entrant.Athlete.FirstName),
                     ReportComponents.Number(x.Entry.Entrant.Points), ReportComponents.Number(penalty.RacePoints.GetValueOrDefault(x.Entry.Bib)),
                     penalty.BestClassified.Any(p => p.Competitor.Bib == x.Entry.Bib) ? "Yes" : "" }));
             foreach (var section in new[] { ("Best five classified among the top ten", penalty.BestClassified), ("Best five started", penalty.BestStarted) })
             {
                 ReportComponents.Heading(column, section.Item1);
-                ReportComponents.Table(column.Item(), ["Bib", "Name", "Listed points", "Used points", "Race points", "Note"], section.Item2.Select(x => new[]
-                { ReportComponents.Number(x.Competitor.Bib), x.Competitor.Entry.Entrant.Athlete.Surname + " " + x.Competitor.Entry.Entrant.Athlete.FirstName,
+                ReportComponents.Table(column.Item(), ["Bib", "Name", "Listed points", "Used points", "Race points", "Note"], section.Item2.Select(x => new object[]
+                { ReportComponents.Number(x.Competitor.Bib), new PersonName(x.Competitor.Entry.Entrant.Athlete.Surname, x.Competitor.Entry.Entrant.Athlete.FirstName),
                     ReportComponents.Number(x.Competitor.ListedPoints), ReportComponents.Number(x.UsedPoints), ReportComponents.Number(x.RacePoints), x.SubstitutedMaximum ? "Points cap used" : "" }));
             }
             column.Item().PaddingTop(8).Text(string.Create(CultureInfo.InvariantCulture,
@@ -255,4 +276,10 @@ internal static class PenaltyCalculationDocument
         }
         ReportComponents.ManualLine(column, "Technical delegate signature (manual)");
     }
+}
+
+/// <summary>A person in a report table, printed by the person name rule (see <see cref="ReportComponents.Person"/>).</summary>
+internal sealed record PersonName(string Surname, string? FirstName, string? Suffix = null)
+{
+    public override string ToString() => string.Join(" ", new[] { Surname.ToUpperInvariant(), FirstName, Suffix }.Where(x => !string.IsNullOrWhiteSpace(x)));
 }

@@ -93,7 +93,7 @@ public partial class DesktopWorkflowTests
             var window = new Window { Width = 1366, Height = 900, Content = new ResultsView { DataContext = vm } };
             window.Show(); window.UpdateLayout();
             var jury = window.GetVisualDescendants().OfType<DataGrid>().Single(x => ReferenceEquals(x.ItemsSource, vm.ResultsJury));
-            jury.SelectedIndex = 0; jury.CurrentColumn = jury.Columns[2];
+            jury.SelectedIndex = 0; jury.CurrentColumn = jury.Columns.Single(x => Equals(x.Header, "SURNAME"));
             Assert.True(jury.BeginEdit()); window.UpdateLayout();
             jury.GetVisualDescendants().OfType<TextBox>().Single().Text = "Delegate";
             Assert.True(jury.CommitEdit()); Assert.Equal("Delegate", vm.ResultsJury[0].LastName);

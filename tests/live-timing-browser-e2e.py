@@ -134,6 +134,11 @@ def main():
             # The banner follows the course from the top down: the racer after next, then the next racer just above the course.
             expect(page.locator('#track li.next .bib')).to_have_text(['2', '1'])
             expect(page.locator('#track li.next .who')).to_have_text(['TEST2 Synthetic', 'TEST1 Synthetic'])
+            # Person name rule: the surname is its own bold element in the banner and in the results.
+            expect(page.locator('#track li.next .who .last')).to_have_text(['TEST2', 'TEST1'])
+            expect(page.locator('#track li.next .who .last').first).to_have_css('font-weight', '700')
+            expect(page.locator('tr[data-bib="1"] td.name .last')).to_have_text('TEST1')
+            expect(page.locator('tr[data-bib="1"] td.name .last')).to_have_css('font-weight', '700')
             expect(page.locator('#track li.next .nation .code')).to_have_text(['FIN', 'FIN'])
             expect(page.locator('#course')).to_be_hidden()
             # Race statistics below the results; racers per nation and club open on demand.
@@ -454,7 +459,7 @@ def main():
             front.on('pageerror', lambda error: failures.append(str(error)))
             front.goto(base + '/')
             expect(front.locator('#favorites')).to_be_visible()
-            expect(front.locator('#favoriteList > li .who strong')).to_have_text(['TEST2 Synthetic'])
+            expect(front.locator('#favoriteList > li .who .person')).to_have_text(['TEST2 Synthetic'])
             expect(front.locator('#favoriteList .entries a')).to_have_text(['Synthetic browser race'])
             expect(front.locator('#favoriteList .entries a')).to_have_attribute('href', '/r/' + sid)
             expect(front.locator('#favoriteList .entries .runs')).to_have_text(re.compile(r'^Run 1 '))

@@ -87,6 +87,25 @@ public sealed class PdfFactoryTests
             EntryReportBuilder.Build(reverse, ReportCatalog.GetAvailableReports(reverse).Single(x => x.Type == PdfReportType.EventSeriesEntriesByNation)).SelectMany(x => x.Entries).Select(x => x.Id));
     }
     [Fact]
+    public async Task EntryReportPrintsTheSurnameInBoldCapitalsAndTheFirstNameRegular()
+    {
+        using var folder = new TestFolder();
+        var source = MemorySource(folder.PathFor("test.ost"), 6);
+        var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.CompetitionEntries);
+        Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
+        using var pdf = PdfDocument.Open(folder.PathFor(descriptor.FileName));
+        var words = pdf.GetPages().SelectMany(x => x.GetWords()).ToArray();
+        var names = words.Select((word, index) => (word, index)).Where(x => x.word.Text.StartsWith("RACER", StringComparison.Ordinal))
+            .Select(x => (Surname: x.word, FirstName: words[x.index + 1])).ToArray();
+        Assert.NotEmpty(names);
+        Assert.All(names, x =>
+        {
+            Assert.Equal("Synthetic", x.FirstName.Text);
+            Assert.Contains("Bold", x.Surname.Letters[0].FontName, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Bold", x.FirstName.Letters[0].FontName, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+    [Fact]
     public async Task RealPdfGenerationStatusRegenerationAndFailurePreserveLastValidFile()
     {
         using var folder = new TestFolder();
