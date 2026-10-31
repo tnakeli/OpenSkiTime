@@ -46,6 +46,10 @@
     <Style Selector="Grid.cardHeader">
       <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
     </Style>
+    <!-- A card's closing option (share to all races): docked to the bottom edge, so cards side by side line up. -->
+    <Style Selector="CheckBox.cardFooter">
+      <Setter Property="Margin" Value="0,10,0,0" />
+    </Style>
     <Style Selector="TextBlock.cardTitle">
       <Setter Property="FontSize" Value="{DynamicResource CardTitleSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
@@ -223,6 +227,14 @@
     <Style Selector="TextBlock.gridCell">
       <Setter Property="Padding" Value="6,4" />
       <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- Row marker (NEW, DEL, ● pending, + new row): a narrow centred column that fits its longest marker. -->
+    <Style Selector="TextBlock.markerCell">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     </Style>
     <Style Selector="TextBlock.gridCell.changed">
       <Setter Property="Background" Value="{DynamicResource PendingCellBrush}" />

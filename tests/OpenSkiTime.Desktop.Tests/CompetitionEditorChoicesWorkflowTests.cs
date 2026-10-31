@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
@@ -29,7 +30,7 @@ public partial class DesktopWorkflowTests
                 fisStore: new FisLocalStore(folder), recentSeriesStore: new RecentSeriesStore(folder));
             await vm.OpenSeriesCommand.ExecuteAsync(null); vm.ShowCompetitionsCommand.Execute(null);
             vm.SelectedCompetition = Assert.Single(vm.Competitions);
-            var window = new MainWindow { DataContext = vm, Width = 1280, Height = 1000, WindowState = Avalonia.Controls.WindowState.Normal };
+            var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000, WindowState = Avalonia.Controls.WindowState.Normal };
             window.Show(); window.UpdateLayout();
 
             // Every field on a form row has the same height: text, choice, number and search fields.
@@ -41,6 +42,20 @@ public partial class DesktopWorkflowTests
             Assert.True(fields.Length >= 10);
             var heights = fields.GroupBy(x => x.Bounds.Height).ToArray();
             Assert.True(heights.Length == 1, string.Join("; ", heights.Select(g => $"{g.Key}px: {string.Join(", ", g.Select(x => x.GetType().Name).Distinct())}")));
+
+            // One page column: in a window wider than the content width, the list, the right-hand cards and the
+            // action bar end on the same edge, and the share-to-all checkboxes of a card row sit on one line.
+            double Right(Control c) => c.TranslatePoint(new Point(c.Bounds.Width, 0), window)!.Value.X;
+            double Top(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            Border Card(string name) => window.FindControl<Control>(name)!.GetVisualAncestors().OfType<Border>().First(x => x.Classes.Contains("card"));
+            var list = window.FindControl<DataGrid>("CompetitionsGrid")!;
+            Assert.InRange(list.Bounds.Width, 1239, 1241);
+            var saveCompetition = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save competition"));
+            var addCompetition = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Add competition"));
+            Assert.All(new Control[] { Card("CompetitionFisCheckBox"), Card("SaveCourseToAllRacesCheckBox"),
+                saveCompetition.GetVisualAncestors().OfType<Border>().First(x => x.Classes.Contains("card")), addCompetition },
+                x => Assert.Equal(Right(list), Right(x)));
+            Assert.Equal(Top(window.FindControl<CheckBox>("SaveTdToAllRacesCheckBox")!), Top(window.FindControl<CheckBox>("SaveCourseToAllRacesCheckBox")!));
 
             Assert.Equal("150", vm.CompetitionVerticalDrop);
             vm.CompetitionStartAltitude = "600";
@@ -73,6 +88,19 @@ public partial class DesktopWorkflowTests
             Assert.Equal("2026/27", vm.Season); Assert.Equal("2026/27", seriesSeason.Text);
             seriesSeason.Text = "2030/31";
             Assert.Equal("2030/31", vm.Season);
+
+            // The FIS calendar, the series form, its actions and the header row share the page edges.
+            vm.IsSeriesCalendarOpen = true; window.UpdateLayout();
+            var calendar = Card("SeriesCalendarEventsGrid");
+            var saveSeries = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save series"));
+            Assert.InRange(calendar.Bounds.Width, 1239, 1241);
+            Assert.All(new Control[] { Card("SeriesSeasonInput"), saveSeries.GetVisualAncestors().OfType<Border>().First(x => x.Classes.Contains("card")),
+                (Control)window.FindControl<Button>("BrowseSeriesCalendarButton")!.Parent! }, x => Assert.Equal(Right(calendar), Right(x)));
+            // The calendar season is a choice; a season outside the offered range is added, so it stays selected.
+            var calendarSeason = window.FindControl<ComboBox>("SeriesCalendarSeasonInput")!;
+            vm.SeriesCalendarSeason = "2020"; window.UpdateLayout();
+            Assert.Contains("2020", calendarSeason.Items.OfType<string>());
+            Assert.Equal("2020", calendarSeason.SelectedItem);
             window.Close();
         }
         finally { Directory.Delete(folder, true); }

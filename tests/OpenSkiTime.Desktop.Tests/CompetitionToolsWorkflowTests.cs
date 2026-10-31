@@ -40,7 +40,7 @@ public partial class DesktopWorkflowTests
             var tdCheckbox = window.FindControl<CheckBox>("SaveTdToAllRacesCheckBox")!;
             Assert.False(tdCheckbox.IsChecked);
             // Each checkbox sits in the card whose values it shares: course in the course card, TD in the TD card.
-            var courseCard = window.FindControl<StackPanel>("CompetitionCourseDetails")!;
+            var courseCard = window.FindControl<DockPanel>("CompetitionCourseDetails")!;
             Assert.Contains(courseCard, checkbox.GetVisualAncestors());
             Assert.DoesNotContain(courseCard, tdCheckbox.GetVisualAncestors());
             Assert.Equal("Save Course & Homologation to all Slalom races", checkbox.Content);
@@ -198,7 +198,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal("Test slope", vm.CompetitionCourseName);
             Assert.Same(vm.BrowseCompetitionHomologationsCommand, window.FindControl<Button>("BrowseCompetitionHomologationsButton")!.Command);
             Assert.Equal(Avalonia.Layout.HorizontalAlignment.Left, window.FindControl<Button>("BrowseCompetitionHomologationsButton")!.HorizontalAlignment);
-            Assert.DoesNotContain(window.FindControl<StackPanel>("CompetitionCourseDetails")!.GetVisualAncestors(), x => x is Expander);
+            Assert.DoesNotContain(window.FindControl<DockPanel>("CompetitionCourseDetails")!.GetVisualAncestors(), x => x is Expander);
             await vm.ShowResultsCommand.ExecuteAsync(null); vm.ResultsCompetition = vm.FisCompetitions.Single(x => x.Id == target.Id); await vm.LoadResultsCommand.ExecuteAsync(null);
             Assert.Equal("640", vm.ResultsRuns[0].Length); Assert.Equal("500", vm.ResultsRuns[1].StartAltitude);
             vm.ResultsRuns[1].StartAltitude = "490"; vm.ResultsRuns[1].Drop = "190"; Assert.True(await vm.FlushRaceInformationAsync());

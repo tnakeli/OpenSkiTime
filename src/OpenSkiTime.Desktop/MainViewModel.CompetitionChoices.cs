@@ -45,6 +45,15 @@ public sealed partial class MainViewModel
         SyncInPlace(SeriesSeasonChoices, wanted);
     }
 
+    /// <summary>
+    /// FIS calendar seasons around today, plus the season being browsed, so the calendar season choice never loses
+    /// its selection.
+    /// </summary>
+    public ObservableCollection<string> SeriesCalendarSeasonChoices { get; } = new(FisReferenceData.SeasonChoices(DateOnly.FromDateTime(DateTime.Today), null));
+
+    partial void OnSeriesCalendarSeasonChanged(string value)
+        => SyncInPlace(SeriesCalendarSeasonChoices, FisReferenceData.SeasonChoices(DateOnly.FromDateTime(DateTime.Today), value));
+
     // Brings a choice list to the wanted items without clearing it, so an item that stays is never deselected.
     private static void SyncInPlace(ObservableCollection<string> items, IReadOnlyList<string> wanted)
     {
