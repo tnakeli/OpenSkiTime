@@ -29,6 +29,7 @@
 - Lay out forms on the 12-column grid: cards span columns of one 12-column `Grid` (`ColumnSpacing="12"`), fields inside a card sit in `local:FormRow` rows with `Grid.Column`/`Grid.ColumnSpan`, so edges line up between rows. Size spans to the content (short for codes, nations and counts, wide for names); no free-stretching boxes. Forms are left aligned and at most `ContentMaxWidth` (1240 px) wide.
 - Grids: `DataGrid.raceGrid`, columns sized to content (`Width="Auto"`) so values are never cut; a narrow window scrolls. Short categorical values use `local:ChipTextColumn` so sorting and filter headers keep working.
 - Measured values (altitudes, lengths) use `Border.statField` with the unit inside the field, not in the label.
+- Choices: a fixed list is a `ComboBox`; a code list that may grow (FIS categories) is an editable `ComboBox`; a long list (nations) is an `AutoCompleteBox` that searches by code and name. Lists of FIS codes live in `FisReferenceData` and are suggestions, never a restriction.
 - Actions: one action bar at the bottom of a form, destructive action (`dangerAction`) on the left, primary action (`primaryAction`) on the right.
 - Remove text that does not help the operator: no eyebrows, subtitles or format hints that a placeholder or the value already shows.
 - Keep control names, bindings and visibility rules when restyling a view; tests and E2E automation find controls by name and label.

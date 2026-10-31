@@ -274,27 +274,28 @@
                         <TextBlock Text="DISCIPLINE" Classes="fieldLabel" />
                         <ComboBox ItemsSource="{Binding Disciplines}" SelectedItem="{Binding CompetitionDiscipline}" />
                       </StackPanel>
-                      <StackPanel Grid.Column="3" Grid.ColumnSpan="3" Classes="field" IsVisible="{Binding IsCompetitionFis}">
+                      <StackPanel Grid.Column="3" Grid.ColumnSpan="3" Classes="field">
                         <TextBlock Text="GENDER" Classes="fieldLabel" />
                         <ComboBox ItemsSource="{Binding CompetitionGenders}" SelectedItem="{Binding CompetitionGender}" />
                       </StackPanel>
-                      <StackPanel Grid.Column="6" Grid.ColumnSpan="2" Classes="field">
+                      <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field">
                         <TextBlock Text="RUNS" Classes="fieldLabel" />
                         <NumericUpDown Value="{Binding CompetitionRunCount}" Minimum="1" Maximum="9" FormatString="0" />
                       </StackPanel>
-                      <StackPanel Grid.Column="9" Grid.ColumnSpan="2" Classes="field">
+                      <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
                         <TextBlock Text="INTERMEDIATES" Classes="fieldLabel" />
                         <NumericUpDown Value="{Binding CompetitionIntermediateCount}" Minimum="0" Maximum="20" FormatString="0" />
                       </StackPanel>
                     </local:FormRow>
-                    <local:FormRow IsVisible="{Binding IsCompetitionFis}">
+                    <local:FormRow>
                       <StackPanel Grid.Column="0" Grid.ColumnSpan="9" Classes="field">
                         <TextBlock Text="LOCATION" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionLocation}" />
                       </StackPanel>
-                      <StackPanel Grid.Column="9" Grid.ColumnSpan="2" Classes="field">
+                      <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
                         <TextBlock Text="NATION" Classes="fieldLabel" />
-                        <TextBox Text="{Binding CompetitionNation}" MaxLength="3" />
+                        <AutoCompleteBox Text="{Binding CompetitionNation, Mode=TwoWay}" ItemsSource="{Binding NationChoices}" Classes="nation"
+                                         ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" MaxLength="3" />
                       </StackPanel>
                     </local:FormRow>
                   </StackPanel>
@@ -305,12 +306,12 @@
                   <StackPanel Spacing="{DynamicResource FormGap}">
                     <Grid Classes="cardHeader"><TextBlock Text="FIS data" Classes="cardTitle" /></Grid>
                     <CheckBox Name="CompetitionFisCheckBox" Content="Use FIS rules" IsChecked="{Binding IsCompetitionFis}" />
-                    <local:FormRow>
+                    <local:FormRow IsVisible="{Binding IsCompetitionFis}">
                       <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
                         <TextBlock Text="FIS CATEGORY" Classes="fieldLabel" />
-                        <TextBox Name="CompetitionCategoryInput" Text="{Binding CompetitionCalendarCategory, Mode=TwoWay}"
-                                 IsEnabled="{Binding IsCompetitionFis}" PlaceholderText="e.g. NJR, FIS, NC"
-                                 ToolTip.Tip="Enter the FIS calendar category code. This is separate from the FIS rules setting." />
+                        <ComboBox Name="CompetitionCategoryInput" IsEditable="True" ItemsSource="{Binding CompetitionCategoryChoices}"
+                                  Text="{Binding CompetitionCalendarCategory, Mode=TwoWay}" PlaceholderText="e.g. NJR, FIS, NC"
+                                  ToolTip.Tip="FIS calendar category code. Pick one or type another code. This is separate from the FIS rules setting." />
                       </StackPanel>
                     </local:FormRow>
                     <local:FormRow IsVisible="{Binding IsCompetitionFis}">
@@ -318,7 +319,9 @@
                         <TextBlock Text="FIS CODEX" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionFisCode}" />
                       </StackPanel>
                       <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Classes="field">
-                        <TextBlock Text="FIS SEASON" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionSeason}" MaxLength="4" />
+                        <TextBlock Text="FIS SEASON" Classes="fieldLabel" />
+                        <ComboBox Name="CompetitionSeasonInput" ItemsSource="{Binding CompetitionSeasonChoices}" SelectedItem="{Binding CompetitionSeason, Mode=TwoWay}"
+                                  ToolTip.Tip="FIS season by its ending year: 2027 is the 2026/27 season." />
                       </StackPanel>
                     </local:FormRow>
                     <Button Name="GetCompetitionDataButton" Content="Get competition data" Command="{Binding GetCompetitionDataCommand}" IsEnabled="{Binding !IsCompetitionDataBusy}"
@@ -333,13 +336,15 @@
                 <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5" Classes="card">
                   <StackPanel Spacing="{DynamicResource FormGap}">
                     <Grid Classes="cardHeader"><TextBlock Text="Technical delegate" Classes="cardTitle" /></Grid>
-                    <StackPanel Spacing="{DynamicResource FormGap}" IsVisible="{Binding IsCompetitionFis}">
+                    <StackPanel Spacing="{DynamicResource FormGap}">
                       <local:FormRow>
                         <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="SURNAME" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdLastName}" /></StackPanel>
                         <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="FIRST NAME" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdFirstName}" /></StackPanel>
                       </local:FormRow>
                       <local:FormRow>
-                        <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdNation}" MaxLength="3" /></StackPanel>
+                        <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel" />
+                          <AutoCompleteBox Text="{Binding CompetitionTdNation, Mode=TwoWay}" ItemsSource="{Binding NationChoices}" Classes="nation"
+                                         ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" MaxLength="3" /></StackPanel>
                         <StackPanel Grid.Column="3" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="TD NUMBER" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdNumber}" /></StackPanel>
                       </local:FormRow>
                       <TextBlock Text="{Binding CompetitionTdOriginalName}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding CompetitionTdOriginalName}" />
@@ -355,11 +360,9 @@
                     <Grid Classes="cardHeader" ColumnDefinitions="*,Auto">
                       <TextBlock Text="Course and homologation" Classes="cardTitle" />
                       <Button Name="BrowseCompetitionHomologationsButton" Grid.Column="1" Content="Browse FIS homologations" Command="{Binding BrowseCompetitionHomologationsCommand}"
-                              IsEnabled="{Binding !IsHomologationBusy}" IsVisible="{Binding IsCompetitionFis}" Classes="secondaryAction" />
+                              IsEnabled="{Binding !IsHomologationBusy}" Classes="secondaryAction" />
                     </Grid>
-                    <Panel IsVisible="{Binding IsCompetitionFis}">
-                      <TextBlock Text="{Binding CompetitionHomologationStatus}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding HasCompetitionHomologationStatus}" />
-                    </Panel>
+                    <TextBlock Text="{Binding CompetitionHomologationStatus}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding HasCompetitionHomologationStatus}" />
                     <Grid ColumnDefinitions="*,10,Auto" IsVisible="{Binding HasCompetitionHomologations}">
                       <ComboBox Name="CompetitionHomologationPicker" ItemsSource="{Binding CompetitionHomologations}" SelectedItem="{Binding SelectedCompetitionHomologation}">
                         <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" /></DataTemplate></ComboBox.ItemTemplate>
@@ -371,7 +374,7 @@
                         <TextBlock Text="COURSE" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionCourseName}" />
                       </StackPanel>
-                      <StackPanel Name="CompetitionHomologationField" Grid.Column="6" Grid.ColumnSpan="6" Classes="field" IsVisible="{Binding IsCompetitionFis}">
+                      <StackPanel Name="CompetitionHomologationField" Grid.Column="6" Grid.ColumnSpan="6" Classes="field">
                         <TextBlock Text="HOMOLOGATION" Classes="fieldLabel" />
                         <TextBox Text="{Binding CompetitionHomologation}" />
                       </StackPanel>

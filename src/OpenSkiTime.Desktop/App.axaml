@@ -250,6 +250,18 @@
       <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
       <Setter Property="BorderThickness" Value="2" />
     </Style>
+    <!-- Searchable choice (nations): looks and sizes like a text box; the inner text box carries the field styles. -->
+    <Style Selector="AutoCompleteBox">
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+      <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
+      <Setter Property="MaxDropDownHeight" Value="280" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    </Style>
     <Style Selector="CheckBox">
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
