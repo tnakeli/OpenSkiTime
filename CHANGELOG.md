@@ -14,6 +14,10 @@ This version uses live protocol 2.
 - **Replay file follows the file during capture:** a replay file connected as timing keeps being read, so impulses appended while connected (for example by the real-time rehearsal script `scripts/race-replay.py`) are captured as they arrive. Replay lines may name the bib explicitly.
 - **Live timing server load:** the Local and Cloud cards of the live timing control panel show the server's viewers (now and the lowest, average and highest over the last hour), viewers on the whole server, response times, CPU, memory and queued work, so you see what limits the server when many people follow. Needs live timing server 0.5.0 or later; with an older server the card shows no load.
 
+### Changed
+
+- **Updated components:** the application and the live timing control panel now use Avalonia 12 for the user interface. Entity Framework Core, SQLite and the other .NET libraries have been updated to their latest servicing releases.
+
 ### Fixed
 
 - **FIS calendar loads despite incomplete races:** one race without a codex (or another unusable row) no longer rejects the whole FIS calendar. Races without a codex are imported and the codex can be entered in Competitions later; a later calendar import fills it in for the same race. Only races that cannot form a competition are skipped, and the calendar status shows how many.

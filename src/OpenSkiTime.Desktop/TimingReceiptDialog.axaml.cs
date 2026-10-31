@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -8,6 +9,7 @@ namespace OpenSkiTime.Desktop;
 
 public partial class TimingReceiptDialog : Window
 {
+    private static readonly DataFormat<byte[]> PngClipboardFormat = DataFormat.CreateBytesPlatformFormat("image/png");
     private bool _applying;
     private bool _closed;
 
@@ -17,7 +19,7 @@ public partial class TimingReceiptDialog : Window
         var panels = this.FindControl<Grid>("ReceiptPanels")!;
         panels.AddHandler(DragDrop.DragOverEvent, (_, e) =>
         {
-            e.DragEffects = DataContext is MainViewModel { IsReportBusy: false, IsReportImageInput: true } && e.Data.Contains(DataFormats.Files)
+            e.DragEffects = DataContext is MainViewModel { IsReportBusy: false, IsReportImageInput: true } && e.DataTransfer.Contains(DataFormat.File)
                 ? DragDropEffects.Copy : DragDropEffects.None;
             e.Handled = true;
         });
@@ -25,7 +27,7 @@ public partial class TimingReceiptDialog : Window
         {
             e.Handled = true;
             if (DataContext is MainViewModel { IsReportImageInput: true } vm)
-            { await vm.ImportReportImagesAsync(e.Data.GetFiles()?.Select(x => x.TryGetLocalPath()).OfType<string>().ToArray() ?? []); }
+            { await vm.ImportReportImagesAsync(e.DataTransfer.TryGetFiles()?.Select(x => x.TryGetLocalPath()).OfType<string>().ToArray() ?? []); }
         });
         AddHandler(KeyDownEvent, async (_, e) =>
         {
@@ -81,7 +83,7 @@ public partial class TimingReceiptDialog : Window
                 var image = WindowsReceiptClipboard.ReadImage();
                 if (image is not null) { await vm.ImportReportImageBytesAsync(image.Value.Bytes, image.Value.FileName); return; }
             }
-            else if (Clipboard is { } clipboard && await clipboard.GetDataAsync("image/png") is byte[] png)
+            else if (Clipboard is { } clipboard && await clipboard.TryGetValueAsync(PngClipboardFormat) is { } png)
             { if (!_closed) { await vm.ImportReportImageBytesAsync(png, "Clipboard.png"); } return; }
             vm.ReportImportStatus = "The clipboard has no supported image. Copy an image or use Open images.";
         }

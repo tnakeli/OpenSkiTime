@@ -105,7 +105,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal("synthetic-shared-key", vm.FisApiKeyInput);
             PressSettingsControl(window, window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save key")));
             Assert.Equal("synthetic-shared-key", credentials.Read()); Assert.Equal("", vm.FisApiKeyInput);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBox>(), x => x.Watermark?.Contains("personal access token", StringComparison.OrdinalIgnoreCase) == true);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBox>(), x => x.PlaceholderText?.Contains("personal access token", StringComparison.OrdinalIgnoreCase) == true);
             await vm.RefreshTimingDeviceHomologationsCommand.ExecuteAsync(null);
             vm.SelectedTimingDeviceHomologation = Assert.Single(vm.TimingDeviceHomologations);
             vm.SelectedReportDefaultDevice = vm.ReportDefaultDevices[0];

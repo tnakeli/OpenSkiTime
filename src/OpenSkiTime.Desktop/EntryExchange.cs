@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 
 namespace OpenSkiTime.Desktop;
 
@@ -11,7 +12,7 @@ public interface IEntryExchange
 public sealed class AvaloniaEntryExchange(Window owner) : IEntryExchange
 {
     public Task<string?> ReadClipboardAsync()
-        => owner.Clipboard?.GetTextAsync() ?? Task.FromResult<string?>(null);
+        => owner.Clipboard?.TryGetTextAsync() ?? Task.FromResult<string?>(null);
 
     public async Task WriteClipboardAsync(string text)
     {

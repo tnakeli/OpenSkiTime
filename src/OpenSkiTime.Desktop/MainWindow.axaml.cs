@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
+        UpdateCaptionButtonSpace();
         DataContextChanged += (_, _) => BindCompetitionColumns();
         SizeChanged += (_, _) => UpdateCompetitorGridHeight();
         Closing += async (_, e) =>
@@ -119,7 +120,14 @@ public partial class MainWindow : Window
         ArgumentNullException.ThrowIfNull(change);
         base.OnPropertyChanged(change);
         // Windows draws its minimize, maximize and close buttons over the right end of the extended title bar.
-        if (change.Property == IsExtendedIntoWindowDecorationsProperty && this.FindControl<Border>("CaptionButtonSpace") is { } space)
+        if (change.Property == IsExtendedIntoWindowDecorationsProperty) { UpdateCaptionButtonSpace(); }
+    }
+
+    // Avalonia 12 can report the extended title bar while the window is still being constructed, before the XAML
+    // name scope exists, so the space is updated again once the content has loaded.
+    private void UpdateCaptionButtonSpace()
+    {
+        if (NameScope.GetNameScope(this)?.Find<Border>("CaptionButtonSpace") is { } space)
         { space.Width = IsExtendedIntoWindowDecorations ? 140 : 0; }
     }
 

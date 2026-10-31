@@ -139,7 +139,7 @@ public partial class DesktopWorkflowTests
             {
                 Directory.CreateDirectory(output); horizontal.Value = 0; window.UpdateLayout();
                 using var bitmap = new RenderTargetBitmap(new PixelSize(1280, 1000), new Vector(96, 96));
-                bitmap.Render(window); bitmap.Save(Path.Combine(output, "competitor-grid.png"));
+                bitmap.Render(window); bitmap.Save(Path.Combine(output, "competitor-grid.png"), PngBitmapEncoderOptions.Default);
 
             }
             await vm.DiscardDeskChangesCommand.ExecuteAsync(null);

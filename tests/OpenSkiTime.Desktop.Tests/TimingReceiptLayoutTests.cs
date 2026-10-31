@@ -64,7 +64,7 @@ public partial class DesktopWorkflowTests
             {
                 Directory.CreateDirectory(output);
                 using var bitmap = new RenderTargetBitmap(new PixelSize((int)window.Width, (int)window.Height), new Vector(96, 96));
-                bitmap.Render(window); bitmap.Save(Path.Combine(output, "timing-receipt-dialog.png"));
+                bitmap.Render(window); bitmap.Save(Path.Combine(output, "timing-receipt-dialog.png"), PngBitmapEncoderOptions.Default);
             }
 
             void Drag(Point start, double distance)

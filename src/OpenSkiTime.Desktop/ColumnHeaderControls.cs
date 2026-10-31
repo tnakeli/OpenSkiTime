@@ -88,7 +88,7 @@ internal sealed class ColumnHeaderControls
             opened(menu);
             var panel = new StackPanel { Width = 210, Spacing = 6 };
             panel.Children.Add(new TextBlock { Text = "Filter " + label });
-            var editor = new TextBox { Name = prefix + "Filter_" + key, Watermark = "Search text" };
+            var editor = new TextBox { Name = prefix + "Filter_" + key, PlaceholderText = "Search text" };
             panel.Children.Add(editor);
             void Submit()
             {

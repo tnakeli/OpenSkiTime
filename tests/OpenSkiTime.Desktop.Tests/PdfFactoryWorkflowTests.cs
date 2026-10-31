@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -110,7 +111,7 @@ public partial class DesktopWorkflowTests
             {
                 Dispatcher.UIThread.RunJobs();
                 using var screenshot = window.CaptureRenderedFrame();
-                screenshot?.Save(Path.Combine(qa, "pdf-factory-ui.png"));
+                screenshot?.Save(Path.Combine(qa, "pdf-factory-ui.png"), PngBitmapEncoderOptions.Default);
             }
             window.Close();
             vm.Dispose();

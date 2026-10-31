@@ -82,7 +82,7 @@ public partial class DesktopWorkflowTests
             {
                 Directory.CreateDirectory(output);
                 using var bitmap = new RenderTargetBitmap(new PixelSize(1366, 1100), new Vector(96, 96));
-                bitmap.Render(window); bitmap.Save(Path.Combine(output, "series-calendar.png"));
+                bitmap.Render(window); bitmap.Save(Path.Combine(output, "series-calendar.png"), PngBitmapEncoderOptions.Default);
             }
             await vm.UseSeriesCalendarEventCommand.ExecuteAsync(null);
             Assert.False(vm.IsError); Assert.Equal(3, requests.Count);

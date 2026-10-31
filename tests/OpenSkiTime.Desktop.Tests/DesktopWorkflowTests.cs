@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -323,7 +324,7 @@ public partial class DesktopWorkflowTests
         Directory.CreateDirectory(directory);
         using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)window.Width, (int)window.Height), new Vector(96, 96));
         bitmap.Render(window);
-        bitmap.Save(Path.Combine(directory, name));
+        bitmap.Save(Path.Combine(directory, name), PngBitmapEncoderOptions.Default);
     }
 
     [Fact]

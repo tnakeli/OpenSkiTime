@@ -87,7 +87,7 @@ public partial class DesktopWorkflowTests
                 var scroll = window.FindControl<ScrollViewer>("WorkspaceScroll")!;
                 scroll.Offset = new Vector(0, 250); window.UpdateLayout();
                 using var bitmap = new RenderTargetBitmap(new PixelSize(1366, 900), new Vector(96, 96));
-                bitmap.Render(window); bitmap.Save(Path.Combine(output, "competition-calendar.png"));
+                bitmap.Render(window); bitmap.Save(Path.Combine(output, "competition-calendar.png"), PngBitmapEncoderOptions.Default);
             }
             await vm.ShowResultsCommand.ExecuteAsync(null); await vm.LoadResultsCommand.ExecuteAsync(null);
             Assert.Equal("Competition place", vm.WeatherLocation);

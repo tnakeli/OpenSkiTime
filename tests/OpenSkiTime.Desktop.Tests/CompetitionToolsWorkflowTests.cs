@@ -210,10 +210,10 @@ public partial class DesktopWorkflowTests
             {
                 Directory.CreateDirectory(output);
                 using var bitmap = new RenderTargetBitmap(new PixelSize(1854, 1100), new Vector(96, 96)); bitmap.Render(window);
-                bitmap.Save(Path.Combine(output, "competition-tools.png"));
+                bitmap.Save(Path.Combine(output, "competition-tools.png"), PngBitmapEncoderOptions.Default);
                 window.FindControl<ScrollViewer>("WorkspaceScroll")!.Offset = new Vector(0, 550); window.UpdateLayout();
                 using var courseBitmap = new RenderTargetBitmap(new PixelSize(1854, 1100), new Vector(96, 96)); courseBitmap.Render(window);
-                courseBitmap.Save(Path.Combine(output, "competition-course.png"));
+                courseBitmap.Save(Path.Combine(output, "competition-course.png"), PngBitmapEncoderOptions.Default);
             }
             window.Close();
         }

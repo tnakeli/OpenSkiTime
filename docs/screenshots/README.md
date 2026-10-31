@@ -8,7 +8,7 @@ To regenerate the eleven desktop PNGs from the repository root, set `OPENSKITIME
 
 ```powershell
 $env:OPENSKITIME_README_SCREENSHOTS = Join-Path (Get-Location) 'docs/screenshots'
-dotnet test tests/OpenSkiTime.Desktop.Tests/OpenSkiTime.Desktop.Tests.csproj -c Release --filter FullyQualifiedName~ScreenshotsFromSyntheticEvent
+dotnet test tests/OpenSkiTime.Desktop.Tests/OpenSkiTime.Desktop.Tests.csproj -c Release --filter-method "*ScreenshotsFromSyntheticEvent*"
 ```
 
 The fixture creates its `.ost` file and points-list ZIP under the system temporary directory and removes them after capture.

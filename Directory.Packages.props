@@ -4,30 +4,30 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
 
-    <AvaloniaVersion>11.2.3</AvaloniaVersion>
-    <CommunityToolkitMvvmVersion>8.4.0</CommunityToolkitMvvmVersion>
-    <EfCoreVersion>10.0.0</EfCoreVersion>
-    <ExtensionsVersion>10.0.0</ExtensionsVersion>
-    <XunitVersion>2.9.3</XunitVersion>
-    <XunitRunnerVersion>3.1.4</XunitRunnerVersion>
-    <NetTestSdkVersion>17.14.1</NetTestSdkVersion>
-    <FluentAssertionsVersion>6.12.2</FluentAssertionsVersion>
-    <CoverletVersion>6.0.4</CoverletVersion>
+    <AvaloniaVersion>12.1.4</AvaloniaVersion>
+    <AvaloniaDataGridVersion>12.1.2</AvaloniaDataGridVersion>
+    <CommunityToolkitMvvmVersion>8.4.2</CommunityToolkitMvvmVersion>
+    <EfCoreVersion>10.0.14</EfCoreVersion>
+    <ExtensionsVersion>10.0.14</ExtensionsVersion>
+    <!-- Avalonia.Headless.XUnit 12.1 is built against xunit.v3 3.2.2 and fails test discovery on xunit.v3 4.x. -->
+    <XunitVersion>3.2.2</XunitVersion>
+    <XunitRunnerVersion>4.0.1</XunitRunnerVersion>
+    <NetTestSdkVersion>18.11.0</NetTestSdkVersion>
+    <CoverletVersion>10.1.0</CoverletVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageVersion Include="QuestPDF" Version="2026.9.1" />
-    <PackageVersion Include="PdfPig" Version="0.1.12" />
+    <PackageVersion Include="PdfPig" Version="0.1.16" />
     <PackageVersion Include="Tesseract" Version="5.2.0" />
     <!-- Avalonia (UI) -->
     <PackageVersion Include="Avalonia"                          Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Desktop"                  Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Themes.Fluent"            Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Fonts.Inter"              Version="$(AvaloniaVersion)" />
-    <PackageVersion Include="Avalonia.Diagnostics"              Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Headless"                 Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Headless.XUnit"           Version="$(AvaloniaVersion)" />
-    <PackageVersion Include="Avalonia.Controls.DataGrid"        Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Controls.DataGrid"        Version="$(AvaloniaDataGridVersion)" />
 
     <!-- MVVM -->
     <PackageVersion Include="CommunityToolkit.Mvvm"             Version="$(CommunityToolkitMvvmVersion)" />
@@ -37,10 +37,10 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(EfCoreVersion)" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(EfCoreVersion)" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="$(EfCoreVersion)" />
-    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
-    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.21.3" />
-    <PackageVersion Include="System.IO.Ports" Version="10.0.0" />
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.14" />
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.95.2" />
+    <PackageVersion Include="System.IO.Ports" Version="10.0.14" />
     <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" />
 
     <!-- DI / Logging -->
@@ -50,9 +50,8 @@
 
     <!-- Test -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk"   Version="$(NetTestSdkVersion)" />
-    <PackageVersion Include="xunit"                    Version="$(XunitVersion)" />
+    <PackageVersion Include="xunit.v3.mtp-v2"          Version="$(XunitVersion)" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="$(XunitRunnerVersion)" />
-    <PackageVersion Include="FluentAssertions"         Version="$(FluentAssertionsVersion)" />
     <PackageVersion Include="coverlet.collector"       Version="$(CoverletVersion)" />
     <!-- Opt-in real-window desktop automation (tests/OpenSkiTime.Desktop.E2E) -->
     <PackageVersion Include="FlaUI.Core"               Version="5.0.0" />

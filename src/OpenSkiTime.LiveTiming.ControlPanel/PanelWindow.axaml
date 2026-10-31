@@ -100,15 +100,15 @@
       <StackPanel Classes="field"><TextBlock Text="Speech" /><ComboBox ItemsSource="{Binding RadioTtsChoices}" SelectedItem="{Binding RadioTts}" HorizontalAlignment="Stretch" /></StackPanel>
       <Grid ColumnDefinitions="*,8,*,8,*">
        <StackPanel Classes="field"><TextBlock Text="Azure region" /><TextBox Text="{Binding RadioRegion}" /></StackPanel>
-       <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="Voice, Aino" /><TextBox Text="{Binding RadioVoiceA}" Watermark="Default" /></StackPanel>
-       <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="Voice, Kalle" /><TextBox Text="{Binding RadioVoiceB}" Watermark="Default" /></StackPanel>
+       <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="Voice, Aino" /><TextBox Text="{Binding RadioVoiceA}" PlaceholderText="Default" /></StackPanel>
+       <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="Voice, Kalle" /><TextBox Text="{Binding RadioVoiceB}" PlaceholderText="Default" /></StackPanel>
       </Grid>
       <StackPanel Classes="field"><TextBlock Text="Event background for the hosts" /><TextBox Text="{Binding RadioContext}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54" MaxLength="2000" /></StackPanel>
       <StackPanel Classes="field"><TextBlock Text="Curation notes (habits to avoid)" /><TextBox Text="{Binding RadioNotes}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxLength="1000" /></StackPanel>
       <StackPanel Classes="field"><TextBlock Text="Pronunciation (one per line: written = spoken)" /><TextBox Text="{Binding RadioLexicon}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxLength="4000" /></StackPanel>
       <StackPanel Classes="field"><TextBlock Text="Background music folder (MP3, optional)" />
        <Grid ColumnDefinitions="*,8,Auto">
-        <TextBox Name="RadioMusicFolderBox" Text="{Binding RadioMusicFolder}" Watermark="No music" />
+        <TextBox Name="RadioMusicFolderBox" Text="{Binding RadioMusicFolder}" PlaceholderText="No music" />
         <Button Grid.Column="2" Name="BrowseMusicButton" Content="Browse…" Click="BrowseMusic" />
        </Grid>
       </StackPanel>
@@ -118,7 +118,7 @@
      </StackPanel></Border>
      <Border Classes="card"><StackPanel Spacing="8">
       <TextBlock Text="Race clock" Classes="heading" />
-      <StackPanel Classes="field"><TextBlock Text="Time zone" /><TextBox Text="{Binding TimeZone}" Watermark="Windows or IANA time zone ID" /></StackPanel>
+      <StackPanel Classes="field"><TextBlock Text="Time zone" /><TextBox Text="{Binding TimeZone}" PlaceholderText="Windows or IANA time zone ID" /></StackPanel>
       <TextBlock Text="Settings take effect when you press Start. The time zone is also applied when refreshing the race state." Classes="muted" FontSize="11" />
      </StackPanel></Border>
     </StackPanel>

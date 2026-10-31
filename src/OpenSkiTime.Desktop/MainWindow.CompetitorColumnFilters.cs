@@ -79,7 +79,7 @@ public partial class MainWindow
             CompetitorFilterMenu = menu;
             var panel = new StackPanel { Width = 210, Spacing = 6 };
             panel.Children.Add(new TextBlock { Text = "Filter " + text.Replace('\n', ' ') });
-            var editor = new TextBox { Name = "CompetitorFilter_" + key, Watermark = column.Tag is "competition-entry" ? "Yes / No" : "Search text" };
+            var editor = new TextBox { Name = "CompetitorFilter_" + key, PlaceholderText = column.Tag is "competition-entry" ? "Yes / No" : "Search text" };
             panel.Children.Add(editor);
             void Submit() { if (Apply(editor.Text ?? "")) { menu.Hide(); filter.Focus(); } }
             editor.KeyDown += (_, e) =>

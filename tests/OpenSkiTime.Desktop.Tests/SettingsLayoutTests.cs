@@ -113,6 +113,6 @@ public partial class DesktopWorkflowTests
         if (string.IsNullOrWhiteSpace(output)) { return; }
         Directory.CreateDirectory(output);
         using var bitmap = new RenderTargetBitmap(new PixelSize(width, height), new Vector(96, 96));
-        bitmap.Render(window); bitmap.Save(Path.Combine(output, $"settings-{width}-{name}.png"));
+        bitmap.Render(window); bitmap.Save(Path.Combine(output, $"settings-{width}-{name}.png"), PngBitmapEncoderOptions.Default);
     }
 }

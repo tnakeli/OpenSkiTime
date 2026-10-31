@@ -73,14 +73,14 @@ public sealed class ResultsVisualTests
         {
             Directory.CreateDirectory(output);
             using var bitmap = new RenderTargetBitmap(new PixelSize(1366, 900), new Vector(96, 96));
-            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-review.png"));
+            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-review.png"), PngBitmapEncoderOptions.Default);
             var scroller = window.GetVisualDescendants().OfType<ScrollViewer>().First();
             scroller.Offset = new Vector(0, 700); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-runs.png"));
+            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-runs.png"), PngBitmapEncoderOptions.Default);
             scroller.Offset = new Vector(0, 1650); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-penalty.png"));
+            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-penalty.png"), PngBitmapEncoderOptions.Default);
             scroller.Offset = new Vector(0, scroller.Extent.Height); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-xml.png"));
+            bitmap.Render(window); bitmap.Save(Path.Combine(output, "results-xml.png"), PngBitmapEncoderOptions.Default);
         }
         Assert.True(window.IsVisible);
         window.Close();

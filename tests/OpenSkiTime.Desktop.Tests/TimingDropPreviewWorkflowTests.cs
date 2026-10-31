@@ -19,10 +19,10 @@ public partial class DesktopWorkflowTests
         var row = vm.TimestampRows.Single(x => x.Cells.Any(c => c?.Key == timestampKey));
         view.FindControl<DataGrid>("TimestampsGrid")!.ScrollIntoView(row, null);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        ((Window)view.GetVisualRoot()!).UpdateLayout();
+        ((Window)TopLevel.GetTopLevel(view)!).UpdateLayout();
         var target = view.FindControl<DataGrid>("TimestampsGrid")!.GetVisualDescendants().OfType<Border>()
             .First(x => x.Tag is TimingTimestampCell cell && cell.Key == timestampKey && x.Bounds.Width > 0);
-        var data = new DataObject(); data.Set(TimingView.CompetitorDragFormat, racer);
+        using var data = TimingView.CreateCompetitorDragData(racer);
         var over = new DragEventArgs(DragDrop.DragOverEvent, data, target, new Avalonia.Point(2, 2), KeyModifiers.None) { Source = target };
         target.RaiseEvent(over);
         Assert.Equal(DragDropEffects.Move, over.DragEffects); // the preview never changes which cells accept a drop
@@ -113,7 +113,7 @@ public partial class DesktopWorkflowTests
             Assert.True(HoverTimingRacer(view, vm.CreateTimingDrag(b)!, i2).Visible);
 
             // Cancelling (leaving the view) hides the preview and changes nothing.
-            var leave = new DragEventArgs(DragDrop.DragLeaveEvent, new DataObject(), view, new Avalonia.Point(0, 0), KeyModifiers.None) { Source = view };
+            var leave = new DragEventArgs(DragDrop.DragLeaveEvent, new DataTransfer(), view, new Avalonia.Point(0, 0), KeyModifiers.None) { Source = view };
             view.RaiseEvent(leave);
             Assert.False(preview.IsVisible);
             Assert.Same(before, workspace.Timing.Snapshot); // hovering wrote no audit, decision or observation
