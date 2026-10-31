@@ -447,11 +447,11 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(500);
     }
 
-    // Settings → FIS: refresh the FIS equipment (timing device) homologations from the FIS API.
+    // Settings → Timing report: refresh the FIS equipment (timing device) homologations from the FIS API.
     public void RefreshEquipmentHomologations()
     {
         Navigate("Settings");
-        SelectTab("FIS");
+        SelectTab("Timing report");
         app.Click("Refresh homologations");
         Thread.Sleep(1000);
         app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Button))
@@ -486,12 +486,13 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // The competition jury in Race information: the chief of race is required for the FIS XML.
     public void EnterChiefOfRace(string firstName, string lastName, string nation)
     {
+        SelectTab("Race information");
         // Each cell is edited on its own: double-click starts editing, Enter commits. The row is looked up again for
         // every cell because focusing a cell can scroll the Results page.
         AutomationElement Cell(int column) => app.Retry(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.DataItem))
             .FirstOrDefault(r => r.FindAllDescendants(app.By.ByControlType(ControlType.Text)).Any(t => t.Name == "Chief of race"))
             ?.FindAllChildren(app.By.ByClassName("DataGridCell")).ElementAtOrDefault(column));
-        foreach (var (column, value) in new[] { (1, firstName), (2, lastName), (3, nation) })
+        foreach (var (column, value) in new[] { (1, lastName), (2, firstName), (3, nation) })
         {
             for (var attempt = 0; attempt < 3; attempt++)
             {
@@ -515,15 +516,16 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     // Race information needed for the FIS XML: gates, turning gates, start time and course setter of each run.
     public void CompleteRaceInformation()
     {
-        string[] setters = ["Ola|SYNTHSETTER|NOR", "Ulla|SYNTHSETTER|AUT"];
+        SelectTab("Race information");
+        string[] setters = ["SYNTHSETTER|Ola|NOR", "SYNTHSETTER|Ulla|AUT"];
         for (var run = 1; run <= race.Competition.RunCount; run++)
         {
             var heading = $"Run {run}";
             app.SetText(FieldAfter(heading, "GATES"), run == 1 ? "58" : "60"); Pause();
-            app.SetText(FieldAfter(heading, "TURNS"), run == 1 ? "56" : "58"); Pause();
-            app.SetText(FieldAfter(heading, "START HH:mm"), run == 1 ? "10:00" : "13:00"); Pause();
+            app.SetText(FieldAfter(heading, "TURNING GATES"), run == 1 ? "56" : "58"); Pause();
+            app.SetText(FieldAfter(heading, "START TIME"), run == 1 ? "10:00" : "13:00"); Pause();
             var setter = setters[run - 1].Split('|');
-            var first = FieldAfter(heading, "COURSE SETTER");
+            var first = FieldAfter(heading, "SETTER SURNAME");
             app.SetText(first, setter[0]);
             app.Press(VirtualKeyShort.TAB); Keyboard.Type(setter[1]);
             app.Press(VirtualKeyShort.TAB); Keyboard.Type(setter[2]);
@@ -536,6 +538,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     public void ApproveAndExportXml(string directory)
     {
         Directory.CreateDirectory(directory);
+        SelectTab("FIS XML");
         app.Click("TD approves · create XML");
         app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text))
             .Any(x => x.Name.StartsWith("TD approval saved as immutable revision", StringComparison.Ordinal)), "results approved", TimeSpan.FromSeconds(30));

@@ -1,39 +1,72 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:OpenSkiTime.Desktop"
              x:Class="OpenSkiTime.Desktop.RaceInformationView" x:CompileBindings="False">
-  <StackPanel Spacing="8">
-    <TextBlock Text="Race information" Classes="sectionTitle" />
-    <TextBlock Text="{Binding ResultsCourseSummary}" Classes="supportingText" TextWrapping="Wrap" />
-    <TextBlock Text="{Binding ResultsPointsList}" Classes="supportingText" />
-    <TextBlock Text="{Binding ResultsPointsValidity}" Classes="supportingText" />
-    <TextBlock Text="{Binding ResultsStatistics}" Classes="supportingText" />
-    <TextBlock Text="{Binding RaceInformationStatus}" Classes="supportingText" TextWrapping="Wrap" />
-    <TextBlock Text="{Binding ResultsTechnicalDelegateText}" Classes="supportingText" TextWrapping="Wrap" />
-    <TextBlock Text="COMPETITION JURY" Classes="fieldLabel" />
-    <DataGrid Classes="raceGrid" ItemsSource="{Binding ResultsJury}" AutoGenerateColumns="False" Height="200" RowHeight="28" ColumnHeaderHeight="28">
-      <DataGrid.Columns>
-        <DataGridTextColumn Header="FUNCTION" Binding="{Binding Label}" Width="190" IsReadOnly="True" />
-        <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
-        <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" />
-        <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="90" />
-      </DataGrid.Columns>
-    </DataGrid>
-    <ItemsControl ItemsSource="{Binding ResultsRuns}">
-      <ItemsControl.ItemTemplate><DataTemplate><local:RaceRunView Margin="0,0,0,8" /></DataTemplate></ItemsControl.ItemTemplate>
+  <!-- Race information for the result XML: jury and weather forecast side by side, then one card per run. Changes
+       are saved automatically. -->
+  <StackPanel Classes="tabPage">
+    <Grid ColumnDefinitions="*,*,*,*,*,*,*,*,*,*,*,*" ColumnSpacing="12">
+      <Border Grid.Column="0" Grid.ColumnSpan="7" Classes="card">
+        <StackPanel Spacing="{DynamicResource FormGap}">
+          <Grid Classes="cardHeader" ColumnDefinitions="Auto,*">
+            <TextBlock Text="Competition jury" Classes="cardTitle" />
+            <TextBlock Grid.Column="1" Name="RaceInformationStatusText" Text="{Binding RaceInformationStatus}" Classes="supportingText"
+                       HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" />
+          </Grid>
+          <TextBlock Text="{Binding ResultsTechnicalDelegateText}" Classes="supportingText" TextWrapping="Wrap"
+                     IsVisible="{Binding ResultsTechnicalDelegateText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <DataGrid Name="ResultsJuryGrid" Classes="raceGrid" ItemsSource="{Binding ResultsJury}" AutoGenerateColumns="False"
+                    RowHeight="30" ColumnHeaderHeight="32" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                    HorizontalGridLinesBrush="{DynamicResource LineBrush}">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="FUNCTION" Binding="{Binding Label}" Width="Auto" IsReadOnly="True" />
+              <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" MinWidth="120" />
+              <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" MinWidth="110" />
+              <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="70" MinWidth="60" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Column="7" Grid.ColumnSpan="5" Classes="card">
+        <StackPanel Spacing="{DynamicResource FormGap}">
+          <Grid Classes="cardHeader"><TextBlock Text="Weather forecast" Classes="cardTitle" /></Grid>
+          <TextBlock Text="{Binding WeatherBrowseStatus}" Classes="supportingText" TextWrapping="Wrap" />
+          <local:FormRow>
+            <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field">
+              <TextBlock Text="LOCATION" Classes="fieldLabel" />
+              <TextBox Name="WeatherLocationInput" Text="{Binding WeatherLocation}" />
+            </StackPanel>
+            <Button Grid.Column="8" Grid.ColumnSpan="4" Content="Find location" Command="{Binding SearchWeatherPlacesCommand}" IsEnabled="{Binding !IsInformationBusy}"
+                    VerticalAlignment="Bottom" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="secondaryAction" />
+          </local:FormRow>
+          <local:FormRow>
+            <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field">
+              <TextBlock Text="PLACE" Classes="fieldLabel" />
+              <ComboBox ItemsSource="{Binding WeatherPlaces}" SelectedItem="{Binding SelectedWeatherPlace}" DisplayMemberBinding="{Binding Display}" HorizontalAlignment="Stretch" />
+            </StackPanel>
+            <Button Grid.Column="8" Grid.ColumnSpan="4" Content="Browse hours" Command="{Binding BrowseWeatherHoursCommand}" IsEnabled="{Binding !IsInformationBusy}"
+                    VerticalAlignment="Bottom" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="secondaryAction"
+                    ToolTip.Tip="Browse today's forecast hours of the selected place." />
+          </local:FormRow>
+          <StackPanel Classes="field">
+            <TextBlock Text="HOUR" Classes="fieldLabel" />
+            <ComboBox ItemsSource="{Binding WeatherHours}" SelectedItem="{Binding SelectedWeatherHour}" DisplayMemberBinding="{Binding Display}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding ResultsRuns}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate><DataTemplate>
+              <Button Content="{Binding Label, StringFormat='Apply to {0}'}" Command="{Binding $parent[UserControl].DataContext.ApplyWeatherToRunCommand}" CommandParameter="{Binding}"
+                      IsEnabled="{Binding $parent[UserControl].DataContext.SelectedWeatherHour, Converter={x:Static ObjectConverters.IsNotNull}}" Classes="secondaryAction" />
+            </DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- One card per run, side by side and equally tall. -->
+    <ItemsControl Name="ResultsRunCards" ItemsSource="{Binding ResultsRuns}">
+      <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" ColumnSpacing="12" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate><DataTemplate><local:RaceRunView /></DataTemplate></ItemsControl.ItemTemplate>
     </ItemsControl>
-    <Expander Header="Browse weather forecast (optional)" IsExpanded="False">
-      <StackPanel Spacing="8">
-        <TextBlock Text="{Binding WeatherBrowseStatus}" Classes="supportingText" TextWrapping="Wrap" />
-            <ComboBox ItemsSource="{Binding WeatherPlaces}" SelectedItem="{Binding SelectedWeatherPlace}" DisplayMemberBinding="{Binding Display}" HorizontalAlignment="Stretch" />
-        <Button Content="Browse race-day hours" Command="{Binding BrowseWeatherHoursCommand}" IsEnabled="{Binding !IsInformationBusy}" Classes="secondaryAction" HorizontalAlignment="Left" />
-        <ComboBox ItemsSource="{Binding WeatherHours}" SelectedItem="{Binding SelectedWeatherHour}" DisplayMemberBinding="{Binding Display}" HorizontalAlignment="Stretch" />
-        <ItemsControl ItemsSource="{Binding ResultsRuns}">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate><DataTemplate>
-            <Button Content="{Binding Label, StringFormat='Apply forecast to {0}'}" Command="{Binding $parent[UserControl].DataContext.ApplyWeatherToRunCommand}" CommandParameter="{Binding}" Classes="secondaryAction" Margin="0,0,8,0" />
-          </DataTemplate></ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
-    </Expander>
   </StackPanel>
 </UserControl>

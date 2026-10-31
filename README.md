@@ -64,7 +64,7 @@ See [timing setup and operation](docs/timing.md) and [post-run classification](d
 
 ### 6 · Race information, penalty and XML
 
-Prepare race information before timing begins, or complete it afterwards. Jury members and each run's course setter, course, gates, forerunners, start time, conditions and temperatures are editable. Valid changes save automatically; invalid entries remain visible with a **Not saved** message. An optional weather browser offers race-day forecasts alongside manually entered measured temperatures.
+Prepare race information before timing begins, or complete it afterwards. Jury members and each run's course setter, course, gates, forerunners, start time, conditions and temperatures are editable. Valid changes save automatically; invalid entries remain visible with a **Not saved** message. An optional weather browser offers today's forecast alongside manually entered measured temperatures.
 
 ![Race information with fictional officials, a course setter, forerunner and run conditions](docs/screenshots/07-race-information.png)
 

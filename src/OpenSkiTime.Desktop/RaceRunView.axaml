@@ -1,48 +1,72 @@
 <UserControl xmlns:local="using:OpenSkiTime.Desktop" xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="OpenSkiTime.Desktop.RaceRunView" x:CompileBindings="False">
-  <Border Classes="subtleSurface" Padding="10,8">
-    <StackPanel Spacing="6">
-      <TextBlock Text="{Binding Label}" Classes="sectionTitle" />
-      <WrapPanel>
-        <StackPanel Classes="field" Width="190" Margin="0,0,8,6"><TextBlock Text="COURSE" Classes="fieldLabel" /><TextBox Text="{Binding Course}" /></StackPanel>
-        <StackPanel Classes="field" Width="145" Margin="0,0,8,6"><TextBlock Text="HOMOLOGATION" Classes="fieldLabel" /><TextBox Text="{Binding Homologation}" /></StackPanel>
-        <StackPanel Classes="field" Width="85" Margin="0,0,8,6"><TextBlock Text="START m" Classes="fieldLabel" /><TextBox Text="{Binding StartAltitude}" /></StackPanel>
-        <StackPanel Classes="field" Width="85" Margin="0,0,8,6"><TextBlock Text="FINISH m" Classes="fieldLabel" /><TextBox Text="{Binding FinishAltitude}" /></StackPanel>
-        <StackPanel Classes="field" Width="85" Margin="0,0,8,6"><TextBlock Text="DROP m" Classes="fieldLabel" /><TextBox Text="{Binding Drop}" /></StackPanel>
-        <StackPanel Classes="field" Width="85" Margin="0,0,8,6"><TextBlock Text="LENGTH m" Classes="fieldLabel" /><TextBox Text="{Binding Length}" /></StackPanel>
-        <StackPanel Classes="field" Width="75" Margin="0,0,8,6"><TextBlock Text="GATES" Classes="fieldLabel" /><TextBox Text="{Binding Gates}" /></StackPanel>
-        <StackPanel Classes="field" Width="75" Margin="0,0,8,6"><TextBlock Text="TURNS" Classes="fieldLabel" /><TextBox Text="{Binding TurningGates}" /></StackPanel>
-        <StackPanel Classes="field" Width="100" Margin="0,0,8,6"><TextBlock Text="START HH:mm" Classes="fieldLabel" /><TextBox Text="{Binding StartTime}" PlaceholderText="10:00" /></StackPanel>
-      </WrapPanel>
-      <WrapPanel>
-        <TextBlock Text="COURSE SETTER" Classes="fieldLabel" VerticalAlignment="Center" Width="130" />
-        <TextBox Text="{Binding Setter.FirstName}" PlaceholderText="First name" Width="180" Margin="0,0,8,0" />
-        <TextBox Text="{Binding Setter.LastName}" PlaceholderText="Surname" Width="180" Margin="0,0,8,0" />
-        <TextBox Text="{Binding Setter.Nation}" PlaceholderText="NAT" Width="80" MaxLength="3" />
-      </WrapPanel>
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <TextBlock Text="FORERUNNERS" Classes="fieldLabel" VerticalAlignment="Center" Width="130" />
-        <Button Content="+ Add" Command="{Binding AddForerunnerCommand}" Classes="secondaryAction" />
-        <Button Content="Remove selected" Command="{Binding RemoveForerunnerCommand}" Classes="secondaryAction" />
-        <TextBlock Text="{Binding Forerunners.Count, StringFormat='{}{0} entered'}" VerticalAlignment="Center" />
-      </StackPanel>
+  <!-- One run of the race information: course, gates and start time, course setter, forerunners and weather, on the
+       12-column grid. -->
+  <Border Classes="card">
+    <StackPanel Spacing="{DynamicResource FormGap}">
+      <Grid Classes="cardHeader"><TextBlock Text="{Binding Label}" Classes="cardTitle" /></Grid>
+      <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field"><TextBlock Text="COURSE" Classes="fieldLabel" /><TextBox Text="{Binding Course}" /></StackPanel>
+        <StackPanel Grid.Column="8" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="HOMOLOGATION" Classes="fieldLabel" /><TextBox Text="{Binding Homologation}" /></StackPanel>
+      </local:FormRow>
+      <local:FormRow>
+        <Border Grid.Column="0" Grid.ColumnSpan="3" Classes="statField"><StackPanel>
+          <TextBlock Text="START ALTITUDE" Classes="fieldLabel" />
+          <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding StartAltitude}" /><TextBlock Grid.Column="1" Text="m" Classes="unit" /></Grid></StackPanel></Border>
+        <Border Grid.Column="3" Grid.ColumnSpan="3" Classes="statField"><StackPanel>
+          <TextBlock Text="FINISH ALTITUDE" Classes="fieldLabel" />
+          <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding FinishAltitude}" /><TextBlock Grid.Column="1" Text="m" Classes="unit" /></Grid></StackPanel></Border>
+        <Border Grid.Column="6" Grid.ColumnSpan="3" Classes="statField"><StackPanel>
+          <TextBlock Text="VERTICAL DROP" Classes="fieldLabel" />
+          <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding Drop}" /><TextBlock Grid.Column="1" Text="m" Classes="unit" /></Grid></StackPanel></Border>
+        <Border Grid.Column="9" Grid.ColumnSpan="3" Classes="statField"><StackPanel>
+          <TextBlock Text="COURSE LENGTH" Classes="fieldLabel" />
+          <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding Length}" /><TextBlock Grid.Column="1" Text="m" Classes="unit" /></Grid></StackPanel></Border>
+      </local:FormRow>
+      <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="GATES" Classes="fieldLabel" /><TextBox Text="{Binding Gates}" /></StackPanel>
+        <StackPanel Grid.Column="3" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="TURNING GATES" Classes="fieldLabel" /><TextBox Text="{Binding TurningGates}" /></StackPanel>
+        <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="START TIME" Classes="fieldLabel" /><TextBox Text="{Binding StartTime}" PlaceholderText="hh:mm" /></StackPanel>
+      </local:FormRow>
+      <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="5" Classes="field"><TextBlock Text="SETTER SURNAME" Classes="fieldLabel" /><TextBox Text="{Binding Setter.LastName}" /></StackPanel>
+        <StackPanel Grid.Column="5" Grid.ColumnSpan="5" Classes="field"><TextBlock Text="SETTER FIRST NAME" Classes="fieldLabel" /><TextBox Text="{Binding Setter.FirstName}" /></StackPanel>
+        <StackPanel Grid.Column="10" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel" /><TextBox Text="{Binding Setter.Nation}" MaxLength="3" /></StackPanel>
+      </local:FormRow>
+      <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="CONDITIONS" Classes="fieldLabel" /><TextBox Text="{Binding Conditions}" PlaceholderText="Clear" /></StackPanel>
+        <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="SNOW" Classes="fieldLabel" /><TextBox Text="{Binding Snow}" PlaceholderText="Hard" /></StackPanel>
+      </local:FormRow>
+      <local:FormRow>
+        <Border Grid.Column="0" Grid.ColumnSpan="4" Classes="statField"><StackPanel>
+          <TextBlock Text="AIR AT START" Classes="fieldLabel" />
+          <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding StartTemperature}" /><TextBlock Grid.Column="1" Text="°C" Classes="unit" /></Grid></StackPanel></Border>
+        <Border Grid.Column="4" Grid.ColumnSpan="4" Classes="statField"><StackPanel>
+          <TextBlock Text="AIR AT FINISH" Classes="fieldLabel" />
+          <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding FinishTemperature}" /><TextBlock Grid.Column="1" Text="°C" Classes="unit" /></Grid></StackPanel></Border>
+        <Border Grid.Column="8" Grid.ColumnSpan="4" Classes="statField"><StackPanel>
+          <TextBlock Text="AIR · PLACE UNSPECIFIED" Classes="fieldLabel" />
+          <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding UnlocatedTemperature}" /><TextBlock Grid.Column="1" Text="°C" Classes="unit" /></Grid></StackPanel></Border>
+      </local:FormRow>
+      <TextBlock Text="{Binding WeatherSource}" Classes="supportingText" TextWrapping="Wrap"
+                 IsVisible="{Binding WeatherSource, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <Grid ColumnDefinitions="Auto,8,*,Auto,8,Auto" Margin="0,4,0,0">
+        <TextBlock Text="FORERUNNERS" Classes="fieldLabel" VerticalAlignment="Center" />
+        <Border Grid.Column="2" Classes="chip"><TextBlock Text="{Binding Forerunners.Count}" /></Border>
+        <Button Grid.Column="3" Content="Remove forerunner" Command="{Binding RemoveForerunnerCommand}" IsEnabled="{Binding SelectedForerunner, Converter={x:Static ObjectConverters.IsNotNull}}" Classes="secondaryAction" />
+        <Button Grid.Column="5" Content="Add forerunner" Command="{Binding AddForerunnerCommand}" Classes="secondaryAction" />
+      </Grid>
       <DataGrid Classes="raceGrid" ItemsSource="{Binding Forerunners}" SelectedItem="{Binding SelectedForerunner}"
-                AutoGenerateColumns="False" MinHeight="62" MaxHeight="230" RowHeight="28" ColumnHeaderHeight="28">
+                AutoGenerateColumns="False" MinHeight="62" MaxHeight="230" RowHeight="30" ColumnHeaderHeight="32"
+                GridLinesVisibility="Horizontal" HeadersVisibility="Column" HorizontalGridLinesBrush="{DynamicResource LineBrush}">
         <DataGrid.Columns>
-          <DataGridTextColumn Header="ID" Binding="{Binding Letter}" Width="85" />
-          <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
-          <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" />
-          <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="90" />
+          <DataGridTextColumn Header="ID" Binding="{Binding Letter}" Width="60" MinWidth="50" />
+          <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" MinWidth="110" />
+          <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" MinWidth="100" />
+          <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="70" MinWidth="60" />
         </DataGrid.Columns>
       </DataGrid>
-      <WrapPanel>
-        <StackPanel Classes="field" Width="180" Margin="0,0,8,0"><TextBlock Text="CONDITIONS" Classes="fieldLabel" /><TextBox Text="{Binding Conditions}" PlaceholderText="Clear" /></StackPanel>
-        <StackPanel Classes="field" Width="180" Margin="0,0,8,0"><TextBlock Text="SNOW" Classes="fieldLabel" /><TextBox Text="{Binding Snow}" PlaceholderText="Hard" /></StackPanel>
-        <StackPanel Classes="field" Width="135" Margin="0,0,8,0"><TextBlock Text="AIR START °C" Classes="fieldLabel" /><TextBox Text="{Binding StartTemperature}" PlaceholderText="Measured" /></StackPanel>
-        <StackPanel Classes="field" Width="135"><TextBlock Text="AIR FINISH °C" Classes="fieldLabel" /><TextBox Text="{Binding FinishTemperature}" PlaceholderText="Measured" /></StackPanel>
-        <StackPanel Classes="field" Width="170" Margin="8,0,0,0"><TextBlock Text="AIR °C · PLACE UNSPECIFIED" Classes="fieldLabel" /><TextBox Text="{Binding UnlocatedTemperature}" PlaceholderText="Measured" /></StackPanel>
-      </WrapPanel>
-      <TextBlock Text="{Binding WeatherSource}" Classes="supportingText" TextWrapping="Wrap" />
     </StackPanel>
   </Border>
 </UserControl>

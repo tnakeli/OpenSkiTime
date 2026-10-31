@@ -13,7 +13,6 @@ public sealed partial class MainViewModel
     private readonly FisTimingDeviceCache _timingDeviceCache = timingDeviceCache ?? new();
     private TimingReportDefaults? _reportDefaults;
     private bool _reportSettingsLoaded;
-    private DateTimeOffset? _timingDeviceCatalogueRetrievedAt;
     public TimingReportDefaults ReportDefaults { get { EnsureReportSettingsLoaded(); return _reportDefaults ?? new(); } }
     [ObservableProperty] private int _selectedSettingsTab;
     [RelayCommand] private void ShowTimingReportSettings() { SelectedSettingsTab = 2; ShowSettings(); }
@@ -21,11 +20,10 @@ public sealed partial class MainViewModel
     public TimingReportPersonEditor ReportDefaultTimekeeper { get; } = new();
     public IReadOnlyList<string> ReportConnectionModes { get; } = ["Cable", "Radio", "LAN", "WLAN", "Mobile", "USB", "Other"];
     public ObservableCollection<TimingReportDeviceEditor> ReportDefaultDevices { get; } =
-        [new("Timer A", 1), new("Timer B", 1), new("Start gate", 10), new("Start clock", 0), new("Finish cells A", 20), new("Finish cells B", 20),
+        [new("Timer A", 1), new("Timer B", 1), new("Start gate", 10, 15), new("Start clock", 0), new("Finish cells A", 20), new("Finish cells B", 20),
             new("Start timer A (optional)", 1), new("Start timer B (optional)", 1)];
     public ObservableCollection<FisTimingDevice> TimingDeviceHomologations { get; } = [];
     [ObservableProperty] private TimingReportDeviceEditor? _selectedReportDefaultDevice;
-    [ObservableProperty] private FisTimingDevice? _selectedTimingDeviceHomologation;
     [ObservableProperty] private bool _isTimingDeviceLookupBusy;
     [ObservableProperty] private string _timingDeviceCatalogueStatus = "No catalogue downloaded. Equipment can be entered manually.";
     [ObservableProperty] private string _reportDefaultsStatus = "Timing reports use the equipment and officials saved here.";
@@ -101,20 +99,9 @@ public sealed partial class MainViewModel
 
     private void ShowTimingDeviceCatalogue(FisTimingDeviceCatalogue catalogue)
     {
-        _timingDeviceCatalogueRetrievedAt = catalogue.RetrievedAt;
         TimingDeviceHomologations.Clear();
         foreach (var device in catalogue.Devices) { TimingDeviceHomologations.Add(device); }
+        foreach (var editor in ReportDefaultDevices) { editor.SetCatalogue(catalogue.Devices, catalogue.RetrievedAt); }
         TimingDeviceCatalogueStatus = $"{catalogue.Devices.Length} homologations cached · {catalogue.RetrievedAt:yyyy-MM-dd HH:mm} UTC. Check validity for the race season.";
-    }
-
-    [RelayCommand]
-    private void ApplyTimingDeviceHomologation()
-    {
-        if (SelectedReportDefaultDevice is not { } editor || SelectedTimingDeviceHomologation is not { } device) { return; }
-        if (editor.Category != device.CategoryId)
-        { TimingDeviceCatalogueStatus = "Choose a homologation matching the selected equipment type."; return; }
-        editor.Load(new(device.CompanyName, device.Name, editor.Serial, device.HomologationCode)
-            { ValidUntilSeason = device.ValidUntilSeason, HomologationRetrievedAt = _timingDeviceCatalogueRetrievedAt });
-        TimingDeviceCatalogueStatus = $"Applied to {editor.Label}. Check serial number and save defaults.";
     }
 }

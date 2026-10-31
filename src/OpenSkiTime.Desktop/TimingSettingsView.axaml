@@ -27,90 +27,115 @@
      <TextBox Text="{Binding ReplayPath}" IsVisible="{Binding IsReplay}" Width="280" PlaceholderText="Path to raw ALGE ASCII file" />
      <TextBlock Text="Training data only" IsVisible="{Binding IsSimulator}" Classes="supportingText" VerticalAlignment="Center" />
     </WrapPanel>
-    <TextBlock Grid.Column="8" Name="RoleSignalText" Text="{Binding SignalText}" VerticalAlignment="Center" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" FontSize="12" Foreground="{DynamicResource AccentBrush}" ToolTip.Tip="Latest signal per channel of this device while timing is connected. ● marks this role's channel." />
+    <TextBlock Grid.Column="8" Name="RoleSignalText" Text="{Binding SignalText}" VerticalAlignment="Center" FontFamily="{DynamicResource TimeFontFamily}" FontSize="{DynamicResource LabelSize}" Foreground="{DynamicResource AccentBrush}" ToolTip.Tip="Latest signal per channel of this device while timing is connected. ● marks this role's channel." />
    </Grid>
   </DataTemplate>
  </UserControl.Resources>
- <StackPanel Spacing="12">
-  <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="4"><TextBlock Text="Timing devices &amp; clocks" Classes="sectionTitle" />
-   <TextBlock Text="Set up once here. Operate the race in Timing." Classes="supportingText" /></StackPanel>
-   <Button Grid.Column="1" Content="Back to timing" Command="{Binding ReturnToTimingCommand}" IsVisible="{Binding HasTimingRun}" Classes="secondaryAction" /></Grid>
-  <Grid ColumnDefinitions="*,12,Auto">
-   <TextBlock Text="{Binding TimingConnection}" VerticalAlignment="Center" TextWrapping="Wrap" />
-   <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-    <Button Content="Connect" Command="{Binding ConnectTimingCommand}" IsEnabled="{Binding CanConnectTiming}" IsVisible="{Binding !IsTimingConnected}" Classes="primaryAction" />
-    <Button Content="Disconnect" Command="{Binding DisconnectTimingCommand}" IsVisible="{Binding IsTimingConnected}" IsEnabled="{Binding !IsTimingBusy}" Classes="secondaryAction" />
-   </StackPanel>
-  </Grid>
-  <Grid ColumnDefinitions="*,8,Auto,8,Auto" IsVisible="{Binding CanRetryBackupClock}">
-   <TextBlock Name="SettingsBackupClockStatusText" Text="{Binding BackupClockStatusText}" VerticalAlignment="Center" TextWrapping="Wrap" />
-   <Button Grid.Column="2" Content="Retry B Clock" Command="{Binding RetryBackupClockCommand}" Classes="secondaryAction" ToolTip.Tip="Reconnect B Clock (or retry its storage). A timing is not interrupted." />
-   <Button Grid.Column="4" Content="Disconnect B Clock" Command="{Binding DisconnectBackupClockCommand}" IsVisible="{Binding IsBackupClockActive}" Classes="secondaryAction" />
-  </Grid>
-  <TextBlock IsVisible="{Binding IsTimingConnected}" Text="Connected. Capture continues when you leave Settings or change views. Disconnect to change timing settings." Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
-  <Border IsVisible="{Binding HasTimingMigrationNotes}" BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1" Padding="8">
-   <StackPanel Spacing="4">
-    <TextBlock Text="FORMER TIMING SETTINGS MIGRATED · REVIEW AND SAVE" Classes="fieldLabel" />
-    <TextBlock Name="TimingMigrationNotesText" Text="{Binding TimingMigrationNotes}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
+ <StackPanel Classes="tabPage">
+  <!-- Connection: state, connect and disconnect, and the clock context all timing roles share. -->
+  <Border Classes="card">
+   <StackPanel Spacing="{DynamicResource FormGap}">
+    <Grid Classes="cardHeader" ColumnDefinitions="*,Auto">
+     <TextBlock Text="Connection" Classes="cardTitle" />
+     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+      <Button Content="Back to timing" Command="{Binding ReturnToTimingCommand}" IsVisible="{Binding HasTimingRun}" Classes="secondaryAction" />
+      <Button Content="Connect" Command="{Binding ConnectTimingCommand}" IsEnabled="{Binding CanConnectTiming}" IsVisible="{Binding !IsTimingConnected}" Classes="primaryAction" />
+      <Button Content="Disconnect" Command="{Binding DisconnectTimingCommand}" IsVisible="{Binding IsTimingConnected}" IsEnabled="{Binding !IsTimingBusy}" Classes="secondaryAction" />
+     </StackPanel>
+    </Grid>
+    <TextBlock Text="{Binding TimingConnection}" TextWrapping="Wrap" />
+    <Grid ColumnDefinitions="*,8,Auto,8,Auto" IsVisible="{Binding CanRetryBackupClock}">
+     <TextBlock Name="SettingsBackupClockStatusText" Text="{Binding BackupClockStatusText}" VerticalAlignment="Center" TextWrapping="Wrap" />
+     <Button Grid.Column="2" Content="Retry B Clock" Command="{Binding RetryBackupClockCommand}" Classes="secondaryAction" ToolTip.Tip="Reconnect B Clock (or retry its storage). A timing is not interrupted." />
+     <Button Grid.Column="4" Content="Disconnect B Clock" Command="{Binding DisconnectBackupClockCommand}" IsVisible="{Binding IsBackupClockActive}" Classes="secondaryAction" />
+    </Grid>
+    <TextBlock IsVisible="{Binding IsTimingConnected}" Text="Connected. Capture continues when you leave Settings or change views. Disconnect to change timing settings." Classes="supportingText attention" TextWrapping="Wrap" />
+    <Border IsVisible="{Binding HasTimingMigrationNotes}" Classes="warningNote">
+     <StackPanel Spacing="4">
+      <TextBlock Text="FORMER TIMING SETTINGS MIGRATED · REVIEW AND SAVE" Classes="fieldLabel" />
+      <TextBlock Name="TimingMigrationNotesText" Text="{Binding TimingMigrationNotes}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
+     </StackPanel>
+    </Border>
+    <local:FormRow IsEnabled="{Binding CanChangeTimingDevice}">
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="DEVICE DATE" Classes="fieldLabel" /><TextBox Text="{Binding TimingDeviceDate}" PlaceholderText="YYYY-MM-DD" /></StackPanel>
+     <StackPanel Grid.Column="2" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="OPERATOR" Classes="fieldLabel" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
+    </local:FormRow>
    </StackPanel>
   </Border>
-  <StackPanel Spacing="10" IsEnabled="{Binding CanChangeTimingDevice}">
-   <Grid ColumnDefinitions="130,10,*" HorizontalAlignment="Left" Width="450">
-    <StackPanel Classes="field"><TextBlock Text="DEVICE DATE" Classes="fieldLabel" /><TextBox Text="{Binding TimingDeviceDate}" PlaceholderText="YYYY-MM-DD" /></StackPanel>
-    <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="OPERATOR" Classes="fieldLabel" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
-   </Grid>
 
-   <TextBlock Text="PRIMARY TIMING" Classes="eyebrow" />
-   <TextBlock Text="{Binding TimingDeviceHelp}" Classes="supportingText" TextWrapping="Wrap" />
-   <Grid ColumnDefinitions="120,8,180,8,110,8,*">
-    <TextBlock Text="ROLE" Classes="fieldLabel" /><TextBlock Grid.Column="2" Text="SOURCE" Classes="fieldLabel" />
-    <TextBlock Grid.Column="4" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Text="CONNECTION" Classes="fieldLabel" />
-   </Grid>
-   <ItemsControl Name="PrimaryTimingRolesList" ItemsSource="{Binding PrimaryTimingRoles}" ItemTemplate="{StaticResource TimingRoleRowTemplate}" />
-   <StackPanel Orientation="Horizontal" Spacing="8">
-    <Button Content="Add intermediate" Command="{Binding AddTimingIntermediateCommand}" Classes="secondaryAction" />
-    <Button Content="Remove last intermediate" Command="{Binding RemoveTimingIntermediateCommand}" IsEnabled="{Binding HasTimingIntermediateRoles}" Classes="secondaryAction" />
-   </StackPanel>
-   <TextBlock Text="Any device can serve any role. Roles on one device use different channels; different devices, source types and ALGE Results accounts may be combined. All device clocks are set to the same time. A race uses as many intermediates as its competition defines." Classes="supportingText" TextWrapping="Wrap" />
-   <StackPanel Spacing="6" IsVisible="{Binding UsesAlgeResultsAccount}">
-    <TextBlock Text="ALGE RESULTS ACCOUNTS" Classes="fieldLabel" />
-    <ItemsControl Name="AlgeAccountsList" ItemsSource="{Binding AlgeAccounts}">
-     <ItemsControl.ItemTemplate>
-      <DataTemplate>
-       <Grid ColumnDefinitions="2*,8,2*,8,Auto,8,Auto,8,2*" Margin="0,0,0,6">
-        <TextBlock Text="{Binding Username}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-        <TextBox Grid.Column="2" Text="{Binding Password}" PasswordChar="•" PlaceholderText="{Binding PasswordWatermark}" />
-        <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding RememberPassword}" />
-        <Button Grid.Column="6" Content="Fetch devices" Command="{Binding DataContext.FetchAlgeDevicesCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" IsEnabled="{Binding !IsFetching}" Classes="secondaryAction" />
-        <TextBlock Grid.Column="8" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Classes="supportingText" />
+  <StackPanel Classes="tabPage" IsEnabled="{Binding CanChangeTimingDevice}">
+   <Border Classes="card">
+    <StackPanel Spacing="{DynamicResource FormGap}">
+     <Grid Classes="cardHeader" ColumnDefinitions="*,Auto">
+      <TextBlock Text="Primary timing" Classes="cardTitle" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+       <Button Content="Add intermediate" Command="{Binding AddTimingIntermediateCommand}" Classes="secondaryAction" />
+       <Button Content="Remove last intermediate" Command="{Binding RemoveTimingIntermediateCommand}" IsEnabled="{Binding HasTimingIntermediateRoles}" Classes="secondaryAction" />
+      </StackPanel>
+     </Grid>
+     <TextBlock Text="{Binding TimingDeviceHelp}" Classes="supportingText" TextWrapping="Wrap" />
+     <StackPanel Spacing="4">
+      <Grid ColumnDefinitions="120,8,180,8,110,8,*">
+       <TextBlock Text="ROLE" Classes="fieldLabel" /><TextBlock Grid.Column="2" Text="SOURCE" Classes="fieldLabel" />
+       <TextBlock Grid.Column="4" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Text="CONNECTION" Classes="fieldLabel" />
+      </Grid>
+      <ItemsControl Name="PrimaryTimingRolesList" ItemsSource="{Binding PrimaryTimingRoles}" ItemTemplate="{StaticResource TimingRoleRowTemplate}" />
+     </StackPanel>
+     <TextBlock Text="Any device can serve any role. Roles on one device use different channels; different devices, source types and ALGE Results accounts may be combined. All device clocks are set to the same time. A race uses as many intermediates as its competition defines." Classes="supportingText" TextWrapping="Wrap" />
+    </StackPanel>
+   </Border>
+
+   <Border Classes="card" IsVisible="{Binding UsesAlgeResultsAccount}">
+    <StackPanel Spacing="{DynamicResource FormGap}">
+     <Grid Classes="cardHeader"><TextBlock Text="ALGE Results accounts" Classes="cardTitle" /></Grid>
+     <ItemsControl Name="AlgeAccountsList" ItemsSource="{Binding AlgeAccounts}">
+      <ItemsControl.ItemTemplate>
+       <DataTemplate>
+        <Grid ColumnDefinitions="2*,8,2*,8,Auto,8,Auto,8,2*" Margin="0,0,0,6">
+         <TextBlock Text="{Binding Username}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+         <TextBox Grid.Column="2" Text="{Binding Password}" PasswordChar="•" PlaceholderText="{Binding PasswordWatermark}" />
+         <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding RememberPassword}" />
+         <Button Grid.Column="6" Content="Fetch devices" Command="{Binding DataContext.FetchAlgeDevicesCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" IsEnabled="{Binding !IsFetching}" Classes="secondaryAction" />
+         <TextBlock Grid.Column="8" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Classes="supportingText" />
+        </Grid>
+       </DataTemplate>
+      </ItemsControl.ItemTemplate>
+     </ItemsControl>
+    </StackPanel>
+   </Border>
+
+   <Border Classes="card">
+    <StackPanel Spacing="{DynamicResource FormGap}">
+     <Grid Classes="cardHeader" ColumnDefinitions="Auto,8,Auto,*,Auto">
+      <TextBlock Text="B Clock" Classes="cardTitle" />
+      <Border Grid.Column="2" Classes="chip"><TextBlock Text="OPTIONAL" /></Border>
+      <Button Grid.Column="4" Content="Add B Clock" Command="{Binding AddBackupClockCommand}" IsVisible="{Binding HasNoBackupClockRoles}" Classes="secondaryAction" />
+      <Button Grid.Column="4" Content="Clear B Clock" Command="{Binding ClearBackupClockCommand}" IsVisible="{Binding HasBackupClockRoles}" Classes="dangerAction" />
+     </Grid>
+     <TextBlock Text="An independent B Clock connects automatically right after primary timing and follows the active run. B never changes race times; it supports the timing report and warns when A and B disagree." Classes="supportingText" TextWrapping="Wrap" />
+     <StackPanel Spacing="{DynamicResource FormGap}" IsVisible="{Binding HasBackupClockRoles}">
+      <StackPanel Spacing="4">
+       <Grid ColumnDefinitions="120,8,180,8,110,8,*">
+        <TextBlock Text="ROLE" Classes="fieldLabel" /><TextBlock Grid.Column="2" Text="SOURCE" Classes="fieldLabel" />
+        <TextBlock Grid.Column="4" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Text="CONNECTION" Classes="fieldLabel" />
        </Grid>
-      </DataTemplate>
-     </ItemsControl.ItemTemplate>
-    </ItemsControl>
-   </StackPanel>
+       <ItemsControl Name="BackupTimingRolesList" ItemsSource="{Binding BackupTimingRoles}" ItemTemplate="{StaticResource TimingRoleRowTemplate}" />
+      </StackPanel>
+      <TextBlock Text="B Clock Start and B Clock Finish may use the same or different devices. Use devices separate from primary timing (own USB ID, COM port or ALGE Results device ID)." Classes="supportingText" TextWrapping="Wrap" />
+      <local:FormRow>
+       <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="START WARNING (MS)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupStartWarningMilliseconds}" Minimum="1" Maximum="10000" FormatString="0" /></StackPanel>
+       <StackPanel Grid.Column="3" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="FINISH WARNING (MS)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupFinishWarningMilliseconds}" Minimum="1" Maximum="10000" FormatString="0" /></StackPanel>
+       <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="MISSING SIGNAL WAIT (S)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupMissingGraceSeconds}" Minimum="1" Maximum="300" FormatString="0" /></StackPanel>
+      </local:FormRow>
+     </StackPanel>
+    </StackPanel>
+   </Border>
 
-   <Separator />
-   <TextBlock Text="B CLOCK · OPTIONAL" Classes="eyebrow" />
-   <TextBlock Text="An independent B Clock connects automatically right after primary timing and follows the active run. B never changes race times; it supports the timing report and warns when A and B disagree." Classes="supportingText" TextWrapping="Wrap" />
-   <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasNoBackupClockRoles}">
-    <TextBlock Text="B Clock · not configured" VerticalAlignment="Center" />
-    <Button Content="Add B Clock" Command="{Binding AddBackupClockCommand}" Classes="secondaryAction" />
-   </StackPanel>
-   <StackPanel Spacing="8" IsVisible="{Binding HasBackupClockRoles}">
-    <Grid ColumnDefinitions="120,8,180,8,110,8,*">
-     <TextBlock Text="ROLE" Classes="fieldLabel" /><TextBlock Grid.Column="2" Text="SOURCE" Classes="fieldLabel" />
-     <TextBlock Grid.Column="4" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Text="CONNECTION" Classes="fieldLabel" />
+   <Border Classes="card" Padding="12,10">
+    <Grid ColumnDefinitions="*,Auto">
+     <Button Grid.Column="1" Content="Save timing settings" Command="{Binding SaveTimingPreferencesCommand}" Classes="primaryAction" />
     </Grid>
-    <ItemsControl Name="BackupTimingRolesList" ItemsSource="{Binding BackupTimingRoles}" ItemTemplate="{StaticResource TimingRoleRowTemplate}" />
-    <TextBlock Text="B Clock Start and B Clock Finish may use the same or different devices. Use devices separate from primary timing (own USB ID, COM port or ALGE Results device ID)." Classes="supportingText" TextWrapping="Wrap" />
-    <Grid ColumnDefinitions="*,8,*,8,*" Width="570" HorizontalAlignment="Left">
-     <StackPanel Classes="field"><TextBlock Text="START WARNING (MS)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupStartWarningMilliseconds}" Minimum="1" Maximum="10000" FormatString="0" /></StackPanel>
-     <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="FINISH WARNING (MS)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupFinishWarningMilliseconds}" Minimum="1" Maximum="10000" FormatString="0" /></StackPanel>
-     <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="MISSING SIGNAL WAIT (S)" Classes="fieldLabel" /><NumericUpDown Value="{Binding BackupMissingGraceSeconds}" Minimum="1" Maximum="300" FormatString="0" /></StackPanel>
-    </Grid>
-    <Button Content="Clear B Clock" Command="{Binding ClearBackupClockCommand}" Classes="secondaryAction" HorizontalAlignment="Left" />
-   </StackPanel>
-   <Button Content="Save timing settings" Command="{Binding SaveTimingPreferencesCommand}" Classes="primaryAction" HorizontalAlignment="Left" />
+   </Border>
   </StackPanel>
  </StackPanel>
 </UserControl>

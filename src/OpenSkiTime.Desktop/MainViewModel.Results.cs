@@ -22,6 +22,10 @@ public sealed record PenaltyReviewRow(int Bib, string Name, string Listed, strin
     public string FirstName { get; init; } = "";
 }
 
+// Rule values and sums of the FIS penalty, formatted for the Penalty tab.
+public sealed record PenaltyRuleFigures(string F, string PointsCap, string Correction, string Adder, string Minimum, string Maximum);
+public sealed record PenaltySumFigures(string A, string B, string C, string Calculated, string Applied, string Note);
+
 public sealed partial class MainViewModel
 {
     private FisRaceResult? _resultRace;
@@ -38,9 +42,9 @@ public sealed partial class MainViewModel
     [ObservableProperty] private CompetitionDetails? _resultsCompetition;
     [ObservableProperty] private string _resultsState = "Choose a FIS competition.";
     [ObservableProperty] private string _resultsPointsList = string.Empty;
-    [ObservableProperty] private string _resultsPenaltySummary = string.Empty;
+    [ObservableProperty] private PenaltySumFigures? _resultsPenaltyFigures;
     [ObservableProperty] private string _resultsRuleSource = string.Empty;
-    [ObservableProperty] private string _resultsRuleValues = string.Empty;
+    [ObservableProperty] private PenaltyRuleFigures? _resultsRuleFigures;
     [ObservableProperty] private string _resultsCategory = string.Empty;
     [ObservableProperty] private ApprovedResult? _selectedResultApproval;
     public bool ResultsHasSecondRun => ResultsCompetition?.Values.RunCount == 2;
@@ -98,11 +102,11 @@ public sealed partial class MainViewModel
     {
         var load = ++_resultsLoad;
         _resultRace = null; _resultFingerprint = null;
-        _resultsRuleProfile = null; ResultsRuleSource = ""; ResultsRuleValues = "";
+        _resultsRuleProfile = null; ResultsRuleSource = ""; ResultsRuleFigures = null;
         _reviewedPenalty = null;
         ResultRows.Clear(); ResultBestClassified.Clear(); ResultBestStarted.Clear(); ResultApprovals.Clear();
         ResultTopTen.Clear();
-        ResultsPenaltySummary = string.Empty;
+        ResultsPenaltyFigures = null;
         ResultsStatistics = string.Empty;
         var competition = ResultsCompetition;
         if (competition is null)
@@ -179,8 +183,8 @@ public sealed partial class MainViewModel
                     competition.Values.Discipline, _resultRace.FirstList.Plan.Gender);
                 var profile = _resultsRuleProfile;
                 ResultsRuleSource = $"FIS list {pointsSource.Code} · valid {pointsSource.ValidFrom:yyyy-MM-dd}–{pointsSource.ValidTo:yyyy-MM-dd} · {profile.Category} · race level {profile.RaceLevel} · {_resultRace.FirstList.Plan.Gender} · FIS Points Rules 2026/27 §§4.4–4.5, 4.9";
-                ResultsRuleValues = string.Create(CultureInfo.InvariantCulture,
-                    $"F {profile.FValue}   Points cap {profile.MaximumPoints:0.00}   Correction (Z) {profile.Correction:0.00}   Category adder {profile.Adder:0.00}   Minimum {profile.Minimum:0.00}   Maximum {profile.Maximum:0.00}");
+                ResultsRuleFigures = new(Points(profile.FValue, "0"), Points(profile.MaximumPoints), Points(profile.Correction),
+                    Points(profile.Adder), Points(profile.Minimum), Points(profile.Maximum));
                 ReviewPenalty(CalculateCurrentPenalty());
             }
             catch (DomainValidationException ex)
@@ -237,12 +241,13 @@ public sealed partial class MainViewModel
                 Note = selected is null ? "" : "Best 5" + (selected.SubstitutedMaximum ? " · list cap" : "")
                     + (selected.RacePoints < penalty.RacePoints[row.Bib] ? " · race cap" : "") });
         }
-        ResultsPenaltySummary = string.Create(CultureInfo.InvariantCulture,
-            $"A · best 5 in top 10: {penalty.SumA:0.00}    B · best 5 starters: {penalty.SumB:0.00}    C · corresponding capped race points: {penalty.SumC:0.00}\nCalculated penalty (A + B − C) / 10 = {penalty.Calculated:0.00}\nCorrection (Z): {penalty.Rules.Correction:0.00}    Category adder: {penalty.Rules.Adder:0.00}    Minimum: {penalty.Rules.Minimum:0.00}    Maximum: {penalty.Rules.Maximum:0.00}\nApplied penalty: {penalty.Applied:0.00}")
-            + (penalty.DoubleMinimum ? string.Create(CultureInfo.InvariantCulture,
-                $" · effective minimum {Math.Max(penalty.Rules.Minimum, 2m * penalty.MaximumPoints):0.00} (double points cap)") : "");
+        ResultsPenaltyFigures = new(Points(penalty.SumA), Points(penalty.SumB), Points(penalty.SumC),
+            Points(penalty.Calculated), Points(penalty.Applied),
+            penalty.DoubleMinimum ? $"Effective minimum {Points(Math.Max(penalty.Rules.Minimum, 2m * penalty.MaximumPoints))} (double points cap)." : "");
         OnPropertyChanged(nameof(ResultsReady));
     }
+
+    private static string Points(decimal value, string format = "0.00") => value.ToString(format, CultureInfo.InvariantCulture);
 
     private static PenaltyReviewRow PenaltyRow(PenaltySelection item) => new(item.Competitor.Bib,
         item.Competitor.Entry.Entrant.Athlete.Surname + " " + item.Competitor.Entry.Entrant.Athlete.FirstName,

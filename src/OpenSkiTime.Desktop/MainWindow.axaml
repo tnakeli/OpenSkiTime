@@ -562,7 +562,7 @@
             </StackPanel>
           </Expander>
         </StackPanel>
-        <Border Classes="workSurface" Padding="{DynamicResource SectionInset}" IsVisible="{Binding IsSettingsSection}"><local:SettingsView /></Border>
+        <local:SettingsView IsVisible="{Binding IsSettingsSection}" />
       </StackPanel>
     </ScrollViewer>
     <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />

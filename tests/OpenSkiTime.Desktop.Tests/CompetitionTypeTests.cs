@@ -151,7 +151,7 @@ public partial class DesktopWorkflowTests
             await vm.ShowResultsCommand.ExecuteAsync(null); await vm.LoadResultsCommand.ExecuteAsync(null);
             Assert.False(vm.ResultsIsFis);
             var results = window.GetVisualDescendants().OfType<ResultsView>().Single();
-            Assert.False(results.FindControl<Border>("ResultsFisInformation")!.IsVisible);
+            Assert.False(results.FindControl<TabControl>("ResultsTabs")!.IsVisible);
             window.Close();
         }
         finally { Directory.Delete(folder, true); }

@@ -92,6 +92,8 @@ public partial class DesktopWorkflowTests
             vm.ResultsCategory = "FIS";
             var window = new Window { Width = 1366, Height = 900, Content = new ResultsView { DataContext = vm } };
             window.Show(); window.UpdateLayout();
+            window.GetVisualDescendants().OfType<TabControl>().Single(x => x.Name == "ResultsTabs").SelectedIndex = 2;
+            window.UpdateLayout();
             var jury = window.GetVisualDescendants().OfType<DataGrid>().Single(x => ReferenceEquals(x.ItemsSource, vm.ResultsJury));
             jury.SelectedIndex = 0; jury.CurrentColumn = jury.Columns.Single(x => Equals(x.Header, "SURNAME"));
             Assert.True(jury.BeginEdit()); window.UpdateLayout();
@@ -148,10 +150,8 @@ public partial class DesktopWorkflowTests
         vm.SelectedWeatherHour = new(new DateTime(2026, 10, 2, 10, 0, 0), "Europe/Helsinki", 3.5m, 0, "Synthetic source", DateTimeOffset.UnixEpoch);
         window.Content = new RaceInformationView { DataContext = vm };
         window.Show(); window.UpdateLayout();
-        window.GetVisualDescendants().OfType<Expander>().Single(x => Equals(x.Header, "Browse weather forecast (optional)")).IsExpanded = true;
-        window.UpdateLayout();
-        var button = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Apply forecast to Run 1"));
-        Assert.NotNull(button.Command); Assert.Same(run, button.CommandParameter);
+        var button = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Apply to Run 1"));
+        Assert.NotNull(button.Command); Assert.Same(run, button.CommandParameter); Assert.True(button.IsEnabled);
         button.Command.Execute(button.CommandParameter);
         Assert.Equal("Clear", run.Conditions); Assert.Contains("3.5 °C", run.WeatherSource, StringComparison.Ordinal);
         Assert.Equal("", run.StartTemperature); Assert.Equal("", run.FinishTemperature);

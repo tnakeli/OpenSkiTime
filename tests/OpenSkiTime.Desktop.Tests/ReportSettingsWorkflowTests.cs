@@ -47,6 +47,56 @@ public partial class DesktopWorkflowTests
         editor.Load(device); editor.Brand = "Other maker";
         Assert.Null(editor.Values.ValidUntilSeason);
     }
+    [AvaloniaFact]
+    public void EquipmentRowsOfferBrandsOfTheirTypeAndThenOnlyThatBrandsModels()
+    {
+        FisTimingDevice Device(int id, string model, string code, string company, int category, bool valid = true)
+            => new(id, model, code, 2031, id, company, category, category switch { 1 => "Timer", 10 => "Start gate", 15 => "Start door", _ => "Photo cell" }, null, null, valid);
+        var retrieved = new DateTimeOffset(2026, 10, 5, 15, 21, 0, TimeSpan.Zero);
+        var catalogue = new[] { Device(1, "Synthetic Timer 2", "SYA.002", "SYNTH A", 1), Device(2, "Synthetic Timer 1", "SYA.001", "SYNTH A", 1),
+            Device(3, "Other Timer", "SYB.001", "SYNTH B", 1), Device(4, "Synthetic Gate", "SYA.G1", "SYNTH A", 10),
+            Device(5, "Synthetic Door", "SYC.D1", "SYNTH C", 15), Device(6, "Synthetic Cell", "SYA.C1", "SYNTH A", 20),
+            Device(7, "Synthetic Timer 0", "SYA.000", "SYNTH A", 1, valid: false) };
+        var timer = new TimingReportDeviceEditor("Timer A", 1);
+        var gate = new TimingReportDeviceEditor("Start gate", 10, 15);
+        timer.SetCatalogue(catalogue, retrieved); gate.SetCatalogue(catalogue, retrieved);
+        Assert.Equal(["SYNTH A", "SYNTH B"], timer.BrandChoices);
+        Assert.Equal(["SYNTH A", "SYNTH C"], gate.BrandChoices);
+
+        // The real Settings view, on its Timing report tab, with only the equipment rows bound.
+        var window = new Window { Width = 1200, Height = 800, Content = new SettingsView { DataContext = new { ReportDefaultDevices = new[] { timer }, SelectedSettingsTab = 2 } } };
+        window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+        var grid = window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "ReportEquipmentDefaultsGrid");
+        try
+        {
+            var brandBox = grid.GetVisualDescendants().OfType<ComboBox>().Single(x => x.Name == "ReportEquipmentBrandBox");
+            var modelBox = grid.GetVisualDescendants().OfType<ComboBox>().Single(x => x.Name == "ReportEquipmentModelBox");
+            timer.Serial = "SERIAL-1";
+            brandBox.SelectedItem = "SYNTH A"; Dispatcher.UIThread.RunJobs();
+            Assert.Equal("SYNTH A", timer.Brand);
+            // Only the chosen brand's timers, valid models first.
+            Assert.Equal(["Synthetic Timer 1", "Synthetic Timer 2", "Synthetic Timer 0"], modelBox.Items.Cast<TimingDeviceModelChoice>().Select(x => x.Device.Name));
+            modelBox.SelectedItem = timer.ModelChoices[1]; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            Assert.Equal(new TimingReportDevice("SYNTH A", "Synthetic Timer 2", "SERIAL-1", "SYA.002") { ValidUntilSeason = 2031, HomologationRetrievedAt = retrieved }, timer.Values);
+            Assert.Equal("Synthetic Timer 2", modelBox.Text);
+            Assert.Equal("2031", timer.Validity);
+
+            // Typing a model by hand keeps it as manual, unverified equipment.
+            modelBox.Text = "Hand-entered timer"; Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Hand-entered timer", timer.Model);
+            Assert.Equal("Manual / unverified", timer.Validity);
+        }
+        finally { window.Close(); }
+
+        // A brand that is only part of a catalogue maker's name still narrows the models; no brand lists them all.
+        timer.Brand = "synth b";
+        Assert.Equal(["Other Timer"], timer.ModelChoices.Select(x => x.Device.Name));
+        timer.Brand = "";
+        Assert.Equal(4, timer.ModelChoices.Count);
+        gate.Brand = "SYNTH C";
+        Assert.Equal(["Synthetic Door"], gate.ModelChoices.Select(x => x.Device.Name));
+    }
+
     [Theory]
     [InlineData("Timy 2/3 · USB", "Timy USB A", "Timy 2/3 · USB", "Timy USB B", false)]
     [InlineData("Timy 2/3 · USB", "Timy USB A", "Timy 2/3 · USB", "Timy USB A", true)]
@@ -107,9 +157,8 @@ public partial class DesktopWorkflowTests
             Assert.Equal("synthetic-shared-key", credentials.Read()); Assert.Equal("", vm.FisApiKeyInput);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBox>(), x => x.PlaceholderText?.Contains("personal access token", StringComparison.OrdinalIgnoreCase) == true);
             await vm.RefreshTimingDeviceHomologationsCommand.ExecuteAsync(null);
-            vm.SelectedTimingDeviceHomologation = Assert.Single(vm.TimingDeviceHomologations);
-            vm.SelectedReportDefaultDevice = vm.ReportDefaultDevices[0];
-            vm.ApplyTimingDeviceHomologationCommand.Execute(null);
+            vm.ReportDefaultDevices[0].Brand = "SYNTHETIC";
+            vm.ReportDefaultDevices[0].SelectedModel = Assert.Single(vm.ReportDefaultDevices[0].ModelChoices);
             Assert.Equal("SYN.001T.26", vm.ReportDefaultDevices[0].Homologation);
             tabs.SelectedIndex = 2; window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             Assert.Contains(window.GetVisualDescendants().OfType<DataGrid>(), x => x.Name == "ReportEquipmentDefaultsGrid" && x.IsEffectivelyVisible);

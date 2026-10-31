@@ -1,123 +1,220 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:local="clr-namespace:OpenSkiTime.Desktop"
  x:Class="OpenSkiTime.Desktop.SettingsView" x:CompileBindings="False">
- <StackPanel Spacing="12">
+ <!-- A form view: one page column, so the title, tabs, cards and action bars share both edges. -->
+ <local:PageColumn>
+ <StackPanel Spacing="8">
   <TextBlock Text="Settings" Classes="sectionTitle"/>
-  <TabControl Name="SettingsTabs" SelectedIndex="{Binding SelectedSettingsTab}">
+  <TabControl Name="SettingsTabs" Classes="pageTabs" SelectedIndex="{Binding SelectedSettingsTab}">
    <TabItem Header="FIS">
-    <StackPanel Spacing="12" Margin="0,12,0,0">
-     <TextBlock Text="FIS API key" FontWeight="SemiBold"/>
-     <TextBlock Text="One API key for FIS data, equipment homologations, results and timing reports." Classes="supportingText"/>
-     <Grid ColumnDefinitions="340,8,Auto,8,Auto" HorizontalAlignment="Left">
-      <TextBox Name="FisApiKeyInputBox" PasswordChar="•" Text="{Binding FisApiKeyInput}" PlaceholderText="{Binding FisApiKeyWatermark}" MaxLength="1024"/>
-      <Button Grid.Column="2" Content="Save key" Command="{Binding SaveFisApiKeyCommand}" Classes="primaryAction"/>
-      <Button Grid.Column="4" Content="Remove key" Command="{Binding RemoveFisApiKeyCommand}" Classes="secondaryAction"/>
-     </Grid>
-     <TextBlock Text="{Binding FisApiKeyStatus}" Classes="supportingText"/>
-     <TextBlock Text="Create the key in FIS Member Section → API Access. XML test uploads require competition.files.write and competition.files.read permissions." TextWrapping="Wrap" Classes="supportingText"/>
-     <TextBlock Text="XML transmission remains in test mode. The key stays in this Windows account's credential store." TextWrapping="Wrap" Classes="supportingText"/>
-     <Separator/>
-     <TextBlock Text="Equipment homologations" FontWeight="SemiBold"/>
-     <Button Content="Refresh homologations" Command="{Binding RefreshTimingDeviceHomologationsCommand}" IsEnabled="{Binding !IsTimingDeviceLookupBusy}" Classes="secondaryAction" HorizontalAlignment="Left"/>
-     <TextBlock Text="{Binding TimingDeviceCatalogueStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+    <StackPanel Classes="tabPage">
+     <Border Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="FIS API key" Classes="cardTitle"/></Grid>
+       <TextBlock Text="Create it in FIS Member Section → API Access."
+                  TextWrapping="Wrap" Classes="supportingText"/>
+       <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+         <TextBlock Text="API KEY" Classes="fieldLabel"/>
+         <TextBox Name="FisApiKeyInputBox" PasswordChar="•" Text="{Binding FisApiKeyInput}" PlaceholderText="{Binding FisApiKeyWatermark}" MaxLength="1024"/>
+        </StackPanel>
+        <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+         <Button Content="Save key" Command="{Binding SaveFisApiKeyCommand}" Classes="primaryAction"/>
+         <Button Content="Remove key" Command="{Binding RemoveFisApiKeyCommand}" Classes="dangerAction"/>
+        </StackPanel>
+       </local:FormRow>
+       <TextBlock Text="{Binding FisApiKeyStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+       <TextBlock Text="The key stays in this Windows account's credential store." TextWrapping="Wrap" Classes="supportingText"/>
+      </StackPanel>
+     </Border>
     </StackPanel>
    </TabItem>
    <TabItem Header="Timing devices">
-    <StackPanel Spacing="16" Margin="0,12,0,0">
-     <local:TimingSettingsView/>
-    </StackPanel>
+    <local:TimingSettingsView/>
    </TabItem>
    <TabItem Header="Timing report">
-    <StackPanel Spacing="14" Margin="0,12,0,0">
-     <TextBlock Text="Report equipment defaults" FontWeight="SemiBold"/>
-     <DataGrid Name="ReportEquipmentDefaultsGrid" ItemsSource="{Binding ReportDefaultDevices}" SelectedItem="{Binding SelectedReportDefaultDevice}"
-       AutoGenerateColumns="False" CanUserSortColumns="False" CanUserReorderColumns="False" MinHeight="240">
-      <DataGrid.Columns>
-       <DataGridTextColumn Header="EQUIPMENT" Binding="{Binding Label}" IsReadOnly="True" Width="150"/>
-       <DataGridTextColumn Header="BRAND" Binding="{Binding Brand}" Width="*"/>
-       <DataGridTextColumn Header="MODEL" Binding="{Binding Model}" Width="*"/>
-       <DataGridTextColumn Header="SERIAL" Binding="{Binding Serial}" Width="*"/>
-       <DataGridTextColumn Header="HOMOLOGATION" Binding="{Binding Homologation}" Width="*"/>
-       <DataGridTextColumn Header="VALID THROUGH" Binding="{Binding Validity}" IsReadOnly="True" Width="145"/>
-      </DataGrid.Columns>
-     </DataGrid>
-     <Grid ColumnDefinitions="*,8,Auto">
-      <ComboBox ItemsSource="{Binding TimingDeviceHomologations}" SelectedItem="{Binding SelectedTimingDeviceHomologation}" PlaceholderText="Cached FIS homologations" HorizontalAlignment="Stretch">
-       <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Display}"/></DataTemplate></ComboBox.ItemTemplate>
-      </ComboBox>
-      <Button Grid.Column="2" Content="Apply to selected equipment" Command="{Binding ApplyTimingDeviceHomologationCommand}" Classes="secondaryAction"/>
-     </Grid>
-     <TextBlock Text="{Binding TimingDeviceCatalogueStatus}" TextWrapping="Wrap" Classes="supportingText"/>
-     <Separator/>
-     <TextBlock Text="Chief of timing and calculations" FontWeight="SemiBold"/>
-     <local:TimingReportPersonView DataContext="{Binding ReportDefaultChief}"/>
-     <Separator/>
-     <TextBlock Text="Timekeeper" FontWeight="SemiBold"/>
-     <local:TimingReportPersonView DataContext="{Binding ReportDefaultTimekeeper}"/>
-     <Grid ColumnDefinitions="*,8,*,8,*">
-      <StackPanel Classes="field"><TextBlock Text="CONNECTION A" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultConnectionA}" HorizontalAlignment="Stretch"/></StackPanel>
-      <StackPanel Grid.Column="2" Classes="field"><TextBlock Text="CONNECTION B" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultConnectionB}" HorizontalAlignment="Stretch"/></StackPanel>
-      <StackPanel Grid.Column="4" Classes="field"><TextBlock Text="VOICE" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultVoice}" HorizontalAlignment="Stretch"/></StackPanel>
-     </Grid>
-     <TextBlock Text="Results software: OpenSkiTime. The version is filled automatically." Classes="supportingText"/>
-     <Button Content="Save report defaults" Command="{Binding SaveTimingReportDefaultsCommand}" Classes="primaryAction" HorizontalAlignment="Left"/>
-     <TextBlock Text="{Binding ReportDefaultsStatus}" TextWrapping="Wrap" Classes="supportingText"/>
-    </StackPanel>
+    <!-- Report defaults: equipment across the page, the two people side by side, then connections and the action bar. -->
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="12">
+     <Border Grid.ColumnSpan="2" Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader" ColumnDefinitions="*,Auto">
+        <TextBlock Text="Report equipment" Classes="cardTitle"/>
+        <Button Grid.Column="1" Content="Refresh homologations" Command="{Binding RefreshTimingDeviceHomologationsCommand}" IsEnabled="{Binding !IsTimingDeviceLookupBusy}"
+                Classes="secondaryAction" ToolTip.Tip="Download the FIS equipment homologation catalogue for the brand and model lists. Uses the FIS API key."/>
+       </Grid>
+       <!-- Columns size to their content so no label or value is cut; the editable columns keep room to type. -->
+       <DataGrid Name="ReportEquipmentDefaultsGrid" Classes="raceGrid" ItemsSource="{Binding ReportDefaultDevices}" SelectedItem="{Binding SelectedReportDefaultDevice}"
+         AutoGenerateColumns="False" CanUserSortColumns="False" CanUserReorderColumns="False" SelectionMode="Single">
+        <DataGrid.Columns>
+         <DataGridTextColumn Header="EQUIPMENT" Binding="{Binding Label}" IsReadOnly="True" Width="Auto"/>
+         <!-- Brand, then model: the brand list holds the catalogue makers of the row's equipment type, the model list
+              only that maker's models of the type. Both stay free text for equipment outside the catalogue. -->
+         <DataGridTemplateColumn Header="BRAND" Width="Auto" MinWidth="170">
+          <DataGridTemplateColumn.CellTemplate>
+           <DataTemplate>
+            <ComboBox Name="ReportEquipmentBrandBox" IsEditable="True" ItemsSource="{Binding BrandChoices}" Text="{Binding Brand, Mode=TwoWay}"
+                      MaxDropDownHeight="320" Margin="4,2" ToolTip.Tip="Equipment maker. The list shows makers of this equipment type in the cached FIS catalogue."/>
+           </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+         </DataGridTemplateColumn>
+         <DataGridTemplateColumn Header="MODEL" Width="Auto" MinWidth="200">
+          <DataGridTemplateColumn.CellTemplate>
+           <DataTemplate>
+            <ComboBox Name="ReportEquipmentModelBox" IsEditable="True" ItemsSource="{Binding ModelChoices}" Text="{Binding Model, Mode=TwoWay}"
+                      SelectedItem="{Binding SelectedModel, Mode=TwoWay}" MaxDropDownHeight="320" Margin="4,2"
+                      ToolTip.Tip="Choosing a catalogue model fills the homologation and its validity. The serial number is kept.">
+             <ComboBox.ItemTemplate>
+              <DataTemplate>
+               <StackPanel>
+                <TextBlock Text="{Binding Device.Name}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Details}" FontSize="{DynamicResource MetaSize}" Foreground="{DynamicResource MutedTextBrush}"/>
+               </StackPanel>
+              </DataTemplate>
+             </ComboBox.ItemTemplate>
+            </ComboBox>
+           </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+         </DataGridTemplateColumn>
+         <DataGridTextColumn Header="SERIAL" Binding="{Binding Serial}" Width="Auto" MinWidth="120"/>
+         <DataGridTextColumn Header="HOMOLOGATION" Binding="{Binding Homologation}" Width="Auto" MinWidth="140"/>
+         <DataGridTextColumn Header="VALID THROUGH" Binding="{Binding Validity}" IsReadOnly="True" Width="Auto"/>
+        </DataGrid.Columns>
+       </DataGrid>
+       <TextBlock Text="{Binding TimingDeviceCatalogueStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+      </StackPanel>
+     </Border>
+     <Border Grid.Row="1" Grid.Column="0" Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="Chief of timing and calculations" Classes="cardTitle"/></Grid>
+       <local:TimingReportPersonView DataContext="{Binding ReportDefaultChief}"/>
+      </StackPanel>
+     </Border>
+     <Border Grid.Row="1" Grid.Column="1" Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="Timekeeper" Classes="cardTitle"/></Grid>
+       <local:TimingReportPersonView DataContext="{Binding ReportDefaultTimekeeper}"/>
+      </StackPanel>
+     </Border>
+     <Border Grid.Row="2" Grid.ColumnSpan="2" Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="Connections" Classes="cardTitle"/></Grid>
+       <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="CONNECTION A" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultConnectionA}"/></StackPanel>
+        <StackPanel Grid.Column="2" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="CONNECTION B" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultConnectionB}"/></StackPanel>
+        <StackPanel Grid.Column="4" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="VOICE" Classes="fieldLabel"/><ComboBox ItemsSource="{Binding ReportConnectionModes}" SelectedItem="{Binding ReportDefaultVoice}"/></StackPanel>
+       </local:FormRow>
+       <TextBlock Text="Results software: OpenSkiTime. The version is filled automatically." Classes="supportingText"/>
+      </StackPanel>
+     </Border>
+     <Border Grid.Row="3" Grid.ColumnSpan="2" Classes="card" Padding="12,10">
+      <Grid ColumnDefinitions="*,12,Auto">
+       <TextBlock Text="{Binding ReportDefaultsStatus}" TextWrapping="Wrap" Classes="supportingText" VerticalAlignment="Center"/>
+       <Button Grid.Column="2" Content="Save report defaults" Command="{Binding SaveTimingReportDefaultsCommand}" Classes="primaryAction"/>
+      </Grid>
+     </Border>
+    </Grid>
    </TabItem>
    <TabItem Header="Live timing">
-    <StackPanel Spacing="12" Margin="0,12,0,0">
-     <TextBlock Text="Cloud publisher key" FontWeight="SemiBold"/>
-     <TextBlock Text="A Cloud live timing server accepts new race sessions only from publishers with a key issued by its operator. Local publishing needs no key." TextWrapping="Wrap" Classes="supportingText"/>
-     <StackPanel Classes="field" HorizontalAlignment="Left" Width="460">
-      <TextBlock Text="CLOUD SERVER" Classes="fieldLabel"/>
-      <TextBox Name="LiveCloudEndpointBox" Text="{Binding LiveCloudEndpoint}" MaxLength="512"/>
-     </StackPanel>
-     <Grid ColumnDefinitions="340,8,Auto,8,Auto" HorizontalAlignment="Left">
-      <TextBox Name="LivePublisherKeyInputBox" PasswordChar="•" Text="{Binding LivePublisherKeyInput}" PlaceholderText="Publisher key" MaxLength="512"/>
-      <Button Grid.Column="2" Content="Save key" Command="{Binding SaveLivePublisherKeyCommand}" Classes="primaryAction"/>
-      <Button Grid.Column="4" Content="Remove key" Command="{Binding RemoveLivePublisherKeyCommand}" Classes="secondaryAction"/>
-     </Grid>
-     <TextBlock Name="LivePublisherKeyStatusText" Text="{Binding LivePublisherKeyStatus}" Classes="supportingText"/>
-     <TextBlock Text="The key is saved per server in this Windows account's credential store, never in the event file. To publish on live.openskiti.me, contact the OpenSkiTime maintainer for a key. You can also run your own live timing server." TextWrapping="Wrap" Classes="supportingText"/>
-     <Separator/>
-     <TextBlock Text="Race radio provider keys" FontWeight="SemiBold"/>
-     <TextBlock Text="The optional race radio in the live timing panel uses your own accounts at a language model and a speech provider. Each key is saved in this Windows account's credential store, never in the event file. Spending is limited per competition in the panel." TextWrapping="Wrap" Classes="supportingText"/>
-     <Grid ColumnDefinitions="240,8,300,8,Auto,8,Auto" HorizontalAlignment="Left">
-      <ComboBox Name="LiveRadioKeyProviderBox" ItemsSource="{Binding LiveRadioKeyChoices}" SelectedItem="{Binding LiveRadioKeyProvider}" HorizontalAlignment="Stretch"/>
-      <TextBox Grid.Column="2" Name="LiveRadioKeyInputBox" PasswordChar="•" Text="{Binding LiveRadioKeyInput}" PlaceholderText="API key" MaxLength="512"/>
-      <Button Grid.Column="4" Content="Save radio key" Command="{Binding SaveLiveRadioKeyCommand}" Classes="primaryAction"/>
-      <Button Grid.Column="6" Content="Remove radio key" Command="{Binding RemoveLiveRadioKeyCommand}" Classes="secondaryAction"/>
-     </Grid>
-     <TextBlock Name="LiveRadioKeyStatusText" Text="{Binding LiveRadioKeyStatus}" Classes="supportingText"/>
+    <StackPanel Classes="tabPage">
+     <Border Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="Cloud publisher key" Classes="cardTitle"/></Grid>
+       <TextBlock Text="A Cloud live timing server accepts new race sessions only from publishers with a key issued by its operator. Local publishing needs no key." TextWrapping="Wrap" Classes="supportingText"/>
+       <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+         <TextBlock Text="CLOUD SERVER" Classes="fieldLabel"/>
+         <TextBox Name="LiveCloudEndpointBox" Text="{Binding LiveCloudEndpoint}" MaxLength="512"/>
+        </StackPanel>
+       </local:FormRow>
+       <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+         <TextBlock Text="PUBLISHER KEY" Classes="fieldLabel"/>
+         <TextBox Name="LivePublisherKeyInputBox" PasswordChar="•" Text="{Binding LivePublisherKeyInput}" MaxLength="512"/>
+        </StackPanel>
+        <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+         <Button Content="Save key" Command="{Binding SaveLivePublisherKeyCommand}" Classes="primaryAction"/>
+         <Button Content="Remove key" Command="{Binding RemoveLivePublisherKeyCommand}" Classes="dangerAction"/>
+        </StackPanel>
+       </local:FormRow>
+       <TextBlock Name="LivePublisherKeyStatusText" Text="{Binding LivePublisherKeyStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+       <TextBlock Text="The key is saved per server in this Windows account's credential store, never in the event file. To publish on live.openskiti.me, contact the OpenSkiTime maintainer for a key. You can also run your own live timing server." TextWrapping="Wrap" Classes="supportingText"/>
+      </StackPanel>
+     </Border>
+     <Border Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="Race radio provider keys" Classes="cardTitle"/></Grid>
+       <TextBlock Text="The optional race radio in the live timing panel uses your own accounts at a language model and a speech provider. Each key is saved in this Windows account's credential store, never in the event file. Spending is limited per competition in the panel." TextWrapping="Wrap" Classes="supportingText"/>
+       <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Classes="field">
+         <TextBlock Text="PROVIDER" Classes="fieldLabel"/>
+         <ComboBox Name="LiveRadioKeyProviderBox" ItemsSource="{Binding LiveRadioKeyChoices}" SelectedItem="{Binding LiveRadioKeyProvider}"/>
+        </StackPanel>
+        <StackPanel Grid.Column="3" Grid.ColumnSpan="3" Classes="field">
+         <TextBlock Text="API KEY" Classes="fieldLabel"/>
+         <TextBox Name="LiveRadioKeyInputBox" PasswordChar="•" Text="{Binding LiveRadioKeyInput}" MaxLength="512"/>
+        </StackPanel>
+        <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+         <Button Content="Save radio key" Command="{Binding SaveLiveRadioKeyCommand}" Classes="primaryAction"/>
+         <Button Content="Remove radio key" Command="{Binding RemoveLiveRadioKeyCommand}" Classes="dangerAction"/>
+        </StackPanel>
+       </local:FormRow>
+       <TextBlock Name="LiveRadioKeyStatusText" Text="{Binding LiveRadioKeyStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+      </StackPanel>
+     </Border>
     </StackPanel>
    </TabItem>
    <TabItem Header="About">
-    <StackPanel Name="AboutPanel" Spacing="10" Margin="0,12,0,0">
-     <TextBlock Name="AboutProductText" Text="{Binding ProductInfoName}" FontSize="18" FontWeight="SemiBold"/>
-     <TextBlock Name="AboutVersionText" Text="{Binding ProductInfoVersionLine}" Classes="supportingText"/>
-     <TextBlock Text="Open-source alpine ski race timing. Local race operation works offline; online integrations are optional." TextWrapping="Wrap"/>
-     <Separator/>
-     <TextBlock Text="Open source and licenses" FontWeight="SemiBold"/>
-     <TextBlock Text="OpenSkiTime is released under the MIT license. Third-party components keep their own licenses. FIS logos and forms are FIS trademarks and artwork; their use does not imply FIS certification or endorsement." TextWrapping="Wrap" Classes="supportingText"/>
-     <WrapPanel>
-      <HyperlinkButton Content="Source code" NavigateUri="https://github.com/tnakeli/OpenSkiTime"/>
-      <HyperlinkButton Content="MIT license" NavigateUri="https://github.com/tnakeli/OpenSkiTime/blob/master/LICENSE"/>
-      <HyperlinkButton Content="Third-party notices" NavigateUri="https://github.com/tnakeli/OpenSkiTime/blob/master/THIRD-PARTY-NOTICES.md"/>
-     </WrapPanel>
-     <TextBlock Text="Support and security" FontWeight="SemiBold"/>
-     <TextBlock Text="Report bugs and feature requests as GitHub issues. Report security vulnerabilities privately through GitHub security advisories, not as public issues. Never attach credentials or personal race data." TextWrapping="Wrap" Classes="supportingText"/>
-     <WrapPanel>
-      <HyperlinkButton Content="Report an issue" NavigateUri="https://github.com/tnakeli/OpenSkiTime/issues"/>
-      <HyperlinkButton Content="Report a vulnerability" NavigateUri="https://github.com/tnakeli/OpenSkiTime/security/advisories/new"/>
-     </WrapPanel>
-     <TextBlock Text="Privacy" FontWeight="SemiBold"/>
-     <TextBlock Text="Event series, timing data and audit history stay in your local .ost files. Data leaves this computer only through integrations you start, such as FIS services or live timing." TextWrapping="Wrap" Classes="supportingText"/>
-     <WrapPanel>
-      <HyperlinkButton Content="Privacy &amp; your race data" NavigateUri="https://openskiti.me/privacy/"/>
-      <HyperlinkButton Content="openskiti.me" NavigateUri="https://openskiti.me/"/>
-     </WrapPanel>
+    <StackPanel Name="AboutPanel" Classes="tabPage">
+     <Border Classes="card">
+      <StackPanel Spacing="6">
+       <TextBlock Name="AboutProductText" Text="{Binding ProductInfoName}" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold"/>
+       <TextBlock Name="AboutVersionText" Text="{Binding ProductInfoVersionLine}" TextWrapping="Wrap" Classes="supportingText"/>
+       <TextBlock Text="Open-source alpine ski race timing. Local race operation works offline; online integrations are optional." TextWrapping="Wrap"/>
+      </StackPanel>
+     </Border>
+     <!-- Three equally tall cards; their links dock to the bottom so they line up across the row. -->
+     <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+      <Border Grid.Column="0" Classes="card">
+       <DockPanel>
+        <WrapPanel DockPanel.Dock="Bottom" Classes="links" Margin="0,6,0,0">
+         <HyperlinkButton Content="Source code" NavigateUri="https://github.com/tnakeli/OpenSkiTime"/>
+         <HyperlinkButton Content="MIT license" NavigateUri="https://github.com/tnakeli/OpenSkiTime/blob/master/LICENSE"/>
+         <HyperlinkButton Content="Third-party notices" NavigateUri="https://github.com/tnakeli/OpenSkiTime/blob/master/THIRD-PARTY-NOTICES.md"/>
+        </WrapPanel>
+        <StackPanel Spacing="{DynamicResource FormGap}">
+         <Grid Classes="cardHeader"><TextBlock Text="Open source and licenses" Classes="cardTitle"/></Grid>
+         <TextBlock Text="OpenSkiTime is released under the MIT license. Third-party components keep their own licenses. FIS logos and forms are FIS trademarks and artwork; their use does not imply FIS certification or endorsement." TextWrapping="Wrap" Classes="supportingText"/>
+        </StackPanel>
+       </DockPanel>
+      </Border>
+      <Border Grid.Column="1" Classes="card">
+       <DockPanel>
+        <WrapPanel DockPanel.Dock="Bottom" Classes="links" Margin="0,6,0,0">
+         <HyperlinkButton Content="Report an issue" NavigateUri="https://github.com/tnakeli/OpenSkiTime/issues"/>
+         <HyperlinkButton Content="Report a vulnerability" NavigateUri="https://github.com/tnakeli/OpenSkiTime/security/advisories/new"/>
+        </WrapPanel>
+        <StackPanel Spacing="{DynamicResource FormGap}">
+         <Grid Classes="cardHeader"><TextBlock Text="Support and security" Classes="cardTitle"/></Grid>
+         <TextBlock Text="Report bugs and feature requests as GitHub issues. Report security vulnerabilities privately through GitHub security advisories, not as public issues. Never attach credentials or personal race data." TextWrapping="Wrap" Classes="supportingText"/>
+        </StackPanel>
+       </DockPanel>
+      </Border>
+      <Border Grid.Column="2" Classes="card">
+       <DockPanel>
+        <WrapPanel DockPanel.Dock="Bottom" Classes="links" Margin="0,6,0,0">
+         <HyperlinkButton Content="Privacy &amp; your race data" NavigateUri="https://openskiti.me/privacy/"/>
+         <HyperlinkButton Content="openskiti.me" NavigateUri="https://openskiti.me/"/>
+        </WrapPanel>
+        <StackPanel Spacing="{DynamicResource FormGap}">
+         <Grid Classes="cardHeader"><TextBlock Text="Privacy" Classes="cardTitle"/></Grid>
+         <TextBlock Text="Event series, timing data and audit history stay in your local .ost files. Data leaves this computer only through integrations you start, such as FIS services or live timing." TextWrapping="Wrap" Classes="supportingText"/>
+        </StackPanel>
+       </DockPanel>
+      </Border>
+     </Grid>
     </StackPanel>
    </TabItem>
   </TabControl>
  </StackPanel>
+ </local:PageColumn>
 </UserControl>

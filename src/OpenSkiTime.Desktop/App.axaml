@@ -111,6 +111,26 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
     </Style>
+    <!-- Figure: a read-only calculated value (penalty rule values and sums) in a tile shaped like a stat field. The
+         result of a calculation (applied penalty) uses the accent tint. -->
+    <Style Selector="Border.figure">
+      <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+      <Setter Property="Padding" Value="8,3,6,3" />
+    </Style>
+    <Style Selector="Border.figure.result">
+      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.figureValue">
+      <Setter Property="FontSize" Value="{DynamicResource SectionSize}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="0,3,0,0" />
+    </Style>
     <Style Selector="TextBlock.unit">
       <Setter Property="FontSize" Value="{DynamicResource MetaSize}" />
       <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
@@ -126,6 +146,13 @@
     <Style Selector="Border.infoNote">
       <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+    <!-- Warning note (migrated settings to review): pale warning with a strong warning edge. -->
+    <Style Selector="Border.warningNote">
+      <Setter Property="Background" Value="{DynamicResource WarningTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
       <Setter Property="BorderThickness" Value="3,0,0,0" />
       <Setter Property="Padding" Value="10,8" />
     </Style>
@@ -483,6 +510,22 @@
     </Style>
     <Style Selector="TabItem:selected /template/ Border#PART_SelectedPipe">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <!-- Page tabs (Settings): the first tab label starts on the page edge, so tabs and cards share the left edge. -->
+    <Style Selector="TabControl.pageTabs">
+      <Setter Property="Padding" Value="0,12,0,0" />
+    </Style>
+    <Style Selector="TabControl.pageTabs > TabItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,24,0" />
+    </Style>
+    <Style Selector="StackPanel.tabPage">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+    <!-- A row of links under a card's text: the first link starts on the text edge. -->
+    <Style Selector="WrapPanel.links > HyperlinkButton">
+      <Setter Property="Padding" Value="0,4" />
+      <Setter Property="Margin" Value="0,0,16,0" />
     </Style>
     <!-- Row splitters between stacked panes: a visible grip so operators can find and resize them. -->
     <Style Selector="GridSplitter.paneSplitter">
