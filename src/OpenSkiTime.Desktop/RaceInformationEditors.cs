@@ -107,7 +107,13 @@ public sealed partial class RaceRunEditor : ObservableObject
     // that ownership, so a later forecast never replaces a value the operator entered, even an equal one.
     private bool _forecastOwnsUnlocated;
     private bool _fillingFromForecast;
-    partial void OnUnlocatedTemperatureChanged(string value) { if (!_fillingFromForecast) { _forecastOwnsUnlocated = false; } }
+    partial void OnUnlocatedTemperatureChanged(string value)
+    {
+        if (_fillingFromForecast) { return; }
+        _forecastOwnsUnlocated = false;
+        // The saved provenance must not claim the field either, or reopening would hand it back to the forecast.
+        if (WeatherSource.EndsWith(FilledMarker, StringComparison.Ordinal)) { WeatherSource = WeatherSource[..^FilledMarker.Length]; }
+    }
 
     private void FillUnlocated(string value)
     {

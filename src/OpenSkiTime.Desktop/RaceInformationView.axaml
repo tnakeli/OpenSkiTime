@@ -52,8 +52,9 @@
             <TextBlock Text="HOUR" Classes="fieldLabel" />
             <ComboBox ItemsSource="{Binding WeatherHours}" SelectedItem="{Binding SelectedWeatherHour}" DisplayMemberBinding="{Binding Display}" HorizontalAlignment="Stretch" />
           </StackPanel>
-          <ItemsControl ItemsSource="{Binding ResultsRuns}">
-            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <!-- One button per run; they wrap inside the card for competitions with many runs. -->
+          <ItemsControl Name="ApplyWeatherButtons" ItemsSource="{Binding ResultsRuns}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="8" LineSpacing="8" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate><DataTemplate>
               <Button Content="{Binding Label, StringFormat='Apply to {0}'}" Command="{Binding $parent[UserControl].DataContext.ApplyWeatherToRunCommand}" CommandParameter="{Binding}"
                       IsEnabled="{Binding $parent[UserControl].DataContext.SelectedWeatherHour, Converter={x:Static ObjectConverters.IsNotNull}}" Classes="secondaryAction" />

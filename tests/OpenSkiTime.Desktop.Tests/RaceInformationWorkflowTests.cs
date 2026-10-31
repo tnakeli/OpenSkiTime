@@ -144,6 +144,25 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
+    public void ForecastApplyButtonsWrapInsideTheWeatherCardForNineRuns()
+    {
+        var runs = Enumerable.Range(1, 9).Select(n => new RaceRunEditor(new(n, new("", "", "")))).ToArray();
+        var view = new RaceInformationView { DataContext = new { ResultsRuns = runs, ResultsJury = Array.Empty<object>() } };
+        var window = new Window { Content = new ScrollViewer { Content = view, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, Width = 980, Height = 900 };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            var list = view.FindControl<ItemsControl>("ApplyWeatherButtons")!;
+            var right = list.TranslatePoint(new Point(list.Bounds.Width, 0), view)!.Value.X;
+            var buttons = list.GetVisualDescendants().OfType<Button>().ToArray();
+            Assert.Equal(9, buttons.Length);
+            Assert.All(buttons, b => Assert.True(b.TranslatePoint(new Point(b.Bounds.Width, 0), view)!.Value.X <= right + 0.5, $"{b.Content} is cut off."));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ForecastSelectionAndFisSuggestionsPreserveManualValues()
     {
         var run = new RaceRunEditor(new(1, new("Test", "Setter", "FIN"), Course: "Manual course", Weather: new("Manual condition", "Hard", 0m, -1m)));
@@ -172,6 +191,14 @@ public partial class DesktopWorkflowTests
         var typedReopened = new RaceRunEditor(typed.Values);
         typedReopened.ApplyForecast(new(new DateTime(2026, 10, 2, 12, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
         Assert.Equal(3.5m, typedReopened.Values.Weather!.UnlocatedTemperature);
+        // Retyping a forecast-filled value makes it the operator's in the saved provenance too: after save and reopen a
+        // later forecast leaves it alone.
+        var retyped = new RaceRunEditor(new(3, new("", "", "")));
+        retyped.ApplyForecast(new(new DateTime(2026, 10, 2, 10, 0, 0), "Europe/Helsinki", 4.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        retyped.UnlocatedTemperature = "4";
+        var retypedReopened = new RaceRunEditor(retyped.Values);
+        retypedReopened.ApplyForecast(new(new DateTime(2026, 10, 2, 11, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(4m, retypedReopened.Values.Weather!.UnlocatedTemperature);
         // An hour without a temperature removes the earlier forecast's value instead of leaving it under new provenance.
         reopened.ApplyForecast(new(new DateTime(2026, 10, 2, 14, 0, 0), "Europe/Helsinki", null, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
         Assert.Null(reopened.Values.Weather!.UnlocatedTemperature);
