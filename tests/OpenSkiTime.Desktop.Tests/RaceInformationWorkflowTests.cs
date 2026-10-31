@@ -133,6 +133,13 @@ public partial class DesktopWorkflowTests
         Assert.Equal("Manual condition", run.Conditions); Assert.Equal("Hard", run.Snow);
         Assert.Equal(0m, run.Values.Weather!.StartTemperature); Assert.Equal(-1m, run.Values.Weather.FinishTemperature);
         Assert.Contains("3.5 °C", run.WeatherSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Synthetic source", run.WeatherSource, StringComparison.Ordinal);
+        Assert.Equal(3.5m, run.Values.Weather.UnlocatedTemperature);
+        run.ApplyForecast(new(new DateTime(2026, 10, 2, 11, 0, 0), "Europe/Helsinki", 4.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(4.0m, run.Values.Weather.UnlocatedTemperature);
+        run.UnlocatedTemperature = "2";
+        run.ApplyForecast(new(new DateTime(2026, 10, 2, 12, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(2m, run.Values.Weather.UnlocatedTemperature);
         run.AddForerunnerCommand.Execute(null); run.AddForerunnerCommand.Execute(null);
         Assert.Equal("A", run.Forerunners[0].Letter); Assert.Equal("B", run.Forerunners[1].Letter);
         run.SelectedForerunner = run.Forerunners[0]; run.RemoveForerunnerCommand.Execute(null);

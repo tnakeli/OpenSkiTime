@@ -174,7 +174,7 @@ internal static class EntriesDocument
     {
         var start = data.Descriptor.Type == PdfReportType.StartList;
         if (data.Groups.Count == 0 || data.Groups.All(x => x.Entries.Count == 0)) { column.Item().Text("No entries."); }
-        var columns = start ? StartColumns() : EntryColumns(data);
+        var columns = start ? StartColumns(data) : EntryColumns(data);
         foreach (var group in data.Groups)
         {
             if (group.Label.Length > 0) { ReportComponents.Heading(column, group.Label + " (" + group.Entries.Count + ")"); }
@@ -185,13 +185,20 @@ internal static class EntriesDocument
     }
     private sealed record EntryColumn(string Header, float Width, Func<EntryReportRow, object> Value);
     private static PersonName Name(EntryReportRow x) => new(x.Athlete.Surname, x.Athlete.FirstName);
-    private static EntryColumn[] StartColumns() =>
-    [
-        new("Pos", 0.5f, x => ReportComponents.Number(x.Position)), new("Bib", 0.5f, x => ReportComponents.Number(x.Bib)),
-        new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name), new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)),
-        new("Nation", 0.7f, x => x.Athlete.Nation ?? ""), new("Club", 1.5f, x => x.Athlete.Club ?? ""),
-        new("Points", 0.8f, x => x.Points?.ToString("0.00", CultureInfo.InvariantCulture) ?? "")
-    ];
+    private static string Points(decimal? value) => value?.ToString("0.00", CultureInfo.InvariantCulture) ?? "";
+    private static EntryColumn[] StartColumns(PdfReportData data)
+    {
+        // The points column is headed by the competition's discipline ("SL pts") and omitted when nobody has points.
+        var code = EntryReportBuilder.FisPointsDisciplines(data.Source, data.Descriptor) is [var only] ? only + " pts" : "Points";
+        var columns = new List<EntryColumn>
+        {
+            new("Pos", 0.5f, x => ReportComponents.Number(x.Position)), new("Bib", 0.5f, x => ReportComponents.Number(x.Bib)),
+            new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name), new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)),
+            new("Nation", 0.7f, x => x.Athlete.Nation ?? ""), new("Club", 1.5f, x => x.Athlete.Club ?? "")
+        };
+        if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Points is not null)) { columns.Add(new(code, 0.8f, x => Points(x.Points))); }
+        return columns.ToArray();
+    }
     private static EntryColumn[] EntryColumns(PdfReportData data)
     {
         var rows = data.Groups.SelectMany(x => x.Entries).ToArray();
@@ -202,6 +209,12 @@ internal static class EntriesDocument
             new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)), new("Nation", 0.7f, x => x.Athlete.Nation ?? ""),
             new("Club", 1.5f, x => x.Athlete.Club ?? "")]);
         if (rows.Any(x => x.Category is not ("" or CategoryResolver.Unclassified))) { columns.Add(new("Category", 1.3f, x => x.Category)); }
+        // FIS points of the disciplines in the report's scope, one column each; a discipline nobody has points in is omitted.
+        foreach (var code in EntryReportBuilder.FisPointsDisciplines(data.Source, data.Descriptor))
+        {
+            if (rows.Any(x => x.FisPoints?.For(code) is not null))
+            { columns.Add(new(code + " pts", 0.8f, x => Points(x.FisPoints?.For(code)))); }
+        }
         if (data.Descriptor.CompetitionId is null)
         {
             // Series entries mark each competition the entrant participates in, in race order.

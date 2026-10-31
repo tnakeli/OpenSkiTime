@@ -58,7 +58,7 @@ public sealed partial class SeriesWorkspace
 public sealed record PdfReportDescriptor(string Id, PdfReportType Type, string DisplayName,
     Guid? CompetitionId, int? RunNumber, string FileName, bool CanGenerate, string? UnavailableReason);
 public sealed record EntryReportRow(Guid Id, CompetitorValues Athlete, string Category, int? Bib = null,
-    int? Position = null, decimal? Points = null);
+    int? Position = null, decimal? Points = null, CompetitorFisPoints? FisPoints = null);
 public sealed record ReportGroup(string Label, IReadOnlyList<EntryReportRow> Entries);
 public sealed record RunReportData(StartListRevision List, TimingSnapshot Timing, TimingReplayData Source);
 public sealed record FinalReportData(FisRaceResult Race, FisPenaltyResult? Penalty, ApprovedResult? Approval, string? PenaltyUnavailableReason)
@@ -158,6 +158,14 @@ public static class EntryReportBuilder
                 .OrderBy(x => x.Values.Surname, StringComparer.Ordinal).ThenBy(x => x.Values.FirstName, StringComparer.Ordinal).ThenBy(x => x.Id)
                 .Select(x => new EntryReportRow(x.Id, x.Values, CategoryResolver.Resolve(x.Values, source.Desk.Categories),
                     source.Desk.Participations.FirstOrDefault(p => p.CompetitorId == x.Id && p.CompetitionId == descriptor.CompetitionId)?.ImportedBib)).ToArray();
+        if (descriptor.Type == PdfReportType.StartList)
+        {
+            // A start list shows the points its draw used. A list drawn without points (a club race) shows the saved
+            // FIS points of the competition's discipline instead; one source per list, never mixed row by row.
+            if (entries.All(x => x.Points is null) && FisPointsDisciplines(source, descriptor) is [var code])
+            { entries = entries.Select(x => x with { Points = source.Desk.FisPointsOf(x.Id)?.For(code) }).ToArray(); }
+        }
+        else { entries = entries.Select(x => x with { FisPoints = source.Desk.FisPointsOf(x.Id) }).ToArray(); }
         Func<EntryReportRow, string>? group = descriptor.Type switch
         {
             PdfReportType.EventSeriesEntriesByNation or PdfReportType.CompetitionEntriesByNation => x => string.IsNullOrWhiteSpace(x.Athlete.Nation) ? "Nation not supplied" : x.Athlete.Nation,
@@ -167,6 +175,25 @@ public static class EntryReportBuilder
         };
         return group is null ? [new("", entries)] : entries.GroupBy(group).OrderBy(x => x.Key, StringComparer.Ordinal)
             .Select(x => new ReportGroup(x.Key, x.ToArray())).ToArray();
+    }
+
+    // FIS points list order.
+    private static readonly string[] s_pointsOrder = ["DH", "SL", "GS", "SG", "AC"];
+
+    /// <summary>
+    /// FIS points disciplines a report shows: those of the competitions in its scope (every competition of the series
+    /// for series reports, otherwise the report's competition), in FIS points list order. A competition of another
+    /// discipline has no FIS points column.
+    /// </summary>
+    public static IReadOnlyList<string> FisPointsDisciplines(PdfReportSource source, PdfReportDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(descriptor);
+        var races = descriptor.CompetitionId is null ? source.Series.Competitions
+            : source.Series.Competitions.Where(x => x.Id == descriptor.CompetitionId)
+                .DefaultIfEmpty(source.Competition).OfType<CompetitionDetails>();
+        var codes = races.Where(x => x.Values.Discipline != Discipline.Other)
+            .Select(x => CompetitorFisPoints.DisciplineCode(x.Values.Discipline)).ToHashSet(StringComparer.Ordinal);
+        return s_pointsOrder.Where(codes.Contains).ToArray();
     }
 }
 

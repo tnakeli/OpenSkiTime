@@ -34,8 +34,8 @@
      <StackPanel Name="TimingIntermediateSwitches" Orientation="Horizontal" Spacing="4" />
      <ToggleButton Content="FINISH" IsChecked="{Binding FinishInputOn, Mode=OneWay}" Command="{Binding ToggleTimingChannelCommand}" CommandParameter="finish" IsEnabled="{Binding IsTimingConnected}" />
      <TextBlock Classes="raceConnectionText" Text="{Binding TimingHoldSummary}" VerticalAlignment="Center" Margin="4,0,0,0" FontWeight="SemiBold" />
-     <Border Name="TimingClockWarningBadge" IsVisible="{Binding HasTimingClockWarning}" Background="{DynamicResource BannerWarningBrush}" CornerRadius="3" Padding="6,1" VerticalAlignment="Center" ToolTip.Tip="{Binding TimingClockWarning}">
-      <TextBlock Text="{Binding TimingClockWarning}" Foreground="{DynamicResource BannerWarningTextBrush}" FontSize="12" FontWeight="SemiBold" MaxWidth="420" TextTrimming="CharacterEllipsis" />
+     <Border Name="TimingClockWarningBadge" IsVisible="{Binding HasTimingClockWarning}" Background="{DynamicResource BannerWarningBrush}" CornerRadius="{DynamicResource ChipRadius}" Padding="8,1" VerticalAlignment="Center" ToolTip.Tip="{Binding TimingClockWarning}">
+      <TextBlock Text="{Binding TimingClockWarning}" Foreground="{DynamicResource BannerWarningTextBrush}" FontSize="{DynamicResource LabelSize}" FontWeight="SemiBold" MaxWidth="420" TextTrimming="CharacterEllipsis" />
      </Border>
     </StackPanel>
     <TextBlock Classes="raceConnectionText" Text="{Binding TimingConnection}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
@@ -43,19 +43,22 @@
     <Border Classes="stripDivider" Height="20" VerticalAlignment="Center" />
     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
      <TextBlock Classes="raceConnectionText" Text="B:" FontWeight="SemiBold" VerticalAlignment="Center" />
-     <Border Name="BackupClockStatusBadge" Classes.backupClockProblem="{Binding HasBackupClockProblem}" CornerRadius="3" Padding="6,1" VerticalAlignment="Center" ToolTip.Tip="{Binding BackupClockStatusText, StringFormat='{}{0} · B never changes A timing.'}">
+     <Border Name="BackupClockStatusBadge" Classes.backupClockProblem="{Binding HasBackupClockProblem}" CornerRadius="{DynamicResource ChipRadius}" Padding="8,1" VerticalAlignment="Center" ToolTip.Tip="{Binding BackupClockStatusText, StringFormat='{}{0} · B never changes A timing.'}">
       <TextBlock Name="BackupClockStatusText" Classes="raceConnectionText" Text="{Binding BackupClockStatusText}" MaxWidth="300" TextTrimming="CharacterEllipsis" />
      </Border>
-     <Button Name="ShowBackupButton" Content="{Binding BackupButtonText}" Command="{Binding ShowBackupCommand}" IsEnabled="{Binding CanShowBackup}" Classes.backupWarning="{Binding HasBackupWarning}" MinHeight="24" Padding="8,1" FontSize="12" Focusable="False" ToolTip.Tip="Show independent B timestamps for 30 seconds. A timing remains unchanged." />
+     <Button Name="ShowBackupButton" Content="{Binding BackupButtonText}" Command="{Binding ShowBackupCommand}" IsEnabled="{Binding CanShowBackup}" Classes.backupWarning="{Binding HasBackupWarning}" MinHeight="24" Padding="8,1" FontSize="{DynamicResource LabelSize}" Focusable="False" ToolTip.Tip="Show independent B timestamps for 30 seconds. A timing remains unchanged." />
     </StackPanel>
    </WrapPanel>
    </DockPanel>
   </Border>
-  <StackPanel Grid.Row="1" Spacing="4">
-   <TextBlock Text="{Binding LiveTimingError}" IsVisible="{Binding HasLiveTimingError}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Margin="0,0,0,4" />
-   <TextBlock Name="BackupWarningText" Text="{Binding BackupWarning}" IsVisible="{Binding HasBackupWarning}" Foreground="{DynamicResource ErrorBrush}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4" />
-   <Border IsVisible="{Binding HasTimingAlarm}" BorderBrush="{DynamicResource ErrorBrush}" Background="{DynamicResource ErrorTintBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,4">
-    <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
+  <!-- Problems that need the operator: one note style each, above the panes. -->
+  <StackPanel Grid.Row="1" Spacing="6">
+   <StackPanel.Styles><Style Selector="StackPanel > Border.errorNote"><Setter Property="Margin" Value="0,0,0,2" /></Style></StackPanel.Styles>
+   <Border Classes="errorNote" IsVisible="{Binding HasLiveTimingError}"><TextBlock Text="{Binding LiveTimingError}" /></Border>
+   <Border Classes="errorNote" IsVisible="{Binding HasBackupWarning}">
+    <TextBlock Name="BackupWarningText" Text="{Binding BackupWarning}" IsVisible="{Binding HasBackupWarning}" FontWeight="SemiBold" /></Border>
+   <Border Classes="errorNote" IsVisible="{Binding HasTimingAlarm}">
+    <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" VerticalAlignment="Center" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
    </Border>
   </StackPanel>
   <!-- Live band: At start, On course and Timestamps side by side; the ranking below. Visible grips let the operator
@@ -75,7 +78,7 @@
      <StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="AT START" Classes="raceHeadingText" /><Border Classes="chip"><TextBlock Text="{Binding AtStartRows.Count}" /></Border></StackPanel>
      <!-- Quick forerunner entry: they start before the competitors and are shown in Results. -->
      <ToggleButton Grid.Column="1" Name="ForerunnersToggle" Content="Forerunners" Classes="secondaryAction" IsChecked="{Binding ShowForerunnerEditor}"
-                   MinHeight="24" Padding="10,1" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" ToolTip.Tip="{Binding ForerunnerSummary}" />
+                   MinHeight="24" Padding="10,1" FontSize="{DynamicResource LabelSize}" Margin="0,0,6,0" VerticalAlignment="Center" ToolTip.Tip="{Binding ForerunnerSummary}" />
     </Grid>
     <Grid Grid.Row="1">
      <TextBlock Classes="raceQueueHint" AutomationProperties.Name="{Binding NextStartLabel, StringFormat='Next · {0}'}"><Run Text="NEXT" Classes="queueCaption" /><Run Text="   " /><Run Text="{Binding NextStartBanner.Lead}" FontWeight="Bold" /><Run Text=" " /><Run Text="{Binding NextStartBanner.Surname}" FontWeight="Bold" /><Run Text=" " /><Run Text="{Binding NextStartBanner.FirstName}" /><Run Text="{Binding NextStartBanner.Note}" /></TextBlock>
@@ -99,7 +102,7 @@
     </Grid>
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Background="{DynamicResource AccentTintBrush}">
      <TextBlock Classes="raceQueueHint" AutomationProperties.Name="{Binding ExpectedFinishLabel, StringFormat='Finish next · {0}'}"><Run Text="FINISH NEXT" Classes="queueCaption" /><Run Text="   " /><Run Text="{Binding ExpectedFinishBanner.Lead}" FontWeight="Bold" /><Run Text=" " /><Run Text="{Binding ExpectedFinishBanner.Surname}" FontWeight="Bold" /><Run Text=" " /><Run Text="{Binding ExpectedFinishBanner.FirstName}" /><Run Text="{Binding ExpectedFinishBanner.Note}" /></TextBlock>
-     <TextBlock Grid.Column="1" Text="{Binding ExpectedFinishTime}" Classes="raceClock" Margin="8,3" FontSize="18" />
+     <TextBlock Grid.Column="1" Text="{Binding ExpectedFinishTime}" Classes="raceClock" Margin="8,3" FontSize="{DynamicResource RaceClockSize}" />
     </Grid>
     <DataGrid Grid.Row="2" Name="RunningGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding RunningRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRow="MarkForerunnerRow"
      AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
@@ -108,7 +111,7 @@
       <DataGridTextColumn Header="" Binding="{Binding Clock.Marker}" Width="26" />
       <DataGridTextColumn Header="BIB" Binding="{Binding BibText}" Width="56" />
       <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="110" />
-      <DataGridTextColumn Header="CURRENT" Binding="{Binding Clock.Time}" Width="96" FontWeight="Bold" FontSize="18" Foreground="{StaticResource AccentBrush}" />
+      <DataGridTextColumn Header="CURRENT" Binding="{Binding Clock.Time}" Width="96" FontWeight="Bold" FontSize="{StaticResource RaceClockSize}" Foreground="{StaticResource AccentBrush}" />
      </DataGrid.Columns>
     </DataGrid>
     <!-- Status actions for the selected competitor; also drop targets when dragging a competitor. -->
@@ -146,7 +149,7 @@
      <TextBlock Grid.Column="1" Text="◆ Latest finisher" Classes="raceHeadingNote" />
      <!-- Classification after the run: a dialog that edits one competitor at a time, chosen by bib or name. -->
      <ToggleButton Grid.Column="2" Name="EditClassificationToggle" Content="Edit classification" Classes="secondaryAction" IsChecked="{Binding ShowTimingClassificationEditor}"
-                   MinHeight="24" Padding="10,1" FontSize="12" VerticalAlignment="Center" ToolTip.Tip="DSQ with gate, reason and judge, or another status, saved with the correction history" />
+                   MinHeight="24" Padding="10,1" FontSize="{DynamicResource LabelSize}" VerticalAlignment="Center" ToolTip.Tip="DSQ with gate, reason and judge, or another status, saved with the correction history" />
     </Grid>
     <!-- The two latest finishers stay in view above the full ranking (latest first); the code keeps the columns in
          line with the ranking grid. -->
@@ -156,7 +159,7 @@
       HeadersVisibility="None" RowHeight="28" GridLinesVisibility="Horizontal" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"
       ToolTip.Tip="The two latest finishers with their rank. Right-click or Shift+F10 for status.">
       <DataGrid.Columns>
-       <DataGridTextColumn Header="" Binding="{Binding FinishMarker}" Width="28" Foreground="{StaticResource AccentBrush}" FontSize="15" />
+       <DataGridTextColumn Header="" Binding="{Binding FinishMarker}" Width="28" Foreground="{StaticResource AccentBrush}" FontSize="{StaticResource SectionSize}" />
        <DataGridTextColumn Header="RK" Binding="{Binding DisplayRank}" Width="42" FontWeight="SemiBold" />
        <DataGridTextColumn Header="BIB" Binding="{Binding BibText}" Width="56" />
        <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="130" />
@@ -172,7 +175,7 @@
      AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" RowHeight="28" GridLinesVisibility="Horizontal"
      ToolTip.Tip="Results in rank order within each category. Drag a competitor onto a timestamp to assign it. Right-click or Shift+F10 for status.">
      <DataGrid.Columns>
-      <DataGridTextColumn Header="" Binding="{Binding FinishMarker}" Width="28" Foreground="{StaticResource AccentBrush}" FontSize="15" />
+      <DataGridTextColumn Header="" Binding="{Binding FinishMarker}" Width="28" Foreground="{StaticResource AccentBrush}" FontSize="{StaticResource SectionSize}" />
       <DataGridTextColumn Header="RK" Binding="{Binding DisplayRank}" Width="42" FontWeight="SemiBold" />
       <DataGridTextColumn Header="BIB" Binding="{Binding BibText}" Width="56" />
       <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="130" />
@@ -187,7 +190,7 @@
   </Grid>
   <Border Grid.Row="2" Name="BackupTimesPanel" IsVisible="{Binding ShowBackupTimes}" Classes="racePane" Padding="6" VerticalAlignment="Bottom" MaxHeight="180">
    <Grid RowDefinitions="Auto,Auto">
-    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding BackupDisplayLabel}" Classes="eyebrow" VerticalAlignment="Center" /><Button Name="HideBackupButton" Grid.Column="1" Content="Hide B" Command="{Binding HideBackupCommand}" MinHeight="19" Padding="7,1" FontSize="10" Focusable="False" /></Grid>
+    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding BackupDisplayLabel}" Classes="fieldLabel" VerticalAlignment="Center" /><Button Name="HideBackupButton" Grid.Column="1" Content="Hide B" Command="{Binding HideBackupCommand}" Classes="secondaryAction" MinHeight="22" Padding="8,1" FontSize="{DynamicResource MetaSize}" Focusable="False" /></Grid>
     <DataGrid Grid.Row="1" Name="BackupTimesGrid" ItemsSource="{Binding BackupMonitorRows}" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="24" MaxHeight="145" Focusable="False">
      <DataGrid.Columns>
       <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" Width="48" /><DataGridTextColumn Header="POINT" Binding="{Binding Position}" Width="70" />
@@ -213,12 +216,12 @@
      <TextBlock Text="{Binding ManualTimestampError}" IsVisible="{Binding HasManualTimestampError}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
     </StackPanel>
    </Border>
-   <TextBlock Text="{Binding SelectedTimingProblem}" IsVisible="{Binding HasSelectedTimingProblem}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
-   <TextBlock Text="Unassigned finish · drag a competitor onto its finish timestamp." IsVisible="{Binding HasUnassignedFinish}" Foreground="{DynamicResource WarningBrush}" />
+   <Border Classes="errorNote" IsVisible="{Binding HasSelectedTimingProblem}"><TextBlock Text="{Binding SelectedTimingProblem}" /></Border>
+   <Border Classes="warningNote" IsVisible="{Binding HasUnassignedFinish}"><TextBlock Text="Unassigned finish · drag a competitor onto its finish timestamp." /></Border>
   </StackPanel>
   <Border Grid.Row="4" Classes="card" Padding="12,4" Margin="0,6,0,0" IsVisible="{Binding ShowTimingSimulatorControls}">
   <StackPanel Orientation="Horizontal" Spacing="6">
-   <TextBlock Text="TRAINING" Classes="eyebrow" VerticalAlignment="Center" Margin="0,0,6,0" /><TextBox Name="SimulationTimeBox" Text="{Binding SimulationTime}" Width="155" ToolTip.Tip="Simulator device time. While live, impulses use the PC clock at the press; type a time to pause and use it." />
+   <TextBlock Text="TRAINING" Classes="fieldLabel" VerticalAlignment="Center" Margin="0,0,6,0" /><TextBox Name="SimulationTimeBox" Text="{Binding SimulationTime}" Width="155" ToolTip.Tip="Simulator device time. While live, impulses use the PC clock at the press; type a time to pause and use it." />
    <Button Name="SimulationClockToggle" Content="{Binding SimulationClockToggleText}" Command="{Binding ToggleSimulationClockCommand}" Classes="secondaryAction" ToolTip.Tip="Pause the PC clock to type a simulator time, or follow the PC clock live again." />
    <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsTimingSimulator}">
     <Button Content="Test start" Command="{Binding SimulatePulseCommand}" CommandParameter="start" IsEnabled="{Binding IsTimingConnected}" Classes="secondaryAction" />

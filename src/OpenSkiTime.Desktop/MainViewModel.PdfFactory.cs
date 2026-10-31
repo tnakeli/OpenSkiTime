@@ -21,6 +21,8 @@ public sealed class PdfFactoryRow
     public string GenerateLabel => CanOpen ? "Regenerate" : "Generate";
     public string OpenLabel => Status == "Outdated" ? "Open old" : "Open";
     public bool IsOutdated => Status == "Outdated";
+    public bool IsGenerated => Status == "Generated";
+    public bool IsNotGenerated => !CanOpen;
     public IAsyncRelayCommand GenerateCommand { get; }
     public IRelayCommand OpenCommand { get; }
     public PdfFactoryRow(PdfReportDescriptor descriptor, string outputPath, PdfReportStatus status, Func<Task> generate, Action open)

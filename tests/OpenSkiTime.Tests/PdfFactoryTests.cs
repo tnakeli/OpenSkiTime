@@ -87,6 +87,40 @@ public sealed class PdfFactoryTests
             EntryReportBuilder.Build(reverse, ReportCatalog.GetAvailableReports(reverse).Single(x => x.Type == PdfReportType.EventSeriesEntriesByNation)).SelectMany(x => x.Entries).Select(x => x.Id));
     }
     [Fact]
+    public async Task EntryReportsShowFisPointsOfTheDisciplinesInTheirScope()
+    {
+        using var folder = new TestFolder();
+        var source = MemorySource(folder.PathFor("test.ost"), 6);
+        var giant = new CompetitionDetails(Guid.NewGuid(), Competition with { ShortLabel = "Levi GS", Discipline = Discipline.GiantSlalom });
+        var other = new CompetitionDetails(Guid.NewGuid(), Competition with { ShortLabel = "Levi PS", Discipline = Discipline.Other });
+        var points = source.Desk.Competitors.ToDictionary(x => x.Id, x => new CompetitorFisPoints("1327", 99.5m, null, 12.34m, 23.45m, null));
+        source = source with { Series = source.Series with { Competitions = [.. source.Series.Competitions, giant, other] },
+            Desk = source.Desk with { FisPoints = points } };
+        var catalog = ReportCatalog.GetAvailableReports(source);
+        var series = catalog.Single(x => x.Type == PdfReportType.EventSeriesEntries);
+        var competition = catalog.Single(x => x.Type == PdfReportType.CompetitionEntries);
+        // FIS list order; a discipline no competition has (DH) and one without FIS points (Other) get no column.
+        Assert.Equal(["SL", "GS"], EntryReportBuilder.FisPointsDisciplines(source, series));
+        Assert.Equal(["SL"], EntryReportBuilder.FisPointsDisciplines(source, competition));
+        Assert.All(EntryReportBuilder.Build(source, series).SelectMany(x => x.Entries), x => Assert.Equal(12.34m, x.FisPoints?.Sl));
+
+        var service = new ReportGenerationService(new QuestPdfRenderer());
+        Assert.True((await service.GenerateAsync(source, series, _ => Task.CompletedTask, s_at)).Success);
+        Assert.True((await service.GenerateAsync(source, competition, _ => Task.CompletedTask, s_at)).Success);
+        string Text(PdfReportDescriptor d)
+        {
+            using var pdf = PdfDocument.Open(folder.PathFor(d.FileName));
+            return string.Join(" ", pdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));
+        }
+        var seriesText = Text(series);
+        Assert.Contains("SL pts", seriesText, StringComparison.Ordinal); Assert.Contains("GS pts", seriesText, StringComparison.Ordinal);
+        Assert.Contains("12.34", seriesText, StringComparison.Ordinal); Assert.Contains("23.45", seriesText, StringComparison.Ordinal);
+        Assert.DoesNotContain("DH pts", seriesText, StringComparison.Ordinal); Assert.DoesNotContain("99.50", seriesText, StringComparison.Ordinal);
+        var competitionText = Text(competition);
+        Assert.Contains("SL pts", competitionText, StringComparison.Ordinal);
+        Assert.DoesNotContain("GS pts", competitionText, StringComparison.Ordinal);
+    }
+    [Fact]
     public async Task EntryReportPrintsTheSurnameInBoldCapitalsAndTheFirstNameRegular()
     {
         using var folder = new TestFolder();
@@ -322,6 +356,13 @@ public sealed class PdfFactoryTests
         var outcomes = await new ReportGenerationService(new QuestPdfRenderer()).GenerateAllAsync(source, r => workspace.SaveGeneratedPdfAsync(r), s_at);
         Assert.Equal(13, outcomes.Count);
         Assert.All(outcomes, x => Assert.True(x.Success, x.Error));
+        using (var startList = PdfDocument.Open(folder.PathFor(ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.StartList && x.RunNumber == 1).FileName)))
+        {
+            // The draw points are headed by the competition's discipline.
+            var text = string.Join(" ", startList.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));
+            Assert.Contains("SL pts", text, StringComparison.Ordinal);
+            Assert.Contains("10.00", text, StringComparison.Ordinal);
+        }
         Assert.Equal(revision, (await workspace.ReadAsync()).Revision);
         var unchanged = await workspace.ReadTimingAsync(first.Id);
         Assert.Equal(ResultSourceFingerprint.Create(firstReplay), ResultSourceFingerprint.Create(unchanged));

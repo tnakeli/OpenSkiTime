@@ -90,6 +90,8 @@
   <CornerRadius x:Key="ChipRadius">9</CornerRadius>
 
   <!-- Type. Dense on purpose: race office operators work with many fields on one screen. -->
+  <!-- Running clock and expected finish time in the timing view: read at a glance. -->
+  <x:Double x:Key="RaceClockSize">18</x:Double>
   <x:Double x:Key="TitleSize">17</x:Double>
   <x:Double x:Key="SectionSize">15</x:Double>
   <x:Double x:Key="CardTitleSize">14</x:Double>

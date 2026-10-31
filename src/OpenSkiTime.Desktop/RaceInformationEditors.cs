@@ -100,9 +100,13 @@ public sealed partial class RaceRunEditor : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(hour);
         if (string.IsNullOrWhiteSpace(Conditions)) { Conditions = hour.Conditions; }
-        // A model grid-cell temperature is not a measured start/finish temperature.
+        // A model grid-cell temperature is not a measured start/finish temperature, so it goes to the
+        // place-unspecified field. A value the operator typed is kept; an earlier forecast value is replaced.
+        var previous = ForecastTemperature;
         ForecastTemperature = hour.Temperature?.ToString("0.0", CultureInfo.InvariantCulture) ?? "unavailable";
-        WeatherSource = $"Open-Meteo forecast · {hour.LocalTime:yyyy-MM-dd HH:mm} {hour.Timezone} · {ForecastTemperature} °C · retrieved {hour.RetrievedAt:O} · {hour.Source}";
+        if (hour.Temperature is not null && (string.IsNullOrWhiteSpace(UnlocatedTemperature) || UnlocatedTemperature == previous))
+        { UnlocatedTemperature = ForecastTemperature; }
+        WeatherSource = $"Open-Meteo forecast · {hour.LocalTime:yyyy-MM-dd HH:mm} {hour.Timezone} · {ForecastTemperature} °C · retrieved {hour.RetrievedAt.ToUniversalTime():yyyy-MM-dd HH:mm} UTC";
     }
 
     public void FillEmpty(string field, string value)

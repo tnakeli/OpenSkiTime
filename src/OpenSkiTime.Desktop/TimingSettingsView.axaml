@@ -2,15 +2,15 @@
  xmlns:local="using:OpenSkiTime.Desktop"
  x:Class="OpenSkiTime.Desktop.TimingSettingsView" x:CompileBindings="False">
  <UserControl.Resources>
-  <!-- One timing role: Role -> Source -> Channel -> source-specific connection details. -->
+  <!-- One timing role on the 12-column grid: Role -> Source -> Channel -> source-specific connection details -> signal. -->
   <DataTemplate x:Key="TimingRoleRowTemplate">
-   <Grid ColumnDefinitions="120,8,180,8,110,8,*,8,Auto" Margin="0,0,0,6">
-    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
-    <ComboBox Grid.Column="2" VerticalAlignment="Center" ItemsSource="{Binding Sources}" SelectedItem="{Binding Source}" IsVisible="{Binding ShowOwnConnection}" HorizontalAlignment="Stretch" ToolTip.Tip="Timing source for this role" />
-    <TextBlock Grid.Column="2" Text="{Binding LeaderSourceLabel}" IsVisible="{Binding ShowsLeaderConnection}" Classes="supportingText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-    <NumericUpDown Grid.Column="4" VerticalAlignment="Center" Value="{Binding Channel}" Minimum="0" Maximum="8" FormatString="0" ToolTip.Tip="Device channel C0–C8 for this role" />
-    <WrapPanel Grid.Column="6" VerticalAlignment="Center">
-     <CheckBox Content="{Binding SameConnectionLabel}" IsChecked="{Binding UsesLeaderConnection}" IsVisible="{Binding HasLeader}" Margin="0,0,10,0" ToolTip.Tip="Use the same device connection. Only the channel (and ALGE Results device ID) differs." />
+   <local:FormRow Margin="0,0,0,6">
+    <TextBlock Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+    <ComboBox Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center" ItemsSource="{Binding Sources}" SelectedItem="{Binding Source}" IsVisible="{Binding ShowOwnConnection}" HorizontalAlignment="Stretch" ToolTip.Tip="Timing source for this role" />
+    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="{Binding LeaderSourceLabel}" IsVisible="{Binding ShowsLeaderConnection}" Classes="supportingText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+    <NumericUpDown Grid.Column="4" Grid.ColumnSpan="2" VerticalAlignment="Center" Value="{Binding Channel}" Minimum="0" Maximum="8" FormatString="0" ToolTip.Tip="Device channel C0–C8 for this role" />
+    <WrapPanel Grid.Column="6" Grid.ColumnSpan="4" VerticalAlignment="Center" ItemSpacing="6" LineSpacing="6">
+     <CheckBox Content="{Binding SameConnectionLabel}" IsChecked="{Binding UsesLeaderConnection}" IsVisible="{Binding HasLeader}" ToolTip.Tip="Use the same device connection. Only the channel (and ALGE Results device ID) differs." />
      <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsTimyUsb}">
       <TextBox Text="{Binding UsbId}" Width="140" PlaceholderText="USB ID (optional)" ToolTip.Tip="Leave blank to use the first connected Timy. Other devices are not merged." />
       <TextBox Text="{Binding Firmware}" Width="110" PlaceholderText="Firmware" />
@@ -27,8 +27,8 @@
      <TextBox Text="{Binding ReplayPath}" IsVisible="{Binding IsReplay}" Width="280" PlaceholderText="Path to raw ALGE ASCII file" />
      <TextBlock Text="Training data only" IsVisible="{Binding IsSimulator}" Classes="supportingText" VerticalAlignment="Center" />
     </WrapPanel>
-    <TextBlock Grid.Column="8" Name="RoleSignalText" Text="{Binding SignalText}" VerticalAlignment="Center" FontFamily="{DynamicResource TimeFontFamily}" FontSize="{DynamicResource LabelSize}" Foreground="{DynamicResource AccentBrush}" ToolTip.Tip="Latest signal per channel of this device while timing is connected. ● marks this role's channel." />
-   </Grid>
+    <TextBlock Grid.Column="10" Grid.ColumnSpan="2" Name="RoleSignalText" Text="{Binding SignalText}" VerticalAlignment="Center" TextWrapping="Wrap" FontFamily="{DynamicResource TimeFontFamily}" FontSize="{DynamicResource LabelSize}" Foreground="{DynamicResource AccentBrush}" ToolTip.Tip="Latest signal per channel of this device while timing is connected. ● marks this role's channel." />
+   </local:FormRow>
   </DataTemplate>
  </UserControl.Resources>
  <StackPanel Classes="tabPage">
@@ -75,10 +75,11 @@
      </Grid>
      <TextBlock Text="{Binding TimingDeviceHelp}" Classes="supportingText" TextWrapping="Wrap" />
      <StackPanel Spacing="4">
-      <Grid ColumnDefinitions="120,8,180,8,110,8,*">
-       <TextBlock Text="ROLE" Classes="fieldLabel" /><TextBlock Grid.Column="2" Text="SOURCE" Classes="fieldLabel" />
-       <TextBlock Grid.Column="4" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Text="CONNECTION" Classes="fieldLabel" />
-      </Grid>
+      <local:FormRow>
+       <TextBlock Grid.Column="0" Grid.ColumnSpan="2" Text="ROLE" Classes="fieldLabel" /><TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="SOURCE" Classes="fieldLabel" />
+       <TextBlock Grid.Column="4" Grid.ColumnSpan="2" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Grid.ColumnSpan="4" Text="CONNECTION" Classes="fieldLabel" />
+       <TextBlock Grid.Column="10" Grid.ColumnSpan="2" Text="SIGNAL" Classes="fieldLabel" />
+      </local:FormRow>
       <ItemsControl Name="PrimaryTimingRolesList" ItemsSource="{Binding PrimaryTimingRoles}" ItemTemplate="{StaticResource TimingRoleRowTemplate}" />
      </StackPanel>
      <TextBlock Text="Any device can serve any role. Roles on one device use different channels; different devices, source types and ALGE Results accounts may be combined. All device clocks are set to the same time. A race uses as many intermediates as its competition defines." Classes="supportingText" TextWrapping="Wrap" />
@@ -91,13 +92,13 @@
      <ItemsControl Name="AlgeAccountsList" ItemsSource="{Binding AlgeAccounts}">
       <ItemsControl.ItemTemplate>
        <DataTemplate>
-        <Grid ColumnDefinitions="2*,8,2*,8,Auto,8,Auto,8,2*" Margin="0,0,0,6">
-         <TextBlock Text="{Binding Username}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-         <TextBox Grid.Column="2" Text="{Binding Password}" PasswordChar="•" PlaceholderText="{Binding PasswordWatermark}" />
-         <CheckBox Grid.Column="4" Content="Remember password" IsChecked="{Binding RememberPassword}" />
-         <Button Grid.Column="6" Content="Fetch devices" Command="{Binding DataContext.FetchAlgeDevicesCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" IsEnabled="{Binding !IsFetching}" Classes="secondaryAction" />
-         <TextBlock Grid.Column="8" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Classes="supportingText" />
-        </Grid>
+        <local:FormRow Margin="0,0,0,6">
+         <TextBlock Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding Username}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+         <TextBox Grid.Column="2" Grid.ColumnSpan="3" Text="{Binding Password}" PasswordChar="•" PlaceholderText="{Binding PasswordWatermark}" />
+         <CheckBox Grid.Column="5" Grid.ColumnSpan="2" Content="Remember password" IsChecked="{Binding RememberPassword}" />
+         <Button Grid.Column="7" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Fetch devices" Command="{Binding DataContext.FetchAlgeDevicesCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" IsEnabled="{Binding !IsFetching}" Classes="secondaryAction" />
+         <TextBlock Grid.Column="9" Grid.ColumnSpan="3" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Classes="supportingText" />
+        </local:FormRow>
        </DataTemplate>
       </ItemsControl.ItemTemplate>
      </ItemsControl>
@@ -115,10 +116,11 @@
      <TextBlock Text="An independent B Clock connects automatically right after primary timing and follows the active run. B never changes race times; it supports the timing report and warns when A and B disagree." Classes="supportingText" TextWrapping="Wrap" />
      <StackPanel Spacing="{DynamicResource FormGap}" IsVisible="{Binding HasBackupClockRoles}">
       <StackPanel Spacing="4">
-       <Grid ColumnDefinitions="120,8,180,8,110,8,*">
-        <TextBlock Text="ROLE" Classes="fieldLabel" /><TextBlock Grid.Column="2" Text="SOURCE" Classes="fieldLabel" />
-        <TextBlock Grid.Column="4" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Text="CONNECTION" Classes="fieldLabel" />
-       </Grid>
+       <local:FormRow>
+        <TextBlock Grid.Column="0" Grid.ColumnSpan="2" Text="ROLE" Classes="fieldLabel" /><TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="SOURCE" Classes="fieldLabel" />
+        <TextBlock Grid.Column="4" Grid.ColumnSpan="2" Text="CHANNEL" Classes="fieldLabel" /><TextBlock Grid.Column="6" Grid.ColumnSpan="4" Text="CONNECTION" Classes="fieldLabel" />
+        <TextBlock Grid.Column="10" Grid.ColumnSpan="2" Text="SIGNAL" Classes="fieldLabel" />
+       </local:FormRow>
        <ItemsControl Name="BackupTimingRolesList" ItemsSource="{Binding BackupTimingRoles}" ItemTemplate="{StaticResource TimingRoleRowTemplate}" />
       </StackPanel>
       <TextBlock Text="B Clock Start and B Clock Finish may use the same or different devices. Use devices separate from primary timing (own USB ID, COM port or ALGE Results device ID)." Classes="supportingText" TextWrapping="Wrap" />

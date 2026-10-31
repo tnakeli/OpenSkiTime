@@ -83,6 +83,13 @@
     <Style Selector="Border.chip.red > TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
     </Style>
+    <!-- Something to review, not an error (an outdated PDF). -->
+    <Style Selector="Border.chip.warning">
+      <Setter Property="Background" Value="{DynamicResource WarningTintBrush}" />
+    </Style>
+    <Style Selector="Border.chip.warning > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+    </Style>
     <!-- Stat field: a compact measured value (altitudes, lengths) with its label and unit in one tile. -->
     <Style Selector="Border.statField">
       <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />
@@ -155,6 +162,21 @@
       <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
       <Setter Property="BorderThickness" Value="3,0,0,0" />
       <Setter Property="Padding" Value="10,8" />
+    </Style>
+    <!-- Error note (storage alarm, B signal missing): pale error with a strong error edge. -->
+    <Style Selector="Border.errorNote">
+      <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+    <Style Selector="Border.errorNote TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Border.warningNote > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style Selector="TextBlock.sectionTitle">
       <Setter Property="FontSize" Value="{DynamicResource SectionSize}" />
