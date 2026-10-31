@@ -42,6 +42,10 @@
     <Style Selector="Border.card">
       <Setter Property="Padding" Value="{DynamicResource CardInset}" />
     </Style>
+    <!-- Card header row: control height, so a title with an action button lines up with a title without one. -->
+    <Style Selector="Grid.cardHeader">
+      <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    </Style>
     <Style Selector="TextBlock.cardTitle">
       <Setter Property="FontSize" Value="{DynamicResource CardTitleSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
