@@ -164,6 +164,17 @@ public partial class DesktopWorkflowTests
         run.UnlocatedTemperature = "2";
         run.ApplyForecast(new(new DateTime(2026, 10, 2, 12, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
         Assert.Equal(2m, run.Values.Weather.UnlocatedTemperature);
+        // A typed value equal to a forecast is still the operator's: a later forecast never replaces it, also after reopening.
+        var typed = new RaceRunEditor(new(2, new("", "", ""))) { UnlocatedTemperature = "3.5" };
+        typed.ApplyForecast(new(new DateTime(2026, 10, 2, 10, 0, 0), "Europe/Helsinki", 3.5m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        typed.ApplyForecast(new(new DateTime(2026, 10, 2, 11, 0, 0), "Europe/Helsinki", 4.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(3.5m, typed.Values.Weather!.UnlocatedTemperature);
+        var typedReopened = new RaceRunEditor(typed.Values);
+        typedReopened.ApplyForecast(new(new DateTime(2026, 10, 2, 12, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(3.5m, typedReopened.Values.Weather!.UnlocatedTemperature);
+        // An hour without a temperature removes the earlier forecast's value instead of leaving it under new provenance.
+        reopened.ApplyForecast(new(new DateTime(2026, 10, 2, 14, 0, 0), "Europe/Helsinki", null, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Null(reopened.Values.Weather!.UnlocatedTemperature);
         run.AddForerunnerCommand.Execute(null); run.AddForerunnerCommand.Execute(null);
         Assert.Equal("A", run.Forerunners[0].Letter); Assert.Equal("B", run.Forerunners[1].Letter);
         run.SelectedForerunner = run.Forerunners[0]; run.RemoveForerunnerCommand.Execute(null);
