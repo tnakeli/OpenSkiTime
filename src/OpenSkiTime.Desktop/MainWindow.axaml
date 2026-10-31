@@ -163,7 +163,7 @@
                 <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field">
                   <TextBlock Text="NATION *" Classes="fieldLabel" />
                   <AutoCompleteBox Text="{Binding Nation, Mode=TwoWay}" ItemsSource="{Binding NationChoices}"
-                                   ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" MaxLength="3" />
+                                   ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" />
                 </StackPanel>
                 <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
                   <TextBlock Text="SEASON *" Classes="fieldLabel" />
@@ -304,7 +304,7 @@
                   <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
                     <TextBlock Text="NATION" Classes="fieldLabel" />
                     <AutoCompleteBox Text="{Binding CompetitionNation, Mode=TwoWay}" ItemsSource="{Binding NationChoices}" Classes="nation"
-                                     ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" MaxLength="3" />
+                                     ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" />
                   </StackPanel>
                 </local:FormRow>
               </StackPanel>
@@ -358,7 +358,7 @@
                   <local:FormRow>
                     <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel" />
                       <AutoCompleteBox Text="{Binding CompetitionTdNation, Mode=TwoWay}" ItemsSource="{Binding NationChoices}" Classes="nation"
-                                     ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" MaxLength="3" /></StackPanel>
+                                     ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" /></StackPanel>
                     <StackPanel Grid.Column="3" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="TD NUMBER" Classes="fieldLabel" /><TextBox Text="{Binding CompetitionTdNumber}" /></StackPanel>
                   </local:FormRow>
                   <TextBlock Text="{Binding CompetitionTdOriginalName}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding CompetitionTdOriginalName}" />

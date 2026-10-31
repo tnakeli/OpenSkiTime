@@ -64,6 +64,9 @@ public sealed partial class RaceRunEditor : ObservableObject
         StartTemperature = Format(run.Weather?.StartTemperature); FinishTemperature = Format(run.Weather?.FinishTemperature);
         UnlocatedTemperature = Format(run.Weather?.UnlocatedTemperature);
         WeatherSource = run.Weather?.Source ?? "";
+        // The applied forecast's temperature is part of its saved provenance; restoring it lets a later forecast replace
+        // that value in the place-unspecified field after the series is reopened, while a typed value stays.
+        ForecastTemperature = ForecastIn(WeatherSource);
         foreach (var runner in run.Forerunners ?? [])
         { Forerunners.Add(new() { Letter = runner.Letter, FirstName = runner.Person.FirstName, LastName = runner.Person.LastName, Nation = runner.Person.Nation }); }
     }
@@ -96,6 +99,16 @@ public sealed partial class RaceRunEditor : ObservableObject
     [RelayCommand] private void RemoveForerunner()
     { if (SelectedForerunner is { } row) { Forerunners.Remove(row); } }
 
+    private const string ForecastPrefix = "Open-Meteo forecast · ";
+
+    // "4" and "4.0" are the same forecast value (a saved decimal may come back without its trailing zero).
+    private static bool SameNumber(string a, string b)
+        => decimal.TryParse(a.Replace(',', '.'), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var x)
+            && decimal.TryParse(b, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var y) && x == y;
+
+    private static string ForecastIn(string source) => source.StartsWith(ForecastPrefix, StringComparison.Ordinal)
+        ? source.Split(" · ").FirstOrDefault(x => x.EndsWith(" °C", StringComparison.Ordinal))?[..^3] ?? "" : "";
+
     public void ApplyForecast(WeatherHour hour)
     {
         ArgumentNullException.ThrowIfNull(hour);
@@ -104,9 +117,9 @@ public sealed partial class RaceRunEditor : ObservableObject
         // place-unspecified field. A value the operator typed is kept; an earlier forecast value is replaced.
         var previous = ForecastTemperature;
         ForecastTemperature = hour.Temperature?.ToString("0.0", CultureInfo.InvariantCulture) ?? "unavailable";
-        if (hour.Temperature is not null && (string.IsNullOrWhiteSpace(UnlocatedTemperature) || UnlocatedTemperature == previous))
+        if (hour.Temperature is not null && (string.IsNullOrWhiteSpace(UnlocatedTemperature) || SameNumber(UnlocatedTemperature, previous)))
         { UnlocatedTemperature = ForecastTemperature; }
-        WeatherSource = $"Open-Meteo forecast · {hour.LocalTime:yyyy-MM-dd HH:mm} {hour.Timezone} · {ForecastTemperature} °C · retrieved {hour.RetrievedAt.ToUniversalTime():yyyy-MM-dd HH:mm} UTC";
+        WeatherSource = $"{ForecastPrefix}{hour.LocalTime:yyyy-MM-dd HH:mm} {hour.Timezone} · {ForecastTemperature} °C · retrieved {hour.RetrievedAt.ToUniversalTime():yyyy-MM-dd HH:mm} UTC";
     }
 
     public void FillEmpty(string field, string value)

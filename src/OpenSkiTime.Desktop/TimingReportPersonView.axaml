@@ -8,7 +8,7 @@
    <StackPanel Grid.Column="4" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="FIRST NAME" Classes="fieldLabel"/><TextBox Text="{Binding FirstName}" MaxLength="150"/></StackPanel>
    <StackPanel Grid.Column="8" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="NATION" Classes="fieldLabel"/>
     <AutoCompleteBox Text="{Binding Nation, Mode=TwoWay}" ItemsSource="{x:Static app:FisReferenceData.Nations}"
-                     ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1" MaxLength="3"/></StackPanel>
+                     ValueMemberBinding="{Binding Code}" FilterMode="Custom" ItemFilter="{x:Static local:NationSearch.Filter}" MinimumPrefixLength="1"/></StackPanel>
    <StackPanel Grid.Column="10" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="FIS NUMBER" Classes="fieldLabel"/><TextBox Text="{Binding Number}" MaxLength="30"/></StackPanel>
   </local:FormRow>
   <local:FormRow>

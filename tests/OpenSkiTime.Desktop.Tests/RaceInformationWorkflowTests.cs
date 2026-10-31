@@ -137,6 +137,10 @@ public partial class DesktopWorkflowTests
         Assert.Equal(3.5m, run.Values.Weather.UnlocatedTemperature);
         run.ApplyForecast(new(new DateTime(2026, 10, 2, 11, 0, 0), "Europe/Helsinki", 4.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
         Assert.Equal(4.0m, run.Values.Weather.UnlocatedTemperature);
+        // Reopened from the saved values (4.0 comes back as 4): a new forecast still replaces the earlier forecast value.
+        var reopened = new RaceRunEditor(run.Values with { Weather = run.Values.Weather with { UnlocatedTemperature = 4m } });
+        reopened.ApplyForecast(new(new DateTime(2026, 10, 2, 13, 0, 0), "Europe/Helsinki", -1.5m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
+        Assert.Equal(-1.5m, reopened.Values.Weather!.UnlocatedTemperature);
         run.UnlocatedTemperature = "2";
         run.ApplyForecast(new(new DateTime(2026, 10, 2, 12, 0, 0), "Europe/Helsinki", 5.0m, 3, "Synthetic source", DateTimeOffset.UnixEpoch));
         Assert.Equal(2m, run.Values.Weather.UnlocatedTemperature);
