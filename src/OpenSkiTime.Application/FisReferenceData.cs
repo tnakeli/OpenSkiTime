@@ -63,6 +63,14 @@ public static class FisReferenceData
         return seasons.Select(x => x.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
     }
 
+    /// <summary>
+    /// Series season labels offered for a series start date: the season of the date, one before and one after, as
+    /// "2026/27". Empty without a date. The series season stays free text, so another label can still be typed.
+    /// </summary>
+    public static IReadOnlyList<string> SeriesSeasonChoices(DateOnly? startDate)
+        => startDate is { } d ? [OpenSkiTime.Domain.FisSeason.SeriesLabel(d.AddYears(-1)), OpenSkiTime.Domain.FisSeason.SeriesLabel(d),
+            OpenSkiTime.Domain.FisSeason.SeriesLabel(d.AddYears(1))] : [];
+
     /// <summary>True when the nation matches the search text by code or by name (case-insensitive).</summary>
     public static bool Matches(FisNation nation, string? search)
     {

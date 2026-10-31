@@ -59,9 +59,20 @@ public partial class DesktopWorkflowTests
             Assert.Equal("2028", season.SelectedItem);
             Assert.Equal(["2028", "2029", "2030", "2031"], vm.CompetitionSeasonChoices);
 
-            var nations = window.GetVisualDescendants().OfType<AutoCompleteBox>().ToArray();
+            var nations = window.GetVisualDescendants().OfType<AutoCompleteBox>().Where(x => x.IsEffectivelyVisible).ToArray();
             Assert.Equal(["FIN", "SWE"], nations.Select(x => x.Text));
             Assert.All(nations, x => Assert.Same(FisReferenceData.Nations, x.ItemsSource));
+
+            // Series: the season is an editable choice; a new start date changes the offered labels, never the value.
+            vm.ShowSeriesCommand.Execute(null); window.UpdateLayout();
+            var seriesSeason = window.FindControl<ComboBox>("SeriesSeasonInput")!;
+            Assert.True(seriesSeason.IsEditable); Assert.Equal("2026/27", seriesSeason.Text);
+            Assert.Equal(["2025/26", "2026/27", "2027/28"], seriesSeason.Items.OfType<string>());
+            vm.StartDateText = "01.12.2030"; window.UpdateLayout();
+            Assert.Equal(["2026/27", "2029/30", "2030/31", "2031/32"], seriesSeason.Items.OfType<string>());
+            Assert.Equal("2026/27", vm.Season); Assert.Equal("2026/27", seriesSeason.Text);
+            seriesSeason.Text = "2030/31";
+            Assert.Equal("2030/31", vm.Season);
             window.Close();
         }
         finally { Directory.Delete(folder, true); }

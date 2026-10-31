@@ -278,7 +278,7 @@
     </Style>
     <Style Selector="Expander">
       <Setter Property="FontSize" Value="{DynamicResource BodySize}" />
-      <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadius}" />
     </Style>
     <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
       <Setter Property="FontWeight" Value="SemiBold" />

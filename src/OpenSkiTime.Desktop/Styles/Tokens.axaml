@@ -101,8 +101,8 @@
   <x:Double x:Key="ControlHeight">30</x:Double>
   <!-- Fluent's expander headers default to 48 px. -->
   <x:Double x:Key="ExpanderMinHeight">34</x:Double>
-  <Thickness x:Key="ExpanderHeaderPadding">12,0,12,0</Thickness>
-  <Thickness x:Key="ExpanderContentPadding">12,8</Thickness>
+  <Thickness x:Key="ExpanderHeaderPadding">16,0,12,0</Thickness>
+  <Thickness x:Key="ExpanderContentPadding">16,12,16,14</Thickness>
   <FontFamily x:Key="TimeFontFamily">Cascadia Mono,Consolas,DejaVu Sans Mono,monospace</FontFamily>
 
   <!-- Fluent derives check boxes, toggles, sliders and focus accents from the system accent. Pin it to the
@@ -114,6 +114,19 @@
   <Color x:Key="SystemAccentColorLight1">#3B78EA</Color>
   <Color x:Key="SystemAccentColorLight2">#7FA7F2</Color>
   <Color x:Key="SystemAccentColorLight3">#C6D8FA</Color>
+
+  <!-- Expanders read as cards on the canvas: white header and content, soft line, hover tint on the header. -->
+  <StaticResource x:Key="ExpanderHeaderBackground" ResourceKey="SurfaceBrush" />
+  <StaticResource x:Key="ExpanderHeaderBackgroundPointerOver" ResourceKey="HoverBrush" />
+  <StaticResource x:Key="ExpanderHeaderBackgroundPressed" ResourceKey="HoverBrush" />
+  <StaticResource x:Key="ExpanderHeaderBorderBrush" ResourceKey="LineBrush" />
+  <StaticResource x:Key="ExpanderHeaderBorderBrushPointerOver" ResourceKey="LineBrush" />
+  <StaticResource x:Key="ExpanderHeaderBorderBrushPressed" ResourceKey="LineBrush" />
+  <StaticResource x:Key="ExpanderHeaderForeground" ResourceKey="TextBrush" />
+  <StaticResource x:Key="ExpanderHeaderForegroundPointerOver" ResourceKey="TextBrush" />
+  <StaticResource x:Key="ExpanderHeaderForegroundPressed" ResourceKey="TextBrush" />
+  <StaticResource x:Key="ExpanderContentBackground" ResourceKey="SurfaceBrush" />
+  <StaticResource x:Key="ExpanderContentBorderBrush" ResourceKey="LineBrush" />
 
   <!-- Keyboard focus: one 2 px accent outline on every focusable control instead of Fluent's black and white pair. -->
   <SolidColorBrush x:Key="SystemControlFocusVisualPrimaryBrush">#1D5FE0</SolidColorBrush>

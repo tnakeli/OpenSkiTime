@@ -40,6 +40,14 @@ public sealed class CompetitionEditorChoicesTests
         Assert.Empty(FisReferenceData.SeasonChoices(null, "27"));
     }
 
+    [Fact]
+    public void SeriesSeasonChoicesAreLabelsAroundTheStartDate()
+    {
+        Assert.Equal(["2025/26", "2026/27", "2027/28"], FisReferenceData.SeriesSeasonChoices(new DateOnly(2026, 12, 12)));
+        Assert.Equal(["2025/26", "2026/27", "2027/28"], FisReferenceData.SeriesSeasonChoices(new DateOnly(2027, 3, 1)));
+        Assert.Empty(FisReferenceData.SeriesSeasonChoices(null));
+    }
+
     [Theory]
     [InlineData("fin", "FIN", true)]
     [InlineData("F", "FIN", true)]

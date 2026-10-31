@@ -4,7 +4,7 @@ using OpenSkiTime.Application;
 
 namespace OpenSkiTime.Desktop;
 
-// Choices offered by the competition editor, and the course values derived while typing.
+// Choices offered by the series and competition editors, and the course values derived while typing.
 public sealed partial class MainViewModel
 {
     public IReadOnlyList<string> CompetitionCategoryChoices { get; } = FisReferenceData.CalendarCategories;
@@ -23,11 +23,35 @@ public sealed partial class MainViewModel
     {
         DateOnly? date = DateOnly.TryParseExact(CompetitionDateText, s_dateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
             ? parsed : null;
-        var wanted = FisReferenceData.SeasonChoices(date, CompetitionSeason);
-        foreach (var stale in CompetitionSeasonChoices.Where(x => !wanted.Contains(x)).ToArray()) { CompetitionSeasonChoices.Remove(stale); }
+        SyncInPlace(CompetitionSeasonChoices, FisReferenceData.SeasonChoices(date, CompetitionSeason));
+    }
+
+    /// <summary>
+    /// Season labels around the series start date for the editable series season field. The typed season is always
+    /// one of them: removing the selected item would make the combo box clear the operator's text.
+    /// </summary>
+    public ObservableCollection<string> SeriesSeasonChoices { get; } = new(FisReferenceData.SeriesSeasonChoices(DateOnly.FromDateTime(DateTime.Today)));
+
+    partial void OnStartDateTextChanged(string value) => SyncSeriesSeasonChoices();
+    partial void OnSeasonChanged(string value) => SyncSeriesSeasonChoices();
+
+    private void SyncSeriesSeasonChoices()
+    {
+        DateOnly? date = DateOnly.TryParseExact(StartDateText, s_dateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+            ? parsed : null;
+        var wanted = FisReferenceData.SeriesSeasonChoices(date).ToList();
+        if (!string.IsNullOrWhiteSpace(Season) && !wanted.Contains(Season)) { wanted.Add(Season); }
+        wanted.Sort(StringComparer.Ordinal);
+        SyncInPlace(SeriesSeasonChoices, wanted);
+    }
+
+    // Brings a choice list to the wanted items without clearing it, so an item that stays is never deselected.
+    private static void SyncInPlace(ObservableCollection<string> items, IReadOnlyList<string> wanted)
+    {
+        foreach (var stale in items.Where(x => !wanted.Contains(x)).ToArray()) { items.Remove(stale); }
         for (var i = 0; i < wanted.Count; i++)
         {
-            if (i >= CompetitionSeasonChoices.Count || CompetitionSeasonChoices[i] != wanted[i]) { CompetitionSeasonChoices.Insert(i, wanted[i]); }
+            if (i >= items.Count || items[i] != wanted[i]) { items.Insert(i, wanted[i]); }
         }
     }
 
