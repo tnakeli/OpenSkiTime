@@ -43,13 +43,14 @@ public partial class DesktopWorkflowTests
             var heights = fields.GroupBy(x => x.Bounds.Height).ToArray();
             Assert.True(heights.Length == 1, string.Join("; ", heights.Select(g => $"{g.Key}px: {string.Join(", ", g.Select(x => x.GetType().Name).Distinct())}")));
 
-            // One page column: in a window wider than the content width, the list, the right-hand cards and the
-            // action bar end on the same edge, and the share-to-all checkboxes of a card row sit on one line.
+            // Competitions is full width: the list, the right-hand cards and the action bar end on the same edge,
+            // and the share-to-all checkboxes of a card row sit on one line.
             double Right(Control c) => c.TranslatePoint(new Point(c.Bounds.Width, 0), window)!.Value.X;
             double Top(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.Y;
             Border Card(string name) => window.FindControl<Control>(name)!.GetVisualAncestors().OfType<Border>().First(x => x.Classes.Contains("card"));
             var list = window.FindControl<DataGrid>("CompetitionsGrid")!;
-            Assert.InRange(list.Bounds.Width, 1239, 1241);
+            Assert.True(list.Bounds.Width > 1500, $"Competition list is {list.Bounds.Width}px wide");
+            Assert.DoesNotContain(list.Columns, x => Equals(x.Header, ""));
             var saveCompetition = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save competition"));
             var addCompetition = window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Add competition"));
             Assert.All(new Control[] { Card("CompetitionFisCheckBox"), Card("SaveCourseToAllRacesCheckBox"),

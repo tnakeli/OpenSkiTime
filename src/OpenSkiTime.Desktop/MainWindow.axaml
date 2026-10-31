@@ -207,9 +207,8 @@
           </Border>
         </StackPanel>
         </local:PageColumn>
-        <!-- One page column: the list, editor cards and actions share both edges; the list scrolls when wider. -->
-        <local:PageColumn IsVisible="{Binding IsCompetitionsSection}">
-        <StackPanel Spacing="12">
+        <!-- A view led by its list: full width, so the list, editor cards and actions share both window edges. -->
+        <StackPanel Spacing="12" IsVisible="{Binding IsCompetitionsSection}">
           <Grid ColumnDefinitions="*,Auto">
             <Button Grid.Column="1" Content="Add competition" Command="{Binding NewCompetitionCommand}" Classes="primaryAction" />
           </Grid>
@@ -229,7 +228,6 @@
               <x:Double x:Key="DataGridRowSelectedHoveredUnfocusedBackgroundOpacity">1</x:Double>
             </DataGrid.Resources>
             <DataGrid.Columns>
-              <DataGridTemplateColumn Header="" IsReadOnly="True" CanUserSort="False" Width="40" MinWidth="40"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding ImportMarker}" Classes="markerCell" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
               <DataGridTextColumn Header="DATE" Binding="{Binding Values.Date, Mode=OneWay, StringFormat='{}{0:dd.MM.yyyy}'}" Width="Auto" />
               <DataGridTextColumn Header="COMPETITION" Binding="{Binding Values.ShortLabel}" Width="Auto" FontWeight="SemiBold" />
               <DataGridTextColumn Header="EVENT NAME" Binding="{Binding Values.Name}" Width="Auto" />
@@ -438,7 +436,6 @@
           </Border>
           </StackPanel>
         </StackPanel>
-        </local:PageColumn>
         <StackPanel Spacing="12" IsVisible="{Binding IsCompetitorsSection}">
           <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
           <!-- Desk status and save: edits in the grid stay pending until Save. -->
