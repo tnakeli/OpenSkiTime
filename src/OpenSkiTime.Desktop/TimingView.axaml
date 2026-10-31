@@ -153,7 +153,9 @@
     </Grid>
     <!-- The two latest finishers stay in view above the full ranking (latest first); the code keeps the columns in
          line with the ranking grid. -->
-    <Border Grid.Row="1" Name="LatestFinishersPanel" Classes="latestFinishers" IsVisible="{Binding HasLatestFinishers}">
+    <Border Grid.Row="1" Name="LatestFinishersPanel" Classes="latestFinishers" ClipToBounds="True">
+     <Border.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="HasLatestFinishers" />
+      <Binding Path="!RankingOverflows" RelativeSource="{RelativeSource AncestorType=local:TimingView}" /></MultiBinding></Border.IsVisible>
      <DataGrid Name="LatestFinishersGrid" Classes="raceGrid timingGrid" ItemsSource="{Binding LatestFinisherRows}" SelectionChanged="SelectCompetitor" PointerPressed="SelectContextCompetitor" LoadingRow="MarkForerunnerRow"
       AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" CanUserSortColumns="False" CanUserReorderColumns="False" CanUserResizeColumns="False"
       HeadersVisibility="None" RowHeight="28" GridLinesVisibility="Horizontal" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"

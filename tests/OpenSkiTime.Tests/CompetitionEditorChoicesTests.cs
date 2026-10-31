@@ -45,6 +45,9 @@ public sealed class CompetitionEditorChoicesTests
     {
         Assert.Equal(["2025/26", "2026/27", "2027/28"], FisReferenceData.SeriesSeasonChoices(new DateOnly(2026, 12, 12)));
         Assert.Equal(["2025/26", "2026/27", "2027/28"], FisReferenceData.SeriesSeasonChoices(new DateOnly(2027, 3, 1)));
+        // Calendar edges: the neighbour beyond the range is omitted instead of failing (a saved series must still open).
+        Assert.Equal(2, FisReferenceData.SeriesSeasonChoices(DateOnly.MinValue).Count);
+        Assert.Equal(2, FisReferenceData.SeriesSeasonChoices(DateOnly.MaxValue).Count);
         Assert.Empty(FisReferenceData.SeriesSeasonChoices(null));
     }
 

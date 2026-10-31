@@ -19,7 +19,7 @@ The FIS logo remains a third-party FIS trademark and artwork, rather than OpenSk
 - DNS has at least three rows, NPS one and DNF four. Each status uses individual bib cells. There are 14 cells per row; the label occupies the first four cells, leaving 38 DNS, 10 NPS and 52 DNF writing cells in the default form. Extra rows are added automatically when these capacities are exceeded. Tables continue onto another page when necessary, preserving every bib once. Large DSQ lists and long notes likewise continue across pages.
 - Time published, Deadline and publication Date are blank for manual entry. The Referee contains the saved referee's name/nation when available, with writing space for a signature. No technical-delegate signature field or full jury listing is added to this form.
 
-Competition source renderer version is 6 (timing report form, entry-list columns and versioned footer), making earlier PDFs Outdated after reopening PDF Factory. Existing PDFs remain accessible until regeneration. Timing calculations, raw capture, audit history and series-file format are unchanged.
+Competition source renderer version is 7 and the series report version 2 (FIS points columns by discipline in entry lists and start lists), making earlier PDFs Outdated after reopening PDF Factory. Existing PDFs remain accessible until regeneration. Timing calculations, raw capture, audit history and series-file format are unchanged.
 
 ## Verification
 

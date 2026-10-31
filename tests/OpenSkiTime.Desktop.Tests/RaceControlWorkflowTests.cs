@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Collections;
 using Avalonia.Headless;
@@ -355,6 +356,26 @@ public partial class DesktopWorkflowTests
             Assert.True(latestGrid.IsEffectivelyVisible);
             Assert.Equal(view.FindControl<DataGrid>("RankingGrid")!.Columns.Where(x => x.IsVisible).Select(x => Math.Round(x.ActualWidth)),
                 latestGrid.Columns.Where(x => x.IsVisible).Select(x => Math.Round(x.ActualWidth)));
+            // The latest finisher's time sits exactly under the same time in the grouped (indented) ranking.
+            var rankingGrid = view.FindControl<DataGrid>("RankingGrid")!;
+            var latestRow = vm.LatestFinisherRows[0];
+            double TimeX(DataGrid grid)
+            {
+                var cell = grid.GetVisualDescendants().OfType<TextBlock>()
+                    .FirstOrDefault(x => x.IsEffectivelyVisible && x.Text == latestRow.DisplayTime && x.DataContext is TimingGridRow row && row.Bib == latestRow.Bib);
+                Assert.True(cell is not null, grid.Name + " shows no time for bib " + latestRow.Bib);
+                return cell.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X;
+            }
+            void Settle() { window.UpdateLayout(); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); }
+            rankingGrid.ScrollIntoView(vm.RankingRows.Single(x => x.Bib == latestRow.Bib), null); Settle();
+            Assert.Equal(TimeX(rankingGrid), TimeX(latestGrid), 1);
+            // A ranking wider than its pane (a later run with many intermediates) scrolls sideways; the strip cannot follow
+            // that offset, so it hides until the ranking fits again. The ranking still marks the latest finisher.
+            var club = rankingGrid.Columns.Single(x => Equals(x.Header, "CLUB")); var clubMin = club.MinWidth;
+            club.MinWidth = 900; Settle();
+            Assert.True(view.RankingOverflows); Assert.False(latestGrid.IsEffectivelyVisible);
+            club.MinWidth = clubMin; Settle();
+            Assert.False(view.RankingOverflows); Assert.True(latestGrid.IsEffectivelyVisible);
             Assert.Equal(2, vm.RankingView.Groups!.OfType<DataGridCollectionViewGroup>().Count());
             foreach (var group in vm.RankingRows.GroupBy(x => x.Category))
             {

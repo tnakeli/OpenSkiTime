@@ -65,11 +65,18 @@ public static class FisReferenceData
 
     /// <summary>
     /// Series season labels offered for a series start date: the season of the date, one before and one after, as
-    /// "2026/27". Empty without a date. The series season stays free text, so another label can still be typed.
+    /// "2026/27". Empty without a date. The series season stays free text, so another label can still be typed. A
+    /// neighbouring season outside the calendar range (a date in year 1 or 9999) is left out instead of failing.
     /// </summary>
     public static IReadOnlyList<string> SeriesSeasonChoices(DateOnly? startDate)
-        => startDate is { } d ? [OpenSkiTime.Domain.FisSeason.SeriesLabel(d.AddYears(-1)), OpenSkiTime.Domain.FisSeason.SeriesLabel(d),
-            OpenSkiTime.Domain.FisSeason.SeriesLabel(d.AddYears(1))] : [];
+    {
+        if (startDate is not { } d) { return []; }
+        var dates = new List<DateOnly>(3);
+        if (d.Year > DateOnly.MinValue.Year) { dates.Add(d.AddYears(-1)); }
+        dates.Add(d);
+        if (d.Year < DateOnly.MaxValue.Year) { dates.Add(d.AddYears(1)); }
+        return dates.Select(OpenSkiTime.Domain.FisSeason.SeriesLabel).ToArray();
+    }
 
     /// <summary>True when the nation matches the search text by code or by name (case-insensitive).</summary>
     public static bool Matches(FisNation nation, string? search)
