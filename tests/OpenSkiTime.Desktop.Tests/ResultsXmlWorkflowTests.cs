@@ -322,6 +322,22 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
+    public async Task AConnectionCutWhileTheAnswerIsReadIsNotReportedAsNothingSent()
+    {
+        using var handler = new FisHandler(_ => throw new IOException("The response ended prematurely."));
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler);
+        try
+        {
+            await vm.SendToFisCommand.ExecuteAsync(null); await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
+            var outcome = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.True(outcome.IsError);
+            Assert.DoesNotContain("Nothing was sent", outcome.Hint, StringComparison.Ordinal);
+            Assert.Contains("may have reached FIS", outcome.Hint, StringComparison.Ordinal);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
     public async Task SimulationTimingIsNeverSentAsOfficialResultsButMayBeSentAsATest()
     {
         using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName ?? "FIN9991.xml", "processed", "File successfully saved!", test: call.TestMode == "true", codex: "9991")));

@@ -238,7 +238,7 @@ public sealed partial class MainViewModel
             }
             await SendXmlToFisAsync(approval.XmlFileName, approval.Xml, test, mode, outcome => Publish(key, outcome), null, cancellation.Token);
         }
-        catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or IOException or HttpRequestException
+        catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or SeriesFileException or IOException or HttpRequestException
             or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
         {
             Publish(key, FisUploadOutcomes.FailureOutcome(ex, test, mode, _submissionDisplays.GetValueOrDefault(key).Id ?? "", ResultSubmissionOutcome?.FileName ?? ""));
