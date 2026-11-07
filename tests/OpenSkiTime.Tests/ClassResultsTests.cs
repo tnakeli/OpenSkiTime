@@ -99,6 +99,47 @@ public sealed class ClassResultsTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public async Task LaterRunOrderedWithoutResultsIsNotInvalidatedByTheTimingOfTheRunBefore()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-class-results", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var race = new CompetitionValues("Class race", "CR", s_date, Discipline.GiantSlalom, RaceType.Club, 2, 0);
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var series = await workspace.CreateAsync(Path.Combine(root, "independent.ost"), new("Synthetic", "Test", "Club", s_date, s_date, "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null, race, series.Revision);
+            var competition = series.Competitions[0];
+            var revision = series.Revision;
+            var entrants = new List<DrawEntrant>();
+            for (var i = 0; i < 3; i++)
+            {
+                var athlete = new CompetitorValues("INDEP" + i, "Racer", 2016, null, "FIN", "Club", Gender.Female);
+                var saved = await workspace.SaveDeskRowAsync(null, athlete, competition.Id, true, null, revision);
+                revision = saved.Revision; entrants.Add(new(saved.Value.Id, athlete, null, "N10"));
+            }
+            var blocks = new StartOrderSetup([new("N10", ["N10"], new(), new(), "a")]);
+            var plan = FlexStartOrder.FirstRun(competition.Id, race, null, entrants, PointsListSource.None, new(), blocks);
+            var desk = await workspace.SaveStartListAsync(new(plan, revision, "Test", "Draw", s_at));
+            var first = desk.Revisions.Single();
+            desk = await workspace.MarkRunStartedAsync(first.Id, desk.SeriesRevision, "Test", s_at);
+            await TimeAsync(workspace, first, bib => bib == 1 ? 5000 : null);
+            // Run 2 is ordered by the start order only: it is saved without a timing version although Run 1 is unfinished.
+            var secondPlan = FlexStartOrder.LaterRun(desk.Revisions.Single(), [], blocks);
+            desk = await workspace.SaveStartListAsync(new(secondPlan, desk.SeriesRevision, "Test", "Run 2", s_at));
+            var second = desk.Revisions.Single(x => x.Plan.RunNumber == 2);
+            // Run 1 timing changes afterwards; starting Run 2 is still allowed.
+            await workspace.Timing!.SelectRunAsync(first.Id);
+            await workspace.Timing.StartAsync(new SimulatorTimingSource(), new("Test", "Synthetic", s_date, Simulation: true), "Test");
+            await workspace.Timing.StopAsync();
+            await workspace.Timing.CorrectAsync(new(DecisionKind.Time, CompetitorId: first.Plan.Entries[1].Entrant.CompetitorId, Hundredths: 5100), "Test", "Late time");
+            desk = await workspace.MarkRunStartedAsync(second.Id, desk.SeriesRevision, "Test", s_at);
+            Assert.NotNull(desk.Revisions.Single(x => x.Plan.RunNumber == 2).StartedAt);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     private static async Task TimeAsync(SeriesWorkspace workspace, StartListRevision list, Func<int, long?> time)
     {
         await workspace.Timing!.SelectRunAsync(list.Id);

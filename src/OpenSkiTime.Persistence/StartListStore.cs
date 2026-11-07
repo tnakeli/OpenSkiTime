@@ -38,7 +38,8 @@ internal sealed partial class SqliteSeriesFileSession
             if (string.IsNullOrWhiteSpace(request.Operator) || string.IsNullOrWhiteSpace(request.Reason))
             { throw new DomainValidationException("Enter the operator and reason for this start-list revision."); }
             await ValidateStartPlanAsync(db, plan, ct);
-            if (plan.SourceListId is { } timingSourceId && await db.Captures.AnyAsync(x => x.ListId == timingSourceId, ct))
+            // A flexible later-run list ordered without results (reverse or same order) does not depend on the timing of the run before.
+            if (plan.SourceListId is { } timingSourceId && !ResultsIndependent(plan) && await db.Captures.AnyAsync(x => x.ListId == timingSourceId, ct))
             {
                 var timing = await ReadTimingAsync(timingSourceId, ct);
                 if (!TimingReplay.InputVersionMatches(request.ExpectedTimingVersion, TimingReplay.InputVersion(timing)))
@@ -103,13 +104,15 @@ internal sealed partial class SqliteSeriesFileSession
 
     private async Task ValidateTimingSourceAsync(SeriesDbContext db, StartListRow row, StartListPlan plan, CancellationToken ct)
     {
-        if (plan.SourceListId is { } id && await db.Captures.AnyAsync(x => x.ListId == id, ct))
+        if (plan.SourceListId is { } id && !ResultsIndependent(plan) && await db.Captures.AnyAsync(x => x.ListId == id, ct))
         {
             if (!TimingReplay.InputVersionMatches(row.SourceTimingVersion, TimingReplay.InputVersion(await ReadTimingAsync(id, ct))))
             { throw new DomainValidationException("Run 1 timing changed. Recreate the next start list before starting this run."); }
         }
     }
 
+
+    private static bool ResultsIndependent(StartListPlan plan) => plan.Setup is not null && plan.SourceResults.Count == 0;
 
     // A run's field is stored in the Gender column; "Other" is the list for all genders.
     internal static Gender RunField(Gender? gender) => gender ?? Gender.Other;

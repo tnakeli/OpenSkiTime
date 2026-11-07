@@ -35,6 +35,16 @@ public static class ClassResultsBuilder
         var runs = source.Runs.GroupBy(x => x.List.Plan.RunNumber).ToDictionary(x => x.Key, x => x.ToArray());
         var starters = source.Runs.Where(x => x.List.Plan.RunNumber == 1).SelectMany(x => x.List.Plan.Entries.OrderBy(e => e.Position)).ToArray();
         var rows = new List<(string Class, ClassResultRow Row)>();
+        (TimingStatus Status, long? Hundredths, DisqualificationDetails? Disqualification)? Result(int run, Guid competitorId)
+        {
+            var timed = runs.GetValueOrDefault(run)?.SelectMany(x => x.Timing.Results).FirstOrDefault(x => x.CompetitorId == competitorId && !x.IsForerunner);
+            if (timed is not null && timed.Status is not (TimingStatus.Ready or TimingStatus.OnCourse or TimingStatus.Review)) { return (timed.Status, timed.Hundredths, timed.Disqualification); }
+            // Results typed in without capture are saved with the start list of the next run.
+            if (runs.GetValueOrDefault(run)?.All(x => x.Source.Sessions.Count == 0) == true
+                && runs.GetValueOrDefault(run + 1)?.SelectMany(x => x.List.Plan.SourceResults).FirstOrDefault(x => x.CompetitorId == competitorId) is { } saved)
+            { return (Enum.Parse<TimingStatus>(saved.Status.ToString()), saved.Hundredths, null); }
+            return timed is null ? null : (timed.Status, timed.Hundredths, timed.Disqualification);
+        }
         foreach (var entry in starters)
         {
             var times = new List<string>();
@@ -45,17 +55,16 @@ public static class ClassResultsBuilder
             var detail = string.Empty;
             for (var run = 1; run <= runCount; run++)
             {
-                var result = runs.GetValueOrDefault(run)?.SelectMany(x => x.Timing.Results)
-                    .FirstOrDefault(x => x.CompetitorId == entry.Entrant.CompetitorId && !x.IsForerunner);
+                var result = Result(run, entry.Entrant.CompetitorId);
                 if (result is { Status: TimingStatus.Finished, Hundredths: { } hundredths }) { times.Add(TimingTime.Format(hundredths)); total += hundredths; continue; }
-                var open = result is null || result.Status is TimingStatus.Ready or TimingStatus.OnCourse or TimingStatus.Review;
-                times.Add(open ? "—" : result!.Status.ToString());
+                var open = result is null || result.Value.Status is TimingStatus.Ready or TimingStatus.OnCourse or TimingStatus.Review;
+                times.Add(open ? "—" : result!.Value.Status.ToString());
                 total = null;
                 if (outcome is null && !open)
                 {
-                    (outcome, outcomeRun) = (result!.Status, run);
-                    status = $"{result.Status} R{run}";
-                    if (result.Disqualification is { } dsq)
+                    (outcome, outcomeRun) = (result!.Value.Status, run);
+                    status = $"{result.Value.Status} R{run}";
+                    if (result.Value.Disqualification is { } dsq)
                     { detail = dsq.Gate is { } gate ? $"Gate {gate}" : dsq.Reason; }
                 }
             }
@@ -87,7 +96,12 @@ public static class ClassResultsBuilder
     {
         ArgumentNullException.ThrowIfNull(source);
         var runCount = source.Competition?.Values.RunCount ?? 1;
-        return Enumerable.Range(1, runCount).All(run => source.Runs.Any(x => x.List.Plan.RunNumber == run)
-            && source.Runs.Where(x => x.List.Plan.RunNumber == run).All(x => x.Timing.Complete));
+        // Every list of the first run (a field: all genders, Men or Women) needs all runs, each finished or classified.
+        bool RunComplete(RunReportData data)
+            => data.Timing.Complete || (data.Source.Sessions.Count == 0 && source.Runs.Where(x => x.List.Plan.RunNumber == data.List.Plan.RunNumber + 1 && x.List.Plan.Gender == data.List.Plan.Gender)
+                .Any(x => x.List.Plan.SourceResults.Count == data.List.Plan.Entries.Count));
+        var fields = source.Runs.Where(x => x.List.Plan.RunNumber == 1).Select(x => x.List.Plan.Gender).Distinct().ToArray();
+        return fields.Length > 0 && fields.All(field => Enumerable.Range(1, runCount).All(run =>
+            source.Runs.FirstOrDefault(x => x.List.Plan.RunNumber == run && x.List.Plan.Gender == field) is { } data && RunComplete(data)));
     }
 }

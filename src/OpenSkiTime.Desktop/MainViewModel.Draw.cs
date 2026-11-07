@@ -157,8 +157,9 @@ public sealed partial class MainViewModel
     // Run 1 changes (an ignored stray impulse, a queue reorder) leave the starting order valid.
     public bool CanExportDraw => DrawRevision is not null && !IsDrawBusy && !HasUnsavedRunInput
         && (_sourceTiming is null || DrawRunStarted || DrawRevision.HasCapture
-            || (_sourceTiming.Complete && (DrawRevision.Plan.Setup is not null && DrawRevision.Plan.SourceResults.Count == 0
-                || DrawRevision.Plan.SourceResults.SequenceEqual(_sourceTiming.ToRunFinishes()))));
+            // A flexible list ordered without results does not depend on the run before, complete or not.
+            || (DrawRevision.Plan.Setup is not null && DrawRevision.Plan.SourceResults.Count == 0)
+            || (_sourceTiming.Complete && DrawRevision.Plan.SourceResults.SequenceEqual(_sourceTiming.ToRunFinishes())));
     public bool HasDrawSource => _sourceRun is not null;
     public bool CanEditDrawResults => HasDrawSource && !DrawRunStarted && !IsDrawBusy;
     public string DrawActionLabel => IsFirstDrawRun ? DrawRevision is null ? "Draw" : "Draw again" : "Create start list";

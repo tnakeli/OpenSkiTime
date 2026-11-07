@@ -179,7 +179,15 @@ public sealed partial class MainViewModel
         {
             DrawBlocks[i].Order = i + 1;
             if (_trackedDrawBlocks.Add(DrawBlocks[i]))
-            { DrawBlocks[i].PropertyChanged += (_, e) => { if (e.PropertyName == nameof(DrawBlockRow.FirstBib)) { RecomputeDrawBibs(); } }; }
+            {
+                DrawBlocks[i].PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(DrawBlockRow.FirstBib)) { RecomputeDrawBibs(); }
+                    // Changed options of a saved later-run list are unsaved input until the list is created again or discarded.
+                    if (e.PropertyName is nameof(DrawBlockRow.LaterRun) or nameof(DrawBlockRow.ReverseFirst) or nameof(DrawBlockRow.NonFinishers)
+                        && IsLaterDrawRun && DrawRevision is not null && !IsDrawBusy) { HasUnsavedRunInput = true; }
+                };
+            }
         }
         RecomputeDrawBibs();
         OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(DrawBlockReason));
@@ -339,7 +347,7 @@ public sealed partial class MainViewModel
             plan = FlexStartOrder.LaterRun(source, results, setup);
         }
         await workspace.SaveStartListAsync(new(plan, _drawDesk.SeriesRevision, Environment.UserName,
-            DrawRun == 1 ? "Draw" : $"Run {DrawRun} start order", DateTimeOffset.UtcNow, _sourceTimingVersion));
+            DrawRun == 1 ? "Draw" : $"Run {DrawRun} start order", DateTimeOffset.UtcNow, plan.SourceResults.Count > 0 ? _sourceTimingVersion : null));
         await LoadDrawAsync();
         SetStatus("Start list saved.");
     }

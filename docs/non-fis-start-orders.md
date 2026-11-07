@@ -6,7 +6,7 @@ A Club (non-FIS) competition can hold several classes, men and women together, a
 
 - A **class** is a category label from the series' category rules (Competitors → category rules; a new series starts with the [default classes](competitors.md#default-classes) of its season), resolved from birth year and gender when the list is drawn, for example `N10`, `M10`, `W10`. The program never interprets the label. If a starter has no class or more than one, the draw is blocked and names the competitors. Without any category rules everybody is in one class, `All`.
 - A **block** is one or more classes drawn and listed together. By default every class is its own block; **Merge with next** draws two blocks as one group and **Split** separates them again. Ranking and results stay per class.
-- The **Field** setting chooses the list: **All** (default, every class, men and women in one list) or **Men** / **Women** for a list of one gender. A competition cannot mix an All list with separate Men and Women lists.
+- The start list of a Club race holds every class, men and women together. (Lists of one gender can be saved through the file format, but the application offers one list per run.)
 
 ## Setup grid in the Draw view
 

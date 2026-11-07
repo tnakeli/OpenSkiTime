@@ -157,7 +157,7 @@ public static class ReportCatalog
         if (race.Values.RaceType != RaceType.Fis)
         {
             // A Club race has results per class; the FIS penalty and official results do not apply to it.
-            Add(PdfReportType.ClassResults, "Results", reason: source.Runs.Any(x => x.Source.Sessions.Count > 0) ? null : "Capture timing first.");
+            Add(PdfReportType.ClassResults, "Results", reason: source.Runs.Any(x => x.Source.Sessions.Count > 0 || x.Timing.Results.Any(r => r.Status != TimingStatus.Ready)) ? null : "Record timing first.");
             Add(PdfReportType.TimingReport, "Timing Report", reason: source.TimingReport is not null || source.Runs.Any(x => x.Source.Sessions.Count > 0)
                 ? null : "Save timing report metadata or capture timing first.");
             return result;
