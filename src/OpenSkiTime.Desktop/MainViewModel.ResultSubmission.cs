@@ -133,6 +133,9 @@ public sealed partial class MainViewModel
         // for the timing that is committed now, and a changed race is never sent as if it were current.
         if (await CommittedResultFingerprintAsync(ResultsCompetition.Id, ResultsCompetition.Values.RunCount) != _resultFingerprint)
         { throw new DomainValidationException("Timing or start-list data changed since the results were loaded. Press Refresh timing and check the results before sending."); }
+        var committed = await workspace.ReadAsync();
+        if (committed.Competitions.FirstOrDefault(x => x.Id == ResultsCompetition.Id)?.Values != ResultsCompetition.Values || committed.Values != _current.Values)
+        { throw new DomainValidationException("The competition or series details changed since the results were loaded. Press Refresh timing and check the results before sending."); }
         var penalty = CalculateCurrentPenalty();
         var information = CurrentRaceInformation();
         var td = information.Jury.Single(x => x.Function == "TechnicalDelegate").Person;
@@ -285,8 +288,12 @@ public sealed partial class MainViewModel
     private static async Task FollowFisSubmissionAsync(FisResultSubmissionClient client, string token, FisSubmissionResponse response, string mode,
         string sentFileName, Action<FisUploadOutcome> publish, Func<FisSubmissionResponse, Task>? persist, CancellationToken ct)
     {
+        var test = response.Submission.IsTest;
         for (var poll = 0; ; poll++)
         {
+            // A status answer that changes between test and real is never shown: it could report a test as published results.
+            if (response.Submission.IsTest != test)
+            { throw new FisSubmissionException("FIS answered the status check in a different mode than the upload. Check the submission before sending again.", response.ResponseText, false, FisSubmissionFailure.Unsupported); }
             var paused = !response.Submission.Summary.IsComplete && poll >= 24;
             publish(FisUploadOutcomes.OutcomeOf(response, mode, sentFileName, paused));
             if (persist is not null) { await persist(response); }

@@ -130,6 +130,9 @@ public sealed partial class MainViewModel
         // Another window may have saved a newer report since this one was loaded.
         if ((await workspace.ReadTimingReportAsync(_reportDraft.CompetitionId))?.Revision != _reportSaved?.Revision)
         { throw new DomainValidationException("The saved report changed. Reopen the report before sending it."); }
+        var persistedSeries = await workspace.ReadAsync();
+        if (persistedSeries.Competitions.FirstOrDefault(x => x.Id == _reportDraft.CompetitionId)?.Values != ReportCompetition?.Values || persistedSeries.Values != _current?.Values)
+        { throw new DomainValidationException("The competition or series details changed since the report was opened. Reopen the report before sending it."); }
         var current = ReadReportDraft();
         var unchanged = _reportSaved is not null && !HasTimingReportEdits
             && System.Text.Json.JsonSerializer.Serialize(current) == System.Text.Json.JsonSerializer.Serialize(_reportSaved.Values);

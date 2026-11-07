@@ -276,6 +276,50 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
+    public async Task ChangedCompetitionDetailsAreNeverSentAsCurrentMetadata()
+    {
+        using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName!, "processed", "File successfully saved!", test: false)));
+        var (folder, _, workspace, vm, competition) = await FisXmlRaceAsync(handler);
+        try
+        {
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            Assert.Single(await workspace.ReadApprovedResultsAsync(competition));
+
+            // The codex is corrected elsewhere after Results was loaded: the cached details are obsolete although timing is not.
+            var series = await workspace.ReadAsync();
+            var details = series.Competitions.Single(x => x.Id == competition).Values;
+            await workspace.SaveCompetitionAsync(competition, details with { FisCode = "0599" }, series.Revision);
+
+            await vm.SendToFisCommand.ExecuteAsync(null); await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
+            var outcome = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.True(outcome.IsError); Assert.Equal("XML not created", outcome.Title);
+            Assert.Contains("details changed", outcome.Detail, StringComparison.Ordinal);
+            Assert.Empty(handler.Calls); Assert.Single(await workspace.ReadApprovedResultsAsync(competition));
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task AStatusAnswerThatChangesFromTestToRealIsNeverShownAsPublishedResults()
+    {
+        // The test upload is accepted and still processing; the status answer then drops the test flag and reports success.
+        using var handler = new FisHandler(call => call.Url.Contains("/status/", StringComparison.Ordinal)
+            ? FisJson(FisAnswer("FIN9991.xml", "processed", "File successfully saved!", test: false, codex: "9991"))
+            : FisJson(FisAnswer(call.FileName!, "accepted", "Queued for processing.", test: true, codex: "9991")));
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler);
+        try
+        {
+            vm.FisUploadTestMode = true;
+            await vm.SendToFisCommand.ExecuteAsync(null);
+            var outcome = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.True(outcome.IsError); Assert.NotEqual("Results accepted by FIS", outcome.Title);
+            Assert.Equal("FIS gave no usable answer", outcome.Title);
+            Assert.Equal(2, handler.Calls.Count);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
     public async Task APastedLookupOnARaceWithoutXmlNeverStaysOnAnotherRace()
     {
         var pasted = new Guid("00000000-0000-0000-0000-0000000000e5");
