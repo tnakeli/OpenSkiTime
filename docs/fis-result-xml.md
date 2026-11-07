@@ -22,7 +22,7 @@ The specification is not consistent with itself. Section 1 says the examples "sh
 | `Racepoints`, `Appliedpenalty`, `Calculatedpenalty` | decimal | two decimals, decimal point | |
 | `Season` | `2012` for June 2011 – May 2012 | the competition's FIS season | |
 
-Written but optional: `Usedfislist`, `Appliedpenalty`, `Calculatedpenalty`, `Fvalue`, race header `Eventname`, `Place`, `Racedate`, `Tempunit`, `Longunit`, per run the course name and length, forerunners and weather, `Diff`, `Softwarecompany` (`OpenSkiTime project`), `Softwarename` and `Softwareversion` (the program version).
+Written but optional: `Usedfislist`, `Appliedpenalty`, `Calculatedpenalty`, `Fvalue`, race header `Eventname`, `Place`, `Racedate`, `Tempunit`, `Longunit`, per run the course name and length, forerunners and weather, `Diff`, `Softwarecompany` (`OpenSkiTime http://openskiti.me/`), `Softwarename` and `Softwareversion` (the program version).
 
 Not written: `Training`, `Speedcodex`, `Speedunit`, `Windunit`, `Endtime` (required only for OWG, WSC and WC), `Timingby`, `Dataprocessingby`, the `Assistantreferee` official (the Results race information has no field for it), jury e-mail and phone, and intermediate points (`Course/Intermediate`, `AL_resultdetail`). All are optional.
 
