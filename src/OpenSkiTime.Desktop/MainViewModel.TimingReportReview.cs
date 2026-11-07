@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.Application;
@@ -8,98 +7,250 @@ namespace OpenSkiTime.Desktop;
 
 public sealed partial class MainViewModel
 {
-    public ObservableCollection<SavedTimingReport> ReportHistory { get; } = [];
-    [ObservableProperty] private SavedTimingReport? _selectedReportHistory;
-    [ObservableProperty] private string _reportSubmissionStatus = "FIS submissions are test-only.";
-    private CancellationTokenSource? _reportSubmissionCancellation;
-    private async Task LoadReportHistoryAsync()
+    [ObservableProperty] private FisUploadOutcome? _reportSubmissionOutcome;
+    [ObservableProperty] private bool _isReportSendConfirmationOpen;
+    [ObservableProperty] private bool _isReportFisResponseVisible;
+    [ObservableProperty] private bool _isReportSubmitting;
+    [ObservableProperty] private string _reportSubmissionId = "";
+    [ObservableProperty] private string _reportXmlFileName = "";
+    [ObservableProperty] private string _reportXmlState = "";
+    [ObservableProperty] private string _reportXmlSavedNote = "";
+    private readonly Dictionary<Guid, (string Id, FisUploadOutcome? Outcome)> _reportSubmissionDisplays = [];
+
+    public bool CanSendReportToFis => !IsReportBusy && _reportDraft is not null;
+    public bool CanCheckReportSubmission => !IsReportBusy && Guid.TryParse(ReportSubmissionId, out var id) && id != Guid.Empty;
+    public bool HasReportSubmissionOutcome => ReportSubmissionOutcome is not null;
+    public bool NoReportSubmissionOutcome => ReportSubmissionOutcome is null;
+    public string ReportFisResponseButtonLabel => IsReportFisResponseVisible ? "Hide FIS response" : "View FIS response";
+    public string ReportSendConfirmationText => $"Send {ReportXmlFileName} to FIS as the timing report of {ReportCompetition?.Values.Name}? FIS stores and processes it.";
+
+    partial void OnIsReportBusyChanged(bool value) { OnPropertyChanged(nameof(CanSendReportToFis)); OnPropertyChanged(nameof(CanCheckReportSubmission)); }
+    partial void OnReportSubmissionIdChanged(string value) => OnPropertyChanged(nameof(CanCheckReportSubmission));
+    partial void OnIsReportFisResponseVisibleChanged(bool value) => OnPropertyChanged(nameof(ReportFisResponseButtonLabel));
+    partial void OnIsReportSendConfirmationOpenChanged(bool value) => OnPropertyChanged(nameof(ReportSendConfirmationText));
+    partial void OnReportXmlFileNameChanged(string value) => OnPropertyChanged(nameof(ReportSendConfirmationText));
+    partial void OnReportSubmissionOutcomeChanged(FisUploadOutcome? value)
     {
-        ReportHistory.Clear();
-        if (_reportDraft is null) { return; }
-        foreach (var item in (await workspace.ReadTimingReportHistoryAsync(_reportDraft.CompetitionId)).Reverse()) { ReportHistory.Add(item); }
-        SelectedReportHistory = ReportHistory.Skip(1).FirstOrDefault();
+        OnPropertyChanged(nameof(HasReportSubmissionOutcome)); OnPropertyChanged(nameof(NoReportSubmissionOutcome));
+        if (value is null) { IsReportFisResponseVisible = false; }
+    }
+    private CancellationTokenSource? _reportSubmissionCancellation;
+    partial void OnSelectedReportApprovalChanged(ApprovedTimingReport? value)
+    {
+        IsReportSendConfirmationOpen = false;
+        ShowReportSubmission(value);
+        RefreshReportXmlInfo();
+        _ = LoadReportSubmissionAsync(value);
+    }
+
+    // The answers FIS gave to this XML revision: from this session, or read back from the event file.
+    // Without an XML revision the key is the competition itself, so an answer never shows on another report.
+    private Guid ReportDisplayKey(ApprovedTimingReport? approval) => approval?.Id ?? ReportCompetition?.Id ?? Guid.Empty;
+
+    private void ShowReportSubmission(ApprovedTimingReport? approval)
+    {
+        if (_reportSubmissionDisplays.TryGetValue(ReportDisplayKey(approval), out var shown)) { ReportSubmissionId = shown.Id; ReportSubmissionOutcome = shown.Outcome; }
+        else { ReportSubmissionId = ""; ReportSubmissionOutcome = null; }
+    }
+
+    private async Task LoadReportSubmissionAsync(ApprovedTimingReport? approval)
+    {
+        if (approval is null || _reportFile != workspace.FilePath || _reportSubmissionDisplays.ContainsKey(approval.Id)) { return; }
+        await GuardAsync(async () =>
+        {
+            var saved = await workspace.ReadTimingReportSubmissionAsync(approval.Id);
+            if (saved is null || SelectedReportApproval?.Id != approval.Id) { return; }
+            var response = FisResultSubmissionClient.ReadResponse(saved.Response);
+            var outcome = response is null ? null
+                : FisUploadOutcomes.OutcomeOf(response, response.Submission.IsTest ? "TEST" : "LIVE", approval.XmlFileName, false)
+                    with { SentAt = saved.At.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) };
+            _reportSubmissionDisplays[approval.Id] = (saved.Uuid.ToString("D"), outcome);
+            ReportSubmissionId = saved.Uuid.ToString("D"); ReportSubmissionOutcome = outcome;
+        });
+    }
+
+    // What the left card says about the XML: its file name and whether a saved revision exists.
+    private void RefreshReportXmlInfo()
+    {
+        OnPropertyChanged(nameof(CanSendReportToFis));
+        if (_reportDraft is null) { ReportXmlFileName = ""; ReportXmlState = ""; return; }
+        ReportXmlFileName = TimingReportXml.FileName(_reportDraft);
+        ReportXmlState = SelectedReportApproval is { } latest
+            ? $"Latest saved revision {latest.Revision} · {latest.ApprovedAt.ToLocalTime():yyyy-MM-dd HH:mm}. A new revision is saved when the report or timing data change."
+            : "The XML is created from the current report when you save or send it.";
+    }
+
+    private void PublishReport(Guid approvalId, FisUploadOutcome outcome)
+    {
+        _reportSubmissionDisplays[approvalId] = (outcome.SubmissionId, outcome);
+        if (ReportDisplayKey(SelectedReportApproval) != approvalId) { return; }
+        ReportSubmissionId = outcome.SubmissionId;
+        ReportSubmissionOutcome = outcome;
+    }
+
+    // Creates the timing report XML of the current report and stores it as an immutable revision in the event file. When the
+    // saved report and the latest XML revision are already current, they are reused, so sending twice adds nothing.
+    // Returns null when required fields are missing; ReportValidation then lists them.
+    private async Task<ApprovedTimingReport?> EnsureReportXmlAsync()
+    {
+        if (_reportDraft is null || _reportFile != workspace.FilePath) { throw new DomainValidationException("Open the timing report of this series first."); }
+        // Another window may have saved a newer report since this one was loaded.
+        if ((await workspace.ReadTimingReportAsync(_reportDraft.CompetitionId))?.Revision != _reportSaved?.Revision)
+        { throw new DomainValidationException("The saved report changed. Reopen the report before sending it."); }
+        var persistedSeries = await workspace.ReadAsync();
+        if (persistedSeries.Competitions.FirstOrDefault(x => x.Id == _reportDraft.CompetitionId)?.Values != ReportCompetition?.Values || persistedSeries.Values != _current?.Values)
+        { throw new DomainValidationException("The competition or series details changed since the report was opened. Reopen the report before sending it."); }
+        var current = ReadReportDraft();
+        var unchanged = _reportSaved is not null && !HasTimingReportEdits
+            && System.Text.Json.JsonSerializer.Serialize(current) == System.Text.Json.JsonSerializer.Serialize(_reportSaved.Values);
+        if (unchanged) { ReportValidation = string.Join("\n", TimingReportXml.Validate(current)); _current = await workspace.ReadAsync(); }
+        else { await SaveReportCoreAsync(); }
+        if (ReportValidation.Length > 0) { return null; }
+        // The event file decides in one transaction whether this XML is a new revision or the latest one again, after the
+        // same checks of the draft, the timing and the series revision, so a reused revision is never older than the data.
+        var approved = await workspace.ApproveTimingReportAsync(new(_reportDraft!.CompetitionId, _reportSaved!.Revision,
+            _current!.Revision, TimingOperator, DateTimeOffset.UtcNow, ReportSoftwareVersion));
+        if (ReportApprovals.All(x => x.Id != approved.Id)) { ReportApprovals.Insert(0, approved); }
+        SelectedReportApproval = ReportApprovals.First(x => x.Id == approved.Id);
+        _current = await workspace.ReadAsync();
+        return approved;
     }
 
     [RelayCommand]
-    private async Task RestoreReportRevisionAsync()
+    private async Task SaveTimingReportXmlAsync()
     {
-        if (IsReportBusy || SelectedReportHistory is not { } old || _reportDraft is null) { return; }
+        if (IsReportBusy || IsReportSubmitting) { return; }
         if (!await FlushTimingReportAsync()) { return; }
         IsReportBusy = true;
         await GuardAsync(async () =>
         {
-            if (old.CompetitionId != _reportDraft.CompetitionId) { throw new DomainValidationException("Choose a revision from this competition."); }
-            var series = await workspace.ReadAsync();
-            var restored = old.Values with { Reviewed = false, CertifyFis = false };
-            await workspace.SaveTimingReportAsync(restored, series.Revision, TimingOperator,
-                $"Restore report revision {old.Revision}: {ReportChangeReason}", DateTimeOffset.UtcNow);
-            _reportDraft = restored; _reportSaved = await workspace.ReadTimingReportAsync(old.CompetitionId);
-            await PopulateReportAsync(restored); await LoadReportHistoryAsync();
-            HasTimingReportEdits = false; NotifyReportDefaults();
-            ReportStatus = "Previous values restored as a new revision. Current timing data is updated automatically; review before creating XML.";
+            var approval = await EnsureReportXmlAsync();
+            if (approval is null) { ReportStatus = "Complete the listed fields before creating XML."; return; }
+            var path = await dialogs.ChooseResultXmlExportAsync(Path.GetFileNameWithoutExtension(approval.XmlFileName) + "-timing-report.xml");
+            if (path is null) { ReportXmlSavedNote = ""; ReportStatus = $"Timing report XML revision {approval.Revision} is saved in the event file."; return; }
+            await ExportFile.WriteAsync(path, approval.Xml);
+            ReportXmlSavedNote = $"Saved {Path.GetFileName(path)} · revision {approval.Revision}";
+            ReportStatus = $"Timing report XML revision {approval.Revision} saved to {path}.";
         });
         IsReportBusy = false;
-        await LoadTimingReportAsync();
     }
 
-    partial void OnSelectedReportApprovalChanged(ApprovedTimingReport? value)
+    [RelayCommand]
+    private async Task SendTimingReportToFisAsync()
     {
-        ReportSubmissionStatus = "FIS submissions are test-only.";
-        _ = LoadReportSubmissionAsync(value);
-    }
-    private async Task LoadReportSubmissionAsync(ApprovedTimingReport? approval)
-    {
-        if (approval is null || _reportFile != workspace.FilePath) { return; }
-        await GuardAsync(async () =>
-        {
-            var saved = await workspace.ReadTimingReportSubmissionAsync(approval.Id);
-            if (SelectedReportApproval?.Id == approval.Id && saved is not null) { ReportSubmissionStatus = saved.Status; }
-        });
+        if (IsReportBusy || IsReportSubmitting || IsSubmissionBusy || _reportDraft is null) { return; }
+        // A real upload is stored by FIS: ask once, in place. A test needs no confirmation.
+        if (!FisUploadTestMode) { RefreshReportXmlInfo(); IsReportSendConfirmationOpen = true; return; }
+        await SendReportCoreAsync(test: true);
     }
 
-    [RelayCommand] private Task SendTimingReportTestAsync() => RunReportSubmissionAsync(upload: true);
-    [RelayCommand] private Task CheckTimingReportSubmissionAsync() => RunReportSubmissionAsync(upload: false);
+    [RelayCommand]
+    private async Task ConfirmSendTimingReportAsync()
+    {
+        if (!IsReportSendConfirmationOpen) { return; }
+        IsReportSendConfirmationOpen = false;
+        // The confirmation was for a real send; it never turns into one after test mode was switched on.
+        if (FisUploadTestMode) { return; }
+        await SendReportCoreAsync(test: false);
+    }
+
+    [RelayCommand] private void CancelSendTimingReport() => IsReportSendConfirmationOpen = false;
+    [RelayCommand] private void ToggleReportFisResponse() => IsReportFisResponseVisible = ReportSubmissionOutcome is { HasRawResponse: true } && !IsReportFisResponseVisible;
+    [RelayCommand] private Task CheckTimingReportSubmissionAsync() => CheckReportSubmissionCoreAsync();
     [RelayCommand] private void StopTimingReportStatusCheck() => _reportSubmissionCancellation?.Cancel();
-    private async Task RunReportSubmissionAsync(bool upload)
+
+    private async Task SendReportCoreAsync(bool test)
     {
-        if (IsReportBusy || IsSubmissionBusy || SelectedReportApproval is not { } approval) { return; }
+        if (IsReportBusy || IsSubmissionBusy) { return; }
+        if (!await FlushTimingReportAsync()) { return; }
         var file = workspace.FilePath;
-        IsReportBusy = true;
+        IsReportBusy = true; IsReportSubmitting = true;
         using var cancellation = new CancellationTokenSource(); _reportSubmissionCancellation = cancellation;
+        var mode = test ? "TEST · " + SelectedFisTestScenario.Label.ToLowerInvariant() : "LIVE";
+        var key = ReportDisplayKey(SelectedReportApproval);
         try
         {
-            var previous = await workspace.ReadTimingReportSubmissionAsync(approval.Id);
-            if (!upload && previous is null) { throw new DomainValidationException("No submission ID is saved for this XML revision. Send it in test mode first."); }
-            ReportSubmissionStatus = upload ? "Uploading the exact approved XML - test mode only…" : "Checking the saved FIS submission…";
-            var response = upload
-                ? await UploadApprovedFisArtifactTestAsync(new(approval.Id, approval.XmlFileName, approval.Xml), cancellation.Token)
-                : await PollFisArtifactTestAsync(previous!.Uuid, cancellation.Token);
-            for (var poll = 0; ; poll++)
+            ApprovedTimingReport? approval;
+            try { approval = await EnsureReportXmlAsync(); }
+            catch (Exception ex) when (ex is DomainValidationException or SeriesFileException or SeriesConflictException or IOException)
             {
-                var result = response.Submission;
-                var status = $"TEST · {result.Uuid:D} · {result.Outcome} · processed {result.Summary.Processed}, rejected {result.Summary.Rejected}"
-                    + (result.Summary.IsComplete ? " · complete" : " · awaiting FIS processing")
-                    + "\n" + string.Join("\n", result.Files.Select(x => $"{x.FileName}: {x.Status} · {x.Comments}"));
-                if (workspace.FilePath != file) { return; }
-                if (SelectedReportApproval?.Id == approval.Id) { ReportSubmissionStatus = status; }
-                var series = await workspace.ReadAsync();
-                await workspace.SaveTimingReportSubmissionAsync(new(approval.Id, result.Uuid, status, response.ResponseText, DateTimeOffset.UtcNow), series.Revision);
-                if (result.Summary.IsComplete || poll >= 23) { break; }
-                await Task.Delay(TimeSpan.FromSeconds(5), cancellation.Token);
-                response = await PollFisArtifactTestAsync(result.Uuid, cancellation.Token);
+                var message = ex is IOException ? "The event file could not be written. Check the file and try again." : ex.Message;
+                PublishReport(key, FisUploadOutcomes.Notice(FisUploadTone.Error, "XML not created", message, "Nothing was sent to FIS.", test, mode, "", ""));
+                return;
             }
+            if (approval is null)
+            {
+                PublishReport(key, FisUploadOutcomes.Notice(FisUploadTone.Error, "XML not created", "Complete these fields first:", "Nothing was sent to FIS.", test, mode, "", "",
+                    ReportValidation.Split('\n', StringSplitOptions.RemoveEmptyEntries)));
+                return;
+            }
+            key = approval.Id;
+            await SendXmlToFisAsync(approval.XmlFileName, approval.Xml, test, mode, outcome => { if (workspace.FilePath == file) { PublishReport(approval.Id, outcome); } },
+                response => PersistReportSubmissionAsync(approval, response, file), cancellation.Token);
         }
-        catch (Exception ex) when (ex is DomainValidationException or SeriesFileException or SeriesConflictException
-            or IOException or UnauthorizedAccessException or HttpRequestException or OperationCanceledException or PlatformNotSupportedException)
+        catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or SeriesFileException or SeriesConflictException
+            or IOException or UnauthorizedAccessException or HttpRequestException or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
         {
-            if (workspace.FilePath == file && SelectedReportApproval?.Id == approval.Id)
-            {
-                ReportSubmissionStatus = ex is HttpRequestException or OperationCanceledException
-                    ? "FIS request stopped or failed. The upload may have arrived; check the saved submission ID before sending again."
-                    : ex.Message;
-            }
+            if (workspace.FilePath == file)
+            { PublishReport(key, FisUploadOutcomes.FailureOutcome(ex, test, mode, _reportSubmissionDisplays.GetValueOrDefault(key).Id ?? "", ReportSubmissionOutcome?.FileName ?? "")); }
         }
-        finally { _reportSubmissionCancellation = null; IsReportBusy = false; }
+        finally { _reportSubmissionCancellation = null; IsReportSubmitting = false; IsReportBusy = false; }
+    }
+
+    // The answer stays with the XML revision in the event file, so it can be read again after a restart.
+    private async Task PersistReportSubmissionAsync(ApprovedTimingReport approval, FisSubmissionResponse response, string? file)
+    {
+        if (workspace.FilePath != file) { return; }
+        try
+        {
+            var series = await workspace.ReadAsync();
+            await workspace.SaveTimingReportSubmissionAsync(new(approval.Id, response.Submission.Uuid,
+                (response.Submission.IsTest ? "TEST" : "LIVE") + " · " + response.Submission.Outcome, response.ResponseText, DateTimeOffset.UtcNow), series.Revision);
+        }
+        catch (Exception ex) when (ex is SeriesFileException or SeriesConflictException or DomainValidationException or IOException)
+        { SetStatus("FIS answered, but the answer could not be saved in the event file. Keep the submission ID: " + response.Submission.Uuid.ToString("D"), error: true); }
+    }
+
+    private async Task CheckReportSubmissionCoreAsync()
+    {
+        if (IsReportBusy || IsSubmissionBusy) { return; }
+        var approval = SelectedReportApproval;
+        var uuid = Guid.TryParse(ReportSubmissionId, out var typed) && typed != Guid.Empty ? typed : (Guid?)null;
+        var file = workspace.FilePath;
+        IsReportBusy = true; IsReportSubmitting = true;
+        using var cancellation = new CancellationTokenSource(); _reportSubmissionCancellation = cancellation;
+        var key = ReportDisplayKey(approval);
+        var adHoc = true;
+        void Show(FisUploadOutcome outcome)
+        {
+            if (workspace.FilePath != file) { return; }
+            if (!adHoc) { PublishReport(key, outcome); }
+            else if (ReportDisplayKey(SelectedReportApproval) == key) { ReportSubmissionOutcome = outcome; }
+        }
+        try
+        {
+            var persisted = approval is null ? null : await workspace.ReadTimingReportSubmissionAsync(approval.Id);
+            var associated = persisted?.Uuid;
+            if (uuid is null) { uuid = associated; }
+            if (uuid is null) { throw new DomainValidationException("No submission ID is saved for this XML revision. Send it first."); }
+            // Only the submission this revision sent is saved with it (also one whose answer could not be saved before);
+            // any other ID is looked up and shown.
+            var sentHere = approval is not null && _reportSubmissionDisplays.GetValueOrDefault(approval.Id).Id == uuid.Value.ToString("D");
+            adHoc = approval is null || (associated != uuid && !sentHere);
+            _submissionClient ??= new(_submissionHttp);
+            var token = _fisStore.ReadMemberToken() ?? "";
+            var response = await _submissionClient.PollAsync(uuid.Value, token, cancellation.Token);
+            // A submission saved with this XML revision keeps its mode across restarts: its stored answer was a confirmed one.
+            if (!adHoc && !_confirmedModes.ContainsKey(uuid.Value) && persisted?.Uuid == uuid && StoredMode(persisted.Response) is { } stored) { _confirmedModes[uuid.Value] = stored; }
+            await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", approval?.XmlFileName ?? "",
+                Show, adHoc ? null : r => PersistReportSubmissionAsync(approval!, r, file), cancellation.Token);
+        }
+        catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or SeriesFileException or SeriesConflictException
+            or IOException or UnauthorizedAccessException or HttpRequestException or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
+        {
+            Show(FisUploadOutcomes.FailureOutcome(ex, ReportSubmissionOutcome?.IsTest ?? false, ReportSubmissionOutcome?.Mode ?? "", uuid?.ToString("D") ?? "", ReportSubmissionOutcome?.FileName ?? ""));
+        }
+        finally { _reportSubmissionCancellation = null; IsReportSubmitting = false; IsReportBusy = false; }
     }
 
     public async Task<bool> FlushTimingReportAsync()

@@ -45,6 +45,11 @@ public static class TimingReportXml
             Stamp(b.BStart, label + " B start"); Stamp(b.BFinish, label + " B finish");
             Stamp(b.HandStart, label + " hand start"); Stamp(b.HandFinish, label + " hand finish");
             if (b.NetHundredths is not > 0) { errors.Add(label + " net time is missing."); }
+            void Implausible(EvidenceFinding? finding, string what) { if (finding?.Severity == EvidenceSeverity.Error) { errors.Add($"{label} {what}: {finding.Message}"); } }
+            Implausible(TimingEvidenceCheck.Compare(b.AStart, b.BStart, false), "B start");
+            Implausible(TimingEvidenceCheck.Compare(b.AFinish, b.BFinish, false), "B finish");
+            Implausible(TimingEvidenceCheck.Compare(b.AStart, b.HandStart, true), "hand start");
+            Implausible(TimingEvidenceCheck.Compare(b.AFinish, b.HandFinish, true), "hand finish");
         }
         var h = report.Header;
         if (h.Season is < 1900 or > 2999 || h.Date == default) { errors.Add("Race season and date are required."); }

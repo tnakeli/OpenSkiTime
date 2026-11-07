@@ -3,4 +3,7 @@
     <ProjectReference Include="../OpenSkiTime.Domain/OpenSkiTime.Domain.csproj" />
     <ProjectReference Include="../OpenSkiTime.Timing/OpenSkiTime.Timing.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Flags/*.png" LogicalName="Flags.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

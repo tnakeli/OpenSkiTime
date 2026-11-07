@@ -41,8 +41,10 @@ public sealed class ResultsVisualTests
             "synthetic-fingerprint", DateTimeOffset.UnixEpoch, "Synthetic TD", "FIN9991.xml", [1], 10m, 10m);
         vm.ResultApprovals.Add(approval); vm.SelectedResultApproval = approval;
         vm.ResultSubmissionId = "00000000-0000-0000-0000-000000000123";
-        vm.ResultSubmissionStatus = "TEST · processed 1, rejected 0 · complete";
-        vm.ResultSubmissionResponse = "{\"testMode\":true,\"summary\":{\"isComplete\":true},\"files\":[{\"status\":\"processed\",\"comments\":\"Synthetic result\"}]}";
+        vm.ResultSubmissionOutcome = new FisUploadOutcome(FisUploadTone.Success, "Test passed · FIS processed the file", "Nothing was stored at FIS: this was a test.", "",
+            true, "TEST · simulate success", vm.ResultSubmissionId, "FIN9991.xml", "10:38:53", "1 file · 0 queued · 1 processed · 0 rejected",
+            [new("FIN9991.xml", "Processed", FisUploadTone.Success, "Synthetic result", "AL 2027 · codex 9991", "10:39:53")], [],
+            "{\"testMode\":true,\"summary\":{\"isComplete\":true},\"files\":[{\"status\":\"processed\",\"comments\":\"Synthetic result\"}]}");
         for (var i = 1; i <= 12; i++)
         {
             vm.ResultRows.Add(new(i <= 10 ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : "—", i,
@@ -82,9 +84,26 @@ public sealed class ResultsVisualTests
         Assert.Equal(vm.ResultsRuns.Count, window.GetVisualDescendants().OfType<RaceRunView>().Count());
         Assert.DoesNotContain(window.GetVisualDescendants().OfType<Expander>(), x => x.Header?.ToString()?.StartsWith("FIS suggestions", StringComparison.Ordinal) == true);
         Show(3, "results-xml.png");
-        var send = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SendApprovedXmlTestButton");
-        Assert.Same(vm.SendApprovedXmlTestCommand, send.Command); Assert.True(send.IsEnabled);
-        Assert.Equal(vm.ResultSubmissionResponse, window.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "FisSubmissionResponseBox").Text);
+        var send = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SendToFisButton");
+        Assert.Same(vm.SendToFisCommand, send.Command); Assert.Equal("Send to FIS", send.Content);
+        Assert.Same(vm.SaveFisXmlCommand, window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SaveFisXmlButton").Command);
+        // The answer is a verdict with per-file results; the raw text appears only on request.
+        Assert.Equal("Test passed · FIS processed the file", window.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Name == "FisOutcomeTitle").Text);
+        Assert.Contains("success", window.GetVisualDescendants().OfType<Border>().Single(x => x.Name == "FisOutcomeBanner").Classes);
+        Assert.Contains("Processed", window.GetVisualDescendants().OfType<TextBlock>().Where(x => x.IsEffectivelyVisible).Select(x => x.Text));
+        var raw = window.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "FisSubmissionResponseBox");
+        Assert.False(raw.IsEffectivelyVisible);
+        var view = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "ViewFisResponseButton");
+        Assert.Equal("View FIS response", view.Content); Assert.True(view.IsEnabled);
+        vm.ToggleFisResponseCommand.Execute(null); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        Assert.True(raw.IsEffectivelyVisible); Assert.Equal(vm.ResultSubmissionOutcome!.RawResponse, raw.Text);
+        Assert.Equal("Hide FIS response", view.Content);
+        // Normal mode is the default; test mode reveals the simulation choices.
+        var picker = window.GetVisualDescendants().OfType<ComboBox>().Single(x => x.Name == "FisTestScenarioPicker");
+        Assert.False(vm.FisUploadTestMode); Assert.False(picker.IsEffectivelyVisible);
+        vm.FisUploadTestMode = true; window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        Assert.True(picker.IsEffectivelyVisible); Assert.Equal("Send to FIS · test", send.Content);
+        Assert.Equal(["Simulate success", "Simulate no permission", "Validate the XML as it is"], picker.Items.OfType<FisTestScenarioChoice>().Select(x => x.Label));
         Assert.True(window.IsVisible);
         window.Close();
     }

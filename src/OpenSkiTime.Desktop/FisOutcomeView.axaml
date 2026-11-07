@@ -1,0 +1,44 @@
+<UserControl xmlns:local="using:OpenSkiTime.Desktop" xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OpenSkiTime.Desktop.FisOutcomeView" x:CompileBindings="False">
+  <!-- The answer from FIS as a verdict, shared by Results and Timing report. DataContext: a FisUploadOutcome. -->
+  <StackPanel Spacing="{DynamicResource FormGap}">
+    <Border Name="FisOutcomeBanner" Classes="resultBanner" Classes.success="{Binding IsSuccess}" Classes.error="{Binding IsError}" Classes.warning="{Binding IsWarning}">
+      <StackPanel Spacing="4">
+        <TextBlock Name="FisOutcomeTitle" Text="{Binding Title}" Classes="bannerTitle" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" IsVisible="{Binding HasDetail}" />
+        <TextBlock Text="{Binding Hint}" Classes="supportingText" TextWrapping="Wrap" IsVisible="{Binding HasHint}" />
+      </StackPanel>
+    </Border>
+    <ItemsControl ItemsSource="{Binding Problems}" IsVisible="{Binding HasProblems}">
+      <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat='• {0}'}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <local:FormRow IsVisible="{Binding HasSubmissionId}">
+      <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field">
+        <TextBlock Text="SUBMISSION ID" Classes="fieldLabel" />
+        <TextBox Name="FisSubmissionIdBox" Text="{Binding SubmissionId, Mode=OneWay}" IsReadOnly="True" />
+      </StackPanel>
+      <StackPanel Grid.Column="8" Grid.ColumnSpan="4" Classes="field">
+        <TextBlock Text="SENT" Classes="fieldLabel" />
+        <TextBlock Text="{Binding SentAt}" VerticalAlignment="Center" />
+      </StackPanel>
+    </local:FormRow>
+    <ItemsControl Name="FisFileOutcomes" ItemsSource="{Binding Files}" IsVisible="{Binding HasFiles}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Race}" Classes="supportingText" IsVisible="{Binding Race, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="{Binding Comment}" TextWrapping="Wrap" IsVisible="{Binding HasComment}" />
+              </StackPanel>
+              <Border Grid.Column="1" Classes="chip" Classes.green="{Binding IsSuccess}" Classes.red="{Binding IsError}" Classes.warning="{Binding IsWarning}"
+                      VerticalAlignment="Top"><TextBlock Text="{Binding StatusLabel}" /></Border>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <TextBlock Text="{Binding Counts}" Classes="supportingText" IsVisible="{Binding HasCounts}" />
+  </StackPanel>
+</UserControl>

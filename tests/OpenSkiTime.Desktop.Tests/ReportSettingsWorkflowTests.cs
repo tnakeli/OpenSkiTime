@@ -113,7 +113,7 @@ public partial class DesktopWorkflowTests
         Assert.Equal(same, MainViewModel.SameLocalTimingEndpoint(right, left));
     }
     [AvaloniaFact]
-    public async Task SettingsTabsSaveDefaultsAndOneKeyServesBothXmlArtifactsAndEquipment()
+    public async Task SettingsTabsSaveDefaultsAndTheApiKeyServesEquipmentWhileTheMemberTokenServesBothXmlArtifacts()
     {
         var root = Path.Combine(Path.GetTempPath(), "openskitime-settings", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -130,7 +130,8 @@ public partial class DesktopWorkflowTests
                         new FisTimingDevice(1, "Synthetic Timer", "SYN.001T.26", 2030, 1, "SYNTHETIC", 1, "Timer", 10000, null, true) })) };
                 }
                 Assert.Equal("Bearer", request.Headers.Authorization!.Scheme);
-                Assert.Equal("synthetic-shared-key", request.Headers.Authorization.Parameter);
+                Assert.Equal("synthetic-member-token", request.Headers.Authorization.Parameter);
+                Assert.False(request.Headers.Contains("X-Api-Key"));
                 calls.Add("upload");
                 return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new {
                     uuid = Guid.NewGuid(), testMode = true, outcome = "success",
@@ -139,11 +140,11 @@ public partial class DesktopWorkflowTests
                 }), Encoding.UTF8, "application/json") };
             });
             using var http = new HttpClient(handler);
-            var credentials = new ReportSettingsCredential();
+            var credentials = new ReportSettingsCredential(); var memberCredentials = new ReportSettingsCredential();
             var defaults = new TimingReportDefaultsStore(root);
             await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
             using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = "", OpenPath = "", BackupPath = "" },
-                fisStore: new FisLocalStore(root, credentials), informationHttp: http, submissionHttp: http,
+                fisStore: new FisLocalStore(root, credentials, memberCredentials), informationHttp: http, submissionHttp: http,
                 reportDefaultsStore: defaults, timingDeviceCache: new FisTimingDeviceCache(root), recentSeriesStore: new(root));
             vm.ShowSettingsCommand.Execute(null);
             var window = new Window { Content = new ScrollViewer { Content = new SettingsView { DataContext = vm } }, Width = 1100, Height = 900 };
@@ -155,7 +156,13 @@ public partial class DesktopWorkflowTests
             Assert.Equal("synthetic-shared-key", vm.FisApiKeyInput);
             PressSettingsControl(window, window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save key")));
             Assert.Equal("synthetic-shared-key", credentials.Read()); Assert.Equal("", vm.FisApiKeyInput);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBox>(), x => x.PlaceholderText?.Contains("personal access token", StringComparison.OrdinalIgnoreCase) == true);
+            // The FIS Member Section token is a separate credential: saving it never touches the public API key.
+            Assert.Null(memberCredentials.Read());
+            var tokenBox = window.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "FisMemberTokenInputBox");
+            tokenBox.Focus(); window.KeyTextInput("synthetic-member-token"); Dispatcher.UIThread.RunJobs();
+            PressSettingsControl(window, window.GetVisualDescendants().OfType<Button>().Single(x => Equals(x.Content, "Save token")));
+            Assert.Equal("synthetic-member-token", memberCredentials.Read()); Assert.Equal("", vm.FisMemberTokenInput);
+            Assert.Equal("synthetic-shared-key", credentials.Read());
             await vm.RefreshTimingDeviceHomologationsCommand.ExecuteAsync(null);
             vm.ReportDefaultDevices[0].Brand = "SYNTHETIC";
             vm.ReportDefaultDevices[0].SelectedModel = Assert.Single(vm.ReportDefaultDevices[0].ModelChoices);
@@ -172,9 +179,8 @@ public partial class DesktopWorkflowTests
             Assert.NotNull(defaults.Load().TimerA.HomologationRetrievedAt);
             var approval = new ApprovedResult(Guid.NewGuid(), Guid.NewGuid(), 1, Guid.NewGuid(), null,
                 "synthetic", DateTimeOffset.UnixEpoch, "Synthetic", "FIN9991.xml", Encoding.UTF8.GetBytes("<Synthetic />"), 1m, 1m);
-            vm.SelectedResultApproval = approval;
-            await vm.SendApprovedXmlTestCommand.ExecuteAsync(null);
-            Assert.Contains("processed 1", vm.ResultSubmissionStatus);
+            var results = await vm.UploadApprovedFisArtifactTestAsync(new(approval.Id, approval.XmlFileName, approval.Xml));
+            Assert.Equal(1, results.Submission.Summary.Processed);
             await vm.UploadApprovedFisArtifactTestAsync(new(Guid.NewGuid(), "FIN9991.timing.xml", Encoding.UTF8.GetBytes("<Synthetic />")));
             Assert.Equal(s_reportSettingsCalls, calls);
             tabs.SelectedIndex = 1; window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
@@ -183,6 +189,39 @@ public partial class DesktopWorkflowTests
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<DataGrid>(), x => x.Name == "ReportEquipmentDefaultsGrid" && x.IsEffectivelyVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Save report defaults") && x.IsEffectivelyVisible);
             window.Close();
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [AvaloniaFact]
+    public async Task XmlSubmissionNeedsTheMemberTokenAndNeverSendsThePublicApiKey()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-settings-token", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var requests = 0;
+            using var handler = new ReportSettingsHandler(_ => { requests++; return new(HttpStatusCode.Unauthorized) { Content = new StringContent("{\"message\":\"Unauthenticated.\"}") }; });
+            using var http = new HttpClient(handler);
+            var credentials = new ReportSettingsCredential(); credentials.Save("synthetic-public-key");
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = "", OpenPath = "", BackupPath = "" },
+                fisStore: new FisLocalStore(root, credentials, new ReportSettingsCredential()), informationHttp: http, submissionHttp: http,
+                reportDefaultsStore: new TimingReportDefaultsStore(root), timingDeviceCache: new FisTimingDeviceCache(root), recentSeriesStore: new(root));
+            var artifact = new ApprovedFisXmlArtifact(Guid.NewGuid(), "FIN9991.xml", Encoding.UTF8.GetBytes("<Synthetic />"));
+            // Only the public API key is saved: nothing may be sent.
+            var missing = await Assert.ThrowsAsync<DomainValidationException>(() => vm.UploadApprovedFisArtifactTestAsync(artifact));
+            Assert.Contains("personal access token", missing.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, requests);
+            // A rejected token explains that the public API key does not serve submissions.
+            vm.FisMemberTokenInput = "  synthetic-member-token  ";
+            vm.SaveFisMemberTokenCommand.Execute(null);
+            var rejected = await Assert.ThrowsAsync<FisSubmissionException>(() => vm.UploadApprovedFisArtifactTestAsync(artifact));
+            Assert.Equal(1, requests);
+            Assert.Contains("personal access token", rejected.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("public API key", rejected.Message, StringComparison.Ordinal);
+            vm.RemoveFisMemberTokenCommand.Execute(null);
+            Assert.Equal("Not configured", vm.FisMemberTokenStatus);
         }
         finally { Directory.Delete(root, recursive: true); }
     }

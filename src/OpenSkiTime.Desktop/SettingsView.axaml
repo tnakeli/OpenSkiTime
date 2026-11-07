@@ -11,7 +11,7 @@
      <Border Classes="card">
       <StackPanel Spacing="{DynamicResource FormGap}">
        <Grid Classes="cardHeader"><TextBlock Text="FIS API key" Classes="cardTitle"/></Grid>
-       <TextBlock Text="Create it in FIS Member Section → API Access."
+       <TextBlock Text="Create it in FIS Member Section → API keys. Used for FIS data, points lists and homologations."
                   TextWrapping="Wrap" Classes="supportingText"/>
        <local:FormRow>
         <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
@@ -25,6 +25,24 @@
        </local:FormRow>
        <TextBlock Text="{Binding FisApiKeyStatus}" TextWrapping="Wrap" Classes="supportingText"/>
        <TextBlock Text="The key stays in this Windows account's credential store." TextWrapping="Wrap" Classes="supportingText"/>
+      </StackPanel>
+     </Border>
+     <Border Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="FIS Member Section token" Classes="cardTitle"/></Grid>
+       <TextBlock Text="Create it in FIS Member Section → Personal access tokens with both scopes: Submit competition files and results, and Read submitted competition files and their processing status. Used to send result and timing report XML in test mode."
+                  TextWrapping="Wrap" Classes="supportingText"/>
+       <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+         <TextBlock Text="PERSONAL ACCESS TOKEN" Classes="fieldLabel"/>
+         <TextBox Name="FisMemberTokenInputBox" PasswordChar="•" Text="{Binding FisMemberTokenInput}" PlaceholderText="{Binding FisMemberTokenWatermark}" MaxLength="2560"/>
+        </StackPanel>
+        <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+         <Button Content="Save token" Command="{Binding SaveFisMemberTokenCommand}" Classes="primaryAction"/>
+         <Button Content="Remove token" Command="{Binding RemoveFisMemberTokenCommand}" Classes="dangerAction"/>
+        </StackPanel>
+       </local:FormRow>
+       <TextBlock Text="{Binding FisMemberTokenStatus}" TextWrapping="Wrap" Classes="supportingText"/>
       </StackPanel>
      </Border>
     </StackPanel>

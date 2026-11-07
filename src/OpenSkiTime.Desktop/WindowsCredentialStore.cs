@@ -8,9 +8,9 @@ public interface ICredentialStore
     void Remove();
 }
 
-public sealed class WindowsCredentialStore(string target) : ICredentialStore
+public sealed class WindowsCredentialStore(string target, bool compactBlob = false) : ICredentialStore
 {
-    private readonly OpenSkiTime.LiveTiming.Client.WindowsCredentialStore _store = new(target);
+    private readonly OpenSkiTime.LiveTiming.Client.WindowsCredentialStore _store = new(target, compactBlob);
     public bool Exists() => _store.Exists();
     public string? Read() => _store.Read();
     public void Save(string key) => _store.Save(key);

@@ -26,6 +26,34 @@ public sealed partial class TimingReportEvidenceRow : ObservableObject
     [ObservableProperty] private string _handStart = "";
     [ObservableProperty] private string _handFinish = "";
     public static string Format(TimingReportStamp? stamp) => stamp is null ? "" : TimingReportXml.FormatStamp(stamp);
+
+    // What the typed or read time says against System A: shown on the cell as it is typed. Unreadable text is not judged here;
+    // saving reports it.
+    public EvidenceFinding? BStartIssue => Judge(BStart, OriginalBStart, AStartStamp, false);
+    public EvidenceFinding? BFinishIssue => Judge(BFinish, OriginalBFinish, AFinishStamp, false);
+    public EvidenceFinding? HandStartIssue => Judge(HandStart, OriginalHandStart, AStartStamp, true);
+    public EvidenceFinding? HandFinishIssue => Judge(HandFinish, OriginalHandFinish, AFinishStamp, true);
+    public IEnumerable<(string Cell, EvidenceFinding Finding)> Issues()
+    {
+        foreach (var (cell, finding) in new[] { ("B start", BStartIssue), ("B finish", BFinishIssue), ("hand start", HandStartIssue), ("hand finish", HandFinishIssue) })
+        { if (finding is not null) { yield return (cell, finding); } }
+    }
+    partial void OnBStartChanged(string value) => NotifyIssues();
+    partial void OnBFinishChanged(string value) => NotifyIssues();
+    partial void OnHandStartChanged(string value) => NotifyIssues();
+    partial void OnHandFinishChanged(string value) => NotifyIssues();
+    private void NotifyIssues()
+    {
+        OnPropertyChanged(nameof(BStartIssue)); OnPropertyChanged(nameof(BFinishIssue));
+        OnPropertyChanged(nameof(HandStartIssue)); OnPropertyChanged(nameof(HandFinishIssue));
+    }
+    private TimingReportStamp? Parse(string text, TimingReportStamp? original, TimingReportStamp? reference)
+    {
+        try { return Read(text, original, reference is null ? default : DateOnly.FromDateTime(new(reference.Ticks))); }
+        catch (DomainValidationException) { return null; }
+    }
+    private EvidenceFinding? Judge(string text, TimingReportStamp? original, TimingReportStamp? a, bool hand)
+        => TimingEvidenceCheck.Compare(a, a is null ? null : Parse(text, original, a), hand);
     public TimingReportStamp? Read(string text, TimingReportStamp? original, DateOnly date)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -66,6 +94,28 @@ public sealed partial class TimingReportRunEditor : ObservableObject
     }
     [ObservableProperty] private string _comment = "";
     [ObservableProperty] private bool _allResultsA = true;
+
+    // The implausible B and hand times of the two sampled finishers, summarised under the run.
+    public string EvidenceIssues => string.Join(Environment.NewLine, new[] { First, Last }.Where(x => x is not null).SelectMany(row => row!.Issues()
+        .Select(i => $"Bib {row.Bib} {i.Cell}: {i.Finding.Message}")));
+    public bool HasEvidenceIssues => EvidenceIssues.Length > 0;
+    public bool HasEvidenceError => new[] { First, Last }.Any(row => row is not null && row.Issues().Any(i => i.Finding.Severity == EvidenceSeverity.Error));
+    public bool HasEvidenceWarningOnly => HasEvidenceIssues && !HasEvidenceError;
+    partial void OnFirstChanged(TimingReportEvidenceRow? oldValue, TimingReportEvidenceRow? newValue) => Track(oldValue, newValue);
+    partial void OnLastChanged(TimingReportEvidenceRow? oldValue, TimingReportEvidenceRow? newValue) => Track(oldValue, newValue);
+    private void Track(TimingReportEvidenceRow? oldRow, TimingReportEvidenceRow? newRow)
+    {
+        if (oldRow is not null) { oldRow.PropertyChanged -= RowChanged; }
+        if (newRow is not null) { newRow.PropertyChanged += RowChanged; }
+        NotifyIssues();
+    }
+    private void RowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    { if (args.PropertyName is { } name && name.EndsWith("Issue", StringComparison.Ordinal)) { NotifyIssues(); } }
+    private void NotifyIssues()
+    {
+        OnPropertyChanged(nameof(EvidenceIssues)); OnPropertyChanged(nameof(HasEvidenceIssues));
+        OnPropertyChanged(nameof(HasEvidenceError)); OnPropertyChanged(nameof(HasEvidenceWarningOnly));
+    }
 }
 
 public sealed partial class TimingReportMissedEditor : ObservableObject

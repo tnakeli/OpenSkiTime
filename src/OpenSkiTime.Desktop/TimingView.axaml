@@ -165,7 +165,7 @@
        <DataGridTextColumn Header="RK" Binding="{Binding DisplayRank}" Width="42" FontWeight="SemiBold" />
        <DataGridTextColumn Header="BIB" Binding="{Binding BibText}" Width="56" />
        <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="130" />
-       <DataGridTextColumn Header="NAT" Binding="{Binding Result.Entry.Entrant.Athlete.Nation}" Width="55" />
+       <local:NationColumn Header="NAT" Binding="{Binding Result.Entry.Entrant.Athlete.Nation}" Width="88" />
        <DataGridTextColumn Header="CLUB" Binding="{Binding Result.Entry.Entrant.Athlete.Club}" Width="*" MinWidth="100" />
        <DataGridTextColumn Header="RUN 1" Binding="{Binding PreviousRunRanked}" Width="96" IsVisible="{Binding ShowTimingTotal}" Tag="previousRun" />
        <local:TimeOrStatusColumn Header="RUN 1" Binding="{Binding DisplayTime}" Width="96" Tag="runTime" FontWeight="SemiBold" />
@@ -181,7 +181,7 @@
       <DataGridTextColumn Header="RK" Binding="{Binding DisplayRank}" Width="42" FontWeight="SemiBold" />
       <DataGridTextColumn Header="BIB" Binding="{Binding BibText}" Width="56" />
       <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="*" MinWidth="130" />
-      <DataGridTextColumn Header="NAT" Binding="{Binding Result.Entry.Entrant.Athlete.Nation}" Width="55" />
+      <local:NationColumn Header="NAT" Binding="{Binding Result.Entry.Entrant.Athlete.Nation}" Width="88" />
       <DataGridTextColumn Header="CLUB" Binding="{Binding Result.Entry.Entrant.Athlete.Club}" Width="*" MinWidth="100" />
       <DataGridTextColumn Header="RUN 1" Binding="{Binding PreviousRunRanked}" Width="96" IsVisible="{Binding ShowTimingTotal}" Tag="previousRun" />
       <local:TimeOrStatusColumn Header="RUN 1" Binding="{Binding DisplayTime}" Width="96" Tag="runTime" FontWeight="SemiBold" />

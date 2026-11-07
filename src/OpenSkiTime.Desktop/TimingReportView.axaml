@@ -79,59 +79,92 @@
        </StackPanel>
       </Border>
 
-      <!-- Both cards of the row are equally tall. -->
+      <!-- Left: what to do (declarations, create, send, test mode). Right: what FIS answered. Both columns are equally tall. -->
       <Grid ColumnDefinitions="*,*,*,*,*,*,*,*,*,*,*,*" ColumnSpacing="12">
-       <Border Grid.Column="0" Grid.ColumnSpan="5" Classes="card">
-        <StackPanel Spacing="{DynamicResource FormGap}">
-         <Grid Classes="cardHeader"><TextBlock Text="Approval" Classes="cardTitle"/></Grid>
-         <CheckBox Content="I reviewed the report and verified the timestamps against the original timing records." IsChecked="{Binding ReportReviewed}"/>
-         <CheckBox Content="We certify that the timing and calculations adhered to the FIS rules." IsChecked="{Binding ReportCertified}"/>
-         <StackPanel Classes="field">
-          <TextBlock Text="APPROVED XML" Classes="fieldLabel"/>
-          <ComboBox ItemsSource="{Binding ReportApprovals}" SelectedItem="{Binding SelectedReportApproval}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate>
-           <TextBlock><Run Text="{Binding Revision, StringFormat='XML revision {0}'}"/><Run Text="  "/><Run Text="{Binding ApprovedAt}"/></TextBlock>
-          </DataTemplate></ComboBox.ItemTemplate></ComboBox>
+       <StackPanel Grid.Column="0" Grid.ColumnSpan="5" Spacing="12">
+        <Border Classes="card">
+         <StackPanel Spacing="{DynamicResource FormGap}">
+          <Grid Classes="cardHeader" ColumnDefinitions="*,Auto">
+           <TextBlock Text="Timing report XML" Classes="cardTitle"/>
+           <Border Grid.Column="1" Classes="chip red" IsVisible="{Binding FisUploadTestMode}"><TextBlock Text="TEST MODE"/></Border>
+          </Grid>
+          <CheckBox Content="I reviewed the report and verified the timestamps against the original timing records." IsChecked="{Binding ReportReviewed}"/>
+          <CheckBox Content="We certify that the timing and calculations adhered to the FIS rules." IsChecked="{Binding ReportCertified}"/>
+          <StackPanel Classes="field" IsVisible="{Binding ReportXmlFileName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+           <TextBlock Text="FILE" Classes="fieldLabel"/>
+           <TextBlock Name="TimingReportXmlFileNameText" Text="{Binding ReportXmlFileName}" FontWeight="SemiBold"/>
+          </StackPanel>
+          <TextBlock Text="{Binding ReportXmlState}" Classes="supportingText" TextWrapping="Wrap"
+                     IsVisible="{Binding ReportXmlState, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+          <TextBlock Name="TimingReportXmlSavedNoteText" Text="{Binding ReportXmlSavedNote}" Classes="supportingText" TextWrapping="Wrap"
+                     IsVisible="{Binding ReportXmlSavedNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+          <Grid ColumnDefinitions="*,8,*">
+           <Button Name="SaveTimingReportXmlButton" Grid.Column="0" Content="Save to XML" Command="{Binding SaveTimingReportXmlCommand}" IsEnabled="{Binding CanSendReportToFis}"
+                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="secondaryAction"/>
+           <Button Name="SendTimingReportToFisButton" Grid.Column="2" Content="{Binding SendToFisLabel}" Command="{Binding SendTimingReportToFisCommand}" IsEnabled="{Binding CanSendReportToFis}"
+                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="primaryAction"/>
+          </Grid>
+          <!-- A real upload is stored by FIS, so it is confirmed once, in place. -->
+          <Border Name="TimingReportSendConfirmation" Classes="resultBanner warning" IsVisible="{Binding IsReportSendConfirmationOpen}">
+           <StackPanel Spacing="8">
+            <TextBlock Text="{Binding ReportSendConfirmationText}" TextWrapping="Wrap"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+             <Button Name="ConfirmSendTimingReportButton" Content="Send now" Command="{Binding ConfirmSendTimingReportCommand}" Classes="primaryAction"/>
+             <Button Name="CancelSendTimingReportButton" Content="Cancel" Command="{Binding CancelSendTimingReportCommand}" Classes="secondaryAction"/>
+            </StackPanel>
+           </StackPanel>
+          </Border>
+          <!-- What still blocks the XML; the actions above stay in view however long the list is. -->
+          <Border Classes="warningNote" IsVisible="{Binding ReportValidation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+           <ScrollViewer MaxHeight="200" HorizontalScrollBarVisibility="Disabled">
+            <TextBlock Name="TimingReportValidationText" Text="{Binding ReportValidation}" TextWrapping="Wrap"/>
+           </ScrollViewer>
+          </Border>
          </StackPanel>
-        </StackPanel>
-       </Border>
+        </Border>
+
+        <local:FisTestModeCard/>
+
+        <Expander Header="Check an earlier submission" HorizontalAlignment="Stretch">
+         <local:FormRow>
+          <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field">
+           <TextBlock Text="SUBMISSION ID" Classes="fieldLabel"/>
+           <TextBox Name="TimingReportSubmissionIdInput" Text="{Binding ReportSubmissionId}" PlaceholderText="Paste a submission ID" IsReadOnly="{Binding IsReportBusy}"/>
+          </StackPanel>
+          <Button Name="CheckTimingReportStatusButton" Grid.Column="8" Grid.ColumnSpan="4" Content="Check status" Command="{Binding CheckTimingReportSubmissionCommand}"
+                  IsEnabled="{Binding CanCheckReportSubmission}" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="secondaryAction"/>
+         </local:FormRow>
+        </Expander>
+       </StackPanel>
 
        <Border Grid.Column="5" Grid.ColumnSpan="7" Classes="card">
         <StackPanel Spacing="{DynamicResource FormGap}">
-         <Grid Classes="cardHeader" ColumnDefinitions="Auto,10,Auto,*,Auto,8,Auto">
-          <TextBlock Text="FIS upload" Classes="cardTitle"/>
-          <Border Grid.Column="2" Classes="chip red"><TextBlock Text="TEST MODE"/></Border>
-          <Button Grid.Column="4" Content="Check FIS status" Classes="secondaryAction" Command="{Binding CheckTimingReportSubmissionCommand}" IsEnabled="{Binding !IsReportBusy}"/>
-          <Button Grid.Column="6" Content="Stop FIS check" Classes="secondaryAction" Command="{Binding StopTimingReportStatusCheckCommand}" IsEnabled="{Binding IsReportBusy}"/>
+         <Grid Classes="cardHeader" ColumnDefinitions="Auto,10,Auto,*,Auto">
+          <TextBlock Text="FIS response" Classes="cardTitle"/>
+          <Border Grid.Column="2" Classes="chip" Classes.red="{Binding ReportSubmissionOutcome.IsTest}" IsVisible="{Binding HasReportSubmissionOutcome}">
+           <TextBlock Text="{Binding ReportSubmissionOutcome.Mode}"/></Border>
+          <Button Name="ViewTimingReportFisResponseButton" Grid.Column="4" Content="{Binding ReportFisResponseButtonLabel}" Command="{Binding ToggleReportFisResponseCommand}"
+                  IsEnabled="{Binding ReportSubmissionOutcome.HasRawResponse}" Classes="secondaryAction"/>
          </Grid>
-         <TextBlock Text="{Binding ReportSubmissionStatus}" FontWeight="SemiBold" TextWrapping="Wrap"
-                    IsVisible="{Binding ReportSubmissionStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+         <TextBlock Name="NoTimingReportSubmissionText" Text="Nothing sent yet. The answer from FIS appears here." Classes="supportingText" TextWrapping="Wrap"
+                    IsVisible="{Binding NoReportSubmissionOutcome}"/>
+         <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsReportSubmitting}">
+          <ProgressBar IsIndeterminate="True" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Margin="12,0,0,0" Content="Stop waiting" Command="{Binding StopTimingReportStatusCheckCommand}" Classes="secondaryAction"/>
+         </Grid>
+
+         <local:FisOutcomeView Name="TimingReportFisOutcome" DataContext="{Binding ReportSubmissionOutcome}"
+                               IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+
+         <StackPanel Classes="field" IsVisible="{Binding IsReportFisResponseVisible}">
+          <TextBlock Text="RAW FIS RESPONSE" Classes="fieldLabel"/>
+          <TextBox Name="TimingReportFisResponseBox" Text="{Binding ReportSubmissionOutcome.RawResponse, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                   TextWrapping="Wrap" MinHeight="120" MaxHeight="320"/>
+         </StackPanel>
         </StackPanel>
        </Border>
       </Grid>
-
-      <Expander Header="Report history" HorizontalAlignment="Stretch">
-       <local:FormRow>
-        <ComboBox Grid.Column="0" Grid.ColumnSpan="8" ItemsSource="{Binding ReportHistory}" SelectedItem="{Binding SelectedReportHistory}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate>
-         <TextBlock><Run Text="{Binding Revision, StringFormat='Revision {0}'}"/><Run Text="  "/><Run Text="{Binding Operator}"/><Run Text=" · "/><Run Text="{Binding Reason}"/></TextBlock>
-        </DataTemplate></ComboBox.ItemTemplate></ComboBox>
-        <Button Grid.Column="8" Grid.ColumnSpan="4" Content="Restore selected as a new revision" Classes="secondaryAction" Command="{Binding RestoreReportRevisionCommand}"
-                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
-       </local:FormRow>
-      </Expander>
-
-      <!-- What still blocks approval, next to the action bar. -->
-      <Border Classes="warningNote" IsVisible="{Binding ReportValidation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-       <TextBlock Name="TimingReportValidationText" Text="{Binding ReportValidation}" TextWrapping="Wrap"/>
-      </Border>
-
-      <!-- Actions: approval is the primary step; export and send use the selected approved XML. -->
-      <Border Classes="card" Padding="12,10">
-       <Grid ColumnDefinitions="*,Auto,8,Auto,8,Auto">
-        <Button Grid.Column="1" Content="Export approved XML" Classes="secondaryAction" Command="{Binding ExportTimingReportCommand}"/>
-        <Button Grid.Column="3" Name="SendTimingReportTestButton" Content="Send XML · test mode" Classes="secondaryAction" Command="{Binding SendTimingReportTestCommand}" IsEnabled="{Binding !IsReportBusy}"/>
-        <Button Grid.Column="5" Name="ApproveTimingReportButton" Content="Create approved XML" Command="{Binding ApproveTimingReportCommand}" IsEnabled="{Binding !IsReportBusy}" Classes="primaryAction"/>
-       </Grid>
-      </Border>
      </StackPanel>
     </ScrollViewer>
    </TabItem>
@@ -188,12 +221,20 @@
            <TextBlock Text="{Binding First.Bib, StringFormat='BIB {0}'}"/></Border>
           <TextBlock Grid.Row="2" Text="Start" Classes="rowLabel"/>
           <TextBox Grid.Row="2" Grid.Column="1" IsReadOnly="True" Text="{Binding First.AStart, Mode=OneWay}"/>
-          <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding First.BStart}"/>
-          <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding First.HandStart}"/>
+          <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding First.BStart}"
+                   Classes.error="{Binding First.BStartIssue, Converter={x:Static local:EvidenceIssueConverter.IsError}}" Classes.warning="{Binding First.BStartIssue, Converter={x:Static local:EvidenceIssueConverter.IsWarning}}"
+                   ToolTip.Tip="{Binding First.BStartIssue, Converter={x:Static local:EvidenceIssueConverter.Message}}"/>
+          <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding First.HandStart}"
+                   Classes.error="{Binding First.HandStartIssue, Converter={x:Static local:EvidenceIssueConverter.IsError}}" Classes.warning="{Binding First.HandStartIssue, Converter={x:Static local:EvidenceIssueConverter.IsWarning}}"
+                   ToolTip.Tip="{Binding First.HandStartIssue, Converter={x:Static local:EvidenceIssueConverter.Message}}"/>
           <TextBlock Grid.Row="3" Text="Finish" Classes="rowLabel"/>
           <TextBox Grid.Row="3" Grid.Column="1" IsReadOnly="True" Text="{Binding First.AFinish, Mode=OneWay}"/>
-          <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding First.BFinish}"/>
-          <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding First.HandFinish}"/>
+          <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding First.BFinish}"
+                   Classes.error="{Binding First.BFinishIssue, Converter={x:Static local:EvidenceIssueConverter.IsError}}" Classes.warning="{Binding First.BFinishIssue, Converter={x:Static local:EvidenceIssueConverter.IsWarning}}"
+                   ToolTip.Tip="{Binding First.BFinishIssue, Converter={x:Static local:EvidenceIssueConverter.Message}}"/>
+          <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding First.HandFinish}"
+                   Classes.error="{Binding First.HandFinishIssue, Converter={x:Static local:EvidenceIssueConverter.IsError}}" Classes.warning="{Binding First.HandFinishIssue, Converter={x:Static local:EvidenceIssueConverter.IsWarning}}"
+                   ToolTip.Tip="{Binding First.HandFinishIssue, Converter={x:Static local:EvidenceIssueConverter.Message}}"/>
           <TextBlock Grid.Row="4" Text="Net A" Classes="rowLabel"/>
           <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding First.Net}" FontWeight="SemiBold" VerticalAlignment="Center"/>
           <Border Grid.Row="5" Classes="groupRule"/>
@@ -203,12 +244,20 @@
            <TextBlock Text="{Binding Last.Bib, StringFormat='BIB {0}'}"/></Border>
           <TextBlock Grid.Row="7" Text="Start" Classes="rowLabel"/>
           <TextBox Grid.Row="7" Grid.Column="1" IsReadOnly="True" Text="{Binding Last.AStart, Mode=OneWay}"/>
-          <TextBox Grid.Row="7" Grid.Column="2" Text="{Binding Last.BStart}"/>
-          <TextBox Grid.Row="7" Grid.Column="3" Text="{Binding Last.HandStart}"/>
+          <TextBox Grid.Row="7" Grid.Column="2" Text="{Binding Last.BStart}"
+                   Classes.error="{Binding Last.BStartIssue, Converter={x:Static local:EvidenceIssueConverter.IsError}}" Classes.warning="{Binding Last.BStartIssue, Converter={x:Static local:EvidenceIssueConverter.IsWarning}}"
+                   ToolTip.Tip="{Binding Last.BStartIssue, Converter={x:Static local:EvidenceIssueConverter.Message}}"/>
+          <TextBox Grid.Row="7" Grid.Column="3" Text="{Binding Last.HandStart}"
+                   Classes.error="{Binding Last.HandStartIssue, Converter={x:Static local:EvidenceIssueConverter.IsError}}" Classes.warning="{Binding Last.HandStartIssue, Converter={x:Static local:EvidenceIssueConverter.IsWarning}}"
+                   ToolTip.Tip="{Binding Last.HandStartIssue, Converter={x:Static local:EvidenceIssueConverter.Message}}"/>
           <TextBlock Grid.Row="8" Text="Finish" Classes="rowLabel"/>
           <TextBox Grid.Row="8" Grid.Column="1" IsReadOnly="True" Text="{Binding Last.AFinish, Mode=OneWay}"/>
-          <TextBox Grid.Row="8" Grid.Column="2" Text="{Binding Last.BFinish}"/>
-          <TextBox Grid.Row="8" Grid.Column="3" Text="{Binding Last.HandFinish}"/>
+          <TextBox Grid.Row="8" Grid.Column="2" Text="{Binding Last.BFinish}"
+                   Classes.error="{Binding Last.BFinishIssue, Converter={x:Static local:EvidenceIssueConverter.IsError}}" Classes.warning="{Binding Last.BFinishIssue, Converter={x:Static local:EvidenceIssueConverter.IsWarning}}"
+                   ToolTip.Tip="{Binding Last.BFinishIssue, Converter={x:Static local:EvidenceIssueConverter.Message}}"/>
+          <TextBox Grid.Row="8" Grid.Column="3" Text="{Binding Last.HandFinish}"
+                   Classes.error="{Binding Last.HandFinishIssue, Converter={x:Static local:EvidenceIssueConverter.IsError}}" Classes.warning="{Binding Last.HandFinishIssue, Converter={x:Static local:EvidenceIssueConverter.IsWarning}}"
+                   ToolTip.Tip="{Binding Last.HandFinishIssue, Converter={x:Static local:EvidenceIssueConverter.Message}}"/>
           <TextBlock Grid.Row="9" Text="Net A" Classes="rowLabel"/>
           <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding Last.Net}" FontWeight="SemiBold" VerticalAlignment="Center"/>
           <Border Grid.Row="10" Classes="groupRule"/>
@@ -229,6 +278,10 @@
           <Button Grid.Row="15" Grid.Column="3" Content="Hand finish…" Classes="secondaryAction" Tag="HandFinish" CommandParameter="{Binding Run}" Click="ChooseImages_Click"
                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Read hand-timing finish times of the first and last finisher."/>
          </Grid>
+         <Border Name="ReportEvidenceIssues" Classes="resultBanner" Classes.error="{Binding HasEvidenceError}" Classes.warning="{Binding HasEvidenceWarningOnly}"
+                 IsVisible="{Binding HasEvidenceIssues}">
+          <TextBlock Text="{Binding EvidenceIssues}" TextWrapping="Wrap"/>
+         </Border>
         </StackPanel></Border>
        </DataTemplate></ItemsControl.ItemTemplate>
       </ItemsControl>

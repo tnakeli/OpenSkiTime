@@ -64,7 +64,7 @@
           <DataGridTextColumn Header="ID" Binding="{Binding Letter}" Width="60" MinWidth="50" />
           <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" MinWidth="110" />
           <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" MinWidth="100" />
-          <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="70" MinWidth="60" />
+          <local:NationColumn Header="NAT" Binding="{Binding Nation}" Width="88" MinWidth="88" />
         </DataGrid.Columns>
       </DataGrid>
     </StackPanel>

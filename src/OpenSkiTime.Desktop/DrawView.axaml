@@ -94,7 +94,7 @@
           <local:SurnameColumn Header="SURNAME" Binding="{Binding Entry.Entrant.Athlete.Surname}" Width="220" />
           <DataGridTextColumn Header="FIRST NAME" Binding="{Binding Entry.Entrant.Athlete.FirstName}" Width="180" />
           <DataGridTextColumn Header="YEAR" Binding="{Binding Entry.Entrant.Athlete.BirthYear}" Width="76" />
-          <DataGridTextColumn Header="NAT" Binding="{Binding Entry.Entrant.Athlete.Nation}" Width="72" />
+          <local:NationColumn Header="NAT" Binding="{Binding Entry.Entrant.Athlete.Nation}" Width="88" />
           <DataGridTextColumn Header="RUN 1 TIME" Binding="{Binding RunOneTime}" Width="112" IsVisible="{Binding IsLaterDrawRun}" />
           <DataGridTextColumn Header="FIS PTS" Binding="{Binding Points}" IsVisible="{Binding ShowDrawPoints}" Width="88" />
           <DataGridTextColumn Header="GROUP" Binding="{Binding Entry.Group}" Width="*" MinWidth="140" />
@@ -108,7 +108,7 @@
           <local:SurnameColumn Header="SURNAME" Binding="{Binding Surname}" Width="220" />
           <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="180" />
           <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="76" />
-          <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="72" />
+          <local:NationColumn Header="NAT" Binding="{Binding Nation}" Width="88" />
           <DataGridTextColumn Header="CLUB" Binding="{Binding Club}" Width="*" MinWidth="160" />
           <DataGridTemplateColumn Header="FIS PTS" Width="96"><DataGridTemplateColumn.CellTemplate><DataTemplate>
             <TextBlock Text="{Binding PointsText}" Classes="gridCell" Classes.pointsMismatch="{Binding DiffersFromList}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>

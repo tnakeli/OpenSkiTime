@@ -68,7 +68,7 @@ public partial class DesktopWorkflowTests
             else
             {
                 Assert.Contains("rules are missing", vm.ResultsRuleSource);
-                await vm.ApproveFisResultsCommand.ExecuteAsync(null);
+                await vm.SaveFisXmlCommand.ExecuteAsync(null);
                 Assert.True(vm.IsError); Assert.Empty(await workspace.ReadApprovedResultsAsync(competition));
             }
         }

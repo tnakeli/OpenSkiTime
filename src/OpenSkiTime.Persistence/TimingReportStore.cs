@@ -196,6 +196,10 @@ internal sealed partial class SqliteSeriesFileSession : ITimingReportStore
             { throw new DomainValidationException("Timing data changed since report review. Refresh A data and review again."); }
             var xml = TimingReportXml.Create(draft, request.SoftwareVersion);
             await VerifyReportEvidenceAsync(db, draft, sources, decoders, ct);
+            // The latest revision is exactly this XML for the same timing: it is the revision to use again.
+            var newest = await db.Set<ApprovedTimingReportRow>().AsNoTracking().Where(x => x.CompetitionId == request.CompetitionId)
+                .OrderByDescending(x => x.Revision).FirstOrDefaultAsync(ct);
+            if (newest is not null && newest.SourceFingerprint == draft.SourceFingerprint && newest.Xml.AsSpan().SequenceEqual(xml)) { return Approval(newest); }
             var approved = new ApprovedTimingReportRow { Id = Guid.NewGuid(), CompetitionId = request.CompetitionId,
                 Revision = (await db.Set<ApprovedTimingReportRow>().Where(x => x.CompetitionId == request.CompetitionId).MaxAsync(x => (int?)x.Revision, ct) ?? 0) + 1,
                 DraftRevision = row.Revision, SourceFingerprint = draft.SourceFingerprint, ApprovedAt = request.At,

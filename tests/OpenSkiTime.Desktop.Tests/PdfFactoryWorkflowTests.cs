@@ -86,7 +86,7 @@ public partial class DesktopWorkflowTests
             await entry.GenerateCommand.ExecuteAsync(null);
             Assert.Equal("Generated", vm.PdfReports[0].Status);
             vm.PdfReports[0].OpenCommand.Execute(null);
-            Assert.Equal(Path.Combine(root, entry.FileName), Assert.Single(opener.Paths));
+            Assert.Equal(Path.GetFullPath(Path.Combine(root, entry.RelativePath)), Assert.Single(opener.Paths));
             var current = await workspace.ReadAsync();
             await workspace.SaveSeriesAsync(current.Values with { Organizer = "Edited club" }, current.Revision);
             vm.ShowSeriesCommand.Execute(null);
@@ -173,7 +173,7 @@ public partial class DesktopWorkflowTests
             var referee = vm.PdfReports.Single(row => row.Descriptor.Type == PdfReportType.RefereeReport);
             await referee.GenerateCommand.ExecuteAsync(null);
             referee = vm.PdfReports.Single(row => row.Descriptor.Type == PdfReportType.RefereeReport);
-            var expected = Path.Combine(root, referee.FileName);
+            var expected = Path.GetFullPath(Path.Combine(root, referee.RelativePath));
             Assert.Equal(expected, referee.OutputPath);
             Assert.False(expected.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase));
             var generated = await File.ReadAllBytesAsync(expected);

@@ -29,6 +29,9 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _fisApiKeyInput = string.Empty;
     [ObservableProperty] private string _fisApiKeyStatus = "Not configured";
     [ObservableProperty] private string _fisApiKeyWatermark = "FIS API key";
+    [ObservableProperty] private string _fisMemberTokenInput = string.Empty;
+    [ObservableProperty] private string _fisMemberTokenStatus = "Not configured";
+    [ObservableProperty] private string _fisMemberTokenWatermark = "Personal access token";
     [ObservableProperty] private string _fisListDisplay = "No FIS points list downloaded";
     [ObservableProperty] private string _fisListValidityText = string.Empty;
     [ObservableProperty] private string _fisEffectiveDateText = string.Empty;
@@ -52,11 +55,48 @@ public sealed partial class MainViewModel
             var configured = _fisStore.HasApiKey();
             FisApiKeyStatus = configured ? "Saved for this Windows user" : "Not configured";
             FisApiKeyWatermark = configured ? "••••••••••••" : "FIS API key";
+            var tokenConfigured = _fisStore.HasMemberToken();
+            FisMemberTokenStatus = tokenConfigured ? "Saved for this Windows user" : "Not configured";
+            FisMemberTokenWatermark = tokenConfigured ? "••••••••••••" : "Personal access token";
         }
         catch (Exception ex) when (ex is IOException or PlatformNotSupportedException)
         {
             FisApiKeyStatus = "Credential store unavailable";
             FisApiKeyWatermark = "FIS API key";
+            FisMemberTokenStatus = "Credential store unavailable";
+            FisMemberTokenWatermark = "Personal access token";
+            SetStatus(ex.Message, error: true);
+        }
+    }
+
+    [RelayCommand]
+    private void SaveFisMemberToken()
+    {
+        try
+        {
+            _fisStore.SaveMemberToken(FisMemberTokenInput);
+            FisMemberTokenInput = string.Empty;
+            RefreshFisSettingsStatus();
+            SetStatus("FIS Member Section token saved in Windows Credential Manager.");
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or PlatformNotSupportedException)
+        {
+            SetStatus(ex.Message, error: true);
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveFisMemberToken()
+    {
+        try
+        {
+            _fisStore.RemoveMemberToken();
+            FisMemberTokenInput = string.Empty;
+            RefreshFisSettingsStatus();
+            SetStatus("FIS Member Section token removed from Windows Credential Manager.");
+        }
+        catch (Exception ex) when (ex is IOException or PlatformNotSupportedException)
+        {
             SetStatus(ex.Message, error: true);
         }
     }

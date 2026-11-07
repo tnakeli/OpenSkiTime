@@ -21,7 +21,7 @@
               <DataGridTextColumn Header="FUNCTION" Binding="{Binding Label}" Width="Auto" IsReadOnly="True" />
               <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" MinWidth="120" />
               <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" MinWidth="110" />
-              <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="70" MinWidth="60" />
+              <local:NationColumn Header="NAT" Binding="{Binding Nation}" Width="88" MinWidth="88" />
             </DataGrid.Columns>
           </DataGrid>
         </StackPanel>

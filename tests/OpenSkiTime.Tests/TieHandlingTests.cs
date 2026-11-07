@@ -195,7 +195,7 @@ public sealed class TieHandlingTests
         var (list, timing) = OneRunRace(new() { [1] = 5000, [2] = 5100, [3] = 5000, [4] = 5100, [5] = 5100, [6] = 5300, [7] = 5000 });
         var race = FisRaceResults.Assemble(list, timing);
         var penalty = FisPenalty.Calculate(Discipline.Downhill, race.PenaltyCompetitors, new(0, 999, 0));
-        var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"), [new(45, 43, "10:00", new("S", "Setter", "FIN"))]);
+        var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"), [new(45, 43, "10:00", new("S", "Setter", "FIN"))], CourseChief: new("Course", "Chief", "FIN"));
         var doc = XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race,
             new("Series", "Test", "Club", s_date, s_date, "FIN", "2026/27"), penalty, details)));
         var ranked = doc.Descendants("AL_ranked").Select(x => (Rank: x.Element("Rank")!.Value, Bib: x.Element("Bib")!.Value)).ToArray();

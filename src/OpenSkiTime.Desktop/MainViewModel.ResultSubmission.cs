@@ -15,15 +15,43 @@ public sealed partial class MainViewModel
     private bool _submissionDisposed;
     private int _submissionOperations;
     private bool _submissionClientDisposed;
-    private readonly Dictionary<(string?, Guid), (string Id, string Status, string Response)> _submissionDisplays = [];
+    private readonly Dictionary<(string?, Guid), (string Id, FisUploadOutcome? Outcome)> _submissionDisplays = [];
     private (string?, Guid)? _submissionDisplayKey;
+    // True while the display shows a pasted submission this revision never sent: it is not remembered.
+    private bool _showingLookup;
+    // Without a saved XML revision the key is the competition itself, so an answer never shows on another race.
+    private (string?, Guid) CurrentSubmissionKey => _submissionDisplayKey ?? (workspace.FilePath, ResultsCompetition?.Id ?? Guid.Empty);
+
+    // Real submissions are the default; test mode is a deliberate, visible choice that is not remembered between runs.
+    [ObservableProperty] private bool _fisUploadTestMode;
+    [ObservableProperty] private FisTestScenarioChoice _selectedFisTestScenario = s_fisTestScenarios[0];
+    [ObservableProperty] private bool _isSendConfirmationOpen;
     [ObservableProperty] private bool _isSubmissionBusy;
+    [ObservableProperty] private bool _isFisResponseVisible;
     [ObservableProperty] private string _resultSubmissionId = "";
-    [ObservableProperty] private string _resultSubmissionStatus = "Test mode is fixed on. Select an approved XML revision to send.";
-    [ObservableProperty] private string _resultSubmissionResponse = "";
-    public bool CanSendResultsXml => SelectedResultApproval is not null && !IsSubmissionBusy;
-    public bool CanCheckResultsSubmission => SelectedResultApproval is not null && !IsSubmissionBusy
-        && Guid.TryParse(ResultSubmissionId, out var id) && id != Guid.Empty;
+    [ObservableProperty] private FisUploadOutcome? _resultSubmissionOutcome;
+    [ObservableProperty] private string _resultsXmlFileName = "";
+    [ObservableProperty] private string _resultsXmlState = "";
+    [ObservableProperty] private string _resultsXmlSavedNote = "";
+
+    private static readonly FisTestScenarioChoice[] s_fisTestScenarios =
+    [
+        new(FisUploadTestScenario.SimulateSuccess, "Simulate success", "Sends a copy with codex 9991. FIS accepts it and reports it processed about a minute later."),
+        new(FisUploadTestScenario.SimulateNoPermission, "Simulate no permission", "Sends a copy with codex 9992. FIS rejects it as not allowed for this race."),
+        new(FisUploadTestScenario.ValidateOnly, "Validate the XML as it is", "Sends the real XML. FIS checks its structure; the real codex is an unknown race in test mode."),
+    ];
+    public IReadOnlyList<FisTestScenarioChoice> FisTestScenarios { get; } = s_fisTestScenarios;
+
+    public bool CanSendToFis => ResultsReady && !IsSubmissionBusy;
+    public bool CanSaveFisXml => ResultsReady && !IsSubmissionBusy;
+    public bool CanCheckResultsSubmission => !IsSubmissionBusy && Guid.TryParse(ResultSubmissionId, out var id) && id != Guid.Empty;
+    public bool HasSubmissionOutcome => ResultSubmissionOutcome is not null;
+    public bool NoSubmissionOutcome => ResultSubmissionOutcome is null;
+    public string SendToFisLabel => FisUploadTestMode ? "Send to FIS · test" : "Send to FIS";
+    public string SendConfirmationText => $"Send {ResultsXmlFileName} to FIS as the results of {ResultsCompetition?.Values.Name}? FIS stores and processes it.";
+    public string FisTestScenarioDetail => SelectedFisTestScenario.Detail;
+    public string FisResponseButtonLabel => IsFisResponseVisible ? "Hide FIS response" : "View FIS response";
+    public string ResultsXmlReadyText => ResultsReady ? "" : "The XML can be created when the results and the penalty are available: " + (string.IsNullOrWhiteSpace(ResultsRuleSource) ? ResultsState : ResultsRuleSource);
 
     internal Task<FisSubmissionResponse> UploadApprovedFisArtifactTestAsync(ApprovedFisXmlArtifact artifact, CancellationToken ct = default)
         => SharedFisRequestAsync((client, key) => client.UploadAsync(artifact, key, ct));
@@ -38,117 +66,277 @@ public sealed partial class MainViewModel
         try
         {
             _submissionClient ??= new(_submissionHttp);
-            return await action(_submissionClient, _fisStore.ReadApiKey() ?? "");
+            return await action(_submissionClient, _fisStore.ReadMemberToken() ?? "");
         }
         finally { _submissionOperations--; TryDisposeSubmissionClient(); }
     }
 
+    partial void OnIsFisResponseVisibleChanged(bool value) => OnPropertyChanged(nameof(FisResponseButtonLabel));
+    partial void OnSelectedFisTestScenarioChanged(FisTestScenarioChoice value) => OnPropertyChanged(nameof(FisTestScenarioDetail));
+    partial void OnFisUploadTestModeChanged(bool value)
+    { IsSendConfirmationOpen = false; IsReportSendConfirmationOpen = false; OnPropertyChanged(nameof(SendToFisLabel)); }
+    partial void OnIsSendConfirmationOpenChanged(bool value) => OnPropertyChanged(nameof(SendConfirmationText));
+    partial void OnResultsXmlFileNameChanged(string value) => OnPropertyChanged(nameof(SendConfirmationText));
+    partial void OnResultSubmissionOutcomeChanged(FisUploadOutcome? value)
+    { OnPropertyChanged(nameof(HasSubmissionOutcome)); OnPropertyChanged(nameof(NoSubmissionOutcome)); if (value is null) { IsFisResponseVisible = false; } }
     partial void OnIsSubmissionBusyChanged(bool value)
-    { OnPropertyChanged(nameof(CanSendResultsXml)); OnPropertyChanged(nameof(CanCheckResultsSubmission)); }
+    {
+        OnPropertyChanged(nameof(CanSendToFis)); OnPropertyChanged(nameof(CanSaveFisXml)); OnPropertyChanged(nameof(CanCheckResultsSubmission));
+    }
     partial void OnResultSubmissionIdChanged(string value) => OnPropertyChanged(nameof(CanCheckResultsSubmission));
+
     partial void OnSelectedResultApprovalChanged(ApprovedResult? value)
     {
         RememberSubmissionDisplay();
         _submissionDisplayKey = value is null ? null : (workspace.FilePath, value.Id);
-        if (_submissionDisplayKey is { } key && _submissionDisplays.TryGetValue(key, out var saved))
-        { ResultSubmissionId = saved.Id; ResultSubmissionStatus = saved.Status; ResultSubmissionResponse = saved.Response; }
-        else
-        {
-            ResultSubmissionId = ""; ResultSubmissionResponse = "";
-            ResultSubmissionStatus = "Test mode is fixed on. Select an approved XML revision to send.";
-        }
-        OnPropertyChanged(nameof(CanSendResultsXml));
+        IsSendConfirmationOpen = false;
+        ShowRememberedSubmission();
+        RefreshResultsXmlInfo();
+    }
+
+    private void ShowRememberedSubmission()
+    {
+        _showingLookup = false;
+        if (_submissionDisplays.TryGetValue(CurrentSubmissionKey, out var saved)) { ResultSubmissionId = saved.Id; ResultSubmissionOutcome = saved.Outcome; }
+        else { ResultSubmissionId = ""; ResultSubmissionOutcome = null; }
     }
 
     private void RememberSubmissionDisplay()
     {
-        if (_submissionDisplayKey is { } key)
-        { _submissionDisplays[key] = (ResultSubmissionId, ResultSubmissionStatus, ResultSubmissionResponse); }
+        if (_submissionDisplayKey is { } key && !_showingLookup) { _submissionDisplays[key] = (ResultSubmissionId, ResultSubmissionOutcome); }
     }
 
-    [RelayCommand]
-    private async Task SendApprovedXmlTestAsync()
+    // What the left card says about the XML: its file name and whether the saved revision still matches the results.
+    private void RefreshResultsXmlInfo()
     {
-        if (SelectedResultApproval is not { } approval || IsSubmissionBusy) { return; }
-        var key = (workspace.FilePath, approval.Id);
-        await SubmissionRequestAsync(key, async (client, token, ct) =>
-        {
-            PublishSubmission(key, "", "Uploading approved XML · testMode=true…", "");
-            // Exact approved bytes and filename; no codex replacement and no retry of POST.
-            var response = await client.UploadAsync(new ApprovedFisXmlArtifact(approval.Id, approval.XmlFileName, approval.Xml), token, ct);
-            await FollowSubmissionAsync(key, client, token, response, ct);
-        });
+        OnPropertyChanged(nameof(CanSendToFis)); OnPropertyChanged(nameof(CanSaveFisXml)); OnPropertyChanged(nameof(ResultsXmlReadyText));
+        if (_resultRace is null || _current is null || ResultsCompetition is null) { ResultsXmlFileName = ""; ResultsXmlState = ""; return; }
+        try { ResultsXmlFileName = FisResultXml.FileName(_resultRace with { FirstList = _resultRace.FirstList with
+            { Plan = _resultRace.FirstList.Plan with { Competition = ResultsCompetition.Values } } }, _current.Values); }
+        catch (DomainValidationException ex) { ResultsXmlFileName = ""; ResultsXmlState = ex.Message; return; }
+        ResultsXmlState = SelectedResultApproval is { } latest
+            ? $"Latest saved revision {latest.Revision} · {latest.ApprovedAt.ToLocalTime():yyyy-MM-dd HH:mm}. A new revision is saved when the results or race information change."
+            : "The XML is created from the current results when you save or send it.";
     }
 
-    [RelayCommand]
-    private async Task CheckResultsSubmissionAsync()
+    // Creates the XML of the current results and stores it as an immutable revision in the event file. When the latest
+    // revision is already exactly this XML for the same timing and race information, the event file returns that revision,
+    // so sending twice never adds revisions.
+    private async Task<ApprovedResult> EnsureResultsXmlAsync()
     {
-        if (IsSubmissionBusy || !Guid.TryParse(ResultSubmissionId, out var uuid) || uuid == Guid.Empty) { return; }
-        var key = _submissionDisplayKey;
-        if (key is null) { return; }
-        RememberSubmissionDisplay();
-        await SubmissionRequestAsync(key.Value, async (client, token, ct) =>
+        if (_resultRace is null || _resultFingerprint is null || ResultsCompetition is null || _current is null)
+        { throw new DomainValidationException("Reload complete race results first."); }
+        if (!await FlushRaceInformationAsync()) { throw new DomainValidationException("Resolve unsaved race information before creating the XML."); }
+        if (_resultsRuleProfile is null || _reviewedPenalty is null)
+        { throw new DomainValidationException("The penalty is not available: " + (string.IsNullOrWhiteSpace(ResultsRuleSource) ? ResultsState : ResultsRuleSource)); }
+        // Timing can change after the results were loaded (another window, a live capture). A saved revision is reused only
+        // for the timing that is committed now, and a changed race is never sent as if it were current.
+        if (await CommittedResultFingerprintAsync(ResultsCompetition.Id, ResultsCompetition.Values.RunCount) != _resultFingerprint)
+        { throw new DomainValidationException("Timing or start-list data changed since the results were loaded. Press Refresh timing and check the results before sending."); }
+        var committed = await workspace.ReadAsync();
+        if (committed.Competitions.FirstOrDefault(x => x.Id == ResultsCompetition.Id)?.Values != ResultsCompetition.Values || committed.Values != _current.Values)
+        { throw new DomainValidationException("The competition or series details changed since the results were loaded. Press Refresh timing and check the results before sending."); }
+        var penalty = CalculateCurrentPenalty();
+        var information = CurrentRaceInformation();
+        var td = information.Jury.Single(x => x.Function == "TechnicalDelegate").Person;
+        var chief = information.Jury.Single(x => x.Function == "ChiefRace").Person;
+        var metadata = new FisXmlDetails(information.Category, td, chief,
+            information.Runs.Select(x => new FisRunXmlDetails(x.Gates ?? 0, x.TurningGates ?? 0, x.StartTime, x.CourseSetter)).ToArray(), information);
+        var xmlRace = _resultRace with { FirstList = _resultRace.FirstList with
+        { Plan = _resultRace.FirstList.Plan with { Competition = ResultsCompetition.Values } } };
+        var xml = FisResultXml.Create(xmlRace, _current.Values, penalty, metadata);
+        var competitionId = ResultsCompetition.Id;
+        var path = workspace.FilePath;
+        var expectedRevision = _current.Revision;
+        var operatorName = string.IsNullOrWhiteSpace(TimingOperator) ? "Results operator" : TimingOperator;
+        var saved = await workspace.ApproveResultAsync(new(competitionId, _resultRace.FirstList.Id, _resultRace.SecondList?.Id,
+            _resultFingerprint, _current.Revision, operatorName, FisResultXml.FileName(xmlRace, _current.Values), xml,
+            penalty.Calculated, penalty.Applied, information));
+        if (workspace.FilePath == path && _current is not null)
+        { _current = _current with { Revision = Math.Max(_current.Revision, expectedRevision + 1) }; }
+        if (workspace.FilePath == path && ResultsCompetition?.Id == competitionId)
         {
-            var response = await client.PollAsync(uuid, token, ct);
-            await FollowSubmissionAsync(key.Value, client, token, response, ct);
-        });
-    }
-
-    private async Task FollowSubmissionAsync((string?, Guid) key, FisResultSubmissionClient client, string token,
-        FisSubmissionResponse response, CancellationToken ct)
-    {
-        for (var poll = 0; ; poll++)
-        {
-            var s = response.Submission;
-            var status = $"TEST · {s.Uuid:D} · {s.Outcome} · accepted {s.Summary.Accepted}, processed {s.Summary.Processed}, rejected {s.Summary.Rejected}"
-                + (s.Summary.IsComplete ? " · complete" : " · waiting for processing");
-            status += "\n" + string.Join("\n", s.Files.Select(x => $"{x.FileName}: {x.Status} · {x.Comments}"));
-            if (s.Summary.IsComplete || poll >= 24)
-            {
-                if (!s.Summary.IsComplete) { status += "\nAutomatic polling paused after two minutes. Use Check status to continue."; }
-                PublishSubmission(key, s.Uuid.ToString("D"), status, response.ResponseText);
-                return;
-            }
-            PublishSubmission(key, s.Uuid.ToString("D"), status, response.ResponseText);
-            await Task.Delay(TimeSpan.FromSeconds(5), ct);
-            response = await client.PollAsync(s.Uuid, token, ct);
+            // The event file decides in one transaction whether this XML is a new revision or the latest one again.
+            if (ResultApprovals.All(x => x.Id != saved.Id)) { ResultApprovals.Insert(0, saved); }
+            SelectedResultApproval = ResultApprovals.First(x => x.Id == saved.Id);
         }
+        return saved;
     }
 
-    private void PublishSubmission((string?, Guid) key, string id, string status, string response)
+    private async Task<string> CommittedResultFingerprintAsync(Guid competitionId, int runCount)
     {
-        _submissionDisplays[key] = (id, status, response);
-        if (_submissionDisplayKey != key) { return; }
-        ResultSubmissionId = id; ResultSubmissionStatus = status; ResultSubmissionResponse = response;
+        var desk = await workspace.ReadStartListsAsync(competitionId);
+        var first = desk.Revisions.Where(x => x.Plan.RunNumber == 1).OrderByDescending(x => x.Revision).FirstOrDefault()
+            ?? throw new DomainValidationException("Draw Run 1 before preparing results.");
+        var second = runCount == 2 ? desk.Revisions.Where(x => x.Plan.RunNumber == 2).OrderByDescending(x => x.Revision).FirstOrDefault() : null;
+        return ResultSourceFingerprint.Create(await workspace.ReadTimingAsync(first.Id), second is null ? null : await workspace.ReadTimingAsync(second.Id));
     }
 
-    private async Task SubmissionRequestAsync((string?, Guid) key,
-        Func<FisResultSubmissionClient, string, CancellationToken, Task> action)
+    [RelayCommand]
+    private async Task SaveFisXmlAsync()
+    {
+        await GuardAsync(async () =>
+        {
+            var approval = await EnsureResultsXmlAsync();
+            var path = await dialogs.ChooseResultXmlExportAsync(approval.XmlFileName);
+            if (path is null) { ResultsXmlSavedNote = ""; SetStatus($"FIS XML revision {approval.Revision} is saved in the event file."); return; }
+            await ExportFile.WriteAsync(path, approval.Xml);
+            ResultsXmlSavedNote = $"Saved {Path.GetFileName(path)} · revision {approval.Revision}";
+            SetStatus($"FIS XML revision {approval.Revision} saved to {path}.");
+        });
+    }
+
+    [RelayCommand]
+    private async Task SendToFisAsync()
+    {
+        if (IsSubmissionBusy || !ResultsReady) { return; }
+        // A real upload is stored by FIS: ask once, in place. A test needs no confirmation.
+        if (!FisUploadTestMode) { RefreshResultsXmlInfo(); IsSendConfirmationOpen = true; return; }
+        await SendCoreAsync(test: true);
+    }
+
+    [RelayCommand]
+    private async Task ConfirmSendToFisAsync()
+    {
+        if (!IsSendConfirmationOpen) { return; }
+        IsSendConfirmationOpen = false;
+        // The confirmation was for a real send; it never turns into one after test mode was switched on.
+        if (FisUploadTestMode) { return; }
+        await SendCoreAsync(test: false);
+    }
+
+    [RelayCommand] private void CancelSendToFis() => IsSendConfirmationOpen = false;
+    [RelayCommand] private void ToggleFisResponse() => IsFisResponseVisible = ResultSubmissionOutcome is { HasRawResponse: true } && !IsFisResponseVisible;
+
+    private async Task SendCoreAsync(bool test)
     {
         if (IsSubmissionBusy) { return; }
         IsSubmissionBusy = true;
         _submissionOperations++;
         using var cancellation = new CancellationTokenSource();
         _submissionCancellation = cancellation;
+        var mode = test ? "TEST · " + SelectedFisTestScenario.Label.ToLowerInvariant() : "LIVE";
+        var key = CurrentSubmissionKey;
         try
         {
-            var token = _fisStore.ReadApiKey() ?? "";
-            _submissionClient ??= new(_submissionHttp);
-            await action(_submissionClient, token, cancellation.Token);
+            ApprovedResult approval;
+            try { approval = await EnsureResultsXmlAsync(); }
+            catch (Exception ex) when (ex is DomainValidationException or SeriesFileException or SeriesConflictException or IOException)
+            {
+                var message = ex is DomainValidationException or SeriesFileException or SeriesConflictException ? ex.Message
+                    : "The event file could not be written. Check the file and try again.";
+                Publish(key, FisUploadOutcomes.Notice(FisUploadTone.Error, "XML not created", message, "Nothing was sent to FIS.", test, mode, "", ""));
+                return;
+            }
+            key = (workspace.FilePath, approval.Id);
+            // Practice timing (simulator or replay) never becomes official results; a test upload is still allowed.
+            if (!test && await UsesSimulatedTimingAsync(approval))
+            {
+                Publish(key, FisUploadOutcomes.Notice(FisUploadTone.Error, "Simulation timing", "These results come from simulator or replay timing, which cannot be sent to FIS as official results.",
+                    "Nothing was sent to FIS. Use a test upload to try the XML.", test, mode, "", ""));
+                return;
+            }
+            await SendXmlToFisAsync(approval.XmlFileName, approval.Xml, test, mode, outcome => Publish(key, outcome), null, cancellation.Token);
         }
-        catch (Exception ex) when (ex is DomainValidationException or IOException or HttpRequestException
+        catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or SeriesFileException or IOException or HttpRequestException
             or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
         {
-            var previous = _submissionDisplays.GetValueOrDefault(key);
-            var message = ex switch
-            {
-                OperationCanceledException => "Request stopped or timed out. An upload may have reached FIS. Keep the submission ID and check status before sending again.",
-                HttpRequestException => "FIS network request failed. An upload may have reached FIS. Check status before sending again.",
-                _ => ex.Message
-            };
-            PublishSubmission(key, previous.Id ?? "", message, ex is FisSubmissionException failure ? failure.ResponseText : previous.Response ?? "");
+            Publish(key, FisUploadOutcomes.FailureOutcome(ex, test, mode, _submissionDisplays.GetValueOrDefault(key).Id ?? "", ResultSubmissionOutcome?.FileName ?? ""));
         }
         finally { _submissionCancellation = null; IsSubmissionBusy = false; _submissionOperations--; TryDisposeSubmissionClient(); }
+    }
+
+    private async Task<bool> UsesSimulatedTimingAsync(ApprovedResult approval)
+    {
+        var listIds = approval.SecondListId is { } second ? new[] { approval.FirstListId, second } : [approval.FirstListId];
+        foreach (var id in listIds)
+        { if ((await workspace.ReadTimingAsync(id)).Sessions.Any(x => x.Options.Simulation)) { return true; } }
+        return false;
+    }
+
+    [RelayCommand]
+    private async Task CheckResultsSubmissionAsync()
+    {
+        if (IsSubmissionBusy || !Guid.TryParse(ResultSubmissionId, out var uuid) || uuid == Guid.Empty) { return; }
+        var key = CurrentSubmissionKey;
+        // The answer of a submission this revision never sent is shown, not remembered under it.
+        var known = _submissionDisplays.GetValueOrDefault(key).Id == uuid.ToString("D");
+        void Show(FisUploadOutcome outcome)
+        {
+            if (known) { Publish(key, outcome); }
+            else if (CurrentSubmissionKey == key) { _showingLookup = true; ResultSubmissionOutcome = outcome; }
+        }
+        IsSubmissionBusy = true;
+        _submissionOperations++;
+        using var cancellation = new CancellationTokenSource();
+        _submissionCancellation = cancellation;
+        var mode = ResultSubmissionOutcome?.Mode ?? "";
+        try
+        {
+            _submissionClient ??= new(_submissionHttp);
+            var token = _fisStore.ReadMemberToken() ?? "";
+            var response = await _submissionClient.PollAsync(uuid, token, cancellation.Token);
+            await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", "", Show, null, cancellation.Token);
+        }
+        catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or IOException or HttpRequestException
+            or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
+        {
+            Show(FisUploadOutcomes.FailureOutcome(ex, ResultSubmissionOutcome?.IsTest ?? false, mode, uuid.ToString("D"), ResultSubmissionOutcome?.FileName ?? ""));
+        }
+        finally { _submissionCancellation = null; IsSubmissionBusy = false; _submissionOperations--; TryDisposeSubmissionClient(); }
+    }
+
+    // The XML of any FIS view goes out through here: the stored bytes in normal mode, the simulation copy in test mode.
+    // Every state is published; a persisted answer is handed to the caller (the Timing report keeps its answers).
+    private async Task SendXmlToFisAsync(string fileName, byte[] xml, bool test, string mode, Action<FisUploadOutcome> publish,
+        Func<FisSubmissionResponse, Task>? persist, CancellationToken ct)
+    {
+        var payload = test ? FisTestPayloads.Prepare(fileName, xml, SelectedFisTestScenario.Scenario) : new FisTestPayload(fileName, xml, null, null);
+        publish(FisUploadOutcomes.Notice(FisUploadTone.Progress, test ? "Sending test upload…" : "Sending to FIS…", "Waiting for the answer from FIS.", "", test, mode, "", payload.FileName));
+        _submissionClient ??= new(_submissionHttp);
+        var token = _fisStore.ReadMemberToken() ?? "";
+        var response = await _submissionClient.UploadAsync(payload.FileName, payload.Xml, token, test, ct);
+        // The mode an upload was sent in belongs to its submission id for as long as the program runs.
+        _confirmedModes[response.Submission.Uuid] = test;
+        await FollowFisSubmissionAsync(_submissionClient, token, response, mode, payload.FileName, publish, persist, ct);
+    }
+
+    // The mode of each FIS submission this session sent or saw confirmed, by submission id. It is kept apart from what is on
+    // screen, so switching races, a rejected answer or a cancelled check never changes it.
+    private readonly Dictionary<Guid, bool> _confirmedModes = [];
+
+    // The mode of a submission as an earlier FIS answer stored it; null when the text is not a FIS answer.
+    private static bool? StoredMode(string? storedResponse) => FisResultSubmissionClient.ReadResponse(storedResponse)?.Submission.IsTest;
+
+    private async Task FollowFisSubmissionAsync(FisResultSubmissionClient client, string token, FisSubmissionResponse response, string mode,
+        string sentFileName, Action<FisUploadOutcome> publish, Func<FisSubmissionResponse, Task>? persist, CancellationToken ct)
+    {
+        // The mode is fixed before the first answer is shown: the one confirmed for this id, else what the first answer says.
+        var uuid = response.Submission.Uuid;
+        var test = _confirmedModes.TryGetValue(uuid, out var confirmed) ? confirmed : response.Submission.IsTest;
+        for (var poll = 0; ; poll++)
+        {
+            // A status answer that changes between test and real is never shown: it could report a test as published results.
+            if (response.Submission.IsTest != test)
+            { throw new FisSubmissionException("FIS answered the status check in a different mode than the upload. Check the submission before sending again.", response.ResponseText, false, FisSubmissionFailure.Unsupported); }
+            _confirmedModes[uuid] = test;
+            var paused = !response.Submission.Summary.IsComplete && poll >= 24;
+            publish(FisUploadOutcomes.OutcomeOf(response, mode, sentFileName, paused));
+            if (persist is not null) { await persist(response); }
+            if (response.Submission.Summary.IsComplete || paused) { return; }
+            await Task.Delay(TimeSpan.FromSeconds(5), ct);
+            response = await client.PollAsync(response.Submission.Uuid, token, ct);
+        }
+    }
+
+
+    private void Publish((string?, Guid) key, FisUploadOutcome outcome)
+    {
+        _submissionDisplays[key] = (outcome.SubmissionId, outcome);
+        if (CurrentSubmissionKey != key) { return; }
+        _showingLookup = false;
+        ResultSubmissionId = outcome.SubmissionId;
+        ResultSubmissionOutcome = outcome;
     }
 
     [RelayCommand] private void StopResultsSubmissionPolling() => _submissionCancellation?.Cancel();

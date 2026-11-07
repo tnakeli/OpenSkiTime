@@ -31,10 +31,10 @@ public static class ReportStatusService
     public static PdfReportStatus GetStatus(PdfReportSource source, PdfReportDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(descriptor);
-        var path = Path.Combine(Path.GetDirectoryName(source.FilePath) ?? "", descriptor.FileName);
+        var path = Path.Combine(Path.GetDirectoryName(source.FilePath) ?? "", descriptor.RelativePath);
         if (string.IsNullOrWhiteSpace(source.FilePath) || !File.Exists(path)) { return PdfReportStatus.NotGenerated; }
         var metadata = source.Settings.Reports.FirstOrDefault(x => x.ReportId == descriptor.Id);
-        if (metadata?.SourceVersion != VersionFor(source, descriptor) || metadata.FileName != descriptor.FileName) { return PdfReportStatus.Outdated; }
+        if (metadata?.SourceVersion != VersionFor(source, descriptor) || metadata.FileName != descriptor.RelativePath) { return PdfReportStatus.Outdated; }
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)) == metadata.PdfHash ? PdfReportStatus.Generated : PdfReportStatus.Outdated;
     }
@@ -57,12 +57,13 @@ public sealed partial class ReportGenerationService(IReportPdfRenderer renderer,
     {
         ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(descriptor); ArgumentNullException.ThrowIfNull(saveMetadata);
         if (!descriptor.CanGenerate) { return new(descriptor.Id, false, descriptor.UnavailableReason); }
-        var path = Path.Combine(Path.GetDirectoryName(source.FilePath) ?? throw new IOException("Save the .ost file first."), descriptor.FileName);
+        var path = Path.Combine(Path.GetDirectoryName(source.FilePath) ?? throw new IOException("Save the .ost file first."), descriptor.RelativePath);
         var gate = s_locks.GetOrAdd(path, _ => new(1, 1));
         await gate.WaitAsync(ct);
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             LogStarted(descriptor.Id, descriptor.RunNumber, descriptor.FileName);
             using var lease = new FileStream(path + ".generation.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose);
             var data = new PdfReportData(descriptor, source, EntryReportBuilder.Build(source, descriptor), at);
@@ -78,7 +79,7 @@ public sealed partial class ReportGenerationService(IReportPdfRenderer renderer,
             var hash = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(temporary, ct)));
             // Same-directory replacement never exposes a partially rendered file.
             File.Move(temporary, path, overwrite: true);
-            await saveMetadata(new(descriptor.Id, descriptor.FileName, at, ReportStatusService.VersionFor(source, descriptor), hash));
+            await saveMetadata(new(descriptor.Id, descriptor.RelativePath, at, ReportStatusService.VersionFor(source, descriptor), hash));
             LogCompleted(descriptor.Id);
             return new(descriptor.Id, true);
         }

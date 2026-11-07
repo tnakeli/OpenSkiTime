@@ -58,7 +58,7 @@ public sealed class ApprovedResultStorageTests
             var race = FisRaceResults.Assemble(raw.List, TimingReplay.Restore(raw, new AlgeDecoderFactory()));
             var penalty = FisPenalty.Calculate(values.Discipline, race.PenaltyCompetitors, new(0, 999, 0));
             var metadata = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"),
-                new("C", "Chief", "FIN"), [new(42, 40, "12:00", new("S", "Setter", "FIN"))]);
+                new("C", "Chief", "FIN"), [new(42, 40, "12:00", new("S", "Setter", "FIN"))], CourseChief: new("Course", "Chief", "FIN"));
             var xml = FisResultXml.Create(race, (await workspace.ReadAsync()).Values, penalty, metadata);
             var information = RaceInformation.Empty(values) with { Category = "FIS" };
             var request = new ApproveResultRequest(competition.Id, list.Id, null,
@@ -76,6 +76,18 @@ public sealed class ApprovedResultStorageTests
             Assert.Equal(xml, reopened.Xml);
             Assert.Equal("FIS", reopened.Information!.Category);
             Assert.Equal("FIS", (await workspace.ReadRaceInformationAsync(competition.Id))!.Values.Category);
+            // The same XML for the same data is the latest revision again, but only if the data is still current: the event file
+            // applies the same checks as for a new revision.
+            var current = (await workspace.ReadAsync()).Revision;
+            await Assert.ThrowsAsync<DomainValidationException>(() => workspace.ApproveResultAsync(
+                request with { ExpectedSeriesRevision = current, SourceFingerprint = new string('0', 64) }));
+            var informationRevision = (await workspace.ReadRaceInformationAsync(competition.Id))!.Revision;
+            var again = await workspace.ApproveResultAsync(request with { ExpectedSeriesRevision = current });
+            Assert.Equal(approved.Id, again.Id); Assert.Single(await workspace.ReadApprovedResultsAsync(competition.Id));
+            Assert.Equal(informationRevision, (await workspace.ReadRaceInformationAsync(competition.Id))!.Revision);
+            await Assert.ThrowsAsync<SeriesConflictException>(() => workspace.ApproveResultAsync(request with { ExpectedSeriesRevision = current }));
+            var corrected = await workspace.ApproveResultAsync(request with { ExpectedSeriesRevision = (await workspace.ReadAsync()).Revision, CalculatedPenalty = penalty.Calculated + 1 });
+            Assert.NotEqual(approved.Id, corrected.Id); Assert.Equal(2, corrected.Revision);
             await Assert.ThrowsAsync<SeriesConflictException>(() => workspace.ApproveResultAsync(request));
             await using var sql = new SqliteConnection($"Data Source={path};Pooling=False");
             await sql.OpenAsync();
