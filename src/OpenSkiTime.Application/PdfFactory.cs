@@ -11,7 +11,7 @@ public enum PdfReportType
 {
     EventSeriesEntries, EventSeriesEntriesByNation, EventSeriesEntriesByCategory,
     CompetitionEntries, CompetitionEntriesByNation, CompetitionEntriesByCategory,
-    StartList, RefereeReport, PenaltyCalculation, OfficialResults, TimingReport
+    StartList, RefereeReport, PenaltyCalculation, OfficialResults, TimingReport, ClassResults
 }
 public enum PdfReportStatus { NotGenerated, Generated, Outdated }
 public enum PrintPageSize { A4 }
@@ -62,7 +62,7 @@ public sealed record PdfReportDescriptor(string Id, PdfReportType Type, string D
     public string RelativePath => string.IsNullOrEmpty(Folder) ? FileName : Folder + "/" + FileName;
 }
 public sealed record EntryReportRow(Guid Id, CompetitorValues Athlete, string Category, int? Bib = null,
-    int? Position = null, decimal? Points = null, CompetitorFisPoints? FisPoints = null, long? GapHundredths = null);
+    int? Position = null, decimal? Points = null, CompetitorFisPoints? FisPoints = null, long? GapHundredths = null, string Class = "");
 public sealed record ReportGroup(string Label, IReadOnlyList<EntryReportRow> Entries);
 public sealed record RunReportData(StartListRevision List, TimingSnapshot Timing, TimingReplayData Source);
 public sealed record FinalReportData(FisRaceResult Race, FisPenaltyResult? Penalty, ApprovedResult? Approval, string? PenaltyUnavailableReason)
@@ -89,6 +89,7 @@ public static class ReportFileNameBuilder
             PdfReportType.CompetitionEntriesByNation => "Entries_ByNation",
             PdfReportType.CompetitionEntriesByCategory => "Entries_ByCategory",
             PdfReportType.StartList or PdfReportType.RefereeReport => type + "_Run" + (run ?? throw new ArgumentException("Run is required.", nameof(run))).ToString(CultureInfo.InvariantCulture),
+            PdfReportType.ClassResults => "Results",
             _ => type.ToString()
         };
         return CleanName(shortName) + "_" + date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "_" + suffix + ".pdf";
@@ -153,6 +154,14 @@ public static class ReportCatalog
                 source.Runs.Any(x => x.List.Plan.RunNumber == run && x.List.Plan.Entries.Count > 0) ? null : "Save a start list for this run first.");
             Add(PdfReportType.RefereeReport, $"Referee Report - Run {run}", run);
         }
+        if (race.Values.RaceType != RaceType.Fis)
+        {
+            // A Club race has results per class; the FIS penalty and official results do not apply to it.
+            Add(PdfReportType.ClassResults, "Results", reason: source.Runs.Any(x => x.Source.Sessions.Count > 0 || x.Timing.Results.Any(r => r.Status != TimingStatus.Ready)) ? null : "Record timing first.");
+            Add(PdfReportType.TimingReport, "Timing Report", reason: source.TimingReport is not null || source.Runs.Any(x => x.Source.Sessions.Count > 0)
+                ? null : "Save timing report metadata or capture timing first.");
+            return result;
+        }
         var finalCount = source.Runs.Count(x => x.List.Plan.RunNumber == 1);
         var completeFinals = finalCount > 0 && source.Finals.Count == finalCount;
         Add(PdfReportType.PenaltyCalculation, "Penalty Calculation", reason: completeFinals && source.Finals.All(x => x.Penalty is not null)
@@ -175,7 +184,7 @@ public static class EntryReportBuilder
         var entries = descriptor.Type == PdfReportType.StartList
             ? source.Runs.Where(x => x.List.Plan.RunNumber == descriptor.RunNumber).OrderBy(x => x.List.Plan.Gender)
                 .SelectMany(x => x.List.Plan.Entries.OrderBy(e => e.Position).Select(e => new EntryReportRow(e.Entrant.CompetitorId,
-                    e.Entrant.Athlete, CategoryResolver.Resolve(e.Entrant.Athlete, source.Desk.Categories), e.Bib, e.Position, e.Entrant.Points))).ToArray()
+                    e.Entrant.Athlete, x.List.Plan.Setup?.BlockOf(e.Entrant.Class)?.Name ?? (e.Entrant.Class.Length > 0 ? e.Entrant.Class : CategoryResolver.Resolve(e.Entrant.Athlete, source.Desk.Categories)), e.Bib, e.Position, e.Entrant.Points, Class: e.Entrant.Class))).ToArray()
             : source.Desk.Competitors.Where(x => descriptor.CompetitionId is null || source.Desk.Participations.Any(p => p.CompetitorId == x.Id
                 && p.CompetitionId == descriptor.CompetitionId && p.Participates))
                 .OrderBy(x => x.Values.Surname, StringComparer.Ordinal).ThenBy(x => x.Values.FirstName, StringComparer.Ordinal).ThenBy(x => x.Id)
@@ -189,8 +198,12 @@ public static class EntryReportBuilder
             {
                 var finished = first.Timing.Results.Where(x => !x.IsForerunner && x.Status == TimingStatus.Finished && x.Hundredths is > 0).ToArray();
                 if (finished.Length == 0) { continue; }
-                var leader = finished.Min(x => x.Hundredths!.Value);
-                foreach (var result in finished) { gaps[result.Entry.Entrant.CompetitorId] = result.Hundredths!.Value - leader; }
+                // The gap is to the leader of the class (the whole field when there are no classes).
+                foreach (var inClass in finished.GroupBy(x => x.Entry.Entrant.Class))
+                {
+                    var leader = inClass.Min(x => x.Hundredths!.Value);
+                    foreach (var result in inClass) { gaps[result.Entry.Entrant.CompetitorId] = result.Hundredths!.Value - leader; }
+                }
             }
             entries = entries.Select(x => x with { Points = null, GapHundredths = gaps.TryGetValue(x.Id, out var gap) ? gap : null }).ToArray();
         }
@@ -202,15 +215,28 @@ public static class EntryReportBuilder
             { entries = entries.Select(x => x with { Points = source.Desk.FisPointsOf(x.Id)?.For(code) }).ToArray(); }
         }
         else { entries = entries.Select(x => x with { FisPoints = source.Desk.FisPointsOf(x.Id) }).ToArray(); }
+        var flexibleList = descriptor.Type == PdfReportType.StartList && source.Runs.Any(x => x.List.Plan.RunNumber == descriptor.RunNumber && x.List.Plan.Setup is not null);
         Func<EntryReportRow, string>? group = descriptor.Type switch
         {
             PdfReportType.EventSeriesEntriesByNation or PdfReportType.CompetitionEntriesByNation => x => string.IsNullOrWhiteSpace(x.Athlete.Nation) ? "Nation not supplied" : x.Athlete.Nation,
             PdfReportType.EventSeriesEntriesByCategory or PdfReportType.CompetitionEntriesByCategory => x => x.Category,
-            PdfReportType.StartList => x => GenderLabels.Format(x.Athlete.Gender),
+            // A list of classes keeps its start order: one heading per class block. A FIS list is split by gender.
+            PdfReportType.StartList => flexibleList ? x => x.Category : x => GenderLabels.Format(x.Athlete.Gender),
             _ => null
         };
-        return group is null ? [new("", entries)] : entries.GroupBy(group).OrderBy(x => x.Key, StringComparer.Ordinal)
-            .Select(x => new ReportGroup(x.Key, x.ToArray())).ToArray();
+        if (group is null) { return [new("", entries)]; }
+        if (flexibleList)
+        {
+            // Consecutive starters of a block form one section, so a competitor moved to another place keeps the start order.
+            var sections = new List<ReportGroup>();
+            foreach (var row in entries)
+            {
+                if (sections.Count > 0 && sections[^1].Label == group(row)) { sections[^1] = sections[^1] with { Entries = [.. sections[^1].Entries, row] }; }
+                else { sections.Add(new(group(row), [row])); }
+            }
+            return sections;
+        }
+        return entries.GroupBy(group).OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => new ReportGroup(x.Key, x.ToArray())).ToArray();
     }
 
     // FIS points list order.
@@ -280,7 +306,7 @@ public sealed class PdfReportSourceBuilder(ITimingDecoderFactory decoders)
                                 if (competition.Values.Date < points.ValidFrom || competition.Values.Date > points.ValidTo)
                                 { throw new DomainValidationException("The drawn points list is not valid on race day."); }
                                 var profile = rules.Resolve(competition.Values.Calendar?.Category ?? information.Category,
-                                    competition.Values.Discipline, first.List.Plan.Gender);
+                                    competition.Values.Discipline, first.List.Plan.Gender ?? throw new DomainValidationException("FIS results need a start list for one gender."));
                                 penalty = FisPenalty.Calculate(profile, race.PenaltyCompetitors);
                             }
                             catch (DomainValidationException ex) { penaltyReason = ex.Message; }

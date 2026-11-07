@@ -5,13 +5,17 @@ using System.Text;
 
 namespace OpenSkiTime.Domain;
 
-public sealed record DrawEntrant(Guid CompetitorId, CompetitorValues Athlete, decimal? Points);
+// Class: the category label the competitor was resolved to when the list was drawn (empty in FIS lists).
+public sealed record DrawEntrant(Guid CompetitorId, CompetitorValues Athlete, decimal? Points, string Class = "");
 public sealed record StartListEntry(int Position, int Bib, DrawEntrant Entrant, string Group);
 public sealed record PointsListSource(string Code, DateOnly ValidFrom, DateOnly ValidTo,
     FisPenaltyListRules? PenaltyRules = null)
 {
     // FIS requires the list valid on the race date. Another list may still be used; the start list records which one.
     public bool IsEffectiveOn(DateOnly date) => ValidFrom <= date && date <= ValidTo;
+    // The list of a non-FIS draw whose setup uses no points.
+    public static PointsListSource None { get; } = new(string.Empty, DateOnly.MinValue, DateOnly.MaxValue);
+    public bool IsNone => Code.Length == 0;
 }
 // SkippedBibs: bib numbers that are not handed out (missing or reserved bibs); assignment continues with the next number.
 public sealed record DrawOptions(int FirstGroup = 15, int ReverseCount = 30, int FirstBib = 1, IReadOnlyList<int>? SkippedBibs = null);
@@ -26,10 +30,12 @@ public sealed record StartListChange(StartListChangeKind Kind, string Reason, Gu
     int? FirstBib = null, IReadOnlyList<int>? SkippedBibs = null);
 public enum FinishStatus { Finished, DNS, DNF, DSQ, NPS }
 public sealed record RunFinish(Guid CompetitorId, FinishStatus Status, long? Hundredths);
-public sealed record StartListPlan(Guid CompetitionId, CompetitionValues Competition, Gender Gender, int RunNumber,
+// Gender: the field of the list; null is a list for all genders (non-FIS races). Setup: the flexible start order of a
+// non-FIS list (null for the FIS draw).
+public sealed record StartListPlan(Guid CompetitionId, CompetitionValues Competition, Gender? Gender, int RunNumber,
     string RuleVersion, string Seed, DrawOptions Options, PointsListSource PointsList,
     Guid? SourceListId, IReadOnlyList<RunFinish> SourceResults, IReadOnlyList<StartListEntry> Entries,
-    IReadOnlyList<StartListChange>? Changes = null);
+    IReadOnlyList<StartListChange>? Changes = null, StartOrderSetup? Setup = null);
 public sealed record StartListRevision(Guid Id, int Revision, DateTimeOffset CreatedAt, DateTimeOffset? ApprovedAt,
     string Operator, string Reason, StartListPlan Plan)
 {
@@ -214,7 +220,7 @@ public static class FisStartOrder
         throw new DomainValidationException("This draw profile supports two-run SL/GS and single-run DH/SG. Other formats need their own approved rules.");
     }
 
-    private sealed class DrawRandom(string seed)
+    internal sealed class DrawRandom(string seed)
     {
         private uint _counter;
         private int Next(int count)

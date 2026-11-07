@@ -148,7 +148,7 @@ public partial class MainWindow : Window
     private static void ShowCompetitionMenu(Button button, MainViewModel vm)
     {
         var menu = new MenuFlyout { Placement = Avalonia.Controls.PlacementMode.Bottom };
-        foreach (var competition in vm.IsPdfFactorySection ? vm.Competitions : vm.FisCompetitions)
+        foreach (var competition in vm.IsPdfFactorySection || vm.IsTimingReportSection ? vm.Competitions : vm.FisCompetitions)
         {
             var item = new MenuItem { Header = competition.Values.ShortLabel,
                 Command = vm.SelectActiveCompetitionCommand, CommandParameter = competition };
@@ -161,7 +161,7 @@ public partial class MainWindow : Window
             menu.Items.Add(item);
         }
         if (menu.Items.Count == 0)
-        { menu.Items.Add(new MenuItem { Header = vm.IsPdfFactorySection ? "Add a competition first" : "Add a FIS competition first", IsEnabled = false }); }
+        { menu.Items.Add(new MenuItem { Header = vm.IsPdfFactorySection || vm.IsTimingReportSection ? "Add a competition first" : "Add a FIS competition first", IsEnabled = false }); }
         ShowRaceMenu(button, menu, null);
     }
 

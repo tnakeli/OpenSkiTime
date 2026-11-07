@@ -106,9 +106,9 @@ public sealed record CompetitionValues(
             throw new DomainValidationException("Select a valid discipline and race type.");
         }
 
-        if (RunCount is < 1 or > 9 || IntermediateCount is < 0 or > 20)
+        if (RunCount is < 1 or > 99 || IntermediateCount is < 0 or > 20)
         {
-            throw new DomainValidationException("Runs must be 1–9 and intermediates 0–20.");
+            throw new DomainValidationException("Runs must be 1–99 and intermediates 0–20.");
         }
 
         // A FIS competition may wait for its codex (FIS assigns it late); FIS exports require it.

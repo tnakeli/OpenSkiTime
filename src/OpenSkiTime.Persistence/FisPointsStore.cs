@@ -10,7 +10,7 @@ namespace OpenSkiTime.Persistence;
 
 /// <summary>
 /// Saved FIS points of competitors and the lists they came from. Both tables are part of the current development
-/// format (OpenSkiTime.Development/5) and are created with every new series file; older files are rejected, never
+/// format (OpenSkiTime.Development/6) and are created with every new series file; older files are rejected, never
 /// upgraded. A competitor's points are removed with the competitor (foreign key cascade).
 /// </summary>
 internal static class FisPointsStore

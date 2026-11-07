@@ -73,6 +73,7 @@ public sealed partial class MainViewModel
         if (item.IsNew || item.ChangedFields.Contains("Nation")) { row.Nation = values.Nation ?? string.Empty; }
         if (item.IsNew || item.ChangedFields.Contains("Club")) { row.Club = values.Club ?? string.Empty; }
         if (item.IsNew || item.ChangedFields.Contains("Code")) { row.FederationCode = values.FederationCode ?? string.Empty; }
+        if (item.PointsSpecified) { row.PointsText = item.Points?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty; }
         foreach (var patch in item.Entries)
         {
             if (patch.Participates is { } state)

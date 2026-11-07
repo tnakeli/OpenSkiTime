@@ -337,7 +337,19 @@
       const tr = document.createElement('tr'), td = element('td', 'none', 'No racers match the filter.');
       td.colSpan = columns.length; tr.append(td); get('results').append(tr);
     }
-    shown.forEach(r => {
+    // With classes the results are listed class by class, the active class first: the class of the latest finisher, else of
+    // the racer on course or the next to start.
+    const hasClasses = next.competitors.some(c => c.category);
+    const onCourseBibs = run.results.filter(r => r.status === 'OnCourse').sort((a, b) => (Date.parse(a.startedAt) || 0) - (Date.parse(b.startedAt) || 0));
+    const activeRacer = liveLatestFinish(run.results, ['Finished', 'DNF', 'DSQ'])?.bib ?? onCourseBibs[0]?.bib ?? liveNextStarters(run, 1)[0];
+    const groups = hasClasses ? liveClassGroups(shown, bib => competitor(bib)?.category, run.startOrder, activeRacer) : [{name: '', rows: shown}];
+    groups.forEach(group => {
+    if (hasClasses) {
+      const header = document.createElement('tr'), cell = element('td', 'classname');
+      header.className = 'group'; cell.colSpan = columns.length; cell.append(element('span', 'name', group.name || 'Other'), element('span', 'count', `${group.rows.length}`));
+      header.append(cell); get('results').append(header);
+    }
+    group.rows.forEach(r => {
       const x = {r, c: competitor(r.bib), before: liveEarlierRuns(next, run.number, r.bib)}, tr = document.createElement('tr');
       tr.dataset.bib = r.bib; tr.className = r.status.toLowerCase(); tr.classList.toggle('favorite', isFavorite(x.c));
       if (flashing && run.number === current.number && r.bib === last.bib) tr.classList.add('flash');
@@ -347,6 +359,7 @@
         fill(td, column.value(x)); tr.append(td);
       });
       get('results').append(tr);
+    });
     });
     summary(next, nationsShown);
     restoreFocus(focused);

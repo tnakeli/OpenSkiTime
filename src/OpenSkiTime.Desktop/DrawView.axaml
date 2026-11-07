@@ -20,7 +20,7 @@
                      Classes="supportingText" Classes.attention="{Binding DrawPointsListWarning}" TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,8,0" IsVisible="{Binding IsLaterDrawRun}" IsEnabled="{Binding CanEditDrawResults}">
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,8,0" IsVisible="{Binding ShowFisReversePicker}" IsEnabled="{Binding CanEditDrawResults}">
             <TextBlock Text="REVERSE FASTEST" Classes="fieldLabel" VerticalAlignment="Center" />
             <ComboBox Name="DrawReversePicker" ItemsSource="{Binding ReverseChoices}" SelectedItem="{Binding DrawReverseCount}" Width="90" />
           </StackPanel>
@@ -31,11 +31,11 @@
       </Grid>
     </Border>
 
-    <Expander DockPanel.Dock="Top" Margin="0,0,0,12" Header="Draw settings · FIS standard" HorizontalAlignment="Stretch" IsVisible="{Binding IsFirstDrawRun}">
+    <Expander DockPanel.Dock="Top" Margin="0,0,0,12" Header="{Binding DrawSettingsHeader}" HorizontalAlignment="Stretch" IsVisible="{Binding IsFirstDrawRun}">
       <StackPanel Spacing="{DynamicResource FormGap}" IsEnabled="{Binding !IsDrawBusy}">
         <local:FormRow IsEnabled="{Binding IsFirstDrawRun}">
           <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="FIRST BIB" Classes="fieldLabel" /><NumericUpDown Name="DrawFirstBibInput" Value="{Binding DrawFirstBib}" Minimum="1" Maximum="99999" FormatString="0" /></StackPanel>
-          <StackPanel Grid.Column="2" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="FIRST GROUP" Classes="fieldLabel" /><NumericUpDown Value="{Binding FirstDrawGroup}" Minimum="1" Maximum="15" FormatString="0" /></StackPanel>
+          <StackPanel Grid.Column="2" Grid.ColumnSpan="2" Classes="field" IsVisible="{Binding IsFisDrawLayout}"><TextBlock Text="FIRST GROUP" Classes="fieldLabel" /><NumericUpDown Value="{Binding FirstDrawGroup}" Minimum="1" Maximum="15" FormatString="0" /></StackPanel>
           <StackPanel Grid.Column="4" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="SKIPPED BIBS" Classes="fieldLabel" />
             <TextBox Name="DrawSkippedBibsInput" Text="{Binding DrawSkippedBibsText}" PlaceholderText="Missing bibs, e.g. 13, 27, 40-42" ToolTip.Tip="These bib numbers are not handed out; assignment continues with the next number." /></StackPanel>
           <Button Grid.Column="10" Grid.ColumnSpan="2" Name="AssignBibsButton" Content="Assign bibs" Command="{Binding AssignBibsCommand}" IsEnabled="{Binding CanAssignBibs}" Classes="secondaryAction"
@@ -43,6 +43,48 @@
                   ToolTip.Tip="Give the start list new bibs in its current order from the first bib, skipping the listed numbers. Possible until timing begins." />
         </local:FormRow>
         <TextBlock Text="SL/GS: 2 runs · DH/SG: 1 run. Standard FIS profile; special Cup, youth and snow-seed rules are not included." IsVisible="{Binding IsDrawFis}" Classes="supportingText" TextWrapping="Wrap" />
+      </StackPanel>
+    </Expander>
+
+    <!-- Start order of a Club race: one row per start block (a class, or several classes drawn together). -->
+    <Expander DockPanel.Dock="Top" Name="DrawSetupExpander" Margin="0,0,0,12" Header="{Binding DrawSetupTitle}" HorizontalAlignment="Stretch"
+              IsExpanded="{Binding IsDrawSetupOpen}" IsVisible="{Binding IsFlexDraw}">
+      <StackPanel Spacing="8" IsEnabled="{Binding CanEditDrawSetup}">
+        <DataGrid Name="DrawSetupGrid" Classes="raceGrid" ItemsSource="{Binding DrawBlocks}" SelectedItem="{Binding SelectedDrawBlock}" AutoGenerateColumns="False"
+                  IsReadOnly="True" CanUserSortColumns="False" RowHeight="36" ColumnHeaderHeight="32" GridLinesVisibility="Horizontal" MaxHeight="360">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="#" Binding="{Binding Order}" Width="52" />
+            <DataGridTextColumn Header="CLASSES" Binding="{Binding ClassesText}" Width="170" />
+            <DataGridTextColumn Header="STARTERS" Binding="{Binding Starters}" Width="110" />
+            <DataGridTemplateColumn Header="FIRST RUN" Width="140" IsVisible="{Binding IsFirstDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <ComboBox ItemsSource="{x:Static local:DrawBlockRow.FirstRunChoices}" SelectedItem="{Binding FirstRun}" HorizontalAlignment="Stretch" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="BETTER POINTS" Width="160" IsVisible="{Binding IsFirstDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <ComboBox ItemsSource="{x:Static local:DrawBlockRow.BetterPointsChoices}" SelectedItem="{Binding BetterPoints}" IsEnabled="{Binding IsByPoints}" HorizontalAlignment="Stretch" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="FIRST GROUP" Width="150" IsVisible="{Binding IsFirstDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <NumericUpDown Value="{Binding FirstGroup}" Minimum="1" Maximum="1000" FormatString="0" IsEnabled="{Binding IsByPoints}" Height="{DynamicResource ControlHeight}" MinHeight="0" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="0 = NO POINTS" Width="150" IsVisible="{Binding IsFirstDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <CheckBox IsChecked="{Binding ZeroIsNoPoints}" IsEnabled="{Binding IsByPoints}" HorizontalAlignment="Center" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="FIRST BIB" Width="110" IsVisible="{Binding IsFirstDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <TextBox Text="{Binding FirstBib}" PlaceholderText="{Binding AutoFirstBib}" Height="{DynamicResource ControlHeight}" MinHeight="0" ToolTip.Tip="Calculated from the blocks above. Type a number to start this block at it; the blocks after it follow." /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="BIBS" Width="*" MinWidth="130" IsVisible="{Binding IsFirstDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <TextBlock Text="{Binding BibRange}" Classes="gridCell" Classes.pointsMismatch="{Binding BibConflict}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="ORDER BY" Width="170" IsVisible="{Binding IsLaterDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <ComboBox ItemsSource="{x:Static local:DrawBlockRow.LaterRunChoices}" SelectedItem="{Binding LaterRun}" HorizontalAlignment="Stretch" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="REVERSE FIRST" Width="120" IsVisible="{Binding IsLaterDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <TextBox Text="{Binding ReverseFirst}" IsEnabled="{Binding IsReverseResults}" PlaceholderText="All" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="DNF / DSQ" Width="140" IsVisible="{Binding IsLaterDrawRun}"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+              <ComboBox ItemsSource="{x:Static local:DrawBlockRow.NonFinisherChoices}" SelectedItem="{Binding NonFinishers}" IsEnabled="{Binding IsReverseResults}" HorizontalAlignment="Stretch" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+          </DataGrid.Columns>
+        </DataGrid>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Name="MoveBlockUpButton" Content="Up" Command="{Binding MoveDrawBlockUpCommand}" Classes="secondaryAction" ToolTip.Tip="Move the selected block earlier in the start order." />
+          <Button Name="MoveBlockDownButton" Content="Down" Command="{Binding MoveDrawBlockDownCommand}" Classes="secondaryAction" ToolTip.Tip="Move the selected block later in the start order." />
+          <Button Name="MergeBlockButton" Content="Merge with next" Command="{Binding MergeDrawBlockCommand}" Classes="secondaryAction" ToolTip.Tip="Draw the selected block and the one below as one group. Results stay per class." />
+          <Button Name="SplitBlockButton" Content="Split" Command="{Binding SplitDrawBlockCommand}" Classes="secondaryAction" ToolTip.Tip="Separate a merged block into one block per class." />
+          <Button Name="ApplyBlockToAllButton" Content="Same for all" Command="{Binding ApplyDrawBlockToAllCommand}" Classes="secondaryAction" ToolTip.Tip="Give every block the options of the selected block." />
+          <Button Name="DrawBlockAgainButton" Content="Draw block again" Command="{Binding DrawSelectedBlockAgainCommand}" IsVisible="{Binding IsFirstDrawRun}" Classes="secondaryAction"
+                  ToolTip.Tip="Draw only the selected block again. The other blocks keep their order." />
+        </StackPanel>
       </StackPanel>
     </Expander>
 
@@ -73,7 +115,7 @@
         <TextBlock Text="{Binding DrawListInfo}" Classes="supportingText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsVisible="{Binding !ShowDrawPreview}" />
         <TextBlock Name="DrawPreviewInfoText" Text="{Binding DrawPreviewInfo}" Classes="supportingText" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding ShowDrawPreview}" />
         <Button Grid.Column="1" Content="Start list" Command="{Binding ShowDrawListCommand}" IsVisible="{Binding IsLaterDrawRun}" Classes="sectionNav" Classes.active="{Binding !IsResultInputOpen}" />
-        <Button Grid.Column="3" Content="Run 1 input" Command="{Binding ShowRunInputCommand}" IsVisible="{Binding IsLaterDrawRun}" Classes="sectionNav" Classes.active="{Binding IsResultInputOpen}" />
+        <Button Grid.Column="3" Content="{Binding DrawInputButtonText}" Command="{Binding ShowRunInputCommand}" IsVisible="{Binding IsLaterDrawRun}" Classes="sectionNav" Classes.active="{Binding IsResultInputOpen}" />
       </Grid>
       <DataGrid Grid.Row="1" Name="DrawStartListGrid" Classes="raceGrid" ItemsSource="{Binding DrawStartListRows}" SelectedItem="{Binding SelectedDrawRow}" AutoGenerateColumns="False" IsReadOnly="True" CanUserSortColumns="False" RowHeight="30" ColumnHeaderHeight="32" GridLinesVisibility="Horizontal">
         <DataGrid.IsVisible>
@@ -95,8 +137,10 @@
           <DataGridTextColumn Header="FIRST NAME" Binding="{Binding Entry.Entrant.Athlete.FirstName}" Width="180" />
           <DataGridTextColumn Header="YEAR" Binding="{Binding Entry.Entrant.Athlete.BirthYear}" Width="76" />
           <local:NationColumn Header="NAT" Binding="{Binding Entry.Entrant.Athlete.Nation}" Width="88" />
+          <DataGridTextColumn Header="CLASS" Binding="{Binding Entry.Entrant.Class}" IsVisible="{Binding ShowDrawClass}" Width="120" />
           <DataGridTextColumn Header="RUN 1 TIME" Binding="{Binding RunOneTime}" Width="112" IsVisible="{Binding IsLaterDrawRun}" />
-          <DataGridTextColumn Header="FIS PTS" Binding="{Binding Points}" IsVisible="{Binding ShowDrawPoints}" Width="88" />
+          <DataGridTextColumn Header="FIS PTS" Binding="{Binding Points}" IsVisible="{Binding ShowFisDrawPoints}" Width="88" />
+          <DataGridTextColumn Header="POINTS" Binding="{Binding Points}" IsVisible="{Binding ShowFlexDrawPoints}" Width="88" />
           <DataGridTextColumn Header="GROUP" Binding="{Binding Entry.Group}" Width="*" MinWidth="140" />
         </DataGrid.Columns>
       </DataGrid>

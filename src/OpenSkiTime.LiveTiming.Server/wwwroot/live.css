@@ -204,3 +204,6 @@ footer .viewers::before { content: ""; display: inline-block; width: 8px; height
   #search { max-width: none; }
   .entries, #favoriteList .note { margin-left: 0; }
 }
+/* A class heading in the results of a race with classes. */
+tr.group td { padding: 10px 8px 4px; font-weight: 700; border-top: 2px solid var(--border); background: var(--surface-head); }
+tr.group .count { margin-left: 8px; font-weight: 400; color: var(--text-2); font-variant-numeric: tabular-nums; }

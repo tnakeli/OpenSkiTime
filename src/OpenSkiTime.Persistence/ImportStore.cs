@@ -35,6 +35,8 @@ internal sealed partial class SqliteSeriesFileSession
             var seen = new HashSet<Guid>();
             var regendered = new HashSet<Guid>();
             var pointsCleared = new List<Guid>();
+            var pointChanges = new List<(Guid CompetitorId, CompetitorFisPoints? Points)>();
+            var savedPoints = (await FisPointsStore.ReadAsync(db, ct)).Points;
             var entered = new HashSet<(Guid CompetitorId, Guid CompetitionId)>();
             var created = 0;
             var updated = 0;
@@ -64,6 +66,15 @@ internal sealed partial class SqliteSeriesFileSession
                 Assign(competitor, values);
                 if (item.CompetitorId is not null && !string.Equals(previousCode, competitor.FederationCodeKey, StringComparison.OrdinalIgnoreCase))
                 { pointsCleared.Add(competitor.Id); }
+                if (item.PointsSpecified)
+                {
+                    // The general Points value replaces only itself; the saved points of the disciplines stay, unless the code changed.
+                    var kept = item.CompetitorId is not null && !pointsCleared.Contains(competitor.Id) && savedPoints.TryGetValue(competitor.Id, out var existing) ? existing : null;
+                    var next = (kept ?? new CompetitorFisPoints(CompetitorFisPoints.GeneralListCode, null, null, null, null, null)) with { All = item.Points };
+                    var empty = next.All is null && next.Dh is null && next.Sg is null && next.Sl is null && next.Gs is null && next.Ac is null;
+                    pointChanges.Add((competitor.Id, empty ? null : next));
+                    pointsCleared.Remove(competitor.Id);
+                }
                 if (item.CompetitorId is null || competitor.Gender != previousGender) { regendered.Add(competitor.Id); }
                 var patchedCompetitions = new HashSet<Guid>();
                 foreach (var patch in item.Entries)
@@ -128,6 +139,11 @@ internal sealed partial class SqliteSeriesFileSession
                 throw new DomainValidationException("The import violates a database data rule; no rows were saved.");
             }
             await FisPointsStore.ClearAsync(db, pointsCleared, ct);
+            if (pointChanges.Count > 0)
+            {
+                var (points, pointLists) = await FisPointsStore.ValidateAsync(db, pointChanges, [FisPointsListInfo.General], ct);
+                await FisPointsStore.WriteAsync(db, points, pointLists, ct);
+            }
             await transaction.CommitAsync(ct);
             return new ImportCommitResult(series.Revision, created, updated);
         }

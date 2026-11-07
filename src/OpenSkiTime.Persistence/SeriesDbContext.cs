@@ -5,7 +5,7 @@ namespace OpenSkiTime.Persistence;
 
 public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> options) : DbContext(options)
 {
-    internal const string Format = "OpenSkiTime.Development/5";
+    internal const string Format = "OpenSkiTime.Development/6";
     internal DbSet<SeriesRow> Series => Set<SeriesRow>();
     internal DbSet<CompetitionRow> Competitions => Set<CompetitionRow>();
     internal DbSet<CompetitorRow> Competitors => Set<CompetitorRow>();
@@ -44,7 +44,7 @@ public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> op
         var competition = modelBuilder.Entity<CompetitionRow>();
         competition.ToTable("Competitions", table =>
         {
-            table.HasCheckConstraint("CK_Competition_Runs", "RunCount BETWEEN 1 AND 9");
+            table.HasCheckConstraint("CK_Competition_Runs", "RunCount BETWEEN 1 AND 99");
             table.HasCheckConstraint("CK_Competition_Intermediates", "IntermediateCount BETWEEN 0 AND 20");
             table.HasCheckConstraint("CK_Competition_RaceType", "RaceType IN ('Club','Fis')");
         });
@@ -110,7 +110,7 @@ public sealed partial class SeriesDbContext(DbContextOptions<SeriesDbContext> op
         receipt.Property(x => x.SourceHash).HasMaxLength(64);
 
         var run = modelBuilder.Entity<RunRow>();
-        run.ToTable("Runs", t => t.HasCheckConstraint("CK_Run_Number", "Number BETWEEN 1 AND 9"));
+        run.ToTable("Runs", t => t.HasCheckConstraint("CK_Run_Number", "Number BETWEEN 1 AND 99"));
         run.HasKey(x => x.Id);
         run.Property(x => x.Id).ValueGeneratedNever();
         run.HasOne<CompetitionRow>().WithMany().HasForeignKey(x => x.CompetitionId).OnDelete(DeleteBehavior.Restrict);

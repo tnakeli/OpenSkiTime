@@ -254,6 +254,9 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             var path = await dialogs.ChooseNewAsync(SafeFileName(values.Name));
             if (path is null) { return; }
             var details = await workspace.CreateAsync(path, values, competitions: _pendingCalendarCompetitions);
+            // Every season starts with its age classes; the rules can be changed or replaced in Competitors.
+            var seasonRevision = await workspace.ReplaceCategoryRulesAsync(DefaultCategories.ForSeason(FisSeason.FromSeries(values.Season, values.StartDate)), details.Revision);
+            details = details with { Revision = seasonRevision };
             Apply(details);
             IsOpen = true;
             IsCreatingNew = false;

@@ -42,6 +42,7 @@ public sealed class QuestPdfRenderer : IReportPdfRenderer
                 {
                     case PdfReportType.PenaltyCalculation: PenaltyCalculationDocument.Compose(column, data); break;
                     case PdfReportType.OfficialResults: OfficialResultsDocument.Compose(column, data); break;
+                    case PdfReportType.ClassResults: ClassResultsDocument.Compose(column, data); break;
                     default: EntriesDocument.Compose(column, data); break;
                 }
             });
@@ -131,7 +132,7 @@ internal static class ReportComponents
             if (data.Descriptor.CompetitionId is not null && source.Competition is { } race)
             {
                 var gender = race.Values.Calendar?.Gender switch { "M" => "Men", "W" => "Women", "A" => "All", _ => "" };
-                column.Item().Text($"{race.Values.Name} | {race.Values.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} | {race.Values.Discipline} | {gender} | Codex {race.Values.FisCode ?? "-"}");
+                column.Item().Text($"{race.Values.Name} | {race.Values.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} | {race.Values.Discipline} | {gender}" + (race.Values.RaceType == RaceType.Fis ? $" | Codex {race.Values.FisCode ?? "-"}" : ""));
             }
             else { column.Item().Text(source.Series.Values.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " - " + source.Series.Values.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)); }
             column.Item().Text(source.Series.Values.Location + " | " + source.Series.Values.Nation + " | " + source.Series.Values.Organizer).FontSize(8);
@@ -211,6 +212,8 @@ internal static class EntriesDocument
             new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name), new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)),
             new("Nation", 0.9f, x => new NationCell(x.Athlete.Nation)), new("Club", 1.5f, x => x.Athlete.Club ?? "")
         };
+        // A list of classes names the class of every starter; a merged block holds several classes.
+        if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Class.Length > 0)) { columns.Insert(4, new("Class", 0.8f, x => x.Class)); }
         if (later) { columns.Add(new("Gap", 0.8f, x => TimingTime.FormatGap(x.GapHundredths))); }
         else if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Points is not null)) { columns.Add(new(code, 0.8f, x => Points(x.Points))); }
         return columns.ToArray();

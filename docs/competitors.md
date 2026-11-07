@@ -12,6 +12,14 @@ Sorting and filtering are controlled by two small icons in each column header. C
 
 An active filter fills the funnel and italicizes the column heading. Click that same funnel again to remove the filter immediately. Filters ignore case and combine across columns: `FIN` under NAT and `2007` under YEAR find Finnish competitors born in 2007. Multiple words in one field must all match that column. GENDER matches `Men` and `Women` separately. Participation columns accept `Yes` or `No`; points columns match their displayed values. The blank row always remains available for new registrations. Filter editing uses normal text keyboard navigation and never invokes row deletion or cell-edit shortcuts.
 
+## Default classes
+
+A new event series starts with the age classes of its season, one for girls (N) and one for boys (M): 10, 12, 14, 16, 18 and 21, and the general classes NY and MY. The birth years follow the season's end year and move on by one every season; for 2026/27 U10 is 2017–2019, U12 2015–2016, U14 2013–2014, U16 2011–2012, U18 2009–2010, U21 2006–2008 and the general classes 2005 and earlier. The classes do not overlap, so every competitor has exactly one class. **Default classes (replace)** in the category rules loads them again for the series season; the rules can be edited like any other rule.
+
+## Points
+
+The **POINTS** column holds one points value for every discipline. Type it in the grid, or paste a `Points` column from Excel (blank cells keep the saved value, `~` clears it; the import preview marks changed points). A competitor with a Points value is ordered by it in every discipline; without one the draw uses the FIS points of the race discipline. Update from FIS list keeps typed Points. Points are saved with the competitor in the series file, so every race of a series uses the same values.
+
 ## FIS list updates and points
 
 **Update from FIS list** (in **Update from FIS**) updates the name, birth year, gender, nation, club and FIS points of existing competitors from the loaded FIS points list by matching FIS Code. Changed cells, points included, are highlighted and kept with **Save**; **Undo** lists them and can undo each one. A competitor whose Code is not on the list gets empty points from that list. Rows with unsaved edits and duplicate Codes are skipped.

@@ -124,7 +124,7 @@
        <Button Name="StatusDropNPS" Tag="NPS" Content="NPS" Command="{Binding ClassifyTimingCommand}" CommandParameter="NPS" Classes="statusDrop" ToolTip.Tip="Not permitted to start · Ctrl+N. Drag a competitor here." />
        <Button Name="StatusDropClear" Tag="Clear" Content="Clear status" Command="{Binding ClassifyTimingCommand}" CommandParameter="Clear" Classes="statusDrop" ToolTip.Tip="Use recorded times · Ctrl+R. Drag a competitor here." />
       </WrapPanel>
-      <Button Grid.Column="1" Content="Prepare Run 2" Command="{Binding PrepareNextTimedRunCommand}" IsVisible="{Binding CanPrepareNextTimedRun}" Classes="secondaryAction" VerticalAlignment="Top" Margin="6,0,0,0" />
+      <Button Grid.Column="1" Content="{Binding PrepareNextRunLabel}" Command="{Binding PrepareNextTimedRunCommand}" IsVisible="{Binding CanPrepareNextTimedRun}" Classes="secondaryAction" VerticalAlignment="Top" Margin="6,0,0,0" />
      </Grid>
     </Border>
    </Grid></Border>
