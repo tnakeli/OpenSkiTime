@@ -8,7 +8,7 @@ namespace OpenSkiTime.Application;
 public sealed record ImportEntryPatch(Guid CompetitionId, bool? Participates, bool BibSpecified, int? ImportedBib);
 public sealed record ImportReviewItem(int SourceRow, Guid? CompetitorId, CompetitorValues Values,
     IReadOnlyList<ImportEntryPatch> Entries, IReadOnlyList<string> ChangedFields,
-    IReadOnlyList<string> Warnings, bool IsNew);
+    IReadOnlyList<string> Warnings, bool IsNew, decimal? Points = null, bool PointsSpecified = false);
 public sealed record ImportPreview(Guid SeriesId, long Revision, string SourceHash,
     IReadOnlyList<ImportReviewItem> Rows, IReadOnlyList<string> Warnings);
 public sealed record ImportCommitRow(Guid? CompetitorId, CompetitorValues Values,
@@ -200,6 +200,9 @@ public static class TsvExchange
                     patches.Add(new ImportEntryPatch(competition.Id, participates, bibPresent, bib));
                 }
             }
+            // Points apply to every discipline. A blank cell keeps the saved value; ~ clears it.
+            var pointsPresent = values.TryGetValue("Points", out var pointsText) && pointsText.Length > 0;
+            var points = pointsPresent ? PointsValue(pointsText!, rowIndex + 1) : null;
             var changed = new List<string>();
             if (before is null) { changed.Add("NEW"); }
             else
@@ -212,6 +215,7 @@ public static class TsvExchange
                 if (before.Club != next.Club) { changed.Add("Club"); }
                 if (before.FederationCode != next.FederationCode) { changed.Add("Code"); }
             }
+            if (pointsPresent && points != (match is null ? null : desk.FisPointsOf(match.Id)?.All)) { changed.Add("Points"); }
             foreach (var patch in patches)
             {
                 var old = desk.Participations.FirstOrDefault(x => x.CompetitorId == match?.Id && x.CompetitionId == patch.CompetitionId);
@@ -223,7 +227,7 @@ public static class TsvExchange
                 rowWarnings.Add("New competitor has no stable matching identifier; review for duplicates.");
             }
             preview.Add(new ImportReviewItem(rowIndex + 1, match?.Id, next, patches, changed,
-                rowWarnings, before is null));
+                rowWarnings, before is null, points, pointsPresent));
         }
         return new ImportPreview(series.Id, series.Revision, Hash(source), preview, warnings);
     }
@@ -241,6 +245,7 @@ public static class TsvExchange
             "gender" or "sex" or "sukupuoli" => "Gender",
             "nation" or "nat" or "nationcode" or "country" => "Nation",
             "club" or "clubname" or "team" => "Club",
+            "points" or "pts" or "pisteet" => "Points",
             "fedid" or "federationcode" or "fiscode" or "fis" or "code" => "FederationCode",
             _ => null,
         };
@@ -274,6 +279,15 @@ public static class TsvExchange
             throw new DomainValidationException($"{label} must be a whole number.");
         }
         return number;
+    }
+
+    private static decimal? PointsValue(string text, int row)
+    {
+        if (text == "~") { return null; }
+        if (!decimal.TryParse(text.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var points)
+            || points < 0 || points > 9999.99m || decimal.Round(points, 2) != points)
+        { throw new DomainValidationException($"Row {row}: points must be 0.00–9999.99 with at most two decimals, or ~ to clear."); }
+        return points;
     }
 
     private static int? Bib(string text, int row, string label)

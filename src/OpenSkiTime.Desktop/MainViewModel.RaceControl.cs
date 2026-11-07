@@ -154,7 +154,7 @@ public sealed partial class MainViewModel
                 .ToDictionary(x => x.Key, x => x.Select(FinishedTime).ToArray());
             var splitFields = snapshot.Results.GroupBy(CategoryOf).ToDictionary(x => x.Key, x => x.SelectMany(r => r.Splits)
                 .GroupBy(split => split.Number).ToDictionary(split => split.Key, split => split.Select(y => y.Hundredths).ToArray()));
-            var currentRows = TimingEngine.Combined(snapshot, _previousTiming).ToDictionary(x => x.Result.Bib, x =>
+            var currentRows = TimingEngine.Combined(snapshot, TotalsPrevious).ToDictionary(x => x.Result.Bib, x =>
             {
                 var category = CategoryOf(x.Result);
                 var previous = previousResults?.GetValueOrDefault(x.Result.CompetitorId);

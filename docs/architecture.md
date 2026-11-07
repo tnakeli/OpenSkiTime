@@ -1,4 +1,4 @@
-# OpenSkiTime architecture
+| `Runs` | PK `Id`; competition FK. Field (Women, Men, or `Other` for a Club race list of all genders) and run number 1–99; unique `(CompetitionId, Gender, Number)`. |# OpenSkiTime architecture
 
 This document describes the implemented software, local database and Azure/GitHub architecture reviewed on 2026-10-03. The repository uses **GitHub and GitHub Actions**; no GitLab pipeline is configured. All diagrams are embedded Mermaid diagrams, keeping the descriptions and diagrams in one file.
 
@@ -113,7 +113,7 @@ PDF Factory renders locally and stores source-version/hash metadata in the serie
 | Property | Implemented behavior |
 |---|---|
 | Engine | SQLite via EF Core; one `.ost` file per series. No central race database. |
-| Development format | `OpenSkiTime.Development/5`, stored in the single Series row. |
+| Development format | `OpenSkiTime.Development/6`, stored in the single Series row. |
 | Creation/opening | Create the current model in a temporary sibling file, then move into place. Open checks format and SQLite integrity before accepting the session. |
 | Compatibility | Reject incompatible development files unchanged; no migrations or automatic schema upgrades during pre-release development. |
 | Connections | Short-lived contexts; WAL journal, `synchronous=FULL`, foreign keys enabled, pooling disabled, five-second SQLite timeout. |

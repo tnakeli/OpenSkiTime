@@ -154,7 +154,7 @@ public static class EntryReportBuilder
         var entries = descriptor.Type == PdfReportType.StartList
             ? source.Runs.Where(x => x.List.Plan.RunNumber == descriptor.RunNumber).OrderBy(x => x.List.Plan.Gender)
                 .SelectMany(x => x.List.Plan.Entries.OrderBy(e => e.Position).Select(e => new EntryReportRow(e.Entrant.CompetitorId,
-                    e.Entrant.Athlete, CategoryResolver.Resolve(e.Entrant.Athlete, source.Desk.Categories), e.Bib, e.Position, e.Entrant.Points))).ToArray()
+                    e.Entrant.Athlete, x.List.Plan.Setup?.BlockOf(e.Entrant.Class)?.Name ?? (e.Entrant.Class.Length > 0 ? e.Entrant.Class : CategoryResolver.Resolve(e.Entrant.Athlete, source.Desk.Categories)), e.Bib, e.Position, e.Entrant.Points))).ToArray()
             : source.Desk.Competitors.Where(x => descriptor.CompetitionId is null || source.Desk.Participations.Any(p => p.CompetitorId == x.Id
                 && p.CompetitionId == descriptor.CompetitionId && p.Participates))
                 .OrderBy(x => x.Values.Surname, StringComparer.Ordinal).ThenBy(x => x.Values.FirstName, StringComparer.Ordinal).ThenBy(x => x.Id)
@@ -168,15 +168,18 @@ public static class EntryReportBuilder
             { entries = entries.Select(x => x with { Points = source.Desk.FisPointsOf(x.Id)?.For(code) }).ToArray(); }
         }
         else { entries = entries.Select(x => x with { FisPoints = source.Desk.FisPointsOf(x.Id) }).ToArray(); }
+        var flexibleList = descriptor.Type == PdfReportType.StartList && source.Runs.Any(x => x.List.Plan.RunNumber == descriptor.RunNumber && x.List.Plan.Setup is not null);
         Func<EntryReportRow, string>? group = descriptor.Type switch
         {
             PdfReportType.EventSeriesEntriesByNation or PdfReportType.CompetitionEntriesByNation => x => string.IsNullOrWhiteSpace(x.Athlete.Nation) ? "Nation not supplied" : x.Athlete.Nation,
             PdfReportType.EventSeriesEntriesByCategory or PdfReportType.CompetitionEntriesByCategory => x => x.Category,
-            PdfReportType.StartList => x => GenderLabels.Format(x.Athlete.Gender),
+            // A list of classes keeps its start order: one heading per class block. A FIS list is split by gender.
+            PdfReportType.StartList => flexibleList ? x => x.Category : x => GenderLabels.Format(x.Athlete.Gender),
             _ => null
         };
-        return group is null ? [new("", entries)] : entries.GroupBy(group).OrderBy(x => x.Key, StringComparer.Ordinal)
-            .Select(x => new ReportGroup(x.Key, x.ToArray())).ToArray();
+        if (group is null) { return [new("", entries)]; }
+        var groups = entries.GroupBy(group);
+        return (flexibleList ? groups : groups.OrderBy(x => x.Key, StringComparer.Ordinal)).Select(x => new ReportGroup(x.Key, x.ToArray())).ToArray();
     }
 
     // FIS points list order.
@@ -246,7 +249,7 @@ public sealed class PdfReportSourceBuilder(ITimingDecoderFactory decoders)
                                 if (competition.Values.Date < points.ValidFrom || competition.Values.Date > points.ValidTo)
                                 { throw new DomainValidationException("The drawn points list is not valid on race day."); }
                                 var profile = rules.Resolve(competition.Values.Calendar?.Category ?? information.Category,
-                                    competition.Values.Discipline, first.List.Plan.Gender);
+                                    competition.Values.Discipline, first.List.Plan.Gender ?? throw new DomainValidationException("FIS results need a start list for one gender."));
                                 penalty = FisPenalty.Calculate(profile, race.PenaltyCompetitors);
                             }
                             catch (DomainValidationException ex) { penaltyReason = ex.Message; }

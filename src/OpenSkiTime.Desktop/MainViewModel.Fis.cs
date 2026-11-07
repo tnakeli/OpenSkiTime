@@ -168,10 +168,11 @@ public sealed partial class MainViewModel
     // FIS lists whose points are staged in the grid; saved with the points so the series keeps their validity and rules.
     private readonly Dictionary<string, FisPointsListInfo> _stagedPointsLists = new(StringComparer.OrdinalIgnoreCase);
 
-    private CompetitorFisPoints StagePoints(FisPointsList list, FisAthlete? athlete)
+    private CompetitorFisPoints StagePoints(FisPointsList list, FisAthlete? athlete, decimal? general = null)
     {
         _stagedPointsLists[list.ListCode] = new FisPointsListInfo(list.ListCode, list.Name, list.ValidFrom, list.ValidTo, list.PenaltyRules);
-        return CompetitorFisPoints.FromList(list.ListCode, athlete?.Points);
+        // A Points value typed in or imported for the competitor stays when the FIS list is updated.
+        return CompetitorFisPoints.FromList(list.ListCode, athlete?.Points) with { All = general };
     }
 
     // A changed Code takes that athlete's points from the loaded list (a staged change); the saved Code restores the
@@ -282,12 +283,12 @@ public sealed partial class MainViewModel
                 // Points come from this list; a Code that is not on it has no points on this list.
                 if (!_fisList.Athletes.TryGetValue(group.Key, out var athlete))
                 {
-                    row.FisPoints = StagePoints(_fisList, null);
+                    row.FisPoints = StagePoints(_fisList, null, row.FisPoints?.All);
                     if (row.IsFisPointsChanged) { notOnList++; }
                     continue;
                 }
                 var identity = ApplyFisValues(row, athlete);
-                row.FisPoints = StagePoints(_fisList, athlete);
+                row.FisPoints = StagePoints(_fisList, athlete, row.FisPoints?.All);
                 if (identity || row.IsFisPointsChanged) { staged++; }
             }
         }

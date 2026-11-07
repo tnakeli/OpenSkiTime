@@ -587,7 +587,7 @@ public sealed class TieHandlingTests
         Assert.All(rest, x => Assert.Equal("Points order", x.Group));
         Assert.All(plan.Entries.Where(x => x.Entrant.Points is null), x => Assert.Equal("No points", x.Group));
         Assert.Equal(plan.Entries.Count(x => x.Entrant.Points is null), plan.Entries.Reverse().TakeWhile(x => x.Entrant.Points is null).Count());
-        Assert.Equal(plan.Entries, FisStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender,
+        Assert.Equal(plan.Entries, FisStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender!.Value,
             plan.Entries.Select(x => x.Entrant).Reverse().ToArray(), plan.PointsList, plan.Options, plan.Seed).Entries);
     }
 }

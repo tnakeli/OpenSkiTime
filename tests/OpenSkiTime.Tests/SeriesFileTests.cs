@@ -81,6 +81,7 @@ public class SeriesFileTests
     [InlineData("OpenSkiTime.Development/1")]
     [InlineData("OpenSkiTime.Development/2")]
     [InlineData("OpenSkiTime.Development/4")]
+    [InlineData("OpenSkiTime.Development/5")]
     [InlineData("OpenSkiTime.Development/999")]
     public async Task IncompatibleDevelopmentFileIsRejectedWithoutChangingIt(string format)
     {

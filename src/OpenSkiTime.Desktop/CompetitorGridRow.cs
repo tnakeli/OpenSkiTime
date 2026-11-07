@@ -34,7 +34,7 @@ public sealed partial class CompetitorGridRow : ObservableObject
         if (Equals(_fisPoints, value)) { return; }
         _fisPoints = value;
         foreach (var name in new[] { nameof(FisPoints), nameof(FisDh), nameof(FisSg), nameof(FisSl), nameof(FisGs), nameof(FisAc),
-                     nameof(FisDhText), nameof(FisSgText), nameof(FisSlText), nameof(FisGsText), nameof(FisAcText) })
+                     nameof(FisDhText), nameof(FisSgText), nameof(FisSlText), nameof(FisGsText), nameof(FisAcText), nameof(PointsText), nameof(IsPointsChanged) })
         { OnPropertyChanged(name); }
         NotifyDraftChanged();
     }
@@ -47,6 +47,28 @@ public sealed partial class CompetitorGridRow : ObservableObject
     public decimal? FisSl => FisPoints?.Sl;
     public decimal? FisGs => FisPoints?.Gs;
     public decimal? FisAc => FisPoints?.Ac;
+    // One Points value for every discipline. It is used instead of the discipline points when present.
+    public string PointsText
+    {
+        get => FormatPoint(FisPoints?.All);
+        set
+        {
+            var text = (value ?? string.Empty).Trim().Replace(',', '.');
+            decimal? points = null;
+            if (text.Length > 0)
+            {
+                if (!decimal.TryParse(text, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed)
+                    || parsed < 0 || parsed > 9999.99m || decimal.Round(parsed, 2) != parsed) { OnPropertyChanged(); return; }
+                points = parsed;
+            }
+            var current = FisPoints;
+            if (current is null && points is null) { return; }
+            var next = (current ?? new CompetitorFisPoints(CompetitorFisPoints.GeneralListCode, null, null, null, null, null)) with { All = points };
+            if (points is null && next.Dh is null && next.Sg is null && next.Sl is null && next.Gs is null && next.Ac is null) { next = null!; }
+            SetFisPoints(next, FisPointsCode.Length > 0 ? FisPointsCode : FederationCode.Trim());
+        }
+    }
+    public bool IsPointsChanged => IsFisPointsChanged && FisPoints?.All != SavedFisPoints?.All;
     public string FisDhText => FormatPoint(FisDh);
     public string FisSgText => FormatPoint(FisSg);
     public string FisSlText => FormatPoint(FisSl);

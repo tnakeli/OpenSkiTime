@@ -47,11 +47,12 @@ internal sealed partial class SqliteSeriesFileSession
             if (await db.StartLists.AnyAsync(x => (x.StartedAt != null || db.Captures.Any(c => c.ListId == x.Id)) && db.Runs.Any(r => r.Id == x.RunId
                 && r.CompetitionId == plan.CompetitionId && r.Number == plan.RunNumber), ct))
             { throw new DomainValidationException("Timing capture has begun for this run. Its start list can no longer be redrawn."); }
+            var field = RunField(plan.Gender);
             var run = await db.Runs.SingleOrDefaultAsync(x => x.CompetitionId == plan.CompetitionId
-                && x.Gender == plan.Gender && x.Number == plan.RunNumber, ct);
+                && x.Gender == field && x.Number == plan.RunNumber, ct);
             if (run is null)
             {
-                run = new RunRow { Id = Guid.NewGuid(), CompetitionId = plan.CompetitionId, Gender = plan.Gender, Number = plan.RunNumber };
+                run = new RunRow { Id = Guid.NewGuid(), CompetitionId = plan.CompetitionId, Gender = field, Number = plan.RunNumber };
                 db.Runs.Add(run);
             }
             var revision = (await db.StartLists.Where(x => x.RunId == run.Id).MaxAsync(x => (int?)x.Revision, ct) ?? 0) + 1;
@@ -109,16 +110,30 @@ internal sealed partial class SqliteSeriesFileSession
         }
     }
 
+
+    // A run's field is stored in the Gender column; "Other" is the list for all genders.
+    internal static Gender RunField(Gender? gender) => gender ?? Gender.Other;
+
     private static async Task ValidateStartPlanAsync(SeriesDbContext db, StartListPlan plan, CancellationToken ct)
     {
         var competition = await db.Competitions.SingleOrDefaultAsync(x => x.Id == plan.CompetitionId, ct)
             ?? throw new DomainValidationException("Select an existing competition.");
         if (!Values(competition).HasSameStartOrderRules(plan.Competition)) { throw new DomainValidationException("Competition rules changed. Prepare a new start list."); }
+        var flexible = plan.Setup is not null;
+        if (flexible && competition.RaceType == RaceType.Fis)
+        { throw new DomainValidationException("A FIS competition uses the FIS draw. Use a Club race for a flexible start order."); }
+        if (!flexible && plan.Gender is null) { throw new DomainValidationException("The FIS draw needs Men or Women."); }
+        var field = RunField(plan.Gender);
+        // A later revision of a run would invalidate the bibs and order behind the run after it.
+        if (await db.Runs.AnyAsync(x => x.CompetitionId == plan.CompetitionId && x.Gender == field && x.Number > plan.RunNumber, ct))
+        { throw new DomainValidationException($"Run {plan.RunNumber + 1} already references this list. Run {plan.RunNumber} can no longer be redrawn."); }
         StartListPlan expected;
         if (plan.RunNumber == 1)
         {
-            var otherRuns = await db.Runs.Where(x => x.CompetitionId == plan.CompetitionId && x.Gender != plan.Gender && x.Number == 1).Select(x => x.Id).ToArrayAsync(ct);
-            foreach (var otherRun in otherRuns)
+            var otherRuns = await db.Runs.Where(x => x.CompetitionId == plan.CompetitionId && x.Gender != field && x.Number == 1).ToArrayAsync(ct);
+            if (otherRuns.Length > 0 && (field == Gender.Other || otherRuns.Any(x => x.Gender == Gender.Other)))
+            { throw new DomainValidationException("A start list for all genders cannot be combined with separate Men and Women lists in one competition."); }
+            foreach (var otherRun in otherRuns.Select(x => x.Id))
             {
                 var lists = await db.StartLists.Where(x => x.RunId == otherRun).OrderByDescending(x => x.Revision).ToArrayAsync(ct);
                 var reservedLists = new[] { lists.FirstOrDefault(), lists.FirstOrDefault(x => x.ApprovedAt is not null) }
@@ -127,42 +142,53 @@ internal sealed partial class SqliteSeriesFileSession
                 if (plan.Entries.Any(x => reserved.Contains(x.Bib)))
                 { throw new DomainValidationException("These bibs are already used by the other field in this competition. Choose a different first bib in Draw settings."); }
             }
-            // A newer first-run draft would invalidate the bibs behind a second-run list.
-            if (await db.Runs.AnyAsync(x => x.CompetitionId == plan.CompetitionId && x.Gender == plan.Gender && x.Number > 1, ct))
-            { throw new DomainValidationException("Run 2 already references these bibs. Run 1 can no longer be redrawn."); }
-            expected = FisStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender,
-                plan.Entries.Select(x => x.Entrant).ToArray(), plan.PointsList, plan.Options, plan.Seed);
+            expected = plan.Setup is { } setup
+                ? FlexStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender, plan.Entries.Select(x => x.Entrant).ToArray(),
+                    plan.PointsList, plan.Options, setup)
+                : FisStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender!.Value,
+                    plan.Entries.Select(x => x.Entrant).ToArray(), plan.PointsList, plan.Options, plan.Seed);
         }
         else
         {
             var source = await db.StartLists.SingleOrDefaultAsync(x => x.Id == plan.SourceListId, ct)
                 ?? throw new DomainValidationException("The source start list is missing.");
-            var first = await ReadListAsync(db, source, ct);
-            if (first.StartedAt is null && !await db.Runs.AnyAsync(x => x.CompetitionId == plan.CompetitionId && x.Number == 2, ct))
-            { throw new DomainValidationException("Mark Run 1 started before preparing Run 2."); }
-            if (first.Plan.CompetitionId != plan.CompetitionId || first.Plan.Gender != plan.Gender)
-            { throw new DomainValidationException("The source list belongs to a different competition or gender."); }
+            var previous = await ReadListAsync(db, source, ct);
+            if (previous.StartedAt is null && !await db.Runs.AnyAsync(x => x.CompetitionId == plan.CompetitionId && x.Gender == field
+                && x.Number == plan.RunNumber, ct))
+            { throw new DomainValidationException($"Mark Run {plan.RunNumber - 1} started before preparing Run {plan.RunNumber}."); }
+            if (previous.Plan.CompetitionId != plan.CompetitionId || previous.Plan.Gender != plan.Gender || previous.Plan.RunNumber != plan.RunNumber - 1)
+            { throw new DomainValidationException("The source list belongs to a different competition, gender or run."); }
             if (await db.StartLists.AnyAsync(x => x.RunId == source.RunId && x.Revision > source.Revision, ct))
-            { throw new DomainValidationException("A newer Run 1 revision exists. Use that revision first."); }
-            expected = FisStartOrder.SecondRun(first, plan.SourceResults, plan.Options.ReverseCount);
+            { throw new DomainValidationException($"A newer Run {plan.RunNumber - 1} revision exists. Use that revision first."); }
+            expected = plan.Setup is { } setup
+                ? FlexStartOrder.LaterRun(previous, plan.SourceResults, setup)
+                : FisStartOrder.SecondRun(previous, plan.SourceResults, plan.Options.ReverseCount);
         }
-        // Recorded order and bib changes are replayed on top of the recalculated draw or Run 2 order.
+        // Recorded order and bib changes are replayed on top of the recalculated draw or later-run order.
         expected = FisStartOrder.WithChanges(expected, plan.Changes);
         if (JsonSerializer.Serialize(expected) != JsonSerializer.Serialize(plan))
         { throw new DomainValidationException("Start-list order does not match the recorded draw rules and inputs."); }
         var enteredIds = await db.Participations.Where(x => x.CompetitionId == plan.CompetitionId && x.Participates)
             .Select(x => x.CompetitorId).ToArrayAsync(ct);
         var athletes = await db.Competitors.Where(x => enteredIds.Contains(x.Id)).ToArrayAsync(ct);
-        if (athletes.Any(x => x.Gender is null or Gender.Other))
-        { throw new DomainValidationException("Assign Men or Women to every entered competitor before drawing."); }
-        if (athletes.Any(x => x.Gender != plan.Gender))
-        { throw new DomainValidationException("The FIS profile draws the whole competition. Use separate competitions for Men and Women; local mixed competitions need category draw rules."); }
+        if (!flexible)
+        {
+            if (athletes.Any(x => x.Gender is null or Gender.Other))
+            { throw new DomainValidationException("Assign Men or Women to every entered competitor before drawing."); }
+            if (athletes.Any(x => x.Gender != plan.Gender))
+            { throw new DomainValidationException("The FIS profile draws the whole competition. Use separate competitions for Men and Women."); }
+        }
+        else if (plan.Gender is { } only) { athletes = athletes.Where(x => x.Gender == only).ToArray(); }
         var scoped = athletes.ToDictionary(x => x.Id);
+        // The entries are those of Run 1, the first list of the chain this list continues.
         var referenceEntries = plan.Entries;
-        if (plan.SourceListId is { } sourceId)
+        var link = plan.SourceListId;
+        while (link is { } sourceId)
         {
             var source = await db.StartLists.SingleAsync(x => x.Id == sourceId, ct);
-            referenceEntries = (await ReadListAsync(db, source, ct)).Plan.Entries;
+            var linked = await ReadListAsync(db, source, ct);
+            referenceEntries = linked.Plan.Entries;
+            link = linked.Plan.SourceListId;
         }
         if (scoped.Count != referenceEntries.Count || referenceEntries.Any(x => !scoped.TryGetValue(x.Entrant.CompetitorId, out var a)
             || Values(a) != x.Entrant.Athlete))

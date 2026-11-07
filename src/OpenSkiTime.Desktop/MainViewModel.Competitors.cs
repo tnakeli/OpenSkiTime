@@ -224,6 +224,7 @@ public sealed partial class MainViewModel
         nameof(CompetitorGridRow.Nation) => row.Nation,
         nameof(CompetitorGridRow.Club) => row.Club,
         nameof(CompetitorGridRow.Category) => row.Category,
+        nameof(CompetitorGridRow.PointsText) => row.FisPoints?.All,
         nameof(CompetitorGridRow.FisDh) => row.FisDh,
         nameof(CompetitorGridRow.FisSg) => row.FisSg,
         nameof(CompetitorGridRow.FisSl) => row.FisSl,
@@ -314,7 +315,7 @@ public sealed partial class MainViewModel
     private static string? DescribePoints(CompetitorFisPoints? points)
     {
         if (points is null) { return null; }
-        var values = new[] { ("DH", points.Dh), ("SG", points.Sg), ("SL", points.Sl), ("GS", points.Gs), ("AC", points.Ac) }
+        var values = new[] { ("Points", points.All), ("DH", points.Dh), ("SG", points.Sg), ("SL", points.Sl), ("GS", points.Gs), ("AC", points.Ac) }
             .Where(x => x.Item2 is not null).Select(x => $"{x.Item1} {x.Item2!.Value.ToString("0.00", CultureInfo.InvariantCulture)}").ToArray();
         return $"list {points.ListCode}: " + (values.Length == 0 ? "no points" : string.Join(", ", values));
     }
@@ -468,7 +469,9 @@ public sealed partial class MainViewModel
                     row.Id is null ? row.FisPoints is not null : row.IsFisPointsChanged || row.IsFederationCodeChanged)).ToArray();
                 // The lists the staged points came from are saved with them (identity, validity, penalty rules).
                 var listCodes = rows.Where(x => x.FisPointsSpecified && x.FisPoints is not null).Select(x => x.FisPoints!.ListCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var lists = _stagedPointsLists.Values.Where(x => listCodes.Contains(x.Code)).ToArray();
+                var lists = _stagedPointsLists.Values.Where(x => listCodes.Contains(x.Code))
+                    .Concat(listCodes.Contains(CompetitorFisPoints.GeneralListCode) && !_stagedPointsLists.ContainsKey(CompetitorFisPoints.GeneralListCode)
+                        ? [FisPointsListInfo.General] : []).ToArray();
                 var deletes = _allCompetitorRows.Where(x => x.IsPendingDelete && x.Id is not null)
                     .Select(x => x.Id!.Value).ToArray();
                 var result = await workspace.ApplyDeskBatchAsync(new DeskBatch(series.Id, series.Revision, rows, deletes, lists));

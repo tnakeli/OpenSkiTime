@@ -299,6 +299,13 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
             {
                 row = await db.Competitions.SingleOrDefaultAsync(x => x.Id == existingId && x.SeriesId == series.Id, ct)
                     ?? throw new SeriesFileException("The competition no longer exists in this event series.");
+                if (validated.RaceType == RaceType.Fis && row.RaceType != RaceType.Fis)
+                {
+                    var plans = await (from list in db.StartLists join run in db.Runs on list.RunId equals run.Id
+                        where run.CompetitionId == existingId select list.PlanJson).ToListAsync(ct);
+                    if (plans.Any(json => System.Text.Json.JsonSerializer.Deserialize<StartListPlan>(json)?.Setup is not null))
+                    { throw new DomainValidationException("This competition has a flexible start order, which a FIS competition cannot use. Keep it a Club race."); }
+                }
                 if (!Values(row).HasSameStartOrderRules(validated) && await db.Runs.AnyAsync(x => x.CompetitionId == existingId, ct))
                 { throw new DomainValidationException("Discipline, date and run count affect the saved starting order and cannot be changed after drawing. Race type, names, codes and course details can be edited."); }
             }

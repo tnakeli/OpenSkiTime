@@ -28,6 +28,7 @@ public sealed partial class MainViewModel
         nameof(CompetitorGridRow.BirthYearText) => row.BirthYearText, nameof(CompetitorGridRow.GenderText) => row.GenderText,
         nameof(CompetitorGridRow.Nation) => row.Nation, nameof(CompetitorGridRow.Club) => row.Club,
         nameof(CompetitorGridRow.Category) => row.Category,
+        nameof(CompetitorGridRow.PointsText) => row.PointsText,
         nameof(CompetitorGridRow.FisDh) => row.FisDhText, nameof(CompetitorGridRow.FisSg) => row.FisSgText,
         nameof(CompetitorGridRow.FisSl) => row.FisSlText, nameof(CompetitorGridRow.FisGs) => row.FisGsText,
         nameof(CompetitorGridRow.FisAc) => row.FisAcText,

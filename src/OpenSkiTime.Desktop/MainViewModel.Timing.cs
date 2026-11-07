@@ -202,8 +202,11 @@ public sealed partial class MainViewModel
     public bool CanConnectTiming => _timingList is not null && !IsTimingConnected && !IsTimingBusy;
     public bool CanChangeTimingDevice => !IsTimingConnected && !IsTimingBusy;
     public bool HasTimingRun => _timingList is not null;
-    public bool ShowTimingTotal => TimingRun > 1;
-    public bool CanPrepareNextTimedRun => _shownTiming?.Complete == true && TimingRun == 1 && TimingCompetition?.Values.RunCount == 2;
+    public bool ShowTimingTotal => TimingRun > 1 && TimingCompetition?.Values.RunCount == 2;
+    // Totals add the two runs of a two-run race; in a race with more runs each run is ranked on its own.
+    private TimingSnapshot? TotalsPrevious => TimingCompetition?.Values.RunCount == 2 ? _previousTiming : null;
+    public string PrepareNextRunLabel => $"Prepare Run {TimingRun + 1}";
+    public bool CanPrepareNextTimedRun => _shownTiming?.Complete == true && TimingRun < TimingCompetition?.Values.RunCount;
     public string TimingContext => TimingCompetition is { } c
         ? $"{c.Values.ShortLabel}  /  Run {TimingRun} of {c.Values.RunCount}{CompetitionCodexLabel(c.Values)}"
         : "Timing · choose a competition and run";
@@ -238,7 +241,7 @@ public sealed partial class MainViewModel
     private void NotifyTiming()
     {
         foreach (var name in new[] { nameof(IsTimingSimulator), nameof(CanRetryBackupClock), nameof(CanConnectTiming), nameof(CanChangeTimingDevice), nameof(HasTimingRun), nameof(TimingContext),
-            nameof(TimingCaptureLabel), nameof(TimingDeviceHelp), nameof(WindowTitle), nameof(CanPrepareNextTimedRun), nameof(ShowTimingTotal) }) { OnPropertyChanged(name); }
+            nameof(TimingCaptureLabel), nameof(TimingDeviceHelp), nameof(WindowTitle), nameof(CanPrepareNextTimedRun), nameof(ShowTimingTotal), nameof(PrepareNextRunLabel) }) { OnPropertyChanged(name); }
     }
 
     [RelayCommand]
@@ -579,7 +582,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task PrepareNextTimedRunAsync()
     {
-        if (CanPrepareNextTimedRun && TimingCompetition is { } c) { await OpenDrawRunAsync(new(c, 2)); }
+        if (CanPrepareNextTimedRun && TimingCompetition is { } c) { await OpenDrawRunAsync(new(c, TimingRun + 1)); }
     }
 
     private static int? ReadBib(string text)
@@ -627,7 +630,7 @@ public sealed partial class MainViewModel
         var selectedObservation = SelectedTimingObservation?.Key;
         var selectedHistory = SelectedTimingHistory?.Id;
         // Forerunners follow the competitors so they can be selected, classified (DNS/DNF) and dragged like them.
-        SyncTimingRows(TimingRows, TimingEngine.Combined(snapshot, _previousTiming)
+        SyncTimingRows(TimingRows, TimingEngine.Combined(snapshot, TotalsPrevious)
             .Select(row => new TimingGridRow(row.Result, row.Total, row.Rank))
             .Concat(snapshot.Forerunners.Select(x => new TimingGridRow(x, null, null))).ToArray());
         var editingTime = CorrectedTimeText;

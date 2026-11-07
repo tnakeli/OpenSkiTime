@@ -144,7 +144,7 @@ public sealed class StartListTests
         Assert.Equal(plan.Competition, reopened.Revisions.Single(x => x.Plan.RunNumber == 1).Plan.Competition);
         Assert.Equal("Starter", reopened.Revisions.Single(x => x.Plan.RunNumber == 1).StartedBy);
         Assert.Equal(secondPlan.Entries, reopened.Revisions.Single(x => x.Plan.RunNumber == 2).Plan.Entries);
-        Assert.Equal(plan.Entries, FisStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender,
+        Assert.Equal(plan.Entries, FisStartOrder.FirstRun(plan.CompetitionId, plan.Competition, plan.Gender!.Value,
             plan.Entries.Select(x => x.Entrant).ToArray(), plan.PointsList, plan.Options, plan.Seed).Entries);
     }
 

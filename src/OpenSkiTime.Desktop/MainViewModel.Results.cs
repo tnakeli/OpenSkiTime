@@ -184,7 +184,7 @@ public sealed partial class MainViewModel
                 // This calculation algorithm has been reviewed against the 2026/27 edition and also applies to 2025/26.
                 if (!tables.IsSupportedSeason) { throw new DomainValidationException(tables.UnsupportedSeasonMessage); }
                 _resultsRuleProfile = tables.Resolve(competition.Values.Calendar?.Category ?? ResultsCategory,
-                    competition.Values.Discipline, _resultRace.FirstList.Plan.Gender);
+                    competition.Values.Discipline, _resultRace.FirstList.Plan.Gender!.Value);
                 var profile = _resultsRuleProfile;
                 ResultsRuleSource = $"FIS list {pointsSource.Code} · valid {pointsSource.ValidFrom:yyyy-MM-dd}–{pointsSource.ValidTo:yyyy-MM-dd} · {profile.Category} · race level {profile.RaceLevel} · {_resultRace.FirstList.Plan.Gender} · FIS Points Rules {(tables.Season == 2027 ? "2026/27" : $"{FisPenaltyListRules.SeasonLabel(tables.Season)} (calculation as 2026/27)")} §§4.4–4.5, 4.9";
                 ResultsRuleFigures = new(Points(profile.FValue, "0"), Points(profile.MaximumPoints), Points(profile.Correction),
