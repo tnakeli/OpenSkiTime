@@ -174,14 +174,18 @@ public sealed class FlexDrawWorkflowTests
             vm.DrawBlocks[0].FirstRun = DrawBlockRow.FirstRunChoices[0];
             await vm.PrepareDrawCommand.ExecuteAsync(null);
             Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
-            var bar = () => window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "DrawStartListGrid")
-                .GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ScrollBar>().First(x => x.Orientation == Avalonia.Layout.Orientation.Vertical);
-            Assert.True(bar().Maximum > 100, "The list should be scrollable.");
-            bar().Value = 400; window.UpdateLayout();
-            Assert.Equal(400, bar().Value);
+            DataGrid Grid() => window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "DrawStartListGrid");
+            int FirstRow() { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); return Grid().GetVisualDescendants().OfType<DataGridRow>().Where(x => x.Bounds.Height > 0).Min(x => x.Index); }
+            Assert.Equal(0, FirstRow());
+            // Scroll down so that a later row is the first one in view.
+            Grid().ScrollIntoView(vm.DrawStartListRows[^1], null); window.UpdateLayout();
+            Grid().ScrollIntoView(vm.DrawStartListRows[10], null); window.UpdateLayout();
+            Grid().ScrollIntoView(vm.DrawStartListRows[^1], null); window.UpdateLayout();
+            var before = FirstRow();
+            Assert.True(before > 10, $"The list should be scrolled, first row {before}.");
             await vm.PrepareDrawCommand.ExecuteAsync(null);
-            Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(400, bar().Value, 1);
+            for (var i = 0; i < 6; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(30); window.UpdateLayout(); }
+            Assert.Equal(before, FirstRow());
             window.Close();
         }
         finally { Directory.Delete(folder, true); }
