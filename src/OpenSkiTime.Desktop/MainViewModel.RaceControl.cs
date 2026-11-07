@@ -196,8 +196,14 @@ public sealed partial class MainViewModel
             if (HasTimingCategories && RankingView.GroupDescriptions.Count == 0)
             { RankingView.GroupDescriptions.Add(new DataGridPathGroupDescription(nameof(TimingGridRow.Category))); }
             else if (!HasTimingCategories && RankingView.GroupDescriptions.Count > 0) { RankingView.GroupDescriptions.Clear(); }
+            // The active class is listed first: the class of the latest finisher, else of the competitor on course. The other
+            // classes follow in their category order, so the competitors finishing now are always in view.
+            var activeCategory = !HasTimingCategories ? null
+                : FinishedTimingRows.FirstOrDefault(x => x.Result.FinishKey is not null) is { } lastFinisher ? CategoryOf(lastFinisher.Result)
+                : RunningRows.FirstOrDefault()?.Category;
             // Ex aequo competitors share a rank and are listed with the higher bib first (ICR 617.3.3), as in official results.
-            RankingRows.UpdateRows(() => SyncTimingRows(RankingRows, ranked.OrderBy(x => categoryOrder.GetValueOrDefault(x.Category, int.MaxValue))
+            RankingRows.UpdateRows(() => SyncTimingRows(RankingRows, ranked.OrderBy(x => activeCategory is not null && x.Category == activeCategory ? 0 : 1)
+                .ThenBy(x => categoryOrder.GetValueOrDefault(x.Category, int.MaxValue))
                 .ThenBy(x => x.Category, StringComparer.Ordinal).ThenByOfficialResult(RankedTime, x => x.Bib).ThenBy(x => x.Position)
                 .Select(x => x with { DisplayRank = ResultOrder.Rank(RankedTime(x), ranked.Where(y => y.Category == x.Category).Select(RankedTime)) })
                 .Concat(timedForerunners).ToArray()));

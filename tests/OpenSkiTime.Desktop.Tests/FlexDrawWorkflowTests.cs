@@ -5,8 +5,10 @@ using Avalonia.VisualTree;
 using OpenSkiTime.Application;
 using OpenSkiTime.Desktop;
 using OpenSkiTime.Devices;
+using OpenSkiTime.LiveTiming;
 using OpenSkiTime.Domain;
 using OpenSkiTime.Persistence;
+using OpenSkiTime.Timing;
 using Xunit;
 
 namespace OpenSkiTime.Tests;
@@ -15,6 +17,7 @@ namespace OpenSkiTime.Tests;
 public sealed class FlexDrawWorkflowTests
 {
     private static readonly DateOnly s_date = new(2026, 11, 7);
+    private static readonly int[] s_bibs = [1, 2, 3, 4];
 
     [AvaloniaFact]
     public async Task ClubRaceDrawsClassesAsBlocksAndThenReversesTheStartOrderForLaterRuns()
@@ -189,6 +192,108 @@ public sealed class FlexDrawWorkflowTests
             window.Close();
         }
         finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task RankingListsTheClassOfTheLatestFinisherFirst()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-flex-ranking-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var path = Path.Combine(folder, "ranking.ost");
+            var race = new CompetitionValues("Class race", "CL", s_date, Discipline.GiantSlalom, RaceType.Club, 1, 0);
+            CompetitionDetails competition;
+            await using (var setup = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory()))
+            {
+                var series = await setup.CreateAsync(path, new("Synthetic", "Test", "Club", s_date, s_date, "FIN", "2026/27"));
+                series = await setup.SaveCompetitionAsync(null, race, series.Revision);
+                competition = series.Competitions[0];
+                var revision = (await setup.SaveCategoryRuleAsync(null, new("N10", 2016, 2016, Gender.Female, 0), series.Revision)).Revision;
+                revision = (await setup.SaveCategoryRuleAsync(null, new("M10", 2016, 2016, Gender.Male, 1), revision)).Revision;
+                var entrants = new List<DrawEntrant>();
+                for (var i = 0; i < 6; i++)
+                {
+                    var gender = i < 3 ? Gender.Female : Gender.Male;
+                    var athlete = new CompetitorValues("CLASS" + i, "Racer", 2016, null, null, "Club", gender);
+                    var saved = await setup.SaveDeskRowAsync(null, athlete, competition.Id, true, null, revision);
+                    revision = saved.Revision; entrants.Add(new(saved.Value.Id, athlete, null, i < 3 ? "N10" : "M10"));
+                }
+                var blocks = new StartOrderSetup([new("N10", ["N10"], new(), new(), "a"), new("M10", ["M10"], new(), new(), "b")]);
+                var plan = FlexStartOrder.FirstRun(competition.Id, race, null, entrants, PointsListSource.None, new(), blocks);
+                await setup.SaveStartListAsync(new(plan, revision, "Test", "Draw", DateTimeOffset.UnixEpoch));
+            }
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            using var vm = new MainViewModel(workspace, new Dialogs(path), fisStore: new FisLocalStore(folder), recentSeriesStore: new RecentSeriesStore(folder));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.Competitions.Single(), 1));
+            Assert.False(vm.IsError, vm.StatusMessage);
+            (typeof(MainViewModel).GetField("_timingTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(vm) as DispatcherTimer)?.Stop();
+            var timing = workspace.Timing!;
+            var source = new SimulatorTimingSource();
+            await timing.StartAsync(source, new("Test", "Synthetic", s_date, Simulation: true), "Test");
+            await timing.FollowStartOrderAsync(true);
+            await timing.ExpectAsync(0, null);
+            await timing.ExpectAsync(1, null);
+            var order = timing.Snapshot!.StartOrder.ToArray();
+            static long At(int minute, int second) => new TimeOnly(12, 0, 0).Add(TimeSpan.FromSeconds(minute * 60 + second)).Ticks;
+            for (var i = 0; i < 6; i++)
+            {
+                await source.PulseAsync(0, At(0, i * 20));
+                var bib = order[i];
+                await UntilAsync(() => timing.Snapshot!.Results.Single(x => x.Bib == bib).Status == TimingStatus.OnCourse);
+            }
+            // The first class finishes completely, then the first competitor of the second class: that class is the active one.
+            for (var i = 0; i < 3; i++)
+            {
+                await source.PulseAsync(1, At(1, 10 + i * 10));
+                var bib = order[i];
+                await UntilAsync(() => timing.Snapshot!.Results.Single(x => x.Bib == bib).Status == TimingStatus.Finished);
+            }
+            vm.RefreshTiming();
+            Assert.Equal(["N10", "N10", "N10"], vm.RankingRows.Select(x => x.Category));
+            await source.PulseAsync(1, At(1, 40));
+            await UntilAsync(() => timing.Snapshot!.Results.Single(x => x.Bib == order[3]).Status == TimingStatus.Finished);
+            vm.RefreshTiming();
+            Assert.Equal(["M10", "N10", "N10", "N10"], vm.RankingRows.Select(x => x.Category));
+            await timing.StopAsync();
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    private static async Task UntilAsync(Func<bool> condition, [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        try { while (!condition()) { await Task.Delay(10, timeout.Token); } }
+        catch (TaskCanceledException) { throw new TimeoutException("Condition at line " + line + " was not met."); }
+    }
+
+    [Fact]
+    public void LiveTotalsAreRankedWithinTheClassAndTheSnapshotCarriesTheClass()
+    {
+        var at = new DateTimeOffset(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
+        LiveResult Result(int bib, long hundredths) => new(bib, LiveStatus.Finished, hundredths, null, null, at);
+        // Bibs 1, 2 are in N10 and 3, 4 in M10. Over the whole race bib 3 has the best total, within N10 it is bib 1.
+        var competitors = new[]
+        {
+            new LiveCompetitor(1, "A", "A", "FIN", "", "", "N10"), new LiveCompetitor(2, "B", "B", "FIN", "", "", "N10"),
+            new LiveCompetitor(3, "C", "C", "FIN", "", "", "M10"), new LiveCompetitor(4, "D", "D", "FIN", "", "", "M10"),
+        };
+        var runs = new[]
+        {
+            new LiveRun(1, at, [1, 2, 3, 4], [Result(1, 6000), Result(2, 6100), Result(3, 5000), Result(4, 5100)]),
+            new LiveRun(2, at, [4, 3, 2, 1], [Result(1, 6000), Result(2, 6000), Result(3, 5000), Result(4, 5500)]),
+        };
+        var totals = LiveSnapshotMapper.WithTotals(runs, competitors)[1].Results.ToDictionary(x => x.Bib);
+        Assert.Equal([1, 2, 1, 2], s_bibs.Select(b => totals[b].TotalRank));
+        Assert.Equal<long?>([0, 100, 0, 600], s_bibs.Select(b => totals[b].TotalDifference));
+        // Without classes the ranks are those of the whole race.
+        var whole = LiveSnapshotMapper.WithTotals(runs)[1].Results.ToDictionary(x => x.Bib);
+        Assert.Equal([3, 4, 1, 2], s_bibs.Select(b => whole[b].TotalRank));
+        var snapshot = new LiveSnapshot(1, new("Race", "Place", "GS", new(2026, 11, 7), false, "", "A", "", 0, "", 20), competitors, 20,
+            Enumerable.Range(1, 20).Select(n => new LiveRun(n, at, [1, 2, 3, 4], [])).ToArray(), at);
+        snapshot.Validate();
+        Assert.Equal("N10", System.Text.Json.JsonSerializer.Deserialize<LiveSnapshot>(System.Text.Json.JsonSerializer.Serialize(snapshot, LiveJson.Options), LiveJson.Options)!.Competitors[0].Category);
     }
 
     private sealed class Dialogs(string path) : IFileDialogs

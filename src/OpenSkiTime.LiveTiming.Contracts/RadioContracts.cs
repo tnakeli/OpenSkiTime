@@ -220,7 +220,7 @@ public static class RadioPlayback
             || clip.LifetimeSeconds < 1 || clip.LifetimeSeconds > MaxClipLifetime.TotalSeconds || clip.DurationMs is < 0 or > 120_000
             || clip.Phases is null || clip.Phases.Length > 5 || clip.Phases.Any(x => !Enum.IsDefined(x))
             || clip.Conditions is null || clip.Conditions.Length > MaxConditions
-            || clip.Conditions.Any(x => x is null || !Enum.IsDefined(x.Kind) || x.Run is < 1 or > 9 || x.Bib is < 0 or > 99999
+            || clip.Conditions.Any(x => x is null || !Enum.IsDefined(x.Kind) || x.Run is < 1 or > 99 || x.Bib is < 0 or > 99999
                 || (x.Status is { } status && !Enum.IsDefined(status)))
             || !ContentTypes.Contains(clip.ContentType) || clip.Audio is null || clip.Audio.Length > (MaxClipBytes + 2) / 3 * 4)
         { throw new LiveValidationException("Invalid radio clip."); }

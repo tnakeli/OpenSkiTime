@@ -7,7 +7,8 @@ public enum LiveStatus { Ready, OnCourse, Finished, DNS, DNF, DSQ, NPS, Review }
 public enum PublisherState { Stopped, Starting, Running, Reconnecting, Error }
 public enum PublisherKind { Local, Cloud, FisTcp, FisHttps }
 public enum LiveEventKind { CompetitorStarted, IntermediateTime, CompetitorFinished, DNS, DNF, DSQ, ResultUpdated }
-public sealed record LiveCompetitor(int Bib, string LastName, string FirstName, string Nation, string Club, string FisCode);
+// Category: the class of the racer (for example N10) when the race has classes; results and ranks are then per class.
+public sealed record LiveCompetitor(int Bib, string LastName, string FirstName, string Nation, string Club, string FisCode, string Category = "");
 // Source timestamps remain date-bearing .NET ticks on the authoritative integer 100 ns scale.
 // Elapsed hundredths are already calculated by timing. At/StartedAt explicitly carry the clock's UTC offset.
 public sealed record LiveSplit(int Number, long Hundredths, DateTimeOffset At,
@@ -43,7 +44,7 @@ public sealed record LiveSnapshot(long Version, LiveCompetition Competition, Liv
     {
         if (Version < 0 || Competition is null || Competitors is null || Runs is null
             || string.IsNullOrWhiteSpace(Competition.Name) || Competition.IntermediateCount is < 0 or > 20 || Competition.RunCount is < 0 or > 99
-            || Competitors.Length > maxCompetitors || Runs.Length is < 1 or > 9 || CurrentRun is < 1 or > 9
+            || Competitors.Length > maxCompetitors || Runs.Length is < 1 or > 99 || CurrentRun is < 1 or > 99
             || Runs.Any(x => x is null) || UpdatedAt == default
             || !Runs.Any(x => x.Number == CurrentRun) || Runs.Select(x => x.Number).Distinct().Count() != Runs.Length)
         { throw new LiveValidationException("Invalid live competition snapshot."); }
@@ -54,10 +55,10 @@ public sealed record LiveSnapshot(long Version, LiveCompetition Competition, Liv
         { throw new LiveValidationException("Competitor bibs must be unique and positive."); }
         var bibs = Competitors.Select(x => x.Bib).ToHashSet();
         foreach (var c in Competitors)
-        { foreach (var text in new[] { c.LastName, c.FirstName, c.Nation, c.Club, c.FisCode }) { ValidateText(text); } }
+        { foreach (var text in new[] { c.LastName, c.FirstName, c.Nation, c.Club, c.FisCode, c.Category ?? "" }) { ValidateText(text); } }
         foreach (var run in Runs)
         {
-            if (run.Number is < 1 or > 9 || run.StartOrder is null || run.Results is null
+            if (run.Number is < 1 or > 99 || run.StartOrder is null || run.Results is null
                 || run.ListCreatedAt == default || run.Results.Any(x => x is null)
                 || run.StartOrder.Length > maxCompetitors || run.Results.Length > maxCompetitors
                 || run.StartOrder.Distinct().Count() != run.StartOrder.Length || run.StartOrder.Any(x => !bibs.Contains(x))

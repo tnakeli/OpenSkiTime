@@ -47,3 +47,14 @@ globalThis.liveNextStarters = (run, count = 2) => {
   const waiting = run.startOrder.map((bib, i) => ({bib, i})).filter(x => status(x.bib) === 'Ready');
   return [...waiting.filter(x => x.i > started), ...waiting.filter(x => x.i < started)].slice(0, count).map(x => x.bib);
 };
+/* Results of a race with classes, class by class. Rows come in result order and keep it inside their class. The active
+   class (the one of activeBib: the latest finisher, else the racer on course or next to start) is listed first, the other
+   classes in the order they start. classOf maps a bib to its class; racers without one form a group with an empty name. */
+globalThis.liveClassGroups = (rows, classOf, startOrder, activeBib) => {
+  const groups = new Map(), name = bib => classOf(bib) || '';
+  for (const row of rows) { const key = name(row.bib); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(row); }
+  const active = activeBib == null ? null : name(activeBib);
+  const first = key => { const i = startOrder.findIndex(bib => name(bib) === key); return i < 0 ? Infinity : i; };
+  return [...groups].map(([key, list]) => ({name: key, rows: list}))
+    .sort((a, b) => (b.name === active) - (a.name === active) || first(a.name) - first(b.name));
+};

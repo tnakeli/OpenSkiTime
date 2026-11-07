@@ -117,3 +117,22 @@ test('the next starters follow the furthest racer who started; a late starter co
   assert.deepEqual(next({ 1: 'DNF', 2: 'OnCourse', 5: 'DNS' }), [3, 4]);
   assert.deepEqual(next({ 1: 'Finished', 2: 'Finished', 3: 'Finished', 4: 'DSQ', 5: 'Review', 6: 'Finished' }), []);
 });
+
+test('results of a race with classes list the active class first and the others in start order', () => {
+  const classes = { 1: 'N10', 2: 'N10', 3: 'M10', 4: 'M10', 5: 'N12', 6: 'N12' };
+  const startOrder = [1, 2, 3, 4, 5, 6];
+  const classOf = bib => classes[bib];
+  const rows = [{ bib: 2 }, { bib: 1 }, { bib: 4 }, { bib: 3 }, { bib: 6 }, { bib: 5 }];
+  const names = groups => Array.from(groups, g => g.name);
+  // The latest finisher is in M10: that class first, N10 and N12 follow in start order; rows keep their order in a class.
+  const groups = context.liveClassGroups(rows, classOf, startOrder, 3);
+  assert.deepEqual(names(groups), ['M10', 'N10', 'N12']);
+  assert.deepEqual(Array.from(groups[0].rows, r => r.bib), [4, 3]);
+  assert.deepEqual(Array.from(groups[1].rows, r => r.bib), [2, 1]);
+  // Without an active racer the classes keep the start order.
+  assert.deepEqual(names(context.liveClassGroups(rows, classOf, startOrder, null)), ['N10', 'M10', 'N12']);
+  assert.deepEqual(names(context.liveClassGroups(rows, classOf, startOrder, 5)), ['N12', 'N10', 'M10']);
+  // Racers without a class form one group; a hidden class (filtered out) does not appear.
+  assert.deepEqual(names(context.liveClassGroups([{ bib: 9 }], () => '', [9], 9)), ['']);
+  assert.deepEqual(names(context.liveClassGroups(rows.filter(r => classes[r.bib] !== 'M10'), classOf, startOrder, 5)), ['N12', 'N10']);
+});

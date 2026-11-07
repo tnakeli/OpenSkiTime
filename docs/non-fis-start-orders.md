@@ -49,3 +49,7 @@ Start list TSV, the print view and the PDF show each starter's class; the PDF ha
 - A Club race that already holds lists drawn with the FIS draw keeps the FIS layout; its flexible lists start from a new competition.
 - A competition with a flexible list cannot be changed to a FIS competition.
 - The Results tab, penalty and FIS XML are FIS only; class results are not implemented.
+
+## Timing and live results
+
+In Timing, the ranking lists classes under headings with the **active class first**: the class of the latest finisher, else of the competitor on course. The other classes follow in their category order. The live page lists its results the same way, with ranks per class (see [live timing](live-timing.md#classes)).

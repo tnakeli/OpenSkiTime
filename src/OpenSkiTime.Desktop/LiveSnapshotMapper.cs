@@ -19,16 +19,21 @@ public static class LiveSnapshotMapper
             { throw new LiveValidationException("Device timestamp needs an unambiguous race time zone. Review live timing clock settings."); }
             return (new DateTimeOffset(local, zone.GetUtcOffset(local)), ticks);
         }
-        var best = snapshot.Results.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).Min();
+        // A race with classes ranks every class on its own: rank and difference are those within the class.
+        var classOf = list.Plan.Entries.GroupBy(x => x.Bib).ToDictionary(x => x.Key, x => x.First().Entrant.Class);
+        var hasClasses = classOf.Values.Any(x => x.Length > 0);
+        string ClassOf(int bib) => classOf.GetValueOrDefault(bib, "");
+        var bestOfClass = snapshot.Results.Where(x => x.Status == TimingStatus.Finished).GroupBy(x => ClassOf(x.Bib)).ToDictionary(g => g.Key, g => g.Min(x => x.Hundredths));
         var results = snapshot.Results.Select(r =>
         {
             var start = Source(r.StartKey); var finish = Source(r.FinishKey);
             var correction = snapshot.Audit.LastOrDefault(a => a.After.Kind is DecisionKind.Status or DecisionKind.Time
                 && (a.After.Bib == r.Bib || a.After.CompetitorId == r.CompetitorId));
             var at = correction?.At ?? finish.At ?? start.At ?? list.CreatedAt;
-            var rank = r.Rank ?? (r.Status == TimingStatus.Finished ? snapshot.Results.Count(x => x.Status == TimingStatus.Finished && x.Hundredths < r.Hundredths) + 1 : (int?)null);
+            var rank = r.Rank is { } own && !hasClasses ? own : r.Status == TimingStatus.Finished
+                ? snapshot.Results.Count(x => x.Status == TimingStatus.Finished && ClassOf(x.Bib) == ClassOf(r.Bib) && x.Hundredths < r.Hundredths) + 1 : (int?)null;
             return new LiveResult(r.Bib, Enum.Parse<LiveStatus>(r.Status.ToString()), r.Hundredths, rank,
-                r.Status == TimingStatus.Finished && best is not null ? r.Hundredths - best : null, at,
+                r.Status == TimingStatus.Finished && bestOfClass.TryGetValue(ClassOf(r.Bib), out var best) && best is not null ? r.Hundredths - best : null, at,
                 start.At, start.Ticks, finish.Ticks, r.Splits.Where(x => x.Hundredths is not null).Select(x =>
                 { var source = Source(x.ObservationKey); return new LiveSplit(x.Number, x.Hundredths!.Value, source.At ?? at, source.Ticks); }).ToArray());
         }).ToArray();
@@ -42,18 +47,22 @@ public static class LiveSnapshotMapper
     // From Run 2 on, each finisher's combined time over all runs so far, ranked like the timing view's Run 2 ranking
     // (equal totals share a rank) with the gap to the best total. A racer without a finished time in every earlier run
     // has no total. Recalculated from the published run results, so a correction in any run updates later totals.
-    public static LiveRun[] WithTotals(IEnumerable<LiveRun> runs)
+    public static LiveRun[] WithTotals(IEnumerable<LiveRun> runs, IReadOnlyList<LiveCompetitor>? competitors = null)
     {
         ArgumentNullException.ThrowIfNull(runs);
+        // The standing of a racer is the one within the class.
+        var categories = (competitors ?? []).ToDictionary(x => x.Bib, x => x.Category ?? "");
+        string ClassOf(int bib) => categories.GetValueOrDefault(bib, "");
         var done = new List<LiveRun>();
         foreach (var run in runs.OrderBy(x => x.Number))
         {
             var totals = run.Results.ToDictionary(r => r.Bib, r => done.Count > 0 && r.Status == LiveStatus.Finished
                 && done.All(e => e.Results.Any(p => p.Bib == r.Bib && p.Status == LiveStatus.Finished))
                     ? r.Hundredths + done.Sum(e => e.Results.First(p => p.Bib == r.Bib).Hundredths!.Value) : null);
-            var best = totals.Values.Min();
+            var best = totals.GroupBy(x => ClassOf(x.Key)).ToDictionary(g => g.Key, g => g.Select(x => x.Value).Min());
             done.Add(run with { Results = run.Results.Select(r => r with { TotalHundredths = totals[r.Bib],
-                TotalRank = ResultOrder.Rank(totals[r.Bib], totals.Values), TotalDifference = totals[r.Bib] - best }).ToArray() });
+                TotalRank = ResultOrder.Rank(totals[r.Bib], totals.Where(x => ClassOf(x.Key) == ClassOf(r.Bib)).Select(x => x.Value)),
+                TotalDifference = totals[r.Bib] - best[ClassOf(r.Bib)] }).ToArray() });
         }
         return done.ToArray();
     }
@@ -64,7 +73,7 @@ public static class LiveSnapshotMapper
         {
             if (g.Select(x => x.Entrant.CompetitorId).Distinct().Count() != 1) { throw new LiveValidationException("A bib is assigned to different competitors across runs."); }
             var a = g.Last().Entrant.Athlete;
-            return new LiveCompetitor(g.Key, a.Surname.ToUpperInvariant(), a.FirstName, a.Nation ?? "", a.Club ?? "", a.FederationCode ?? "");
+            return new LiveCompetitor(g.Key, a.Surname.ToUpperInvariant(), a.FirstName, a.Nation ?? "", a.Club ?? "", a.FederationCode ?? "", g.Last().Entrant.Class);
         }).OrderBy(x => x.Bib).ToArray();
     }
 }
