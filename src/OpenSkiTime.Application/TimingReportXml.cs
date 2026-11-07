@@ -50,8 +50,6 @@ public static class TimingReportXml
             Implausible(TimingEvidenceCheck.Compare(b.AFinish, b.BFinish, false), "B finish");
             Implausible(TimingEvidenceCheck.Compare(b.AStart, b.HandStart, true), "hand start");
             Implausible(TimingEvidenceCheck.Compare(b.AFinish, b.HandFinish, true), "hand finish");
-            Implausible(TimingEvidenceCheck.CompareNet(b.NetHundredths, b.BStart, b.BFinish, false), "B elapsed time");
-            Implausible(TimingEvidenceCheck.CompareNet(b.NetHundredths, b.HandStart, b.HandFinish, true), "hand elapsed time");
         }
         var h = report.Header;
         if (h.Season is < 1900 or > 2999 || h.Date == default) { errors.Add("Race season and date are required."); }

@@ -219,8 +219,7 @@ public sealed partial class MainViewModel
                         Sample = (run.First.Bib == result.Bib ? "First " : "") + (run.Last.Bib == result.Bib ? "Last" : ""),
                         AStartStamp = A(result.StartKey), AFinishStamp = A(result.FinishKey),
                         Net = run.First.Bib == result.Bib ? TimingTime.Format(run.First.NetHundredths)
-                            : run.Last.Bib == result.Bib ? TimingTime.Format(run.Last.NetHundredths) : result.Time,
-                        NetHundredths = run.First.Bib == result.Bib ? run.First.NetHundredths : run.Last.Bib == result.Bib ? run.Last.NetHundredths : null };
+                            : run.Last.Bib == result.Bib ? TimingTime.Format(run.Last.NetHundredths) : result.Time };
                     TimingReportStamp? Saved(TimingReportImageRole role, int channel) => draft.Associations.FirstOrDefault(x => x.Run == run.Run && x.Bib == row.Bib && x.Role == role && x.Channel == channel)?.Stamp;
                     row.OriginalBStart = Saved(TimingReportImageRole.B, 0); row.OriginalBFinish = Saved(TimingReportImageRole.B, 1);
                     row.OriginalHandStart = Saved(TimingReportImageRole.HandStart, 0); row.OriginalHandFinish = Saved(TimingReportImageRole.HandFinish, 1);

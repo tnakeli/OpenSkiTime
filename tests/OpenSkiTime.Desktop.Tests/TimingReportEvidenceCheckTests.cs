@@ -19,7 +19,7 @@ public sealed class TimingReportEvidenceCheckTests
 
     private static (TimingReportEvidenceRow First, TimingReportEvidenceRow Last, TimingReportRunEditor Run) Sample()
     {
-        TimingReportEvidenceRow Row(int bib, double start) => new() { Run = 1, Bib = bib, Sample = "First", AStartStamp = At(start), AFinishStamp = At(start + 50.23), NetHundredths = 5023 };
+        TimingReportEvidenceRow Row(int bib, double start) => new() { Run = 1, Bib = bib, Sample = "First", AStartStamp = At(start), AFinishStamp = At(start + 50.23) };
         var first = Row(31, 0); var last = Row(69, 600);
         return (first, last, new() { Source = new() { Run = 1 }, First = first, Last = last });
     }

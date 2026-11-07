@@ -36,8 +36,6 @@ public sealed class TimingEvidenceCheckTests
     {
         Assert.Null(TimingEvidenceCheck.Compare(null, At(0), false));
         Assert.Null(TimingEvidenceCheck.Compare(At(0), null, false));
-        Assert.Null(TimingEvidenceCheck.CompareNet(5000, null, At(50), false));
-        Assert.Null(TimingEvidenceCheck.CompareNet(null, At(0), At(50), false));
     }
 
     [Fact]
@@ -47,17 +45,5 @@ public sealed class TimingEvidenceCheckTests
         var b = new TimingReportStamp(TimeSpan.TicksPerDay + TimeSpan.TicksPerSecond / 100, 4);
         Assert.Null(TimingEvidenceCheck.Compare(a, b, false));
         Assert.Null(TimingEvidenceCheck.Compare(b, a, false));
-    }
-
-    [Fact]
-    public void ElapsedTimeIsComparedWithTheNetTimeOfA()
-    {
-        Assert.Null(TimingEvidenceCheck.CompareNet(5023, At(0), At(50.23), false));
-        Assert.Null(TimingEvidenceCheck.CompareNet(5023, At(0), At(50.30), false));
-        Assert.Equal(EvidenceSeverity.Warning, TimingEvidenceCheck.CompareNet(5023, At(0), At(50.5), false)?.Severity);
-        // Both B times a second late agree with each other but give the same net: only the cell check can see that.
-        Assert.Null(TimingEvidenceCheck.CompareNet(5023, At(1), At(51.23), false));
-        Assert.Equal(EvidenceSeverity.Error, TimingEvidenceCheck.CompareNet(5023, At(0), At(52.0), false)?.Severity);
-        Assert.Contains("net time", TimingEvidenceCheck.CompareNet(5023, At(0), At(52.0), false)!.Message, StringComparison.Ordinal);
     }
 }

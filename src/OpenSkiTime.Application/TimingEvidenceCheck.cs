@@ -1,5 +1,4 @@
 using System.Globalization;
-using OpenSkiTime.Timing;
 
 namespace OpenSkiTime.Application;
 
@@ -23,15 +22,7 @@ public static class TimingEvidenceCheck
     public static EvidenceFinding? Compare(TimingReportStamp? a, TimingReportStamp? other, bool hand)
     {
         if (a is null || other is null) { return null; }
-        return Judge(Signed(other.Ticks - a.Ticks), hand, "A");
-    }
-
-    /// <summary>Compares the elapsed time of System B or the hand clock with the official net time of System A.</summary>
-    public static EvidenceFinding? CompareNet(long? aNetHundredths, TimingReportStamp? start, TimingReportStamp? finish, bool hand)
-    {
-        if (aNetHundredths is not { } net || start is null || finish is null) { return null; }
-        var elapsed = Signed(finish.Ticks - start.Ticks);
-        return Judge(elapsed - net * TimingTime.TicksPerHundredth, hand, "the A net time", "net time");
+        return Judge(Signed(other.Ticks - a.Ticks), hand);
     }
 
     private static long Signed(long difference)
@@ -42,7 +33,7 @@ public static class TimingEvidenceCheck
         return rest > day / 2 ? rest - day : rest;
     }
 
-    private static EvidenceFinding? Judge(long difference, bool hand, string reference, string subject = "time")
+    private static EvidenceFinding? Judge(long difference, bool hand)
     {
         var size = Math.Abs(difference);
         var error = hand ? HandErrorTicks : BErrorTicks; var warning = hand ? HandWarningTicks : BWarningTicks;
@@ -51,7 +42,7 @@ public static class TimingEvidenceCheck
         var direction = difference > 0 ? "later" : "earlier";
         var limit = (error / (decimal)TimeSpan.TicksPerSecond).ToString("0.###", CultureInfo.InvariantCulture);
         return size > error
-            ? new(EvidenceSeverity.Error, $"The {subject} is {seconds} s {direction} than {reference}, more than {limit} s: probably a typing or reading mistake.")
-            : new(EvidenceSeverity.Warning, $"The {subject} is {seconds} s {direction} than {reference}. Check it.");
+            ? new(EvidenceSeverity.Error, $"The time is {seconds} s {direction} than A, more than {limit} s: probably a typing or reading mistake.")
+            : new(EvidenceSeverity.Warning, $"The time is {seconds} s {direction} than A. Check it.");
     }
 }

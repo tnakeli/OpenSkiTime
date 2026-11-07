@@ -17,7 +17,6 @@ public sealed partial class TimingReportEvidenceRow : ObservableObject
     public string AStart => Format(AStartStamp);
     public string AFinish => Format(AFinishStamp);
     public string Net { get; init; } = "";
-    public long? NetHundredths { get; init; }
     public TimingReportStamp? OriginalBStart { get; set; }
     public TimingReportStamp? OriginalBFinish { get; set; }
     public TimingReportStamp? OriginalHandStart { get; set; }
@@ -31,9 +30,9 @@ public sealed partial class TimingReportEvidenceRow : ObservableObject
     // What the typed or read time says against System A: shown on the cell as it is typed. Unreadable text is not judged here;
     // saving reports it.
     public EvidenceFinding? BStartIssue => Judge(BStart, OriginalBStart, AStartStamp, false);
-    public EvidenceFinding? BFinishIssue => Worst(Judge(BFinish, OriginalBFinish, AFinishStamp, false), JudgeNet(BStart, OriginalBStart, BFinish, OriginalBFinish, false));
+    public EvidenceFinding? BFinishIssue => Judge(BFinish, OriginalBFinish, AFinishStamp, false);
     public EvidenceFinding? HandStartIssue => Judge(HandStart, OriginalHandStart, AStartStamp, true);
-    public EvidenceFinding? HandFinishIssue => Worst(Judge(HandFinish, OriginalHandFinish, AFinishStamp, true), JudgeNet(HandStart, OriginalHandStart, HandFinish, OriginalHandFinish, true));
+    public EvidenceFinding? HandFinishIssue => Judge(HandFinish, OriginalHandFinish, AFinishStamp, true);
     public IEnumerable<(string Cell, EvidenceFinding Finding)> Issues()
     {
         foreach (var (cell, finding) in new[] { ("B start", BStartIssue), ("B finish", BFinishIssue), ("hand start", HandStartIssue), ("hand finish", HandFinishIssue) })
@@ -48,8 +47,6 @@ public sealed partial class TimingReportEvidenceRow : ObservableObject
         OnPropertyChanged(nameof(BStartIssue)); OnPropertyChanged(nameof(BFinishIssue));
         OnPropertyChanged(nameof(HandStartIssue)); OnPropertyChanged(nameof(HandFinishIssue));
     }
-    private static EvidenceFinding? Worst(EvidenceFinding? a, EvidenceFinding? b)
-        => a is null ? b : b is null ? a : b.Severity > a.Severity ? b : a;
     private TimingReportStamp? Parse(string text, TimingReportStamp? original, TimingReportStamp? reference)
     {
         try { return Read(text, original, reference is null ? default : DateOnly.FromDateTime(new(reference.Ticks))); }
@@ -57,8 +54,6 @@ public sealed partial class TimingReportEvidenceRow : ObservableObject
     }
     private EvidenceFinding? Judge(string text, TimingReportStamp? original, TimingReportStamp? a, bool hand)
         => TimingEvidenceCheck.Compare(a, a is null ? null : Parse(text, original, a), hand);
-    private EvidenceFinding? JudgeNet(string startText, TimingReportStamp? startOriginal, string finishText, TimingReportStamp? finishOriginal, bool hand)
-        => TimingEvidenceCheck.CompareNet(NetHundredths, Parse(startText, startOriginal, AStartStamp), Parse(finishText, finishOriginal, AFinishStamp), hand);
     public TimingReportStamp? Read(string text, TimingReportStamp? original, DateOnly date)
     {
         ArgumentNullException.ThrowIfNull(text);
