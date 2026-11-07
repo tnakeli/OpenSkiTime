@@ -82,6 +82,8 @@ public sealed class WindowsCredentialStore(string target, bool compactBlob = fal
         finally
         {
             Array.Clear(bytes);
+            // FreeHGlobal does not wipe: clear the native copy of the credential first.
+            Marshal.Copy(new byte[bytes.Length], 0, blob, bytes.Length);
             Marshal.FreeHGlobal(blob);
         }
     }

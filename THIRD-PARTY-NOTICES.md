@@ -37,6 +37,13 @@ CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
 
 The font file is redistributed unchanged.
 
+## Twemoji flag pictures in the desktop application and PDF reports
+
+Project: Twemoji (jdecked/twemoji 15.1.0, https://github.com/jdecked/twemoji), the maintained fork of
+https://github.com/twitter/twemojiPurpose: the flag shown before the nation code in desktop views and PDF reports, as on the live timing pageFiles: `src/OpenSkiTime.Application/Flags/*.png`, one small PNG per country, rendered from the Twemoji SVG flags and
+cropped to the flag. They are embedded in the application and used by `NationFlags`.License: Copyright Twitter, Inc. and other contributors, graphics licensed under CC-BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). The pictures are scaled and cropped; no other change.
+
 ## Other dependencies
 
 Additional third-party dependencies are managed through NuGet.

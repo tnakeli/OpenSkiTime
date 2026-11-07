@@ -96,6 +96,9 @@
   <x:Double x:Key="SectionSize">15</x:Double>
   <x:Double x:Key="CardTitleSize">14</x:Double>
   <x:Double x:Key="BodySize">13</x:Double>
+  <!-- A nation flag picture beside its three-letter code (about 4:3, as the live view draws it). -->
+  <x:Double x:Key="FlagWidth">18</x:Double>
+  <x:Double x:Key="FlagHeight">13</x:Double>
   <x:Double x:Key="LabelSize">12</x:Double>
   <x:Double x:Key="ColumnHeaderSize">11.5</x:Double>
   <x:Double x:Key="ColumnHeaderLetterSpacing">0.4</x:Double>

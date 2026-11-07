@@ -159,7 +159,7 @@ public static class FisResultXml
                 E(writer, "Starttime", run.StartTime);
                 writer.WriteEndElement();
             }
-            E(writer, "Softwarecompany", "OpenSkiTime project"); E(writer, "Softwarename", "OpenSkiTime");
+            E(writer, "Softwarecompany", "OpenSkiTime http://openskiti.me/"); E(writer, "Softwarename", "OpenSkiTime");
             E(writer, "Softwareversion", ProductInfo.Version); writer.WriteEndElement();
             writer.WriteStartElement("AL_classified");
             var winner = race.Rows.Where(x => x.TotalHundredths is not null).Min(x => x.TotalHundredths)!.Value;

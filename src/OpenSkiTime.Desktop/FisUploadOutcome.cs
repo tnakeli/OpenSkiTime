@@ -147,8 +147,9 @@ public static class FisUploadOutcomes
             case OperationCanceledException:
                 return Make(FisUploadTone.Warning, "Stopped waiting for FIS", "The request was stopped or timed out.",
                     "An upload may have reached FIS. Press Check status before sending again.");
-            case HttpRequestException:
-                return Make(FisUploadTone.Error, "Could not reach FIS", "The network request failed.",
+            // The connection can break while the answer is read (an IOException), after FIS has stored the upload.
+            case HttpRequestException or IOException:
+                return Make(FisUploadTone.Error, "Could not reach FIS", "The network request failed or was cut off.",
                     "An upload may have reached FIS. Check the connection, then press Check status before sending again.");
             default:
                 return Make(FisUploadTone.Error, "Could not send", ex.Message, "Nothing was sent to FIS.");

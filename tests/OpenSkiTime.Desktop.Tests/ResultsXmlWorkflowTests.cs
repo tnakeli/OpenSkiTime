@@ -61,7 +61,7 @@ public partial class DesktopWorkflowTests
 
     // A complete one-run FIS race with results, a penalty and full race information, ready for the XML.
     private static async Task<(string Folder, string XmlPath, SeriesWorkspace Workspace, MainViewModel Vm, Guid Competition)> FisXmlRaceAsync(
-        FisHandler handler, bool withToken = true, bool secondRace = false, bool legacyInformation = false)
+        FisHandler handler, bool withToken = true, bool secondRace = false, bool legacyInformation = false, bool simulated = false)
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-fisxml-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -89,7 +89,7 @@ public partial class DesktopWorkflowTests
         var plan = FisStartOrder.FirstRun(competition, race, Gender.Female, entrants, new("1327", new(2026, 9, 24), new(2026, 9, 30), rules), new(), "synthetic-seed");
         var list = Assert.Single((await workspace.SaveStartListAsync(new(plan, revision, "Test", "Synthetic draw", DateTimeOffset.UnixEpoch))).Revisions);
         await workspace.Timing!.SelectRunAsync(list.Id);
-        await workspace.Timing.StartAsync(new SimulatorTimingSource(), new("Test", "Synthetic", date, Simulation: true), "Test");
+        await workspace.Timing.StartAsync(new SimulatorTimingSource(), new("Test", "Synthetic", date, Simulation: simulated), "Test");
         await workspace.Timing.StopAsync();
         foreach (var entry in list.Plan.Entries)
         {
@@ -317,6 +317,75 @@ public partial class DesktopWorkflowTests
             Assert.True(outcome.IsError); Assert.NotEqual("Results accepted by FIS", outcome.Title);
             Assert.Equal("FIS gave no usable answer", outcome.Title);
             Assert.Equal(2, handler.Calls.Count);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task AConnectionCutWhileTheAnswerIsReadIsNotReportedAsNothingSent()
+    {
+        using var handler = new FisHandler(_ => throw new IOException("The response ended prematurely."));
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler);
+        try
+        {
+            await vm.SendToFisCommand.ExecuteAsync(null); await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
+            var outcome = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.True(outcome.IsError);
+            Assert.DoesNotContain("Nothing was sent", outcome.Hint, StringComparison.Ordinal);
+            Assert.Contains("may have reached FIS", outcome.Hint, StringComparison.Ordinal);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task SimulationTimingIsNeverSentAsOfficialResultsButMayBeSentAsATest()
+    {
+        using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName ?? "FIN9991.xml", "processed", "File successfully saved!", test: call.TestMode == "true", codex: "9991")));
+        var (folder, _, workspace, vm, competition) = await FisXmlRaceAsync(handler, simulated: true);
+        try
+        {
+            await vm.SendToFisCommand.ExecuteAsync(null); await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
+            var blocked = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.True(blocked.IsError); Assert.Equal("Simulation timing", blocked.Title);
+            Assert.Contains("Nothing was sent", blocked.Hint, StringComparison.Ordinal);
+            Assert.Empty(handler.Calls);
+            // The XML itself and a test upload remain possible.
+            Assert.Single(await workspace.ReadApprovedResultsAsync(competition));
+            vm.FisUploadTestMode = true;
+            await vm.SendToFisCommand.ExecuteAsync(null);
+            var test = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.False(test.IsError); Assert.True(test.IsTest);
+            Assert.Single(handler.Calls); Assert.Equal("true", handler.Calls[0].TestMode);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task TheModeOfASubmissionSurvivesAnotherRaceAndARejectedAnswer()
+    {
+        // The test upload completes at once. Later the status answer for the same id claims a real submission: it is rejected.
+        // The mode is kept with the submission id, so a further check is rejected again and never shows published results.
+        var statusAsReal = true;
+        var answers = 0;
+        using var handler = new FisHandler(call =>
+        {
+            answers++;
+            return FisJson(FisAnswer(call.FileName ?? "FIN9991.xml", "processed", "File successfully saved!", test: !(statusAsReal && call.Url.Contains("/status/", StringComparison.Ordinal)), codex: "9991"));
+        });
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler, secondRace: true);
+        try
+        {
+            vm.FisUploadTestMode = true;
+            await vm.SendToFisCommand.ExecuteAsync(null);
+            Assert.False(vm.ResultSubmissionOutcome!.IsError);
+            var id = vm.ResultSubmissionId;
+            // A rejected answer is on screen now; it must not become the remembered mode.
+            await vm.CheckResultsSubmissionCommand.ExecuteAsync(null);
+            Assert.True(vm.ResultSubmissionOutcome!.IsError);
+            await vm.CheckResultsSubmissionCommand.ExecuteAsync(null);
+            Assert.True(vm.ResultSubmissionOutcome!.IsError); Assert.Equal("FIS gave no usable answer", vm.ResultSubmissionOutcome.Title);
+            Assert.Equal(id, vm.ResultSubmissionId);
+            Assert.True(answers >= 3);
         }
         finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
     }

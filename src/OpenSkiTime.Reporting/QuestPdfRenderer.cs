@@ -139,7 +139,7 @@ internal static class ReportComponents
         });
     }
     public static void Heading(ColumnDescriptor column, string text) => column.Item().PaddingTop(6).PaddingBottom(4).Text(text).SemiBold().FontSize(9);
-    // Cells are text or a PersonName; string[] rows pass as object[] rows.
+    // Cells are text, a PersonName or a NationCell; string[] rows pass as object[] rows.
     public static void Table(IContainer container, string[] headers, IEnumerable<object[]> rows, float[]? widths = null)
     {
         container.Table(table =>
@@ -152,9 +152,22 @@ internal static class ReportComponents
                 {
                     var cell = table.Cell().BorderBottom(0.25f).BorderColor("#CCD7DC").Padding(3);
                     if (value is PersonName person) { cell.Text(text => Person(text, person)); }
+                    else if (value is NationCell nation) { Nation(cell, nation); }
                     else { cell.Text(value?.ToString() ?? ""); }
                 }
             }
+        });
+    }
+    /// <summary>A nation as in the live view: the flag, then the three-letter code. A code without a flag keeps the flag's space.</summary>
+    public static void Nation(IContainer container, NationCell nation)
+    {
+        var code = NationFlags.Normalize(nation.Code);
+        container.Row(row =>
+        {
+            row.Spacing(3);
+            var flag = row.ConstantItem(12).AlignTop().PaddingTop(2);
+            if (NationFlags.Png(code) is { } png) { flag.Image(png).FitWidth(); }
+            row.RelativeItem().Text(code);
         });
     }
     /// <summary>The person name rule: surname in bold capitals, then the first name in regular weight.</summary>
@@ -188,15 +201,18 @@ internal static class EntriesDocument
     private static string Points(decimal? value) => value?.ToString("0.00", CultureInfo.InvariantCulture) ?? "";
     private static EntryColumn[] StartColumns(PdfReportData data)
     {
+        // Run 2 shows the gap to the leader of Run 1 instead of points.
+        var later = data.Descriptor.RunNumber > 1;
         // The points column is headed by the competition's discipline ("SL pts") and omitted when nobody has points.
         var code = EntryReportBuilder.FisPointsDisciplines(data.Source, data.Descriptor) is [var only] ? only + " pts" : "Points";
         var columns = new List<EntryColumn>
         {
             new("Pos", 0.5f, x => ReportComponents.Number(x.Position)), new("Bib", 0.5f, x => ReportComponents.Number(x.Bib)),
             new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name), new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)),
-            new("Nation", 0.7f, x => x.Athlete.Nation ?? ""), new("Club", 1.5f, x => x.Athlete.Club ?? "")
+            new("Nation", 0.9f, x => new NationCell(x.Athlete.Nation)), new("Club", 1.5f, x => x.Athlete.Club ?? "")
         };
-        if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Points is not null)) { columns.Add(new(code, 0.8f, x => Points(x.Points))); }
+        if (later) { columns.Add(new("Gap", 0.8f, x => TimingTime.FormatGap(x.GapHundredths))); }
+        else if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Points is not null)) { columns.Add(new(code, 0.8f, x => Points(x.Points))); }
         return columns.ToArray();
     }
     private static EntryColumn[] EntryColumns(PdfReportData data)
@@ -206,7 +222,7 @@ internal static class EntriesDocument
         // A column that no entrant has a value for carries no information and is omitted.
         if (rows.Any(x => x.Bib is not null)) { columns.Add(new("Bib", 0.5f, x => ReportComponents.Number(x.Bib))); }
         columns.AddRange([new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name),
-            new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)), new("Nation", 0.7f, x => x.Athlete.Nation ?? ""),
+            new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)), new("Nation", 0.9f, x => new NationCell(x.Athlete.Nation)),
             new("Club", 1.5f, x => x.Athlete.Club ?? "")]);
         if (rows.Any(x => x.Category is not ("" or CategoryResolver.Unclassified))) { columns.Add(new("Category", 1.3f, x => x.Category)); }
         // FIS points of the disciplines in the report's scope, one column each; a discipline nobody has points in is omitted.
@@ -253,10 +269,10 @@ internal static class OfficialResultsDocument
                 final.Race.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.StatusRun).ThenBy(x => x.Entry.Position).Select(x => new object[]
                 { ReportComponents.Number(x.Rank), ReportComponents.Number(x.Entry.Bib), x.Entry.Entrant.Athlete.FederationCode ?? "",
                     new PersonName(x.Entry.Entrant.Athlete.Surname, x.Entry.Entrant.Athlete.FirstName), ReportComponents.Number(x.Entry.Entrant.Athlete.BirthYear),
-                    x.Entry.Entrant.Athlete.Nation ?? "", TimingTime.Format(x.Run1Hundredths), TimingTime.Format(x.Run2Hundredths),
+                    new NationCell(x.Entry.Entrant.Athlete.Nation), TimingTime.Format(x.Run1Hundredths), TimingTime.Format(x.Run2Hundredths),
                     TimingTime.Format(x.TotalHundredths), x.Status == TimingStatus.Finished ? "" : x.Status + " R" + x.StatusRun,
                     final.Penalty is { } p && p.RacePoints.TryGetValue(x.Entry.Bib, out var rp) ? rp.ToString("0.00", CultureInfo.InvariantCulture) : "" }),
-                [0.5f, 0.5f, 0.9f, 2.8f, 0.7f, 0.7f, 0.9f, 0.9f, 0.9f, 0.9f, 0.8f]);
+                [0.5f, 0.5f, 0.9f, 2.6f, 0.7f, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 0.8f]);
             if (final.Approval is { } approval)
             {
                 column.Item().Text("Applied penalty: " + approval.AppliedPenalty.ToString("0.00", CultureInfo.InvariantCulture));
@@ -300,6 +316,9 @@ internal static class PenaltyCalculationDocument
 }
 
 /// <summary>A person in a report table, printed by the person name rule (see <see cref="ReportComponents.Person"/>).</summary>
+/// <summary>A nation code shown as flag and code in a report table.</summary>
+internal sealed record NationCell(string? Code);
+
 internal sealed record PersonName(string Surname, string? FirstName, string? Suffix = null)
 {
     public override string ToString() => string.Join(" ", new[] { Surname.ToUpperInvariant(), FirstName, Suffix }.Where(x => !string.IsNullOrWhiteSpace(x)));

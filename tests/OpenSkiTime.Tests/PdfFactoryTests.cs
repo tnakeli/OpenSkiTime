@@ -25,6 +25,40 @@ public sealed class PdfFactoryTests
     private static readonly FisPenaltyListRules s_rules = new(2027, [new("FIS", 0, 0, 999), new("ENL", 4, 40, 999)],
         [new("SL", Gender.Male, 730, 165, 0, [0, 0, 0, 0, 0])]);
 
+    [Fact]
+    public void ACompetitionsFilesAreInASubfolderNamedAfterItsShortNameAndSeriesFilesStayBeside()
+    {
+        using var folder = new TestFolder();
+        var source = MemorySource(folder.PathFor("race.ost"), 6);
+        var reports = ReportCatalog.GetAvailableReports(source);
+        var competition = reports.Where(x => x.CompetitionId is not null).ToArray();
+        Assert.NotEmpty(competition);
+        Assert.All(competition, x => { Assert.Equal(ReportFileNameBuilder.FolderName(source.Competition!.Values.ShortLabel), x.Folder); Assert.Equal(x.Folder + "/" + x.FileName, x.RelativePath); });
+        var series = reports.Where(x => x.CompetitionId is null).ToArray();
+        Assert.NotEmpty(series);
+        Assert.All(series, x => { Assert.Null(x.Folder); Assert.Equal(x.FileName, x.RelativePath); });
+    }
+
+    [Theory]
+    [InlineData("SL1", "SL1")]
+    [InlineData("Men: SL / Run 1?", "Men_SL_Run_1")]
+    [InlineData("CON", "_CON")]
+    [InlineData("com3", "_com3")]
+    [InlineData("Lpt1.txt", "_Lpt1.txt")]
+    [InlineData("  ", "Event")]
+    [InlineData("COM10", "COM10")]
+    public void ACompetitionFolderIsAPortableNameAndNeverAWindowsDeviceName(string shortName, string expected)
+        => Assert.Equal(expected, ReportFileNameBuilder.FolderName(shortName));
+
+    [Theory]
+    [InlineData(0L, "0.00")]
+    [InlineData(45L, "+0.45")]
+    [InlineData(1234L, "+12.34")]
+    [InlineData(5999L, "+59.99")]
+    [InlineData(6234L, "+1:02.34")]
+    public void TheGapToTheRunOneLeaderIsShownAsTimeBehind(long hundredths, string expected)
+        => Assert.Equal(expected, TimingTime.FormatGap(hundredths));
+
     [Theory]
     [InlineData("Levi_FIS", 1, "Levi_FIS_2026-12-12_StartList_Run1.pdf")]
     [InlineData("Levi FIS", 2, "Levi_FIS_2026-12-12_StartList_Run2.pdf")]
@@ -109,7 +143,7 @@ public sealed class PdfFactoryTests
         Assert.True((await service.GenerateAsync(source, competition, _ => Task.CompletedTask, s_at)).Success);
         string Text(PdfReportDescriptor d)
         {
-            using var pdf = PdfDocument.Open(folder.PathFor(d.FileName));
+            using var pdf = PdfDocument.Open(folder.PathFor(d.RelativePath));
             return string.Join(" ", pdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));
         }
         var seriesText = Text(series);
@@ -127,7 +161,7 @@ public sealed class PdfFactoryTests
         var source = MemorySource(folder.PathFor("test.ost"), 6);
         var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.CompetitionEntries);
         Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
-        using var pdf = PdfDocument.Open(folder.PathFor(descriptor.FileName));
+        using var pdf = PdfDocument.Open(folder.PathFor(descriptor.RelativePath));
         var words = pdf.GetPages().SelectMany(x => x.GetWords()).ToArray();
         var names = words.Select((word, index) => (word, index)).Where(x => x.word.Text.StartsWith("RACER", StringComparison.Ordinal))
             .Select(x => (Surname: x.word, FirstName: words[x.index + 1])).ToArray();
@@ -145,7 +179,7 @@ public sealed class PdfFactoryTests
         using var folder = new TestFolder();
         var source = MemorySource(folder.PathFor("test.ost"), 20);
         var descriptor = ReportCatalog.GetAvailableReports(source)[0];
-        var path = folder.PathFor(descriptor.FileName);
+        var path = folder.PathFor(descriptor.RelativePath);
         Assert.Equal(PdfReportStatus.NotGenerated, ReportStatusService.GetStatus(source, descriptor));
         GeneratedPdf? metadata = null;
         Task Save(GeneratedPdf value) { metadata = value; return Task.CompletedTask; }
@@ -180,7 +214,7 @@ public sealed class PdfFactoryTests
         var receipts = new List<GeneratedPdf>();
         Task Save(GeneratedPdf receipt) { receipts.Add(receipt); return Task.CompletedTask; }
         Assert.True((await service.GenerateAsync(source, descriptor, Save, s_at)).Success);
-        var path = folder.PathFor(descriptor.FileName);
+        var path = folder.PathFor(descriptor.RelativePath);
         var before = await File.ReadAllBytesAsync(path);
         source = source with { Settings = source.Settings with { Profile = new(TemplateName: "corrupt.pdf", TemplatePdf: "Invalid synthetic PDF"u8.ToArray()) } };
         Assert.False((await service.GenerateAsync(source, descriptor, Save, s_at.AddMinutes(1))).Success);
@@ -198,7 +232,7 @@ public sealed class PdfFactoryTests
             .GenerateAllAsync(source, _ => Task.CompletedTask, s_at);
         Assert.Single(outcomes, x => !x.Success);
         Assert.Equal(7, outcomes.Count(x => x.Success)); // six entry lists + two referee reports, one failure
-        Assert.True(File.Exists(folder.PathFor(ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.CompetitionEntries).FileName)));
+        Assert.True(File.Exists(folder.PathFor(ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.CompetitionEntries).RelativePath)));
         Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(source.FilePath)!, "*.tmp"));
     }
     [Fact]
@@ -212,7 +246,7 @@ public sealed class PdfFactoryTests
         QuestPdfRenderer.ValidateTemplate(background);
         source = source with { Settings = source.Settings with { Profile = new(TopMm: 28, BottomMm: 25, LeftMm: 18, RightMm: 18, TemplateName: "branding.pdf", TemplatePdf: background) } };
         var descriptor = ReportCatalog.GetAvailableReports(source)[0];
-        var path = folder.PathFor(descriptor.FileName);
+        var path = folder.PathFor(descriptor.RelativePath);
         new QuestPdfRenderer().Render(new(descriptor, source, EntryReportBuilder.Build(source, descriptor), s_at), path);
         AssertPdf(path);
         // QPDF successfully addresses actual generated pages, rather than assuming a row count implies pagination.
@@ -235,7 +269,7 @@ public sealed class PdfFactoryTests
             new ReportGenerationService(renderer).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at));
         Assert.All(results, x => Assert.True(x.Success));
         Assert.Equal(1, renderer.MaximumConcurrent);
-        AssertPdf(folder.PathFor(descriptor.FileName));
+        AssertPdf(folder.PathFor(descriptor.RelativePath));
     }
     [Fact]
     public async Task ActiveCaptureCommitsAndReplaysWhilePdfRenderingIsBlockedAndFails()
@@ -356,19 +390,35 @@ public sealed class PdfFactoryTests
         var outcomes = await new ReportGenerationService(new QuestPdfRenderer()).GenerateAllAsync(source, r => workspace.SaveGeneratedPdfAsync(r), s_at);
         Assert.Equal(13, outcomes.Count);
         Assert.All(outcomes, x => Assert.True(x.Success, x.Error));
-        using (var startList = PdfDocument.Open(folder.PathFor(ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.StartList && x.RunNumber == 1).FileName)))
+        using (var startList = PdfDocument.Open(folder.PathFor(ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.StartList && x.RunNumber == 1).RelativePath)))
         {
             // The draw points are headed by the competition's discipline.
             var text = string.Join(" ", startList.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));
             Assert.Contains("SL pts", text, StringComparison.Ordinal);
             Assert.Contains("10.00", text, StringComparison.Ordinal);
         }
+        // Run 2 has no points; it shows how far each racer was behind the leader of Run 1 (Run 1 times are 51.00, 52.00, ... by position).
+        var secondList = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.StartList && x.RunNumber == 2);
+        var secondRows = EntryReportBuilder.Build(source, secondList).SelectMany(x => x.Entries).ToArray();
+        Assert.All(secondRows, x => Assert.Null(x.Points));
+        Assert.All(secondRows, x => Assert.NotNull(x.GapHundredths));
+        var firstTimes = firstTiming.Results.Where(x => x.Hundredths is not null).ToDictionary(x => x.Entry.Entrant.CompetitorId, x => x.Hundredths!.Value);
+        var leaderTime = firstTimes.Values.Min();
+        Assert.All(secondRows, x => Assert.Equal(firstTimes[x.Id] - leaderTime, x.GapHundredths));
+        Assert.Contains(secondRows, x => x.GapHundredths == 0);
+        using (var secondPdf = PdfDocument.Open(folder.PathFor(secondList.RelativePath)))
+        {
+            var text = string.Join(" ", secondPdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));
+            Assert.Contains("Gap", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("SL pts", text, StringComparison.Ordinal);
+            Assert.Contains("+1.00", text, StringComparison.Ordinal);
+        }
         Assert.Equal(revision, (await workspace.ReadAsync()).Revision);
         var unchanged = await workspace.ReadTimingAsync(first.Id);
         Assert.Equal(ResultSourceFingerprint.Create(firstReplay), ResultSourceFingerprint.Create(unchanged));
         source = await new PdfReportSourceBuilder(new AlgeDecoderFactory()).BuildAsync(workspace, competition.Id);
         Assert.All(ReportCatalog.GetAvailableReports(source), d => Assert.Equal(PdfReportStatus.Generated, ReportStatusService.GetStatus(source, d)));
-        foreach (var descriptor in ReportCatalog.GetAvailableReports(source)) { AssertPdf(folder.PathFor(descriptor.FileName)); CopyQa(folder.PathFor(descriptor.FileName), descriptor.FileName); }
+        foreach (var descriptor in ReportCatalog.GetAvailableReports(source)) { AssertPdf(folder.PathFor(descriptor.RelativePath)); CopyQa(folder.PathFor(descriptor.RelativePath), descriptor.FileName); }
         var qa = Environment.GetEnvironmentVariable("OST_PDF_QA_DIRECTORY");
         if (!string.IsNullOrWhiteSpace(qa))
         {
@@ -380,7 +430,7 @@ public sealed class PdfFactoryTests
         Assert.Equal(approval.Id, Assert.Single(source.Finals).Approval!.Id);
         Assert.Equal(approval.AppliedPenalty, source.Finals[0].Approval!.AppliedPenalty);
         var official = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.OfficialResults);
-        var officialBytes = await File.ReadAllBytesAsync(folder.PathFor(official.FileName));
+        var officialBytes = await File.ReadAllBytesAsync(folder.PathFor(official.RelativePath));
         using (var officialPdf = UglyToad.PdfPig.PdfDocument.Open(officialBytes))
         {
             // Jury functions print with their display names, not the FIS XML function codes.
@@ -402,7 +452,7 @@ public sealed class PdfFactoryTests
         Assert.Equal(PdfReportStatus.Outdated, ReportStatusService.GetStatus(unapproved, unavailableOfficial));
         Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(unapproved, unavailableOfficial,
             r => workspace.SaveGeneratedPdfAsync(r), s_at)).Success);
-        using (var draftPdf = UglyToad.PdfPig.PdfDocument.Open(await File.ReadAllBytesAsync(folder.PathFor(official.FileName))))
+        using (var draftPdf = UglyToad.PdfPig.PdfDocument.Open(await File.ReadAllBytesAsync(folder.PathFor(official.RelativePath))))
         {
             var draftWords = string.Join(" ", draftPdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));
             Assert.Contains("DRAFT", draftWords, StringComparison.Ordinal);
@@ -578,7 +628,7 @@ public sealed class PdfFactoryTests
         var source = MemorySource(folder.PathFor("race.ost"), 6);
         source = source with { Settings = new(new(TemplateName: "synthetic-background.pdf", TemplatePdf: BackgroundPdf()), []) };
         var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.CompetitionEntries);
-        var path = folder.PathFor(descriptor.FileName);
+        var path = folder.PathFor(descriptor.RelativePath);
         new QuestPdfRenderer().Render(new(descriptor, source, EntryReportBuilder.Build(source, descriptor), s_at), path);
         using var pdf = PdfDocument.Open(path);
         var text = string.Concat(pdf.GetPages().SelectMany(x => x.Text).Where(x => !char.IsWhiteSpace(x)));
@@ -607,7 +657,7 @@ public sealed class PdfFactoryTests
         };
         var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.EventSeriesEntries);
         Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
-        var path = folder.PathFor(descriptor.FileName);
+        var path = folder.PathFor(descriptor.RelativePath);
         CopyQa(path, "series-entries.pdf");
         using var pdf = PdfDocument.Open(path);
         var words = pdf.GetPages().SelectMany(x => x.GetWords()).ToArray();
@@ -632,7 +682,7 @@ public sealed class PdfFactoryTests
         source = source with { Desk = source.Desk with { Participations = [.. source.Desk.Participations.Select((p, i) => i == 0 ? p with { ImportedBib = 17 } : p)] } };
         var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.CompetitionEntries);
         Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
-        using var pdf = PdfDocument.Open(folder.PathFor(descriptor.FileName));
+        using var pdf = PdfDocument.Open(folder.PathFor(descriptor.RelativePath));
         var words = pdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text).ToArray();
         Assert.Contains("Bib", words); Assert.Contains("17", words); Assert.Contains("Category", words); Assert.Contains("Young", words);
         // Competition entries list a single race, so no per-competition participation columns are added.
@@ -679,7 +729,7 @@ public sealed class PdfFactoryTests
         };
         var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.TimingReport);
         Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
-        var path = folder.PathFor(descriptor.FileName);
+        var path = folder.PathFor(descriptor.RelativePath);
         CopyQa(path, "timing-report.pdf");
         using var pdf = PdfDocument.Open(path);
         var page = Assert.Single(pdf.GetPages());
@@ -763,7 +813,7 @@ public sealed class PdfFactoryTests
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "OpenSkiTime-PdfTests-" + Guid.NewGuid().ToString("N"));
         public TestFolder() { Directory.CreateDirectory(_root); }
-        public string PathFor(string name) => Path.Combine(_root, name);
+        public string PathFor(string name) { var path = Path.Combine(_root, name); Directory.CreateDirectory(Path.GetDirectoryName(path)!); return path; }
         public void Dispose() { Directory.Delete(_root, recursive: true); }
     }
 }

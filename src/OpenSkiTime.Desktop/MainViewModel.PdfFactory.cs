@@ -13,6 +13,8 @@ public sealed class PdfFactoryRow
     public PdfReportDescriptor Descriptor { get; }
     public string Name => Descriptor.DisplayName;
     public string FileName => Descriptor.FileName;
+    /// <summary>The file with its competition subfolder, as listed in the view.</summary>
+    public string RelativePath => Descriptor.RelativePath;
     public string OutputPath { get; }
     public string Status { get; }
     public string? Reason => Descriptor.UnavailableReason;
@@ -94,7 +96,7 @@ public sealed partial class MainViewModel
             foreach (var row in rows)
             {
                 var descriptor = row.Descriptor;
-                var outputPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source.FilePath)!, descriptor.FileName));
+                var outputPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source.FilePath)!, descriptor.RelativePath));
                 PdfReports.Add(new(descriptor, outputPath, row.Status, () => GeneratePdfAsync(descriptor.Id), () => OpenPdf(outputPath)));
             }
             PdfSummary = $"{rows.Length} reports | PDFs are stored beside {Path.GetFileName(source.FilePath)}.";

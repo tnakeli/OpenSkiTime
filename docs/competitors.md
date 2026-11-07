@@ -2,6 +2,8 @@
 
 The Competitors tab identifies the view; the content starts directly with registration controls, without a repeated section title. The recovered vertical space is used by the competitor grid.
 
+Every nation column of the desktop views (competitors, draw, start lists, timing, results, race information, forerunners) shows the country's flag before the three-letter FIS code, as the live timing page does. The flag pictures are embedded (`NationFlags`, Twemoji, see THIRD-PARTY-NOTICES.md), so no download is needed; a code without a flag shows the code alone. The nation entry fields stay plain text.
+
 Select several competitors with Ctrl/Shift or use **Select all** (Ctrl+A). Clicking a race participation checkbox on a selected row applies its new value to all selected competitors and keeps those rows selected for further race changes. The blank new-competitor row is excluded from Select all. Participation edits remain staged until **Save**, and can be reviewed and undone individually in **Undo**.
 
 Drag the boundary between column headers to widen or narrow columns. Identity and points columns have compact initial widths; race columns display the full short name horizontally on two lines, with the race/gender above the date for standard calendar names. Hover over a race header to see its full short name and event name. Code and surname stay visible when scrolling horizontally through many races. Wider series use horizontal scrolling instead of squeezing every column into the window.
