@@ -322,6 +322,29 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
+    public async Task ARememberedTestSubmissionIsNeverReportedAsPublishedByTheFirstStatusAnswer()
+    {
+        // The test upload completes at once; later the status answer for the same id drops the test flag and reports success.
+        var statusAsReal = false;
+        using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName ?? "FIN9991.xml", "processed", "File successfully saved!", test: !statusAsReal, codex: "9991")));
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler);
+        try
+        {
+            vm.FisUploadTestMode = true;
+            await vm.SendToFisCommand.ExecuteAsync(null);
+            var sent = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.False(sent.IsError); Assert.True(sent.IsTest);
+
+            statusAsReal = true;
+            await vm.CheckResultsSubmissionCommand.ExecuteAsync(null);
+            var checkedAgain = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.True(checkedAgain.IsError); Assert.Equal("FIS gave no usable answer", checkedAgain.Title);
+            Assert.True(checkedAgain.IsTest);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
     public async Task APastedLookupOnARaceWithoutXmlNeverStaysOnAnotherRace()
     {
         var pasted = new Guid("00000000-0000-0000-0000-0000000000e5");

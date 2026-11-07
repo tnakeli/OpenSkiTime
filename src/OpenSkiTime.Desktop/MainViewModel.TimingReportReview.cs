@@ -241,7 +241,8 @@ public sealed partial class MainViewModel
         }
         try
         {
-            var associated = approval is null ? null : (await workspace.ReadTimingReportSubmissionAsync(approval.Id))?.Uuid;
+            var persisted = approval is null ? null : await workspace.ReadTimingReportSubmissionAsync(approval.Id);
+            var associated = persisted?.Uuid;
             if (uuid is null) { uuid = associated; }
             if (uuid is null) { throw new DomainValidationException("No submission ID is saved for this XML revision. Send it first."); }
             // Only the submission this revision sent is saved with it (also one whose answer could not be saved before);
@@ -251,8 +252,10 @@ public sealed partial class MainViewModel
             _submissionClient ??= new(_submissionHttp);
             var token = _fisStore.ReadMemberToken() ?? "";
             var response = await _submissionClient.PollAsync(uuid.Value, token, cancellation.Token);
+            // A submission this XML revision sent keeps its mode: the first answer may not turn a test into published results.
+            var remembered = adHoc ? null : RememberedMode(sentHere ? _reportSubmissionDisplays.GetValueOrDefault(approval!.Id).Outcome?.RawResponse : persisted?.Response);
             await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", approval?.XmlFileName ?? "",
-                Show, adHoc ? null : r => PersistReportSubmissionAsync(approval!, r, file), cancellation.Token);
+                Show, adHoc ? null : r => PersistReportSubmissionAsync(approval!, r, file), remembered, cancellation.Token);
         }
         catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or SeriesFileException or SeriesConflictException
             or IOException or UnauthorizedAccessException or HttpRequestException or OperationCanceledException or PlatformNotSupportedException or ArgumentException)

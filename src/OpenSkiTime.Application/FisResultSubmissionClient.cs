@@ -192,7 +192,7 @@ public sealed class FisResultSubmissionClient(HttpClient client, TimeProvider? t
             {
                 var root = document.RootElement;
                 if (root.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.String) { apiMessage = message.GetString(); }
-                if (root.TryGetProperty("uuid", out var uuid) && Guid.TryParse(uuid.GetString(), out var parsed) && parsed != Guid.Empty) { existing = parsed; }
+                if (root.TryGetProperty("uuid", out var uuid) && uuid.ValueKind == JsonValueKind.String && Guid.TryParse(uuid.GetString(), out var parsed) && parsed != Guid.Empty) { existing = parsed; }
                 if (root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object)
                 {
                     foreach (var field in errors.EnumerateObject())

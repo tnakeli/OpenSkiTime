@@ -88,6 +88,19 @@ public sealed class FisProductionSubmissionTests
     }
 
     [Theory]
+    [InlineData("123")]
+    [InlineData("null")]
+    [InlineData("{\"a\":1}")]
+    [InlineData("[\"x\"]")]
+    public async Task AnUnexpectedUuidTypeInAnErrorAnswerIsNotACrash(string uuid)
+    {
+        using var handler = new RecordingHandler(_ => Json($"{{\"message\":\"Duplicate upload detected.\",\"uuid\":{uuid}}}", HttpStatusCode.TooManyRequests));
+        using var http = new HttpClient(handler); using var client = new FisResultSubmissionClient(http);
+        var failure = await Assert.ThrowsAsync<FisSubmissionException>(() => client.UploadAsync("FIN0592.xml", [1], Token, testMode: false));
+        Assert.Null(failure.ExistingUuid);
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.Unauthorized, "{\"message\":\"Unauthenticated.\"}", FisSubmissionFailure.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden, "{\"message\":\"Invalid scope(s) provided.\"}", FisSubmissionFailure.Forbidden)]
     [InlineData(HttpStatusCode.Unauthorized, "{\"message\":\"Invalid scope(s) provided.\"}", FisSubmissionFailure.Forbidden)]

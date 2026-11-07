@@ -74,6 +74,15 @@ internal sealed partial class SqliteSeriesFileSession : IResultStore
             { throw new DomainValidationException("A newer start-list revision exists. Review its results first."); }
             if (request.SourceFingerprint != ResultSourceFingerprint.Create(first, second))
             { throw new DomainValidationException("Timing or start-list data changed since review. Reload results before approving."); }
+            // The latest revision is exactly this XML for the same timing, penalty and race information: it is the revision to
+            // use, and it is returned after the same checks as a new one, so a reused revision is never older than the data.
+            var informationJson = request.Information is null ? null : JsonSerializer.Serialize(request.Information);
+            var latest = await db.ApprovedResults.AsNoTracking().Where(x => x.CompetitionId == request.CompetitionId)
+                .OrderByDescending(x => x.Revision).FirstOrDefaultAsync(ct);
+            if (latest is not null && latest.SourceFingerprint == request.SourceFingerprint && latest.Xml.AsSpan().SequenceEqual(request.Xml)
+                && latest.CalculatedPenalty == request.CalculatedPenalty && latest.AppliedPenalty == request.AppliedPenalty
+                && latest.InformationJson is not null && latest.InformationJson == informationJson)
+            { return ToApproval(latest); }
             if (request.Information is { } information)
             {
                 var informationRevision = (await db.Set<RaceInformationRow>().Where(x => x.CompetitionId == request.CompetitionId)

@@ -120,8 +120,8 @@ public sealed partial class MainViewModel
     }
 
     // Creates the XML of the current results and stores it as an immutable revision in the event file. When the latest
-    // revision is already exactly this XML for the same timing and race information, that revision is reused, so sending
-    // twice never adds revisions.
+    // revision is already exactly this XML for the same timing and race information, the event file returns that revision,
+    // so sending twice never adds revisions.
     private async Task<ApprovedResult> EnsureResultsXmlAsync()
     {
         if (_resultRace is null || _resultFingerprint is null || ResultsCompetition is null || _current is null)
@@ -145,11 +145,6 @@ public sealed partial class MainViewModel
         var xmlRace = _resultRace with { FirstList = _resultRace.FirstList with
         { Plan = _resultRace.FirstList.Plan with { Competition = ResultsCompetition.Values } } };
         var xml = FisResultXml.Create(xmlRace, _current.Values, penalty, metadata);
-        var latest = ResultApprovals.FirstOrDefault();
-        if (latest is not null && latest.SourceFingerprint == _resultFingerprint && latest.Xml.AsSpan().SequenceEqual(xml)
-            && latest.AppliedPenalty == penalty.Applied && latest.CalculatedPenalty == penalty.Calculated
-            && latest.Information is not null && System.Text.Json.JsonSerializer.Serialize(latest.Information) == System.Text.Json.JsonSerializer.Serialize(information))
-        { return latest; }
         var competitionId = ResultsCompetition.Id;
         var path = workspace.FilePath;
         var expectedRevision = _current.Revision;
@@ -160,7 +155,11 @@ public sealed partial class MainViewModel
         if (workspace.FilePath == path && _current is not null)
         { _current = _current with { Revision = Math.Max(_current.Revision, expectedRevision + 1) }; }
         if (workspace.FilePath == path && ResultsCompetition?.Id == competitionId)
-        { ResultApprovals.Insert(0, saved); SelectedResultApproval = saved; }
+        {
+            // The event file decides in one transaction whether this XML is a new revision or the latest one again.
+            if (ResultApprovals.All(x => x.Id != saved.Id)) { ResultApprovals.Insert(0, saved); }
+            SelectedResultApproval = ResultApprovals.First(x => x.Id == saved.Id);
+        }
         return saved;
     }
 
@@ -262,7 +261,9 @@ public sealed partial class MainViewModel
             _submissionClient ??= new(_submissionHttp);
             var token = _fisStore.ReadMemberToken() ?? "";
             var response = await _submissionClient.PollAsync(uuid, token, cancellation.Token);
-            await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", "", Show, null, cancellation.Token);
+            // A submission this revision remembers keeps its mode: the first answer may not turn a test into published results.
+            var remembered = known ? RememberedMode(ResultSubmissionOutcome?.RawResponse) : null;
+            await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", "", Show, null, remembered, cancellation.Token);
         }
         catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or IOException or HttpRequestException
             or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
@@ -282,13 +283,17 @@ public sealed partial class MainViewModel
         _submissionClient ??= new(_submissionHttp);
         var token = _fisStore.ReadMemberToken() ?? "";
         var response = await _submissionClient.UploadAsync(payload.FileName, payload.Xml, token, test, ct);
-        await FollowFisSubmissionAsync(_submissionClient, token, response, mode, payload.FileName, publish, persist, ct);
+        await FollowFisSubmissionAsync(_submissionClient, token, response, mode, payload.FileName, publish, persist, test, ct);
     }
 
+    // The mode of a submission as an earlier FIS answer stored it; null when nothing remembered came from FIS.
+    private static bool? RememberedMode(string? storedResponse) => FisResultSubmissionClient.ReadResponse(storedResponse)?.Submission.IsTest;
+
     private static async Task FollowFisSubmissionAsync(FisResultSubmissionClient client, string token, FisSubmissionResponse response, string mode,
-        string sentFileName, Action<FisUploadOutcome> publish, Func<FisSubmissionResponse, Task>? persist, CancellationToken ct)
+        string sentFileName, Action<FisUploadOutcome> publish, Func<FisSubmissionResponse, Task>? persist, bool? expectedTest, CancellationToken ct)
     {
-        var test = response.Submission.IsTest;
+        // The mode is fixed before the first answer is shown: what was asked for or remembered, else what the first answer says.
+        var test = expectedTest ?? response.Submission.IsTest;
         for (var poll = 0; ; poll++)
         {
             // A status answer that changes between test and real is never shown: it could report a test as published results.
