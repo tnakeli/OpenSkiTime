@@ -46,7 +46,9 @@ public partial class DesktopWorkflowTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(vm.IsPdfFactorySection);
             Assert.False(vm.IsFormSection);
-            Assert.Equal(15, vm.PdfReports.Count);
+            // Club race: entries (6), start list and referee report per run (6), Results and Timing Report; the FIS penalty and official results do not apply.
+            Assert.Equal(14, vm.PdfReports.Count);
+            Assert.Contains(vm.PdfReports, x => x.Descriptor.Type == PdfReportType.ClassResults);
             var grid = window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "PdfReportGrid");
             Assert.Equal(4, grid.Columns.Count);
             Assert.True(grid.Bounds.Width > 800);
@@ -104,7 +106,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal("Outdated", vm.PdfReports[0].Status);
             await vm.GenerateAllPdfsCommand.ExecuteAsync(null);
             Assert.Contains("9 report(s) generated", vm.PdfSummary, StringComparison.Ordinal);
-            Assert.Contains("6 unavailable skipped", vm.PdfSummary, StringComparison.Ordinal);
+            Assert.Contains("5 unavailable skipped", vm.PdfSummary, StringComparison.Ordinal);
             Assert.False(vm.IsPdfBusy);
             var qa = Environment.GetEnvironmentVariable("OST_PDF_QA_DIRECTORY");
             if (!string.IsNullOrWhiteSpace(qa))

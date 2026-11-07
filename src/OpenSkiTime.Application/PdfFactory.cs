@@ -11,7 +11,7 @@ public enum PdfReportType
 {
     EventSeriesEntries, EventSeriesEntriesByNation, EventSeriesEntriesByCategory,
     CompetitionEntries, CompetitionEntriesByNation, CompetitionEntriesByCategory,
-    StartList, RefereeReport, PenaltyCalculation, OfficialResults, TimingReport
+    StartList, RefereeReport, PenaltyCalculation, OfficialResults, TimingReport, ClassResults
 }
 public enum PdfReportStatus { NotGenerated, Generated, Outdated }
 public enum PrintPageSize { A4 }
@@ -89,6 +89,7 @@ public static class ReportFileNameBuilder
             PdfReportType.CompetitionEntriesByNation => "Entries_ByNation",
             PdfReportType.CompetitionEntriesByCategory => "Entries_ByCategory",
             PdfReportType.StartList or PdfReportType.RefereeReport => type + "_Run" + (run ?? throw new ArgumentException("Run is required.", nameof(run))).ToString(CultureInfo.InvariantCulture),
+            PdfReportType.ClassResults => "Results",
             _ => type.ToString()
         };
         return CleanName(shortName) + "_" + date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "_" + suffix + ".pdf";
@@ -152,6 +153,14 @@ public static class ReportCatalog
             Add(PdfReportType.StartList, $"Start List - Run {run}", run,
                 source.Runs.Any(x => x.List.Plan.RunNumber == run && x.List.Plan.Entries.Count > 0) ? null : "Save a start list for this run first.");
             Add(PdfReportType.RefereeReport, $"Referee Report - Run {run}", run);
+        }
+        if (race.Values.RaceType != RaceType.Fis)
+        {
+            // A Club race has results per class; the FIS penalty and official results do not apply to it.
+            Add(PdfReportType.ClassResults, "Results", reason: source.Runs.Any(x => x.Source.Sessions.Count > 0) ? null : "Capture timing first.");
+            Add(PdfReportType.TimingReport, "Timing Report", reason: source.TimingReport is not null || source.Runs.Any(x => x.Source.Sessions.Count > 0)
+                ? null : "Save timing report metadata or capture timing first.");
+            return result;
         }
         var finalCount = source.Runs.Count(x => x.List.Plan.RunNumber == 1);
         var completeFinals = finalCount > 0 && source.Finals.Count == finalCount;

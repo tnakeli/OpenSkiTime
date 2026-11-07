@@ -42,6 +42,7 @@ public sealed class QuestPdfRenderer : IReportPdfRenderer
                 {
                     case PdfReportType.PenaltyCalculation: PenaltyCalculationDocument.Compose(column, data); break;
                     case PdfReportType.OfficialResults: OfficialResultsDocument.Compose(column, data); break;
+                    case PdfReportType.ClassResults: ClassResultsDocument.Compose(column, data); break;
                     default: EntriesDocument.Compose(column, data); break;
                 }
             });
@@ -131,7 +132,7 @@ internal static class ReportComponents
             if (data.Descriptor.CompetitionId is not null && source.Competition is { } race)
             {
                 var gender = race.Values.Calendar?.Gender switch { "M" => "Men", "W" => "Women", "A" => "All", _ => "" };
-                column.Item().Text($"{race.Values.Name} | {race.Values.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} | {race.Values.Discipline} | {gender} | Codex {race.Values.FisCode ?? "-"}");
+                column.Item().Text($"{race.Values.Name} | {race.Values.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} | {race.Values.Discipline} | {gender}" + (race.Values.RaceType == RaceType.Fis ? $" | Codex {race.Values.FisCode ?? "-"}" : ""));
             }
             else { column.Item().Text(source.Series.Values.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " - " + source.Series.Values.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)); }
             column.Item().Text(source.Series.Values.Location + " | " + source.Series.Values.Nation + " | " + source.Series.Values.Organizer).FontSize(8);
