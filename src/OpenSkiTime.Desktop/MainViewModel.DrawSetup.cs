@@ -114,7 +114,8 @@ public sealed partial class MainViewModel
     public bool ShowFisDrawPoints => !IsFlexDraw && ShowDrawPoints;
     public bool ShowFlexDrawPoints => IsFlexDraw && ShowDrawPoints;
     public bool ShowDrawClass => IsFlexDraw;
-    public bool CanChooseDrawField => IsFlexDraw && IsFirstDrawRun && DrawRevision is null;
+    // Always available while not busy: after a Men list is saved the operator can still choose Women for the other list.
+    public bool CanChooseDrawField => IsFlexDraw && IsFirstDrawRun && !IsDrawBusy;
     public string DrawSettingsHeader => IsFlexDraw ? "Draw settings" : "Draw settings · FIS standard";
     public bool ShowFisReversePicker => IsLaterDrawRun && IsFisDrawLayout;
     public string DrawInputButtonText => $"Run {DrawRun - 1} input";
@@ -324,7 +325,7 @@ public sealed partial class MainViewModel
             var listCode = entrants.Where(x => x.Points is not null).Select(x => desk.FisPointsOf(x.CompetitorId)!.ListCode)
                 .GroupBy(x => x, StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Count()).FirstOrDefault()?.Key;
             var list = listCode is null ? null : desk.PointsList(listCode);
-            if (setup.UsesPoints && list is null)
+            if (setup.UsesPoints && list is null && entrants.Any(x => x.Points is not null))
             { throw new DomainValidationException("No points are saved for the starters. Enter Points in Competitors, or use Update from FIS list, then Save."); }
             plan = FlexStartOrder.FirstRun(competition.Id, competition.Values, field, entrants, list?.ToSource() ?? PointsListSource.None,
                 new(15, 30, DrawFirstBib, SkippedBibsOrNull()), setup);

@@ -75,6 +75,8 @@ public sealed class FlexDrawWorkflowTests
             Assert.All(vm.DrawEntries.Take(4), x => Assert.Equal("N12", x.Entrant.Class));
             Assert.Equal(Enumerable.Range(1, 4).Concat(Enumerable.Range(11, 8)), vm.DrawEntries.Select(x => x.Bib));
             Assert.Null(vm.DrawRevision!.Plan.Gender);
+            // The field stays selectable after a list is saved, so the other gender can be drawn next.
+            Assert.True(vm.CanChooseDrawField);
             // Later runs reverse the start order without any results; run 3 repeats the order of run 2.
             var runOne = vm.DrawEntries.Select(x => x.Bib).ToArray();
             var listId = vm.DrawRevision.Id;
@@ -85,6 +87,10 @@ public sealed class FlexDrawWorkflowTests
             await vm.PrepareDrawCommand.ExecuteAsync(null);
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(runOne.Take(4).Reverse().Concat(runOne.Skip(4).Reverse()), vm.DrawEntries.Select(x => x.Bib));
+            // Run 2 was ordered without results; timing opens for it although Run 1 has no capture.
+            await viewWorkspace.MarkRunStartedAsync(vm.DrawRevision!.Id, (await viewWorkspace.ReadAsync()).Revision, "Starter", DateTimeOffset.UtcNow);
+            await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.Competitions.Single(), 2));
+            Assert.False(vm.IsError, vm.StatusMessage);
             var window = new Window { Width = 1500, Height = 900, Content = new DrawView { DataContext = vm } };
             window.Show();
             Dispatcher.UIThread.RunJobs();

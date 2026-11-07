@@ -45,15 +45,19 @@ globalThis.liveProvisionalRanks = (snapshot, runNumber) => {
   // The standing after the previous run, as livePreviousRank gives it, for every bib at once.
   const previous = new Map(before.results.filter(x => x.status === 'Finished')
     .map(x => [x.bib, (runNumber === 2 ? x.rank : x.totalRank) ?? null]).filter(([, rank]) => rank != null));
+  // Ranks are within the class when the race has classes; racers without one form a single group.
+  const category = new Map((snapshot.competitors || []).map(c => [c.bib, c.category || '']));
+  const classOf = bib => category.get(bib) ?? '';
   const finished = run.results.filter(r => r.status === 'Finished' && r.totalHundredths != null);
-  const totals = finished.map(r => r.totalHundredths).sort((a, b) => a - b);
-  const waiting = run.startOrder.filter(bib => previous.get(bib) != null && ['Ready', 'OnCourse', 'Review'].includes(result(bib).status))
-    .map(bib => previous.get(bib)).sort((a, b) => a - b);
+  const sortedBy = (items, key, value) => { const groups = new Map(); for (const item of items) { const k = key(item); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(value(item)); } for (const list of groups.values()) list.sort((a, b) => a - b); return groups; };
+  const totals = sortedBy(finished, r => classOf(r.bib), r => r.totalHundredths);
+  const waiting = sortedBy(run.startOrder.filter(bib => previous.get(bib) != null && ['Ready', 'OnCourse', 'Review'].includes(result(bib).status)),
+    bib => classOf(bib), bib => previous.get(bib));
   // How many sorted values are below a value.
   const below = (sorted, value) => { let lo = 0, hi = sorted.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < value) lo = mid + 1; else hi = mid; } return lo; };
   for (const r of finished) {
-    const pending = previous.get(r.bib) == null ? 0 : below(waiting, previous.get(r.bib));
-    ranks.set(r.bib, {rank: 1 + below(totals, r.totalHundredths) + pending, pending, previous: previous.get(r.bib) ?? null});
+    const pending = previous.get(r.bib) == null ? 0 : below(waiting.get(classOf(r.bib)) || [], previous.get(r.bib));
+    ranks.set(r.bib, {rank: 1 + below(totals.get(classOf(r.bib)) || [], r.totalHundredths) + pending, pending, previous: previous.get(r.bib) ?? null});
   }
   return ranks;
 };

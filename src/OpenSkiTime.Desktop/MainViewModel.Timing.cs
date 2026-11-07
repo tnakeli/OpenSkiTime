@@ -311,7 +311,8 @@ public sealed partial class MainViewModel
             {
                 var previous = await workspace.ReadTimingAsync(previousId);
                 _previousTiming = TimingReplay.Restore(previous, new AlgeDecoderFactory());
-                if (previous.Sessions.Count == 0)
+                // A start list made without results (later runs ordered by start order) has no external results to show.
+                if (previous.Sessions.Count == 0 && list.Plan.SourceResults.Count > 0)
                 {
                     // M4/external Run 1 inputs remain the authoritative snapshot behind this start list.
                     _previousTiming = _previousTiming with { Results = _previousTiming.Results.Select(row =>

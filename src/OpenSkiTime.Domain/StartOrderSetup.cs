@@ -71,7 +71,7 @@ public static class FlexStartOrder
         var codes = entrants.Select(x => x.Athlete.FederationCode?.Trim()).Where(x => !string.IsNullOrEmpty(x)).ToArray();
         if (codes.Distinct(StringComparer.OrdinalIgnoreCase).Count() != codes.Length)
         { throw new DomainValidationException("Codes must be unique in the draw."); }
-        if (pointsList.IsNone && setup.UsesPoints) { throw new DomainValidationException("A points list is required when a block is ordered by points."); }
+        if (pointsList.IsNone && setup.UsesPoints && entrants.Any(x => x.Points is not null)) { throw new DomainValidationException("A points list is required when a block is ordered by points."); }
 
         var ordered = new List<(DrawEntrant Entrant, string Group)>();
         foreach (var block in setup.Blocks)

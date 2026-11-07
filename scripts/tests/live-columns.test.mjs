@@ -103,3 +103,14 @@ test('places gained come from the standing after the previous run: Run 1 rank, l
   assert.equal(context.livePositionChange(null, 2), null);
   assert.equal(context.livePositionChange(3, null), null);
 });
+
+test('the provisional standing and +/− are within the class when the race has classes', () => {
+  // Two classes; each leader keeps class rank 1 after Run 2, so neither gains nor loses a place.
+  const competitors = [{ bib: 1, category: 'N10' }, { bib: 2, category: 'N10' }, { bib: 3, category: 'M10' }, { bib: 4, category: 'M10' }];
+  const run1 = { number: 1, results: [{ bib: 1, status: 'Finished', rank: 1 }, { bib: 2, status: 'Finished', rank: 2 }, { bib: 3, status: 'Finished', rank: 1 }, { bib: 4, status: 'Finished', rank: 2 }] };
+  const run2 = { number: 2, startOrder: [4, 3, 2, 1], results: [{ bib: 3, status: 'Finished', totalHundredths: 11000 }, { bib: 1, status: 'Finished', totalHundredths: 12000 }] };
+  const ranks = context.liveProvisionalRanks({ competitors, runs: [run1, run2] }, 2);
+  // Bib 3 (M10) is first among the finished M10, with bib 4 still to come and behind it; bib 1 likewise in N10 with bib 2 to come.
+  assert.deepEqual(plain({ 3: ranks.get(3), 1: ranks.get(1) }), { 3: { rank: 1, pending: 0, previous: 1 }, 1: { rank: 1, pending: 0, previous: 1 } });
+  assert.equal(context.livePositionChange(ranks.get(1).previous, ranks.get(1).rank), 0);
+});

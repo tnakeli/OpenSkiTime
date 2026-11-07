@@ -289,7 +289,7 @@
                   </StackPanel>
                   <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field">
                     <TextBlock Text="RUNS" Classes="fieldLabel" />
-                    <NumericUpDown Value="{Binding CompetitionRunCount}" Minimum="1" Maximum="9" FormatString="0" />
+                    <NumericUpDown Value="{Binding CompetitionRunCount}" Minimum="1" Maximum="99" FormatString="0" />
                   </StackPanel>
                   <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
                     <TextBlock Text="INTERMEDIATES" Classes="fieldLabel" />

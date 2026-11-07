@@ -62,7 +62,7 @@ public sealed record PdfReportDescriptor(string Id, PdfReportType Type, string D
     public string RelativePath => string.IsNullOrEmpty(Folder) ? FileName : Folder + "/" + FileName;
 }
 public sealed record EntryReportRow(Guid Id, CompetitorValues Athlete, string Category, int? Bib = null,
-    int? Position = null, decimal? Points = null, CompetitorFisPoints? FisPoints = null, long? GapHundredths = null);
+    int? Position = null, decimal? Points = null, CompetitorFisPoints? FisPoints = null, long? GapHundredths = null, string Class = "");
 public sealed record ReportGroup(string Label, IReadOnlyList<EntryReportRow> Entries);
 public sealed record RunReportData(StartListRevision List, TimingSnapshot Timing, TimingReplayData Source);
 public sealed record FinalReportData(FisRaceResult Race, FisPenaltyResult? Penalty, ApprovedResult? Approval, string? PenaltyUnavailableReason)
@@ -184,7 +184,7 @@ public static class EntryReportBuilder
         var entries = descriptor.Type == PdfReportType.StartList
             ? source.Runs.Where(x => x.List.Plan.RunNumber == descriptor.RunNumber).OrderBy(x => x.List.Plan.Gender)
                 .SelectMany(x => x.List.Plan.Entries.OrderBy(e => e.Position).Select(e => new EntryReportRow(e.Entrant.CompetitorId,
-                    e.Entrant.Athlete, x.List.Plan.Setup?.BlockOf(e.Entrant.Class)?.Name ?? (e.Entrant.Class.Length > 0 ? e.Entrant.Class : CategoryResolver.Resolve(e.Entrant.Athlete, source.Desk.Categories)), e.Bib, e.Position, e.Entrant.Points))).ToArray()
+                    e.Entrant.Athlete, x.List.Plan.Setup?.BlockOf(e.Entrant.Class)?.Name ?? (e.Entrant.Class.Length > 0 ? e.Entrant.Class : CategoryResolver.Resolve(e.Entrant.Athlete, source.Desk.Categories)), e.Bib, e.Position, e.Entrant.Points, Class: e.Entrant.Class))).ToArray()
             : source.Desk.Competitors.Where(x => descriptor.CompetitionId is null || source.Desk.Participations.Any(p => p.CompetitorId == x.Id
                 && p.CompetitionId == descriptor.CompetitionId && p.Participates))
                 .OrderBy(x => x.Values.Surname, StringComparer.Ordinal).ThenBy(x => x.Values.FirstName, StringComparer.Ordinal).ThenBy(x => x.Id)
@@ -198,8 +198,12 @@ public static class EntryReportBuilder
             {
                 var finished = first.Timing.Results.Where(x => !x.IsForerunner && x.Status == TimingStatus.Finished && x.Hundredths is > 0).ToArray();
                 if (finished.Length == 0) { continue; }
-                var leader = finished.Min(x => x.Hundredths!.Value);
-                foreach (var result in finished) { gaps[result.Entry.Entrant.CompetitorId] = result.Hundredths!.Value - leader; }
+                // The gap is to the leader of the class (the whole field when there are no classes).
+                foreach (var inClass in finished.GroupBy(x => x.Entry.Entrant.Class))
+                {
+                    var leader = inClass.Min(x => x.Hundredths!.Value);
+                    foreach (var result in inClass) { gaps[result.Entry.Entrant.CompetitorId] = result.Hundredths!.Value - leader; }
+                }
             }
             entries = entries.Select(x => x with { Points = null, GapHundredths = gaps.TryGetValue(x.Id, out var gap) ? gap : null }).ToArray();
         }
@@ -221,8 +225,18 @@ public static class EntryReportBuilder
             _ => null
         };
         if (group is null) { return [new("", entries)]; }
-        var groups = entries.GroupBy(group);
-        return (flexibleList ? groups : groups.OrderBy(x => x.Key, StringComparer.Ordinal)).Select(x => new ReportGroup(x.Key, x.ToArray())).ToArray();
+        if (flexibleList)
+        {
+            // Consecutive starters of a block form one section, so a competitor moved to another place keeps the start order.
+            var sections = new List<ReportGroup>();
+            foreach (var row in entries)
+            {
+                if (sections.Count > 0 && sections[^1].Label == group(row)) { sections[^1] = sections[^1] with { Entries = [.. sections[^1].Entries, row] }; }
+                else { sections.Add(new(group(row), [row])); }
+            }
+            return sections;
+        }
+        return entries.GroupBy(group).OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => new ReportGroup(x.Key, x.ToArray())).ToArray();
     }
 
     // FIS points list order.

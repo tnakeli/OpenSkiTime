@@ -1,5 +1,6 @@
 using System.Text.Json;
 using OpenSkiTime.Application;
+using OpenSkiTime.Devices;
 using OpenSkiTime.Domain;
 using OpenSkiTime.Persistence;
 using Xunit;
@@ -88,6 +89,8 @@ public sealed class FlexStartOrderTests
             new([Block("N14", "s", new(FirstRunKind.ByPoints))]));
         Assert.All(plan.Entries, x => Assert.Equal("No points", x.Group));
         Assert.Equal(12, plan.Entries.Select(x => x.Entrant.CompetitorId).Distinct().Count());
+        // Without any points a points-ordered block draws everyone even when no points list is chosen.
+        Assert.Equal(12, Draw(entrants, new([Block("N14", "s", new(FirstRunKind.ByPoints))])).Entries.Count);
     }
 
     [Fact]
@@ -226,9 +229,48 @@ public sealed class FlexStartOrderTests
                 await workspace.ReadAsync(), desk);
             Assert.Equal([12.5m, null, null], preview.Rows.Select(x => x.Points));
             Assert.Equal([true, false, true], preview.Rows.Select(x => x.PointsSpecified));
+            // Committing the reviewed rows saves the same points the preview reported.
+            await workspace.ApplyImportAsync(new ImportCommit(preview.SeriesId, preview.Revision, preview.SourceHash,
+                preview.Rows.Select(x => new ImportCommitRow(x.CompetitorId, x.Values, x.Entries, x.Points, x.PointsSpecified)).ToArray()));
+            var after = await workspace.ReadCompetitorDeskAsync();
+            Assert.Equal(12.5m, after.FisPointsOf(after.Competitors.Single(x => x.Values.Surname == "ONE").Id)!.All);
+            Assert.Null(after.FisPointsOf(after.Competitors.Single(x => x.Values.Surname == "TWO").Id));
             Assert.Contains("Points", preview.Rows[0].ChangedFields);
             var current = await workspace.ReadAsync();
-            Assert.Throws<DomainValidationException>(() => TsvExchange.Preview("Surname\tPoints\nONE\t1.234", current, desk));
+            Assert.Throws<DomainValidationException>(() => TsvExchange.Preview("Surname\tPoints\nONE\t1.234", current, after));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public async Task StartListPdfKeepsTheStartOrderWhenAStarterIsMovedAcrossBlocksAndNamesEveryClass()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-flex-pdf", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var series = await workspace.CreateAsync(Path.Combine(root, "pdf.ost"), new("Synthetic", "Test", "Test", s_race.Date, s_race.Date, "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null, s_race, series.Revision);
+            var competitionId = series.Competitions[0].Id;
+            var entrants = new List<DrawEntrant>();
+            var revision = series.Revision;
+            foreach (var e in Class("N10", Gender.Female, 1, 2).Concat(Class("M10", Gender.Male, 11, 2)))
+            {
+                var saved = await workspace.SaveDeskRowAsync(null, e.Athlete, competitionId, true, null, revision);
+                revision = saved.Revision;
+                entrants.Add(e with { CompetitorId = saved.Value.Id });
+            }
+            var plan = FlexStartOrder.FirstRun(competitionId, s_race, null, entrants, PointsListSource.None, new(), new([Block("N10", "a"), Block("M10", "b")]));
+            // The last starter (M10) is moved to the first place; the list is N10, M10 sections reordered to M10, N10, N10, M10.
+            var moved = FisStartOrder.Apply(plan, new(StartListChangeKind.Move, "Penalty", plan.Entries[3].Entrant.CompetitorId, 1));
+            await workspace.SaveStartListAsync(new(moved, revision, "Operator", "Moved", s_at));
+            var source = await new PdfReportSourceBuilder(new AlgeDecoderFactory()).BuildAsync(workspace, competitionId);
+            var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.StartList && x.RunNumber == 1);
+            var groups = EntryReportBuilder.Build(source, descriptor);
+            Assert.Equal(["M10", "N10", "M10"], groups.Select(x => x.Label));
+            Assert.Equal(moved.Entries.Select(x => (int?)x.Bib).ToArray(), groups.SelectMany(x => x.Entries).Select(x => x.Bib).ToArray());
+            Assert.Equal(["M10", "N10", "N10", "M10"], groups.SelectMany(x => x.Entries).Select(x => x.Class));
         }
         finally { Directory.Delete(root, recursive: true); }
     }

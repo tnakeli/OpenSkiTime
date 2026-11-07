@@ -11,8 +11,9 @@ public sealed record ImportReviewItem(int SourceRow, Guid? CompetitorId, Competi
     IReadOnlyList<string> Warnings, bool IsNew, decimal? Points = null, bool PointsSpecified = false);
 public sealed record ImportPreview(Guid SeriesId, long Revision, string SourceHash,
     IReadOnlyList<ImportReviewItem> Rows, IReadOnlyList<string> Warnings);
+// PointsSpecified: set (or with a null Points, clear) the general Points value; otherwise the saved points stay as they are.
 public sealed record ImportCommitRow(Guid? CompetitorId, CompetitorValues Values,
-    IReadOnlyList<ImportEntryPatch> Entries);
+    IReadOnlyList<ImportEntryPatch> Entries, decimal? Points = null, bool PointsSpecified = false);
 public sealed record ImportCommit(Guid SeriesId, long ExpectedRevision, string SourceHash,
     IReadOnlyList<ImportCommitRow> Rows);
 public sealed record ImportCommitResult(long Revision, int Created, int Updated, bool AlreadyApplied = false);

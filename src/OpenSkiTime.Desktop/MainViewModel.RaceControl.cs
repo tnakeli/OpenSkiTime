@@ -23,7 +23,8 @@ public sealed partial class MainViewModel
     // its rank stay visible however the ranking is scrolled, sorted or filtered.
     public ObservableCollection<TimingGridRow> LatestFinisherRows { get; } = [];
     public bool HasLatestFinishers => LatestFinisherRows.Count > 0;
-    public bool HasTimingCategories => _desk?.Categories.Count > 0;
+    // Classes rank on their own in a Club race. A FIS race is ranked race-wide, whatever category rules the series has.
+    public bool HasTimingCategories => _desk?.Categories.Count > 0 && TimingCompetition is not { Values.RaceType: RaceType.Fis };
     public ObservableCollection<TimingGridRow> OnCourseRows { get; } = [];
     public ObservableCollection<TimingGridRow> FinishedTimingRows { get; } = [];
     public ObservableCollection<int> TimingCheckpoints { get; } = [];
