@@ -147,6 +147,46 @@ public sealed class FlexDrawWorkflowTests
         finally { Directory.Delete(folder, true); }
     }
 
+    [AvaloniaFact]
+    public async Task DrawAgainKeepsTheScrollPositionOfTheStartList()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-flex-scroll-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var path = Path.Combine(folder, "scroll.ost");
+            await using (var setup = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory()))
+            {
+                var series = await setup.CreateAsync(path, new("Synthetic", "Test", "Club", s_date, s_date, "FIN", "2026/27"));
+                series = await setup.SaveCompetitionAsync(null, new("Long race", "LR", s_date, Discipline.GiantSlalom, RaceType.Club, 1, 0), series.Revision);
+                var revision = series.Revision;
+                for (var i = 0; i < 60; i++)
+                {
+                    revision = (await setup.SaveDeskRowAsync(null, new("RACER" + i, "Young", 2014, null, null, "Club", Gender.Male), series.Competitions[0].Id, true, null, revision)).Revision;
+                }
+            }
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            using var vm = new MainViewModel(workspace, new Dialogs(path), fisStore: new FisLocalStore(folder), recentSeriesStore: new RecentSeriesStore(folder));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            var window = new Window { Width = 1400, Height = 700, Content = new DrawView { DataContext = vm } };
+            window.Show();
+            await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(vm.Competitions.Single(), 1));
+            vm.DrawBlocks[0].FirstRun = DrawBlockRow.FirstRunChoices[0];
+            await vm.PrepareDrawCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            var bar = () => window.GetVisualDescendants().OfType<DataGrid>().Single(x => x.Name == "DrawStartListGrid")
+                .GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ScrollBar>().First(x => x.Orientation == Avalonia.Layout.Orientation.Vertical);
+            Assert.True(bar().Maximum > 100, "The list should be scrollable.");
+            bar().Value = 400; window.UpdateLayout();
+            Assert.Equal(400, bar().Value);
+            await vm.PrepareDrawCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(400, bar().Value, 1);
+            window.Close();
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     private sealed class Dialogs(string path) : IFileDialogs
     {
         public Task<string?> ChooseNewAsync(string suggestedName) => Task.FromResult<string?>(path);
