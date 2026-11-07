@@ -46,7 +46,7 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
-    public async Task SubmissionResponseAndResumeIdStayWithTheSelectedApproval()
+    public async Task SubmissionOutcomeAndResumeIdStayWithTheSelectedXmlRevision()
     {
         await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
         var window = new Window();
@@ -54,21 +54,21 @@ public partial class DesktopWorkflowTests
         var first = new ApprovedResult(Guid.NewGuid(), Guid.NewGuid(), 1, Guid.NewGuid(), null,
             "synthetic", DateTimeOffset.UnixEpoch, "Synthetic TD", "FIN9991.xml", [1], 0m, 0m);
         var second = first with { Id = Guid.NewGuid(), CompetitionId = Guid.NewGuid(), XmlFileName = "FIN9992.xml" };
-        Assert.False(vm.CanSendResultsXml);
+        Assert.False(vm.CanSendToFis); Assert.True(vm.NoSubmissionOutcome);
         vm.SelectedResultApproval = first;
         vm.ResultSubmissionId = "00000000-0000-0000-0000-000000000123";
-        vm.ResultSubmissionStatus = "First upload pending"; vm.ResultSubmissionResponse = "First response";
-        Assert.True(vm.CanCheckResultsSubmission); Assert.True(vm.CanSendResultsXml);
-        vm.IsSubmissionBusy = true; Assert.False(vm.CanSendResultsXml); Assert.False(vm.CanCheckResultsSubmission);
+        vm.ResultSubmissionOutcome = new FisUploadOutcome(FisUploadTone.Progress, "First upload pending", "", "", true, "TEST", vm.ResultSubmissionId,
+            "FIN9991.xml", "10:00:00", "", [], [], "First response");
+        Assert.True(vm.CanCheckResultsSubmission); Assert.True(vm.HasSubmissionOutcome);
+        vm.IsSubmissionBusy = true; Assert.False(vm.CanCheckResultsSubmission);
         vm.IsSubmissionBusy = false;
         vm.SelectedResultApproval = second;
-        Assert.Equal("", vm.ResultSubmissionId); Assert.Equal("", vm.ResultSubmissionResponse);
+        Assert.Equal("", vm.ResultSubmissionId); Assert.Null(vm.ResultSubmissionOutcome);
         Assert.False(vm.CanCheckResultsSubmission);
         vm.SelectedResultApproval = first;
-        Assert.Equal("First upload pending", vm.ResultSubmissionStatus); Assert.Equal("First response", vm.ResultSubmissionResponse);
+        Assert.Equal("First upload pending", vm.ResultSubmissionOutcome!.Title); Assert.Equal("First response", vm.ResultSubmissionOutcome.RawResponse);
         Assert.True(vm.CanCheckResultsSubmission);
-        vm.SelectedResultApproval = null; Assert.False(vm.CanSendResultsXml);
-        Assert.Equal("", vm.ResultSubmissionResponse);
+        vm.SelectedResultApproval = null; Assert.Null(vm.ResultSubmissionOutcome);
     }
 
     [AvaloniaFact]

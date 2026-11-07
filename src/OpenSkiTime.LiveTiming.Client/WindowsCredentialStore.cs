@@ -11,8 +11,15 @@ public interface ICredentialStore
     void Remove();
 }
 
-public sealed class WindowsCredentialStore(string target) : ICredentialStore
+/// <summary>
+/// Windows Credential Manager entry of the current user. A credential is stored as UTF-16 (up to 1024 characters) by default.
+/// With <paramref name="compactBlob"/> it is stored as UTF-8 so that a long ASCII credential, such as a JWT access token,
+/// fits the 2560-byte limit of a credential blob (up to 2560 characters).
+/// </summary>
+public sealed class WindowsCredentialStore(string target, bool compactBlob = false) : ICredentialStore
 {
+    public const int MaximumCompactLength = 2560;
+
     public bool Exists()
     {
         RequireWindows();
@@ -38,7 +45,8 @@ public sealed class WindowsCredentialStore(string target) : ICredentialStore
             var credential = Marshal.PtrToStructure<NativeCredential>(pointer);
             var bytes = new byte[credential.CredentialBlobSize];
             Marshal.Copy(credential.CredentialBlob, bytes, 0, bytes.Length);
-            try { return Encoding.Unicode.GetString(bytes); }
+            // An entry written as UTF-16 before the compact format (it contains NUL bytes) still reads correctly.
+            try { return compactBlob && !bytes.Contains((byte)0) ? Encoding.UTF8.GetString(bytes) : Encoding.Unicode.GetString(bytes); }
             finally { Array.Clear(bytes); }
         }
         finally { CredFree(pointer); }
@@ -49,16 +57,21 @@ public sealed class WindowsCredentialStore(string target) : ICredentialStore
         ArgumentNullException.ThrowIfNull(key);
         RequireWindows();
         var clean = key;
-        if (clean.Length == 0 || clean.Length > 1024 || clean.Any(char.IsControl))
+        var limit = compactBlob ? MaximumCompactLength : 1024;
+        if (clean.Length == 0 || clean.Length > limit || clean.Any(char.IsControl) || compactBlob && !clean.All(char.IsAscii))
         {
-            throw new ArgumentException("Enter a credential without control characters (up to 1024 characters).", nameof(key));
+            throw new ArgumentException(compactBlob
+                ? $"Enter a credential of ASCII characters without control characters (up to {limit} characters)."
+                : $"Enter a credential without control characters (up to {limit} characters).", nameof(key));
         }
-        var blob = Marshal.StringToHGlobalUni(clean);
+        var bytes = compactBlob ? Encoding.UTF8.GetBytes(clean) : Encoding.Unicode.GetBytes(clean);
+        var blob = Marshal.AllocHGlobal(bytes.Length);
         try
         {
+            Marshal.Copy(bytes, 0, blob, bytes.Length);
             var credential = new NativeCredential
             {
-                Type = 1, TargetName = target, CredentialBlobSize = clean.Length * 2,
+                Type = 1, TargetName = target, CredentialBlobSize = bytes.Length,
                 CredentialBlob = blob, Persist = 2, UserName = Environment.UserName
             };
             if (!CredWrite(ref credential, 0))
@@ -66,7 +79,11 @@ public sealed class WindowsCredentialStore(string target) : ICredentialStore
                 throw new IOException($"Could not save the credential in Windows Credential Manager (Windows error {Marshal.GetLastPInvokeError()}).");
             }
         }
-        finally { Marshal.ZeroFreeGlobalAllocUnicode(blob); }
+        finally
+        {
+            Array.Clear(bytes);
+            Marshal.FreeHGlobal(blob);
+        }
     }
 
     public void Remove()

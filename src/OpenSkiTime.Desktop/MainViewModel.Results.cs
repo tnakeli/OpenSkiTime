@@ -50,6 +50,7 @@ public sealed partial class MainViewModel
     public bool ResultsHasSecondRun => ResultsCompetition?.Values.RunCount == 2;
     public bool ResultsIsFis => ResultsCompetition?.Values.RaceType == RaceType.Fis;
     public bool ResultsReady => _resultRace is not null && _reviewedPenalty is not null;
+    private void OnResultsReadyChanged() { OnPropertyChanged(nameof(ResultsReady)); RefreshResultsXmlInfo(); }
 
     partial void OnResultsCompetitionChanged(CompetitionDetails? value)
     {
@@ -115,7 +116,7 @@ public sealed partial class MainViewModel
             ResultsJury.Clear(); ResultsRuns.Clear(); ResultsCategory = "";
             ResultsPointsList = ""; ResultsPointsValidity = "";
             ResultsState = "No FIS competition in this series. Check FIS competition and enter a FIS codex in Competitions; existing start lists are preserved.";
-            OnPropertyChanged(nameof(ResultsReady));
+            OnResultsReadyChanged();
             return;
         }
         ResultsState = "Loading timing and approved revisions…";
@@ -176,13 +177,12 @@ public sealed partial class MainViewModel
                 { throw new DomainValidationException("Penalty rules are missing from the drawn list. Download that same FIS points list in Competitors and refresh Results."); }
                 if (competition.Values.Date < pointsSource.ValidFrom || competition.Values.Date > pointsSource.ValidTo)
                 { throw new DomainValidationException("The drawn FIS points list is not valid on race day. Review the draw and points list."); }
-                // This calculation algorithm has been reviewed against the 2026/27 edition.
-                if (tables.Season != 2027)
-                { throw new DomainValidationException("The penalty calculation rules for this season have not been reviewed."); }
+                // This calculation algorithm has been reviewed against the 2026/27 edition and also applies to 2025/26.
+                if (!tables.IsSupportedSeason) { throw new DomainValidationException(tables.UnsupportedSeasonMessage); }
                 _resultsRuleProfile = tables.Resolve(competition.Values.Calendar?.Category ?? ResultsCategory,
                     competition.Values.Discipline, _resultRace.FirstList.Plan.Gender);
                 var profile = _resultsRuleProfile;
-                ResultsRuleSource = $"FIS list {pointsSource.Code} · valid {pointsSource.ValidFrom:yyyy-MM-dd}–{pointsSource.ValidTo:yyyy-MM-dd} · {profile.Category} · race level {profile.RaceLevel} · {_resultRace.FirstList.Plan.Gender} · FIS Points Rules 2026/27 §§4.4–4.5, 4.9";
+                ResultsRuleSource = $"FIS list {pointsSource.Code} · valid {pointsSource.ValidFrom:yyyy-MM-dd}–{pointsSource.ValidTo:yyyy-MM-dd} · {profile.Category} · race level {profile.RaceLevel} · {_resultRace.FirstList.Plan.Gender} · FIS Points Rules {(tables.Season == 2027 ? "2026/27" : $"{FisPenaltyListRules.SeasonLabel(tables.Season)} (calculation as 2026/27)")} §§4.4–4.5, 4.9";
                 ResultsRuleFigures = new(Points(profile.FValue, "0"), Points(profile.MaximumPoints), Points(profile.Correction),
                     Points(profile.Adder), Points(profile.Minimum), Points(profile.Maximum));
                 ReviewPenalty(CalculateCurrentPenalty());
@@ -193,7 +193,7 @@ public sealed partial class MainViewModel
                 ResultsState += " " + ex.Message;
             }
         });
-        OnPropertyChanged(nameof(ResultsReady));
+        OnResultsReadyChanged();
     }
 
     private void PopulateResultRows(FisPenaltyResult? penalty = null)
@@ -244,7 +244,7 @@ public sealed partial class MainViewModel
         ResultsPenaltyFigures = new(Points(penalty.SumA), Points(penalty.SumB), Points(penalty.SumC),
             Points(penalty.Calculated), Points(penalty.Applied),
             penalty.DoubleMinimum ? $"Effective minimum {Points(Math.Max(penalty.Rules.Minimum, 2m * penalty.MaximumPoints))} (double points cap)." : "");
-        OnPropertyChanged(nameof(ResultsReady));
+        OnResultsReadyChanged();
     }
 
     private static string Points(decimal value, string format = "0.00") => value.ToString(format, CultureInfo.InvariantCulture);
@@ -265,54 +265,5 @@ public sealed partial class MainViewModel
         if (_resultRace is null || ResultsCompetition is null) { throw new DomainValidationException("Complete timing before calculating the penalty."); }
         var profile = _resultsRuleProfile ?? throw new DomainValidationException("Load the matching FIS list rule values before reviewing the penalty.");
         return FisPenalty.Calculate(profile, _resultRace.PenaltyCompetitors);
-    }
-
-    [RelayCommand]
-    private async Task ApproveFisResultsAsync()
-    {
-        await GuardAsync(async () =>
-        {
-            if (_resultRace is null || _resultFingerprint is null || ResultsCompetition is null || _current is null)
-            { throw new DomainValidationException("Reload complete race results first."); }
-            if (!await FlushRaceInformationAsync()) { throw new DomainValidationException("Resolve unsaved race information before approving results."); }
-            var penalty = CalculateCurrentPenalty();
-            if (_reviewedPenalty is null || penalty.Rules != _reviewedPenalty.Rules
-                || penalty.FValue != _reviewedPenalty.FValue || penalty.MaximumPoints != _reviewedPenalty.MaximumPoints
-                || penalty.Calculated != _reviewedPenalty.Calculated || penalty.Applied != _reviewedPenalty.Applied)
-            { throw new DomainValidationException("Calculate and review the current penalty with the TD before approving results."); }
-            var information = CurrentRaceInformation();
-            var td = information.Jury.Single(x => x.Function == "TechnicalDelegate").Person;
-            var chief = information.Jury.Single(x => x.Function == "ChiefRace").Person;
-            var metadata = new FisXmlDetails(information.Category, td, chief,
-                information.Runs.Select(x => new FisRunXmlDetails(x.Gates ?? 0, x.TurningGates ?? 0, x.StartTime, x.CourseSetter)).ToArray(), information);
-            var xmlRace = _resultRace with { FirstList = _resultRace.FirstList with
-            { Plan = _resultRace.FirstList.Plan with { Competition = ResultsCompetition.Values } } };
-            var xml = FisResultXml.Create(xmlRace, _current.Values, penalty, metadata);
-            var approvedCompetitionId = ResultsCompetition.Id;
-            var approvedPath = workspace.FilePath;
-            var expectedRevision = _current.Revision;
-            var saved = await workspace.ApproveResultAsync(new(ResultsCompetition.Id, _resultRace.FirstList.Id,
-                _resultRace.SecondList?.Id, _resultFingerprint, _current.Revision,
-                td.FirstName + " " + td.LastName,
-                FisResultXml.FileName(xmlRace, _current.Values), xml, penalty.Calculated, penalty.Applied, information));
-            if (workspace.FilePath == approvedPath && _current is not null)
-            { _current = _current with { Revision = Math.Max(_current.Revision, expectedRevision + 1) }; }
-            if (workspace.FilePath == approvedPath && ResultsCompetition?.Id == approvedCompetitionId)
-            { ResultApprovals.Insert(0, saved); SelectedResultApproval = saved; }
-            SetStatus($"TD approval saved as immutable revision {saved.Revision}. Export {saved.XmlFileName} when ready.");
-        });
-    }
-
-    [RelayCommand]
-    private async Task ExportApprovedXmlAsync()
-    {
-        await GuardAsync(async () =>
-        {
-            if (SelectedResultApproval is not { } approval) { return; }
-            var path = await dialogs.ChooseResultXmlExportAsync(approval.XmlFileName);
-            if (path is null) { return; }
-            await ExportFile.WriteAsync(path, approval.Xml);
-            SetStatus($"Approved XML revision {approval.Revision} exported to {path}.");
-        });
     }
 }

@@ -71,7 +71,7 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
     {
         var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Export approved FIS Alpine results", SuggestedFileName = suggestedName,
+            Title = "Save FIS Alpine results XML", SuggestedFileName = suggestedName,
             DefaultExtension = "xml", FileTypeChoices = [new FilePickerFileType("FIS results XML") { Patterns = ["*.xml"] }],
         });
         return file?.TryGetLocalPath();

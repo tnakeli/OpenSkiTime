@@ -90,6 +90,39 @@
     <Style Selector="Border.chip.warning > TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
     </Style>
+    <!-- Result banner: the verdict of an operation (FIS answer) in one tinted block; the class sets the tone. -->
+    <Style Selector="Border.resultBanner">
+      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource SurfaceRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+    <Style Selector="Border.resultBanner.success">
+      <Setter Property="Background" Value="{DynamicResource SuccessTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}" />
+    </Style>
+    <Style Selector="Border.resultBanner.error">
+      <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
+    </Style>
+    <Style Selector="Border.resultBanner.warning">
+      <Setter Property="Background" Value="{DynamicResource WarningTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BannerWarningBrush}" />
+    </Style>
+    <Style Selector="Border.resultBanner TextBlock.bannerTitle">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    </Style>
+    <Style Selector="Border.resultBanner.success TextBlock.bannerTitle">
+      <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+    </Style>
+    <Style Selector="Border.resultBanner.error TextBlock.bannerTitle">
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+    </Style>
+    <Style Selector="Border.resultBanner.warning TextBlock.bannerTitle">
+      <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+    </Style>
     <!-- Stat field: a compact measured value (altitudes, lengths) with its label and unit in one tile. -->
     <Style Selector="Border.statField">
       <Setter Property="Background" Value="{DynamicResource SubtleSurfaceBrush}" />

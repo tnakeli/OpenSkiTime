@@ -6,11 +6,17 @@ namespace OpenSkiTime.Desktop;
 public sealed class FisLocalStore
 {
     private readonly ICredentialStore _credential;
+    private readonly ICredentialStore _memberCredential;
     private readonly string _archivePath;
 
-    public FisLocalStore(string? localDataDirectory = null, ICredentialStore? apiCredential = null)
+    // Two different FIS credentials: the public API key (api.fis-ski.com, X-Api-Key) and the FIS Member Section personal
+    // access token (profile.fis-ski.com/api, bearer) that submits competition files. One does not work for the other.
+    // An injected API credential without an injected member credential gets an in-memory token store, so a test never
+    // reads the real Windows credential.
+    public FisLocalStore(string? localDataDirectory = null, ICredentialStore? apiCredential = null, ICredentialStore? memberCredential = null)
     {
         _credential = apiCredential ?? new WindowsCredentialStore("OpenSkiTime.FIS.ApiKey");
+        _memberCredential = memberCredential ?? (apiCredential is null ? new WindowsCredentialStore("OpenSkiTime.FIS.MemberToken", compactBlob: true) : new MemoryCredentialStore());
         var directory = localDataDirectory ?? LocalDataDirectory.Path;
         _archivePath = Path.Combine(directory, "fis-points-list.zip");
     }
@@ -38,6 +44,24 @@ public sealed class FisLocalStore
         _credential.Save(key.Trim());
     }
     public void RemoveApiKey() => _credential.Remove();
+
+    public bool HasMemberToken() => _memberCredential.Exists();
+    public string? ReadMemberToken() => _memberCredential.Read();
+    public void SaveMemberToken(string token)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        _memberCredential.Save(token.Trim());
+    }
+    public void RemoveMemberToken() => _memberCredential.Remove();
+
+    private sealed class MemoryCredentialStore : ICredentialStore
+    {
+        private string? _value;
+        public bool Exists() => _value is not null;
+        public string? Read() => _value;
+        public void Save(string key) => _value = key;
+        public void Remove() => _value = null;
+    }
 }
 public sealed class FisPointsDownloader(HttpClient client)
 {

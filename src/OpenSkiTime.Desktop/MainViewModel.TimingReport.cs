@@ -179,7 +179,7 @@ public sealed partial class MainViewModel
                 : stale && saved is not null ? "" : "Current competition timing data. Changes are saved automatically.";
             _current = await workspace.ReadAsync();
             UpdateReportPreviewValidity();
-            NotifyReportDefaults(); OnPropertyChanged(nameof(ReportIdentity));
+            NotifyReportDefaults(); OnPropertyChanged(nameof(ReportIdentity)); RefreshReportXmlInfo();
         });
         IsReportBusy = false;
     }
@@ -341,43 +341,13 @@ public sealed partial class MainViewModel
         finally { _reportSaveGate.Release(); }
     }
 
-    [RelayCommand]
-    private async Task ApproveTimingReportAsync()
-    {
-        if (IsReportBusy) { return; }
-        if (!await FlushTimingReportAsync()) { return; }
-        IsReportBusy = true;
-        await GuardAsync(async () =>
-        {
-            await SaveReportCoreAsync();
-            if (ReportValidation.Length > 0) { ReportStatus = "Complete the listed fields before creating XML."; return; }
-            var approved = await workspace.ApproveTimingReportAsync(new(_reportDraft!.CompetitionId, _reportSaved!.Revision,
-                _current!.Revision, TimingOperator, DateTimeOffset.UtcNow, ReportSoftwareVersion));
-            ReportApprovals.Insert(0, approved); SelectedReportApproval = approved;
-            _current = await workspace.ReadAsync(); ReportStatus = "Approved XML saved in the series. Export or send in test mode.";
-        });
-        IsReportBusy = false;
-    }
-
-    [RelayCommand]
-    private async Task ExportTimingReportAsync()
-    {
-        await GuardAsync(async () =>
-        {
-            if (SelectedReportApproval is not { } approval) { throw new DomainValidationException("Create an approved report XML first."); }
-            var path = await dialogs.ChooseResultXmlExportAsync(Path.GetFileNameWithoutExtension(approval.XmlFileName) + "-timing-report.xml");
-            if (path is null) { return; }
-            await ExportFile.WriteAsync(path, approval.Xml);
-            ReportStatus = "Exported the exact approved timing report XML.";
-        });
-    }
-
     private void ResetReportUi()
     {
         _reportSaveDelay?.Cancel();
         _reportLoadGeneration++; _reportDraft = null; _reportSaved = null; _reportFile = null;
         ReportEvidence.Clear(); ReportRuns.Clear(); ReportMissed.Clear(); ReportApprovals.Clear();
         ReportCompetition = null; SelectedReportApproval = null; HasTimingReportEdits = false;
+        _reportSubmissionDisplays.Clear(); ReportSubmissionOutcome = null; ReportSubmissionId = ""; ReportXmlSavedNote = ""; IsReportSendConfirmationOpen = false;
         ReportHistory.Clear(); SelectedReportHistory = null;
         ResetReportImport();
     }

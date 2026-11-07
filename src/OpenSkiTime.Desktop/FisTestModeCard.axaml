@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OpenSkiTime.Desktop.FisTestModeCard" x:CompileBindings="False">
+  <!-- Test mode for every FIS send. Real sending is the default; the choice is not remembered between runs. DataContext: the main view model. -->
+  <Border Classes="card">
+    <StackPanel Spacing="{DynamicResource FormGap}">
+      <Grid Classes="cardHeader"><TextBlock Text="Test mode" Classes="cardTitle" /></Grid>
+      <CheckBox Name="FisTestModeCheck" Content="Send as a test, nothing is stored at FIS" IsChecked="{Binding FisUploadTestMode}" />
+      <StackPanel Classes="field" IsVisible="{Binding FisUploadTestMode}">
+        <TextBlock Text="SIMULATE" Classes="fieldLabel" />
+        <ComboBox Name="FisTestScenarioPicker" ItemsSource="{Binding FisTestScenarios}" SelectedItem="{Binding SelectedFisTestScenario}"
+                  HorizontalAlignment="Stretch" />
+        <TextBlock Text="{Binding FisTestScenarioDetail}" Classes="supportingText" TextWrapping="Wrap" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

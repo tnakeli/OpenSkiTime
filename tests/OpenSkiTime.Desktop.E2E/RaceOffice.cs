@@ -539,12 +539,11 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
     {
         Directory.CreateDirectory(directory);
         SelectTab("FIS XML");
-        app.Click("TD approves · create XML");
+        // One step: the XML is created from the current results and saved as a revision, then written where the operator chooses.
+        app.Click("Save to XML");
+        SaveFileDialog("Save FIS Alpine results XML", Path.Combine(directory, race.Series.Nation + race.Competition.FisCode + ".xml"));
         app.WaitUntil(() => app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text))
-            .Any(x => x.Name.StartsWith("TD approval saved as immutable revision", StringComparison.Ordinal)), "results approved", TimeSpan.FromSeconds(30));
-        Pause(1500);
-        app.Click("Export approved XML");
-        SaveFileDialog("Export approved FIS Alpine results", Path.Combine(directory, race.Series.Nation + race.Competition.FisCode + ".xml"));
+            .Any(x => x.Name.StartsWith("Saved ", StringComparison.Ordinal) && x.Name.Contains("revision", StringComparison.Ordinal)), "results XML saved", TimeSpan.FromSeconds(30));
         Pause(1500);
     }
 
