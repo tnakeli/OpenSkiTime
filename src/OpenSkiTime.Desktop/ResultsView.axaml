@@ -92,7 +92,7 @@
                     <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="Auto" />
                     <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="Auto" />
                     <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="Auto" />
-                    <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="Auto" />
+                    <local:NationColumn Header="NAT" Binding="{Binding Nation}" Width="Auto" />
                     <DataGridTextColumn Header="LIST PTS" Binding="{Binding Listed}" Width="Auto" />
                     <DataGridTextColumn Header="BEST 5" Binding="{Binding Used}" Width="Auto" />
                     <DataGridTextColumn Header="RACE PTS" Binding="{Binding RacePoints}" Width="Auto" />
@@ -117,7 +117,7 @@
                     <DataGridTextColumn Header="CODE" Binding="{Binding Code}" Width="Auto" />
                     <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" Width="Auto" />
                     <DataGridTextColumn Header="YEAR" Binding="{Binding Year}" Width="Auto" />
-                    <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="Auto" />
+                    <local:NationColumn Header="NAT" Binding="{Binding Nation}" Width="Auto" />
                     <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="Auto" />
                     <DataGridTextColumn Header="LIST PTS" Binding="{Binding Listed}" Width="Auto" />
                     <DataGridTextColumn Header="USED PTS" Binding="{Binding Used}" Width="Auto" />

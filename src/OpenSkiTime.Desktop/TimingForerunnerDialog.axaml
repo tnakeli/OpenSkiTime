@@ -13,7 +13,7 @@
       <DataGridTextColumn Header="ID" Binding="{Binding Letter}" Width="70" />
       <local:SurnameColumn Header="SURNAME" Binding="{Binding LastName}" Width="*" />
       <DataGridTextColumn Header="FIRST NAME" Binding="{Binding FirstName}" Width="*" />
-      <DataGridTextColumn Header="NAT" Binding="{Binding Nation}" Width="70" />
+      <local:NationColumn Header="NAT" Binding="{Binding Nation}" Width="88" />
      </DataGrid.Columns>
     </DataGrid>
    </Grid>
