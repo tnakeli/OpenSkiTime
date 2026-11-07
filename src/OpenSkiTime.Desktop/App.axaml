@@ -299,6 +299,23 @@
       <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
       <Setter Property="BorderThickness" Value="2" />
     </Style>
+    <!-- A typed time that disagrees with System A: warning (check it) or error (blocks the XML). -->
+    <Style Selector="TextBox.warning, TextBox.warning:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WarningTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+    </Style>
+    <Style Selector="TextBox.warning /template/ Border#PART_BorderElement, TextBox.warning:pointerover /template/ Border#PART_BorderElement, TextBox.warning:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{DynamicResource WarningTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+    </Style>
+    <Style Selector="TextBox.error, TextBox.error:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+    </Style>
+    <Style Selector="TextBox.error /template/ Border#PART_BorderElement, TextBox.error:pointerover /template/ Border#PART_BorderElement, TextBox.error:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{DynamicResource ErrorTintBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+    </Style>
     <Style Selector="TextBox:disabled">
       <Setter Property="Background" Value="{DynamicResource DisabledSurfaceBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />

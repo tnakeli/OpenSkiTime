@@ -51,6 +51,26 @@ public sealed class TimingReportTests
     }
 
     [Fact]
+    public void ABTimeFarFromSystemABlocksTheXmlAndASmallerDifferenceOnlyWarns()
+    {
+        var draft = ValidDraft();
+        var run = draft.Runs[0];
+        TimingReportDraft With(TimingReportBib bib) => draft with { Runs = [run with { First = bib, Last = bib }] };
+        // A second off on one B time: the typo is named with the run, bib and field, and no XML is made.
+        var typo = With(run.First with { BFinish = run.First.BFinish! with { Ticks = run.First.BFinish!.Ticks + 12 * TimeSpan.TicksPerSecond } });
+        var errors = TimingReportXml.Validate(typo);
+        Assert.Contains(errors, x => x.Contains("Run 1 first B finish:", StringComparison.Ordinal) && x.Contains("12.000 s later than A", StringComparison.Ordinal));
+        Assert.Contains(errors, x => x.Contains("Run 1 first B elapsed time:", StringComparison.Ordinal));
+        Assert.Throws<DomainValidationException>(() => TimingReportXml.Create(typo, "test"));
+        var hand = With(run.First with { HandStart = run.First.HandStart! with { Ticks = run.First.HandStart!.Ticks - 5 * TimeSpan.TicksPerSecond } });
+        Assert.Contains(TimingReportXml.Validate(hand), x => x.Contains("hand start:", StringComparison.Ordinal));
+        // A few tenths is worth a look on screen but does not stop the report.
+        var small = With(run.First with { BStart = run.First.BStart! with { Ticks = run.First.BStart!.Ticks + TimeSpan.TicksPerSecond / 4 } });
+        Assert.Empty(TimingReportXml.Validate(small));
+        Assert.NotEmpty(TimingReportXml.Create(small, "test"));
+    }
+
+    [Fact]
     public void EquipmentHomologationUsesReportSeasonRatherThanCurrentDate()
     {
         var draft = ValidDraft();

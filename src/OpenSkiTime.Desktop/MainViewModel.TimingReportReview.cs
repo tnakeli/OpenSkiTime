@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenSkiTime.Application;
@@ -8,8 +7,6 @@ namespace OpenSkiTime.Desktop;
 
 public sealed partial class MainViewModel
 {
-    public ObservableCollection<SavedTimingReport> ReportHistory { get; } = [];
-    [ObservableProperty] private SavedTimingReport? _selectedReportHistory;
     [ObservableProperty] private FisUploadOutcome? _reportSubmissionOutcome;
     [ObservableProperty] private bool _isReportSendConfirmationOpen;
     [ObservableProperty] private bool _isReportFisResponseVisible;
@@ -38,36 +35,6 @@ public sealed partial class MainViewModel
         if (value is null) { IsReportFisResponseVisible = false; }
     }
     private CancellationTokenSource? _reportSubmissionCancellation;
-    private async Task LoadReportHistoryAsync()
-    {
-        ReportHistory.Clear();
-        if (_reportDraft is null) { return; }
-        foreach (var item in (await workspace.ReadTimingReportHistoryAsync(_reportDraft.CompetitionId)).Reverse()) { ReportHistory.Add(item); }
-        SelectedReportHistory = ReportHistory.Skip(1).FirstOrDefault();
-    }
-
-    [RelayCommand]
-    private async Task RestoreReportRevisionAsync()
-    {
-        if (IsReportBusy || SelectedReportHistory is not { } old || _reportDraft is null) { return; }
-        if (!await FlushTimingReportAsync()) { return; }
-        IsReportBusy = true;
-        await GuardAsync(async () =>
-        {
-            if (old.CompetitionId != _reportDraft.CompetitionId) { throw new DomainValidationException("Choose a revision from this competition."); }
-            var series = await workspace.ReadAsync();
-            var restored = old.Values with { Reviewed = false, CertifyFis = false };
-            await workspace.SaveTimingReportAsync(restored, series.Revision, TimingOperator,
-                $"Restore report revision {old.Revision}: {ReportChangeReason}", DateTimeOffset.UtcNow);
-            _reportDraft = restored; _reportSaved = await workspace.ReadTimingReportAsync(old.CompetitionId);
-            await PopulateReportAsync(restored); await LoadReportHistoryAsync();
-            HasTimingReportEdits = false; NotifyReportDefaults();
-            ReportStatus = "Previous values restored as a new revision. Current timing data is updated automatically; review before creating XML.";
-        });
-        IsReportBusy = false;
-        await LoadTimingReportAsync();
-    }
-
     partial void OnSelectedReportApprovalChanged(ApprovedTimingReport? value)
     {
         IsReportSendConfirmationOpen = false;
