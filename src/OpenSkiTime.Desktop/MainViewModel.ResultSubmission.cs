@@ -229,6 +229,13 @@ public sealed partial class MainViewModel
                 return;
             }
             key = (workspace.FilePath, approval.Id);
+            // Practice timing (simulator or replay) never becomes official results; a test upload is still allowed.
+            if (!test && await UsesSimulatedTimingAsync(approval))
+            {
+                Publish(key, FisUploadOutcomes.Notice(FisUploadTone.Error, "Simulation timing", "These results come from simulator or replay timing, which cannot be sent to FIS as official results.",
+                    "Nothing was sent to FIS. Use a test upload to try the XML.", test, mode, "", ""));
+                return;
+            }
             await SendXmlToFisAsync(approval.XmlFileName, approval.Xml, test, mode, outcome => Publish(key, outcome), null, cancellation.Token);
         }
         catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or IOException or HttpRequestException
@@ -237,6 +244,14 @@ public sealed partial class MainViewModel
             Publish(key, FisUploadOutcomes.FailureOutcome(ex, test, mode, _submissionDisplays.GetValueOrDefault(key).Id ?? "", ResultSubmissionOutcome?.FileName ?? ""));
         }
         finally { _submissionCancellation = null; IsSubmissionBusy = false; _submissionOperations--; TryDisposeSubmissionClient(); }
+    }
+
+    private async Task<bool> UsesSimulatedTimingAsync(ApprovedResult approval)
+    {
+        var listIds = approval.SecondListId is { } second ? new[] { approval.FirstListId, second } : [approval.FirstListId];
+        foreach (var id in listIds)
+        { if ((await workspace.ReadTimingAsync(id)).Sessions.Any(x => x.Options.Simulation)) { return true; } }
+        return false;
     }
 
     [RelayCommand]
@@ -261,9 +276,7 @@ public sealed partial class MainViewModel
             _submissionClient ??= new(_submissionHttp);
             var token = _fisStore.ReadMemberToken() ?? "";
             var response = await _submissionClient.PollAsync(uuid, token, cancellation.Token);
-            // A submission this revision remembers keeps its mode: the first answer may not turn a test into published results.
-            var remembered = known ? RememberedMode(ResultSubmissionOutcome?.RawResponse) : null;
-            await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", "", Show, null, remembered, cancellation.Token);
+            await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", "", Show, null, cancellation.Token);
         }
         catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or IOException or HttpRequestException
             or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
@@ -283,22 +296,30 @@ public sealed partial class MainViewModel
         _submissionClient ??= new(_submissionHttp);
         var token = _fisStore.ReadMemberToken() ?? "";
         var response = await _submissionClient.UploadAsync(payload.FileName, payload.Xml, token, test, ct);
-        await FollowFisSubmissionAsync(_submissionClient, token, response, mode, payload.FileName, publish, persist, test, ct);
+        // The mode an upload was sent in belongs to its submission id for as long as the program runs.
+        _confirmedModes[response.Submission.Uuid] = test;
+        await FollowFisSubmissionAsync(_submissionClient, token, response, mode, payload.FileName, publish, persist, ct);
     }
 
-    // The mode of a submission as an earlier FIS answer stored it; null when nothing remembered came from FIS.
-    private static bool? RememberedMode(string? storedResponse) => FisResultSubmissionClient.ReadResponse(storedResponse)?.Submission.IsTest;
+    // The mode of each FIS submission this session sent or saw confirmed, by submission id. It is kept apart from what is on
+    // screen, so switching races, a rejected answer or a cancelled check never changes it.
+    private readonly Dictionary<Guid, bool> _confirmedModes = [];
 
-    private static async Task FollowFisSubmissionAsync(FisResultSubmissionClient client, string token, FisSubmissionResponse response, string mode,
-        string sentFileName, Action<FisUploadOutcome> publish, Func<FisSubmissionResponse, Task>? persist, bool? expectedTest, CancellationToken ct)
+    // The mode of a submission as an earlier FIS answer stored it; null when the text is not a FIS answer.
+    private static bool? StoredMode(string? storedResponse) => FisResultSubmissionClient.ReadResponse(storedResponse)?.Submission.IsTest;
+
+    private async Task FollowFisSubmissionAsync(FisResultSubmissionClient client, string token, FisSubmissionResponse response, string mode,
+        string sentFileName, Action<FisUploadOutcome> publish, Func<FisSubmissionResponse, Task>? persist, CancellationToken ct)
     {
-        // The mode is fixed before the first answer is shown: what was asked for or remembered, else what the first answer says.
-        var test = expectedTest ?? response.Submission.IsTest;
+        // The mode is fixed before the first answer is shown: the one confirmed for this id, else what the first answer says.
+        var uuid = response.Submission.Uuid;
+        var test = _confirmedModes.TryGetValue(uuid, out var confirmed) ? confirmed : response.Submission.IsTest;
         for (var poll = 0; ; poll++)
         {
             // A status answer that changes between test and real is never shown: it could report a test as published results.
             if (response.Submission.IsTest != test)
             { throw new FisSubmissionException("FIS answered the status check in a different mode than the upload. Check the submission before sending again.", response.ResponseText, false, FisSubmissionFailure.Unsupported); }
+            _confirmedModes[uuid] = test;
             var paused = !response.Submission.Summary.IsComplete && poll >= 24;
             publish(FisUploadOutcomes.OutcomeOf(response, mode, sentFileName, paused));
             if (persist is not null) { await persist(response); }

@@ -106,26 +106,14 @@ public sealed partial class MainViewModel
         if (unchanged) { ReportValidation = string.Join("\n", TimingReportXml.Validate(current)); _current = await workspace.ReadAsync(); }
         else { await SaveReportCoreAsync(); }
         if (ReportValidation.Length > 0) { return null; }
-        var latest = ReportApprovals.FirstOrDefault();
-        // Timing can be committed after the report was loaded (clocks stay connected): reuse a revision only when the
-        // persisted timing still matches it. Otherwise the approval below refuses the stale report as before.
-        var committed = await CurrentReportFingerprintAsync(_reportDraft!.CompetitionId);
-        if (latest is not null && latest.DraftRevision == _reportSaved!.Revision && latest.SourceFingerprint == _reportDraft.SourceFingerprint
-            && _reportDraft.SourceFingerprint == committed) { return latest; }
+        // The event file decides in one transaction whether this XML is a new revision or the latest one again, after the
+        // same checks of the draft, the timing and the series revision, so a reused revision is never older than the data.
         var approved = await workspace.ApproveTimingReportAsync(new(_reportDraft!.CompetitionId, _reportSaved!.Revision,
             _current!.Revision, TimingOperator, DateTimeOffset.UtcNow, ReportSoftwareVersion));
-        ReportApprovals.Insert(0, approved); SelectedReportApproval = approved;
+        if (ReportApprovals.All(x => x.Id != approved.Id)) { ReportApprovals.Insert(0, approved); }
+        SelectedReportApproval = ReportApprovals.First(x => x.Id == approved.Id);
         _current = await workspace.ReadAsync();
         return approved;
-    }
-
-    private async Task<string> CurrentReportFingerprintAsync(Guid competitionId)
-    {
-        var desk = await workspace.ReadStartListsAsync(competitionId);
-        var sources = new List<TimingReplayData>();
-        foreach (var list in desk.Revisions.GroupBy(x => x.Plan.RunNumber).Select(g => g.MaxBy(x => x.Revision)!))
-        { sources.Add(await workspace.ReadTimingAsync(list.Id)); }
-        return TimingReportProjection.Fingerprint(sources);
     }
 
     [RelayCommand]
@@ -252,10 +240,10 @@ public sealed partial class MainViewModel
             _submissionClient ??= new(_submissionHttp);
             var token = _fisStore.ReadMemberToken() ?? "";
             var response = await _submissionClient.PollAsync(uuid.Value, token, cancellation.Token);
-            // A submission this XML revision sent keeps its mode: the first answer may not turn a test into published results.
-            var remembered = adHoc ? null : RememberedMode(sentHere ? _reportSubmissionDisplays.GetValueOrDefault(approval!.Id).Outcome?.RawResponse : persisted?.Response);
+            // A submission saved with this XML revision keeps its mode across restarts: its stored answer was a confirmed one.
+            if (!adHoc && !_confirmedModes.ContainsKey(uuid.Value) && persisted?.Uuid == uuid && StoredMode(persisted.Response) is { } stored) { _confirmedModes[uuid.Value] = stored; }
             await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", approval?.XmlFileName ?? "",
-                Show, adHoc ? null : r => PersistReportSubmissionAsync(approval!, r, file), remembered, cancellation.Token);
+                Show, adHoc ? null : r => PersistReportSubmissionAsync(approval!, r, file), cancellation.Token);
         }
         catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or SeriesFileException or SeriesConflictException
             or IOException or UnauthorizedAccessException or HttpRequestException or OperationCanceledException or PlatformNotSupportedException or ArgumentException)

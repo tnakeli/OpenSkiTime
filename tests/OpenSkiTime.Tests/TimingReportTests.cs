@@ -231,6 +231,10 @@ public sealed class TimingReportTests
             Assert.All(auxiliarySources.Keys, role => Assert.True(workspace.Auxiliary.State(role).IsActive));
             Assert.Equal(TimingReportXml.Create(draft, "test"), approved.Xml);
             await Assert.ThrowsAsync<SeriesConflictException>(() => workspace.ApproveTimingReportAsync(request));
+            // The same XML for the same timing is the latest revision again, decided with the same checks as a new one.
+            var reused = await workspace.ApproveTimingReportAsync(request with { ExpectedSeriesRevision = (await workspace.ReadAsync()).Revision });
+            Assert.Equal(approved.Id, reused.Id); Assert.Single(await workspace.ReadApprovedTimingReportsAsync(competition.Id));
+            await Assert.ThrowsAsync<SeriesConflictException>(() => workspace.ApproveTimingReportAsync(request));
             var submission = new TimingReportSubmission(approved.Id, Guid.NewGuid(), "TEST accepted", "{\"testMode\":true}", DateTimeOffset.UtcNow);
             revision = await workspace.SaveTimingReportSubmissionAsync(submission, (await workspace.ReadAsync()).Revision);
             revision = await workspace.SaveTimingReportAsync(draft with { Reviewed = false }, revision, "op", "Review source again", DateTimeOffset.UtcNow);
