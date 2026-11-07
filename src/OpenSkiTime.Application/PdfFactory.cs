@@ -136,8 +136,10 @@ public static class ReportCatalog
         var completeFinals = finalCount > 0 && source.Finals.Count == finalCount;
         Add(PdfReportType.PenaltyCalculation, "Penalty Calculation", reason: completeFinals && source.Finals.All(x => x.Penalty is not null)
             ? null : (source.Finals.Count > 0 ? source.Finals[0].PenaltyUnavailableReason : null) ?? "Complete supported FIS results and review the penalty rule profile first.");
-        Add(PdfReportType.OfficialResults, "Official Results", reason: completeFinals && source.Finals.All(x => x.Approved)
-            ? null : "Approve current complete FIS results in Results first. The existing result engine supports one or two runs.");
+        // Available whenever the results are complete, so the output can be checked against an external FIS result at any
+        // time. Without a current saved XML revision the PDF is marked as a draft and prints the calculated penalty.
+        Add(PdfReportType.OfficialResults, "Official Results", reason: completeFinals
+            ? null : "Complete the timing of every run in a FIS competition first. The existing result engine supports one or two runs.");
         Add(PdfReportType.TimingReport, "Timing Report", reason: source.TimingReport is not null || source.Runs.Any(x => x.Source.Sessions.Count > 0)
             ? null : "Save timing report metadata or capture timing first.");
         return result;
@@ -239,7 +241,7 @@ public sealed class PdfReportSourceBuilder(ITimingDecoderFactory decoders)
                             try
                             {
                                 var rules = first.List.Plan.PointsList.PenaltyRules ?? throw new DomainValidationException("Penalty rules are missing from the drawn points list.");
-                                if (rules.Season != 2027) { throw new DomainValidationException("Only the reviewed 2026/27 penalty rules are supported."); }
+                                if (!rules.IsSupportedSeason) { throw new DomainValidationException(rules.UnsupportedSeasonMessage); }
                                 var points = first.List.Plan.PointsList;
                                 if (competition.Values.Date < points.ValidFrom || competition.Values.Date > points.ValidTo)
                                 { throw new DomainValidationException("The drawn points list is not valid on race day."); }

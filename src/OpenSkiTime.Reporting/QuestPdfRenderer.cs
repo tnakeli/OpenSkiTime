@@ -247,6 +247,8 @@ internal static class OfficialResultsDocument
         foreach (var final in data.Source.Finals)
         {
             ReportComponents.Heading(column, GenderLabels.Format(final.Race.FirstList.Plan.Gender));
+            if (final.Approval is null)
+            { column.Item().Text("DRAFT - NOT APPROVED. Current timing results; the technical delegate has not approved them for the current race information and penalty.").Bold(); }
             ReportComponents.Table(column.Item(), ["Rank", "Bib", "Code", "Name", "Year", "Nation", "Run 1", "Run 2", "Total", "Status", "Race pts"],
                 final.Race.Rows.OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib).ThenBy(x => x.StatusRun).ThenBy(x => x.Entry.Position).Select(x => new object[]
                 { ReportComponents.Number(x.Rank), ReportComponents.Number(x.Entry.Bib), x.Entry.Entrant.Athlete.FederationCode ?? "",
@@ -255,9 +257,15 @@ internal static class OfficialResultsDocument
                     TimingTime.Format(x.TotalHundredths), x.Status == TimingStatus.Finished ? "" : x.Status + " R" + x.StatusRun,
                     final.Penalty is { } p && p.RacePoints.TryGetValue(x.Entry.Bib, out var rp) ? rp.ToString("0.00", CultureInfo.InvariantCulture) : "" }),
                 [0.5f, 0.5f, 0.9f, 2.8f, 0.7f, 0.7f, 0.9f, 0.9f, 0.9f, 0.9f, 0.8f]);
-            var approval = final.Approval ?? throw new InvalidOperationException("Current result approval is unavailable.");
-            column.Item().Text("Applied penalty: " + approval.AppliedPenalty.ToString("0.00", CultureInfo.InvariantCulture));
-            column.Item().Text("TD approval revision " + approval.Revision + " | " + approval.ApprovedAt.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture));
+            if (final.Approval is { } approval)
+            {
+                column.Item().Text("Applied penalty: " + approval.AppliedPenalty.ToString("0.00", CultureInfo.InvariantCulture));
+                column.Item().Text("FIS XML revision " + approval.Revision + " | " + approval.ApprovedAt.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture));
+            }
+            else if (final.Penalty is { } draftPenalty)
+            { column.Item().Text("Calculated penalty (not approved): " + draftPenalty.Applied.ToString("0.00", CultureInfo.InvariantCulture)); }
+            else
+            { column.Item().Text("Penalty unavailable: " + (final.PenaltyUnavailableReason ?? "not calculated")); }
         }
         ReportComponents.ManualLine(column, "Technical delegate signature (manual)");
     }

@@ -397,18 +397,25 @@ public sealed class PdfFactoryTests
         await workspace.SaveRaceInformationAsync(competition.Id, editedInformation, (await workspace.ReadAsync()).Revision, s_at);
         var unapproved = await new PdfReportSourceBuilder(new AlgeDecoderFactory()).BuildAsync(workspace, competition.Id);
         var unavailableOfficial = ReportCatalog.GetAvailableReports(unapproved).Single(x => x.Type == PdfReportType.OfficialResults);
-        Assert.False(unavailableOfficial.CanGenerate);
+        // Without a current approval the official results can still be generated, as a marked draft.
+        Assert.True(unavailableOfficial.CanGenerate);
         Assert.Equal(PdfReportStatus.Outdated, ReportStatusService.GetStatus(unapproved, unavailableOfficial));
-        Assert.False((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(unapproved, unavailableOfficial,
+        Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(unapproved, unavailableOfficial,
             r => workspace.SaveGeneratedPdfAsync(r), s_at)).Success);
-        Assert.Equal(officialBytes, await File.ReadAllBytesAsync(folder.PathFor(official.FileName)));
+        using (var draftPdf = UglyToad.PdfPig.PdfDocument.Open(await File.ReadAllBytesAsync(folder.PathFor(official.FileName))))
+        {
+            var draftWords = string.Join(" ", draftPdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));
+            Assert.Contains("DRAFT", draftWords, StringComparison.Ordinal);
+            Assert.DoesNotContain("FIS XML revision", draftWords, StringComparison.Ordinal);
+        }
+        Assert.DoesNotContain("DRAFT", string.Join(" ", UglyToad.PdfPig.PdfDocument.Open(officialBytes).GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text)), StringComparison.Ordinal);
         await workspace.SaveRaceInformationAsync(competition.Id, information, (await workspace.ReadAsync()).Revision, s_at);
         await workspace.SaveCompetitionAsync(competition.Id, Competition with { Calendar = Competition.Calendar! with { Category = "ENL" } }, (await workspace.ReadAsync()).Revision);
         unapproved = await new PdfReportSourceBuilder(new AlgeDecoderFactory()).BuildAsync(workspace, competition.Id);
         Assert.Equal(40, Assert.Single(unapproved.Finals).Penalty!.Applied);
         Assert.Null(unapproved.Finals[0].Approval);
         Assert.True(ReportCatalog.GetAvailableReports(unapproved).Single(x => x.Type == PdfReportType.PenaltyCalculation).CanGenerate);
-        Assert.False(ReportCatalog.GetAvailableReports(unapproved).Single(x => x.Type == PdfReportType.OfficialResults).CanGenerate);
+        Assert.True(ReportCatalog.GetAvailableReports(unapproved).Single(x => x.Type == PdfReportType.OfficialResults).CanGenerate);
         await workspace.SaveCompetitionAsync(competition.Id, Competition, (await workspace.ReadAsync()).Revision);
         source = await new PdfReportSourceBuilder(new AlgeDecoderFactory()).BuildAsync(workspace, competition.Id);
         Assert.True(ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.OfficialResults).CanGenerate);
