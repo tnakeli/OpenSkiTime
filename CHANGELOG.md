@@ -6,25 +6,45 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-This version uses live protocol 2.
+## [0.3.0] - 2026-11-08
+
+This version uses live protocol 2. It changes the `.ost` series format (start lists of all genders, up to 99 runs). Series files from earlier versions cannot be opened; create a new series file.
 
 ### Added
 
-- **Race radio (optional):** short Finnish AI commentary for Local and Cloud live timing viewers. Enable it per competition in the live timing control panel's *Race radio* card, choose the language model and speech provider, set a spending limit (a hard stop) and add event background and pronunciations if needed. Provider keys are saved in Settings → Live timing → *Race radio provider keys* (Windows Credential Manager). Numbers, times, places and names are spoken by OpenSkiTime's own Finnish rules, results are called unofficial, and timing capture and live publishing are never affected. *Simulation* providers rehearse it offline without cost. Every start is announced with the next racer in the start gate and the racer's club (and nationality in an international field); racers on course are featured during the run, and foreign names are respelled for the Finnish voice by nation. The bib is said with each racer's first mention, starts say "Radalla nyt", a DNF is announced at once and with feeling, and every event is said even when the model leaves it out. Starts are said within a few seconds from their templates, and ElevenLabs Eleven v4 Turbo is available for faster speech. *Google Gemini 3.8 Flash TTS (Vertex AI)* and *ElevenLabs Eleven v4* are available as speech providers; Gemini needs a Google API key bound to a service account, saved as the *Google Gemini TTS (Vertex AI)* key, and ElevenLabs its own key. Optional background music: choose a folder of MP3 files (for example royalty-free music) in the *Race radio* card; viewers hear it softly under the commentary and can turn it off with *♪ Music*. When the race pauses (no start or finish for 45 seconds with nobody on course, an interruption, between runs) the hosts recap the unofficial top five, the top ten once the pause has lasted three minutes, and keep listeners company with light talk that never jokes about racers or guesses the cause; the next start ends it at once.
+- **Club races with classes:** a Club (non-FIS) competition can hold several classes, men and women together in one start list, and any number of runs (1–99, for example a training race of 20 runs). Classes are the category rules of the series.
+- **Flexible start order:** in Start lists every class is a start block. Blocks can be reordered, merged into one drawn group and split again. For the first run choose *Draw all* or *By points* (best group drawn, the rest in points order, lower or higher points better, 0 as no points). For each later run choose *Reverse start order* (no results needed), *Reverse results* (the best N or all; DNF/DSQ start last or not at all) or *Same order*. *Draw block again* draws one class again without changing the others. Every list is saved with its settings and seeds and can be verified like a FIS draw.
+- **Bibs per block:** first bibs are calculated from the order, the number of starters, the first bib and the skipped bibs; type a first bib for a block to leave a gap, and the blocks after it follow.
+- **Default classes for every season:** a new event series starts with the age classes of its season (girls N and boys M 10, 12, 14, 16, 18, 21 and general), with birth years that move on every season. *Default classes (replace)* in the category rules loads them again.
+- **Points for all disciplines:** a **POINTS** column in Competitors (typed, pasted from Excel or imported) is used by the draw instead of the discipline's FIS points.
+- **Results PDF for Club races:** one file with the jury and the courses, every class ranked by total time, and those who did not start, did not finish or were disqualified, by run. It says PRELIMINARY until every run is finished.
+- **Timing report for Club races:** the timing report can be prepared for every competition; a Club race gets it as a PDF from PDF Factory, without XML or FIS submission.
+- **Send to FIS:** results and timing reports are sent to FIS from the application, with a test mode that uses FIS's reserved test codices, a clear verdict of FIS's answer and the raw response on request. The results XML follows the FIS Alpine Result XML specification 2.13. The FIS Member Section token has its own place in Settings.
+- **Typed B and hand times checked against System A** as they are entered in the timing report: a small difference is a warning, a large one an error that blocks the XML.
+- **Chief of timing** in the race information.
+- **Race radio (optional):** short Finnish AI commentary for Local and Cloud live timing viewers. Enable it per competition in the live timing control panel's *Race radio* card, choose the language model and speech provider, set a spending limit (a hard stop) and add event background and pronunciations if needed. Provider keys are saved in Settings → Live timing → *Race radio provider keys* (Windows Credential Manager). Results are called unofficial, and timing capture and live publishing are never affected. *Simulation* providers rehearse it offline without cost. Optional background music from a folder of MP3 files can be turned off by viewers.
 - **Replay file follows the file during capture:** a replay file connected as timing keeps being read, so impulses appended while connected (for example by the real-time rehearsal script `scripts/race-replay.py`) are captured as they arrive. Replay lines may name the bib explicitly.
-- **Live timing server load:** the Local and Cloud cards of the live timing control panel show the server's viewers (now and the lowest, average and highest over the last hour), viewers on the whole server, response times, CPU, memory and queued work, so you see what limits the server when many people follow. Needs live timing server 0.5.0 or later; with an older server the card shows no load.
+- **Live timing server load:** the Local and Cloud cards of the live timing control panel show the server's viewers, response times, CPU, memory and queued work. Needs live timing server 0.5.0 or later.
 
 ### Changed
 
-- **Updated components:** the application and the live timing control panel now use Avalonia 12 for the user interface. Entity Framework Core, SQLite and the other .NET libraries have been updated to their latest servicing releases.
+- **Timing ranking and live page:** in a race with classes the class of the latest finisher (or of the racer on course) is listed first, and ranks are within the class. A FIS race is ranked race-wide.
+- **Start lists:** the list keeps its place when it is drawn again; start list PDFs, TSV and the print view show the class of every starter, and a Run 2 start list shows the gap to the Run 1 leader instead of points.
+- **New look:** every view uses the same cards, 12-column layout and colours; person names follow one rule everywhere (surname in bold capitals, then the first name), and nations show their flag in desktop views and PDF reports.
+- **PDF Factory** keeps each competition's files in a subfolder named after its short name. Official Results can be generated as a draft before approval. Penalty rule tables of 2025/26 are accepted.
+- **Updated components:** the application and the live timing control panel use Avalonia 12; Entity Framework Core, SQLite and the other .NET libraries are on their latest servicing releases.
+
+### Removed
+
+- The report history expander of the timing report; report revisions stay in the event file.
 
 ### Fixed
 
-- **FIS calendar loads despite incomplete races:** one race without a codex (or another unusable row) no longer rejects the whole FIS calendar. Races without a codex are imported and the codex can be entered in Competitions later; a later calendar import fills it in for the same race. Only races that cannot form a competition are skipped, and the calendar status shows how many.
+- **FIS calendar loads despite incomplete races:** one race without a codex (or another unusable row) no longer rejects the whole FIS calendar. Races without a codex are imported and the codex can be entered in Competitions later.
 
 ### Security
 
-- **FIS live timing logs without racer data:** the local live timing diagnostic log no longer stores racer names, nations, clubs or FIS codes from FIS messages; it records only message structure, bibs and FIS errors. Full protocol tracing for troubleshooting is opt-in with the `OST_FIS_WIRE_TRACE=1` environment variable.
+- **FIS live timing logs without racer data:** the local live timing diagnostic log no longer stores racer names, nations, clubs or FIS codes from FIS messages. Full protocol tracing is opt-in with the `OST_FIS_WIRE_TRACE=1` environment variable.
 
 ## [0.2.0-preview.2] - 2026-10-14
 
@@ -106,7 +126,8 @@ First public preview of the Windows application, for rehearsals and evaluation. 
 - Local category draws, special Cup, youth, snow-seed and three-run formats are not supported. Automatic backup-time substitution and production FIS submission are pending.
 - ALGE native USB needs the vendor driver and SDK, installed separately.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.2...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.2...v0.3.0
 [0.2.0-preview.2]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.1...v0.2.0-preview.2
 [0.2.0-preview.1]: https://github.com/tnakeli/OpenSkiTime/compare/v0.1.0-preview.2...v0.2.0-preview.1
 [0.1.0-preview.2]: https://github.com/tnakeli/OpenSkiTime/compare/v0.1.0-preview.1...v0.1.0-preview.2
