@@ -8,6 +8,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-08
+
+Live protocol: 2
+
+### Added
+
+- Race page for races with classes (Club races of OpenSkiTime 0.3.0 and later): the results are listed class by class, each class under its own heading. The **active class** comes first: the class of the latest finisher (or DNF/DSQ), else of the racer on course or next to start; the other classes follow in start order. Ranks, differences, totals and **+/−** are within the class. A race without classes looks as before.
+- Races with up to 99 runs (for example training races) can be published.
+
+### Changed
+
+- Person names follow one rule everywhere on the page: surname in bold capitals, then the first name in regular weight.
+
+### Security
+
+- The server image installs the fixed `apt` and `libapt-pkg` packages (CVE-2026-109518).
+
 ## [0.9.0] - 2026-10-25
 
 Live protocol: 2
@@ -171,7 +188,9 @@ Live protocol: 1 (implicit)
 
 - First hosted deployment: public race list, responsive race view, publisher keys for session creation and `security.txt`.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.1...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.10.0...HEAD
+[0.10.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.9.0...live-v0.10.0
+[0.9.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.1...live-v0.9.0
 [0.8.1]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.0...live-v0.8.1
 [0.8.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.7.0...live-v0.8.0
 [0.7.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.6.0...live-v0.7.0
