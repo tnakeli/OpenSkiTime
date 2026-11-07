@@ -107,6 +107,8 @@ public sealed partial class MainViewModel
         _reviewedPenalty = null;
         // The XML revision and the FIS answer shown belong to the race being loaded, never to the previous one.
         SelectedResultApproval = null;
+        // No change event when it was already null: show what belongs to this race explicitly.
+        ShowRememberedSubmission();
         ResultRows.Clear(); ResultBestClassified.Clear(); ResultBestStarted.Clear(); ResultApprovals.Clear();
         ResultTopTen.Clear();
         ResultsPenaltyFigures = null;

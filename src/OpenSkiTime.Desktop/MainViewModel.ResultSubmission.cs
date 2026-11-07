@@ -129,6 +129,10 @@ public sealed partial class MainViewModel
         if (!await FlushRaceInformationAsync()) { throw new DomainValidationException("Resolve unsaved race information before creating the XML."); }
         if (_resultsRuleProfile is null || _reviewedPenalty is null)
         { throw new DomainValidationException("The penalty is not available: " + (string.IsNullOrWhiteSpace(ResultsRuleSource) ? ResultsState : ResultsRuleSource)); }
+        // Timing can change after the results were loaded (another window, a live capture). A saved revision is reused only
+        // for the timing that is committed now, and a changed race is never sent as if it were current.
+        if (await CommittedResultFingerprintAsync(ResultsCompetition.Id, ResultsCompetition.Values.RunCount) != _resultFingerprint)
+        { throw new DomainValidationException("Timing or start-list data changed since the results were loaded. Press Refresh timing and check the results before sending."); }
         var penalty = CalculateCurrentPenalty();
         var information = CurrentRaceInformation();
         var td = information.Jury.Single(x => x.Function == "TechnicalDelegate").Person;
@@ -155,6 +159,15 @@ public sealed partial class MainViewModel
         if (workspace.FilePath == path && ResultsCompetition?.Id == competitionId)
         { ResultApprovals.Insert(0, saved); SelectedResultApproval = saved; }
         return saved;
+    }
+
+    private async Task<string> CommittedResultFingerprintAsync(Guid competitionId, int runCount)
+    {
+        var desk = await workspace.ReadStartListsAsync(competitionId);
+        var first = desk.Revisions.Where(x => x.Plan.RunNumber == 1).OrderByDescending(x => x.Revision).FirstOrDefault()
+            ?? throw new DomainValidationException("Draw Run 1 before preparing results.");
+        var second = runCount == 2 ? desk.Revisions.Where(x => x.Plan.RunNumber == 2).OrderByDescending(x => x.Revision).FirstOrDefault() : null;
+        return ResultSourceFingerprint.Create(await workspace.ReadTimingAsync(first.Id), second is null ? null : await workspace.ReadTimingAsync(second.Id));
     }
 
     [RelayCommand]

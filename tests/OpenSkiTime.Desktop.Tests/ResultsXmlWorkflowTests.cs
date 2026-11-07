@@ -246,6 +246,57 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
+    public async Task ChangedCommittedTimingIsNeverSentOrReusedAsCurrent()
+    {
+        using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName!, "processed", "File successfully saved!", test: false)));
+        var (folder, _, workspace, vm, competition) = await FisXmlRaceAsync(handler);
+        try
+        {
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            Assert.Single(await workspace.ReadApprovedResultsAsync(competition));
+
+            // Timing is corrected elsewhere after Results was loaded: the loaded results are no longer current.
+            var list = Assert.Single((await workspace.ReadStartListsAsync(competition)).Revisions);
+            await workspace.Timing!.SelectRunAsync(list.Id);
+            await workspace.Timing.CorrectAsync(new(DecisionKind.Time, CompetitorId: list.Plan.Entries[0].Entrant.CompetitorId, Hundredths: 4999), "Test", "Late correction");
+
+            await vm.SendToFisCommand.ExecuteAsync(null); await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
+            var outcome = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.True(outcome.IsError); Assert.Equal("XML not created", outcome.Title);
+            Assert.Contains("changed", outcome.Detail, StringComparison.Ordinal); Assert.Contains("Nothing was sent", outcome.Hint, StringComparison.Ordinal);
+            Assert.Empty(handler.Calls); Assert.Single(await workspace.ReadApprovedResultsAsync(competition));
+
+            // After Refresh timing the new results are the current ones and get their own revision.
+            await vm.LoadResultsCommand.ExecuteAsync(null);
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(2, (await workspace.ReadApprovedResultsAsync(competition)).Count);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task APastedLookupOnARaceWithoutXmlNeverStaysOnAnotherRace()
+    {
+        var pasted = new Guid("00000000-0000-0000-0000-0000000000e5");
+        using var handler = new FisHandler(call => FisJson(FisAnswer("FIN0592.xml", "processed", "File successfully saved!", test: false, uuid: Guid.Parse(call.Url[^36..]))));
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler, secondRace: true);
+        try
+        {
+            var first = vm.ResultsCompetition!; var other = vm.Competitions.Single(x => x.Values.ShortLabel == "SG2 W");
+            // Neither race has a saved XML revision: the selected revision stays null while switching.
+            vm.ResultSubmissionId = pasted.ToString("D");
+            await vm.CheckResultsSubmissionCommand.ExecuteAsync(null);
+            Assert.Equal(pasted.ToString("D"), vm.ResultSubmissionOutcome!.SubmissionId);
+            await vm.SelectActiveCompetitionCommand.ExecuteAsync(other);
+            Assert.Null(vm.ResultSubmissionOutcome); Assert.Equal("", vm.ResultSubmissionId);
+            await vm.SelectActiveCompetitionCommand.ExecuteAsync(first);
+            Assert.Null(vm.ResultSubmissionOutcome); Assert.Equal("", vm.ResultSubmissionId);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
     public async Task ARevisionIsReusedOnlyWhileTheRaceInformationSnapshotIsTheSame()
     {
         using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName!, "processed", "File successfully saved!", test: false)));

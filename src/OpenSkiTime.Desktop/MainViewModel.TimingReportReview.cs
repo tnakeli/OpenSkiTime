@@ -127,6 +127,9 @@ public sealed partial class MainViewModel
     private async Task<ApprovedTimingReport?> EnsureReportXmlAsync()
     {
         if (_reportDraft is null || _reportFile != workspace.FilePath) { throw new DomainValidationException("Open the timing report of this series first."); }
+        // Another window may have saved a newer report since this one was loaded.
+        if ((await workspace.ReadTimingReportAsync(_reportDraft.CompetitionId))?.Revision != _reportSaved?.Revision)
+        { throw new DomainValidationException("The saved report changed. Reopen the report before sending it."); }
         var current = ReadReportDraft();
         var unchanged = _reportSaved is not null && !HasTimingReportEdits
             && System.Text.Json.JsonSerializer.Serialize(current) == System.Text.Json.JsonSerializer.Serialize(_reportSaved.Values);
@@ -271,8 +274,10 @@ public sealed partial class MainViewModel
             var associated = approval is null ? null : (await workspace.ReadTimingReportSubmissionAsync(approval.Id))?.Uuid;
             if (uuid is null) { uuid = associated; }
             if (uuid is null) { throw new DomainValidationException("No submission ID is saved for this XML revision. Send it first."); }
-            // Only the submission this revision sent is saved with it; any other ID is looked up and shown.
-            adHoc = approval is null || associated != uuid;
+            // Only the submission this revision sent is saved with it (also one whose answer could not be saved before);
+            // any other ID is looked up and shown.
+            var sentHere = approval is not null && _reportSubmissionDisplays.GetValueOrDefault(approval.Id).Id == uuid.Value.ToString("D");
+            adHoc = approval is null || (associated != uuid && !sentHere);
             _submissionClient ??= new(_submissionHttp);
             var token = _fisStore.ReadMemberToken() ?? "";
             var response = await _submissionClient.PollAsync(uuid.Value, token, cancellation.Token);
