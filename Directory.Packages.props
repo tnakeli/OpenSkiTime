@@ -10,7 +10,7 @@
     <EfCoreVersion>10.0.14</EfCoreVersion>
     <ExtensionsVersion>10.0.14</ExtensionsVersion>
     <!-- Avalonia.Headless.XUnit 12.1 is built against xunit.v3 3.2.2 and fails test discovery on xunit.v3 4.x. -->
-    <XunitVersion>3.2.2</XunitVersion>
+    <XunitVersion>4.0.2</XunitVersion>
     <XunitRunnerVersion>4.0.1</XunitRunnerVersion>
     <NetTestSdkVersion>18.11.0</NetTestSdkVersion>
     <CoverletVersion>10.1.0</CoverletVersion>
