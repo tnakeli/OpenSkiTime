@@ -93,9 +93,10 @@ public sealed partial class MainViewModel
             if (!IsPdfBusy && Competitions.Any(x => x.Id == competition.Id)) { await SelectPdfCompetitionAsync(competition); }
             return;
         }
+        // Results are FIS only; the timing report is made for every competition.
+        if (IsTimingReportSection) { if (Competitions.Any(x => x.Id == competition.Id)) { await SelectReportCompetitionAsync(competition); } return; }
         if (!FisCompetitions.Any(x => x.Id == competition.Id)) { return; }
         if (IsResultsSection) { await SelectResultsCompetitionAsync(competition); }
-        else if (IsTimingReportSection) { await SelectReportCompetitionAsync(competition); }
     }
 
     [RelayCommand]

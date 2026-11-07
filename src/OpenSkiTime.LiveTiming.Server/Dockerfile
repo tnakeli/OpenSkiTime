@@ -7,6 +7,11 @@ COPY src/OpenSkiTime.LiveTiming.Server/ src/OpenSkiTime.LiveTiming.Server/
 RUN dotnet publish src/OpenSkiTime.LiveTiming.Server/OpenSkiTime.LiveTiming.Server.csproj -c Release --no-self-contained -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# Security updates of the base image packages that are not yet in the published image (apt: CVE-2026-109518, libapt-pkg).
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade apt libapt-pkg6.0t64 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app ./
 ENV ASPNETCORE_HTTP_PORTS=8080

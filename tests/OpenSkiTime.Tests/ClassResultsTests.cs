@@ -80,6 +80,11 @@ public sealed class ClassResultsTests
             Assert.Empty(men.Others);
             Assert.True(ClassResultsBuilder.IsComplete(source));
 
+            // A Club race also has its timing report as a PDF (it is not sent to FIS).
+            var timingReport = catalog.Single(x => x.Type == PdfReportType.TimingReport);
+            Assert.True(timingReport.CanGenerate, timingReport.UnavailableReason);
+            Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, timingReport, _ => Task.CompletedTask, s_at)).Success);
+            Assert.True(File.Exists(Path.Combine(root, timingReport.RelativePath)));
             Assert.True((await new ReportGenerationService(new QuestPdfRenderer()).GenerateAsync(source, descriptor, _ => Task.CompletedTask, s_at)).Success);
             using var pdf = PdfDocument.Open(Path.Combine(root, descriptor.RelativePath));
             var text = string.Join(" ", pdf.GetPages().SelectMany(x => x.GetWords()).Select(x => x.Text));

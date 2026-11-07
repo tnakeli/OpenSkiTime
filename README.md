@@ -50,6 +50,10 @@ The [draw fairness and verification guide](docs/fis-draw-fairness.md) explains p
 
 ![First-run start list drawn for a fictional women's slalom](docs/screenshots/04-start-lists.png)
 
+Club races use a flexible start order: classes are start blocks that are ordered, merged and drawn freely for every run, with first bibs calculated automatically. See [start orders for Club races](docs/non-fis-start-orders.md).
+
+![Start order of a fictional Club race with classes, drawn and points-ordered blocks and calculated bib ranges](docs/screenshots/13-club-start-order.png)
+
 ### 5 · Timing and classification
 
 At start, Running and Timestamps show the immediate race state side by side; Ranking keeps the full picture with the two latest finishers pinned above it. Channel HOLD controls retain incoming impulses for review. Ranking columns support filtering and sorting, and keyboard shortcuts and context actions speed up race control.

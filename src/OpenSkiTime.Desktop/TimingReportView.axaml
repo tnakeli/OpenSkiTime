@@ -82,7 +82,15 @@
       <!-- Left: what to do (declarations, create, send, test mode). Right: what FIS answered. Both columns are equally tall. -->
       <Grid ColumnDefinitions="*,*,*,*,*,*,*,*,*,*,*,*" ColumnSpacing="12">
        <StackPanel Grid.Column="0" Grid.ColumnSpan="5" Spacing="12">
-        <Border Classes="card">
+        <!-- A Club race has no XML and no submission: the report is the PDF made in PDF Factory. -->
+        <Border Name="TimingReportPdfCard" Classes="card" IsVisible="{Binding IsReportClub}">
+         <StackPanel Spacing="{DynamicResource FormGap}">
+          <Grid Classes="cardHeader"><TextBlock Text="Timing report PDF" Classes="cardTitle"/></Grid>
+          <CheckBox Content="I reviewed the report and verified the timestamps against the original timing records." IsChecked="{Binding ReportReviewed}"/>
+          <TextBlock Text="This competition is not a FIS race, so the report is not sent to FIS. Make the PDF in PDF Factory (Timing Report)." Classes="supportingText" TextWrapping="Wrap"/>
+         </StackPanel>
+        </Border>
+        <Border Name="TimingReportXmlCard" Classes="card" IsVisible="{Binding IsReportFis}">
          <StackPanel Spacing="{DynamicResource FormGap}">
           <Grid Classes="cardHeader" ColumnDefinitions="*,Auto">
            <TextBlock Text="Timing report XML" Classes="cardTitle"/>
@@ -123,9 +131,9 @@
          </StackPanel>
         </Border>
 
-        <local:FisTestModeCard/>
+        <local:FisTestModeCard IsVisible="{Binding IsReportFis}"/>
 
-        <Expander Header="Check an earlier submission" HorizontalAlignment="Stretch">
+        <Expander Header="Check an earlier submission" HorizontalAlignment="Stretch" IsVisible="{Binding IsReportFis}">
          <local:FormRow>
           <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field">
            <TextBlock Text="SUBMISSION ID" Classes="fieldLabel"/>
@@ -137,7 +145,7 @@
         </Expander>
        </StackPanel>
 
-       <Border Grid.Column="5" Grid.ColumnSpan="7" Classes="card">
+       <Border Grid.Column="5" Grid.ColumnSpan="7" Classes="card" IsVisible="{Binding IsReportFis}">
         <StackPanel Spacing="{DynamicResource FormGap}">
          <Grid Classes="cardHeader" ColumnDefinitions="Auto,10,Auto,*,Auto">
           <TextBlock Text="FIS response" Classes="cardTitle"/>

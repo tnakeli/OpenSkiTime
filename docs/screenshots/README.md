@@ -4,7 +4,7 @@ The desktop screenshots are generated against the current source. Every simulate
 
 These images are headless Avalonia captures of a generated demo event. Athlete identities, codes, competition details and FIS-style points data are fictional; timing comes from the simulator. No personal event file or downloaded points list is checked in.
 
-To regenerate the eleven desktop PNGs from the repository root, set `OPENSKITIME_README_SCREENSHOTS` to the absolute path of this directory and run:
+To regenerate the desktop PNGs (01–09, 11, 13 and overview) from the repository root, set `OPENSKITIME_README_SCREENSHOTS` to the absolute path of this directory and run:
 
 ```powershell
 $env:OPENSKITIME_README_SCREENSHOTS = Join-Path (Get-Location) 'docs/screenshots'
@@ -31,3 +31,5 @@ The Visual previews GitHub workflow runs this browser capture in a Linux CI envi
 `demo-video.jpg` is the website poster for the YouTube demo video: a 1440-pixel frame at 1:35 of the published video (combined Run 2 ranking), extracted with `ffmpeg -ss 95 -i OpenSkiTime-demo.mp4 -frames:v 1 -vf scale=1440:-1 -q:v 3 demo-video.jpg`. The video is recorded from the running application with 100 synthetic athletes and simulated timing. The video file itself stays outside Git.
 
 `live-radio-video.jpg` is the website poster for the YouTube live timing video: a 1440-pixel frame at 0:30 of the published 16:9 video (live race page after a DNF), extracted with `ffmpeg -ss 30 -i OpenSkiTime-live-radio-16x9.mp4 -frames:v 1 -vf scale=1440:-1 -q:v 3 live-radio-video.jpg`. The video is recorded from the running application with synthetic racers and simulated timing.
+
+`13-club-start-order.png` shows the flexible start order of a Club race: the default classes of the 2026/27 season as start blocks, a merged block, a block with a typed first bib, blocks ordered by points and the calculated bib ranges. It comes from the synthetic event of `GenerateClubStartOrderScreenshotFromSyntheticEvent` (same command as above); no personal data is used.

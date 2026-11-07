@@ -206,6 +206,73 @@ public partial class DesktopWorkflowTests
     }
 
     [AvaloniaFact]
+    public async Task GenerateClubStartOrderScreenshotFromSyntheticEvent()
+    {
+        var output = Environment.GetEnvironmentVariable("OPENSKITIME_README_SCREENSHOTS");
+        if (string.IsNullOrWhiteSpace(output)) { return; }
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-club-demo", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "Club Cup Demo.ost");
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+            var date = new DateOnly(2026, 11, 14);
+            var series = await workspace.CreateAsync(file, new("Club Cup", "Summit Arena", "Demo Ski Club", date, date, "FIN", "2026/27"));
+            series = await workspace.SaveCompetitionAsync(null, new("Club Cup Giant Slalom", "GS Cup", date, Discipline.GiantSlalom, RaceType.Club, 2, 0), series.Revision);
+            var race = series.Competitions[0];
+            var revision = await workspace.ReplaceCategoryRulesAsync(DefaultCategories.ForSeason(FisSeason.FromSeries("2026/27", date)), series.Revision);
+            string[] girls = ["Aino", "Eevi", "Helmi", "Iida", "Julia", "Kaisa", "Lilja", "Milla", "Nelli", "Oona"];
+            string[] boys = ["Aatu", "Eino", "Elias", "Ilmari", "Joel", "Kasper", "Leevi", "Miko", "Niilo", "Oskari"];
+            string[] names = ["Harju", "Kuura", "Latu", "Lumi", "Mäki", "Pyry", "Rinne", "Suksi", "Tuuli", "Vaara"];
+            string[] clubs = ["North Ridge", "Snowline", "Fell Alpine", "Peak Club"];
+            var rows = new List<DeskBatchRow>();
+            var n = 0;
+            // Born in the years of the 2026/27 classes: N10/M10 2017-2019, N12/M12 2015-2016, N14/M14 2013-2014, N16/M16 2011-2012.
+            foreach (var (year, count) in new[] { (2018, 5), (2015, 5), (2013, 5), (2011, 5) })
+            {
+                for (var i = 0; i < count * 2; i++)
+                {
+                    var female = i % 2 == 0;
+                    n++;
+                    var points = year == 2011 ? new CompetitorFisPoints(CompetitorFisPoints.GeneralListCode, null, null, null, null, null, 10m * ((n * 7) % 23 + 1)) : null;
+                    rows.Add(new(null, new(names[(n * 3) % names.Length].ToUpperInvariant(), (female ? girls : boys)[(n * 3 + n / 4) % 10], year, null, "FIN", clubs[n % clubs.Length],
+                        female ? Gender.Female : Gender.Male), [new ImportEntryPatch(race.Id, true, false, null)], points, points is not null));
+                }
+            }
+            await workspace.ApplyDeskBatchAsync(new DeskBatch(series.Id, revision, rows, [], [FisPointsListInfo.General]));
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { OpenPath = file, NewPath = file, BackupPath = file + ".backup" },
+                fisStore: new FisLocalStore(root), recentSeriesStore: new RecentSeriesStore(root),
+                categoryRulePresetStore: new CategoryRulePresetStore(root), timingPreferencesStore: new TimingPreferencesStore(root),
+                reportDefaultsStore: new TimingReportDefaultsStore(root), timingDeviceCache: new FisTimingDeviceCache(root));
+            await vm.OpenSeriesCommand.ExecuteAsync(null);
+            vm.FileLabel = @"C:\Demo\Club Cup Demo.ost";
+            var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1440, Height = 1060 };
+            window.Show();
+            try
+            {
+                await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(race, 1));
+                Assert.False(vm.IsError, vm.StatusMessage);
+                // The youngest classes are drawn, the oldest are ordered by points (higher is better); N12 and M12 are drawn as one group.
+                vm.SelectedDrawBlock = vm.DrawBlocks.Single(x => x.ClassesText == "N12");
+                vm.MergeDrawBlockCommand.Execute(null);
+                foreach (var block in vm.DrawBlocks.Where(x => x.ClassesText.Contains("16", StringComparison.Ordinal)))
+                {
+                    block.FirstRun = DrawBlockRow.FirstRunChoices[1];
+                    block.BetterPoints = DrawBlockRow.BetterPointsChoices[1];
+                    block.ZeroIsNoPoints = true;
+                }
+                vm.DrawBlocks.Single(x => x.ClassesText == "N14").FirstBib = "101";
+                await vm.PrepareDrawCommand.ExecuteAsync(null);
+                Assert.False(vm.IsError, vm.StatusMessage);
+                vm.IsDrawSetupOpen = true;
+                CaptureDraw(window, output, "13-club-start-order.png");
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [AvaloniaFact]
     public async Task GenerateTimingReportScreenshotsFromSyntheticEvent()
     {
         var output = Environment.GetEnvironmentVariable("OPENSKITIME_README_SCREENSHOTS");

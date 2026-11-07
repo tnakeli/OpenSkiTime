@@ -23,6 +23,10 @@ public sealed partial class MainViewModel
     public ObservableCollection<TimingReportMissedEditor> ReportMissed { get; } = [];
     public ObservableCollection<ApprovedTimingReport> ReportApprovals { get; } = [];
     [ObservableProperty] private CompetitionDetails? _reportCompetition;
+    // The FIS XML, its submission and the FIS answer belong to FIS competitions; a Club race has its timing report as a PDF only.
+    public bool IsReportFis => ReportCompetition?.Values.RaceType == RaceType.Fis;
+    public bool IsReportClub => ReportCompetition is not null && !IsReportFis;
+    partial void OnReportCompetitionChanged(CompetitionDetails? value) { OnPropertyChanged(nameof(IsReportFis)); OnPropertyChanged(nameof(IsReportClub)); }
     [ObservableProperty] private ApprovedTimingReport? _selectedReportApproval;
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AcceptReportImageMatchesCommand))]
@@ -99,8 +103,8 @@ public sealed partial class MainViewModel
     {
         SwitchSection(WorkspaceSection.TimingReport);
         if (!IsTimingReportSection) { return; }
-        var race = FisCompetitions.FirstOrDefault(x => x.Id == _activeRaceId) ?? FisCompetitions.FirstOrDefault();
-        if (race is null) { ReportStatus = "Select a FIS competition in Competitions first."; return; }
+        var race = Competitions.FirstOrDefault(x => x.Id == _activeRaceId) ?? Competitions.FirstOrDefault();
+        if (race is null) { ReportStatus = "Add a competition in Competitions first."; return; }
         if (!await FlushTimingReportAsync()) { return; }
         ReportCompetition = race;
         await LoadTimingReportAsync();
