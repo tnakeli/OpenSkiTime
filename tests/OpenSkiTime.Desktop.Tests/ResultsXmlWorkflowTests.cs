@@ -61,7 +61,7 @@ public partial class DesktopWorkflowTests
 
     // A complete one-run FIS race with results, a penalty and full race information, ready for the XML.
     private static async Task<(string Folder, string XmlPath, SeriesWorkspace Workspace, MainViewModel Vm, Guid Competition)> FisXmlRaceAsync(
-        FisHandler handler, bool withToken = true, bool secondRace = false)
+        FisHandler handler, bool withToken = true, bool secondRace = false, bool legacyInformation = false)
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-fisxml-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -100,7 +100,9 @@ public partial class DesktopWorkflowTests
         var information = RaceInformation.Empty(race);
         information = information with
         {
-            Jury = information.Jury.Select(x => x.Function == "TechnicalDelegate" ? x : x with { Person = new("Synthetic", x.Function.ToUpperInvariant(), "FIN") }).ToArray(),
+            // Race information saved before the chief of timing existed has no such entry.
+            Jury = information.Jury.Where(x => !legacyInformation || x.Function != "ChiefTiming")
+                .Select(x => x.Function == "TechnicalDelegate" ? x : x with { Person = new("Synthetic", x.Function.ToUpperInvariant(), "FIN") }).ToArray(),
             Runs = information.Runs.Select(r => r with { CourseSetter = new("Course", "SETTER", "FIN"), Gates = 40, TurningGates = 39, StartTime = "10:00" }).ToArray(),
         };
         await workspace.SaveRaceInformationAsync(competition, information, (await workspace.ReadAsync()).Revision, DateTimeOffset.UnixEpoch);
@@ -336,6 +338,33 @@ public partial class DesktopWorkflowTests
             Assert.Null(vm.ResultSubmissionOutcome); Assert.Equal("", vm.ResultSubmissionId);
             await vm.SelectActiveCompetitionCommand.ExecuteAsync(first);
             Assert.Null(vm.ResultSubmissionOutcome); Assert.Equal("", vm.ResultSubmissionId);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task ChiefOfTimingIsEnteredWithTheRaceInformationAndWrittenAsAMember()
+    {
+        using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName!, "processed", "File successfully saved!", test: false)));
+        var (folder, _, workspace, vm, competition) = await FisXmlRaceAsync(handler, legacyInformation: true);
+        try
+        {
+            // Information saved without the entry still opens, with an empty row for the chief of timing.
+            var row = vm.ResultsJury.Single(x => x.Function == "ChiefTiming");
+            Assert.Equal("Chief of timing", row.Label); Assert.Equal("", row.LastName);
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            var first = Assert.Single(await workspace.ReadApprovedResultsAsync(competition));
+            Assert.DoesNotContain(XDocument.Load(new MemoryStream(first.Xml)).Descendants("Member"), x => x.Attribute("Function")!.Value == "ChiefTiming");
+
+            row.LastName = "Timer"; row.FirstName = "Tina"; row.Nation = "fin";
+            Assert.True(await vm.FlushRaceInformationAsync(), vm.StatusMessage);
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            var revisions = await workspace.ReadApprovedResultsAsync(competition);
+            Assert.Equal(2, revisions.Count);
+            var member = XDocument.Load(new MemoryStream(revisions[1].Xml)).Descendants("Member").Single(x => x.Attribute("Function")!.Value == "ChiefTiming");
+            Assert.Equal("TIMER", member.Element("Lastname")!.Value); Assert.Equal("Tina", member.Element("Firstname")!.Value); Assert.Equal("FIN", member.Element("Nation")!.Value);
+            Assert.Equal(["ChiefCourse", "Startreferee", "Finishreferee", "ChiefTiming"],
+                XDocument.Load(new MemoryStream(revisions[1].Xml)).Descendants("Member").Select(x => x.Attribute("Function")!.Value));
         }
         finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
     }

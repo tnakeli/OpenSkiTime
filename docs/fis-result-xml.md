@@ -12,7 +12,7 @@ The specification is not consistent with itself. Section 1 says the examples "sh
 |---|---|---|---|
 | Times (`Timerun1/2`, `Totaltime`, `Diff`) | tables: `MM:SS:ZZ`; example: `55.87`, `1:49.98` | `MM:SS:ZZ`, for example `00:48:01`, `01:35:62` | Tables are normative. **Open point to confirm with FIS** (below). |
 | `Runinfo` attribute | table 2.3.1: `No`; example: `no` | `No` | Table. **Open point.** |
-| Officials | Jury: technical delegate, chief of race, referees; Member: the others. `Member` is required (2.3.1) | Jury: `TechnicalDelegate`, `ChiefRace`, `Referee`; Member: `ChiefCourse`, `Startreferee`, `Finishreferee`. At least one Member is required; XML creation names the missing official. | Tables and the split shown in the example. |
+| Officials | Jury: technical delegate, chief of race, referees; Member: the others. `Member` is required (2.3.1) | Jury: `TechnicalDelegate`, `ChiefRace`, `Referee`; Member: `ChiefCourse`, `Startreferee`, `Finishreferee`, `ChiefTiming`. At least one Member is required; XML creation names the missing official. | Tables and the split shown in the example. |
 | Technical delegate `Number` | not in table 2.3.2; present in the example | written | Only place that carries the TD number. |
 | `Startelev` | table 2.3.5: `Startlelev`; 2.3.4 and example: `Startelev` | `Startelev` | The table spelling is a typo in a document that otherwise spells it `Startelev`. |
 | Non-finisher `AL_result` | 3.11 requires `Racepoints` when present; example shows `Timerun1` only | omitted | A non-finisher has no race points; omission is valid (3.9: optional). Run 1 times stay in Results and the PDFs. |
@@ -24,7 +24,7 @@ The specification is not consistent with itself. Section 1 says the examples "sh
 
 Written but optional: `Usedfislist`, `Appliedpenalty`, `Calculatedpenalty`, `Fvalue`, race header `Eventname`, `Place`, `Racedate`, `Tempunit`, `Longunit`, per run the course name and length, forerunners and weather, `Diff`, `Softwarecompany` (`OpenSkiTime project`), `Softwarename` and `Softwareversion` (the program version).
 
-Not written: `Training`, `Speedcodex`, `Speedunit`, `Windunit`, `Endtime` (required only for OWG, WSC and WC), `Timingby`, `Dataprocessingby`, the `ChiefTiming` and `Assistantreferee` officials (the Results race information has no fields for them), jury e-mail and phone, and intermediate points (`Course/Intermediate`, `AL_resultdetail`). All are optional.
+Not written: `Training`, `Speedcodex`, `Speedunit`, `Windunit`, `Endtime` (required only for OWG, WSC and WC), `Timingby`, `Dataprocessingby`, the `Assistantreferee` official (the Results race information has no field for it), jury e-mail and phone, and intermediate points (`Course/Intermediate`, `AL_resultdetail`). All are optional.
 
 ## Open points to confirm with FIS
 

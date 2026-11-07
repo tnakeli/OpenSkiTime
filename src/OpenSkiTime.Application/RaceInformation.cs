@@ -23,13 +23,14 @@ public sealed record RaceCourseDefaults(string Course, int? StartAltitude, int? 
 public sealed record RaceInformation(string Category, IReadOnlyList<RaceOfficial> Jury,
     IReadOnlyList<RaceRunInformation> Runs, string Source = "", RaceCourseDefaults? CourseDefaults = null)
 {
-    public static readonly string[] JuryFunctions = ["TechnicalDelegate", "ChiefRace", "Referee", "ChiefCourse", "StartReferee", "FinishReferee"];
+    public static readonly string[] JuryFunctions = ["TechnicalDelegate", "ChiefRace", "Referee", "ChiefCourse", "StartReferee", "FinishReferee", "ChiefTiming"];
 
     // Display name of a jury function; the stored value stays the FIS XML function code.
     public static string JuryFunctionLabel(string function) => function switch
     {
         "TechnicalDelegate" => "Technical delegate", "ChiefRace" => "Chief of race", "Referee" => "Referee",
-        "ChiefCourse" => "Course chief", "StartReferee" => "Start referee", "FinishReferee" => "Finish referee", _ => function,
+        "ChiefCourse" => "Course chief", "StartReferee" => "Start referee", "FinishReferee" => "Finish referee",
+        "ChiefTiming" => "Chief of timing", _ => function,
     };
 
     public static RaceInformation Empty(CompetitionValues competition)

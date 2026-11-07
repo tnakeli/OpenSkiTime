@@ -106,7 +106,7 @@ public sealed class FisResultsTests
         var raceInfo = doc.Descendants("AL_raceinfo").Single();
         // Jury: technical delegate, chief of race and referees. Members: the other officials (2.3.1-2.3.3).
         Assert.Equal(["TechnicalDelegate", "ChiefRace", "Referee"], raceInfo.Elements("Jury").Select(x => x.Attribute("Function")!.Value));
-        Assert.Equal(["ChiefCourse", "Startreferee", "Finishreferee"], raceInfo.Elements("Member").Select(x => x.Attribute("Function")!.Value));
+        Assert.Equal(["ChiefCourse", "Startreferee", "Finishreferee", "ChiefTiming"], raceInfo.Elements("Member").Select(x => x.Attribute("Function")!.Value));
         Assert.True(raceInfo.Elements("Jury").Last().IsBefore(raceInfo.Elements("Member").First()));
         Assert.Equal("718", raceInfo.Elements("Jury").First().Element("Number")!.Value);
         Assert.Equal(["Course", "Starttime"], raceInfo.Elements("Runinfo").First().Elements().Select(x => x.Name.LocalName).Where(x => x is "Course" or "Starttime"));
