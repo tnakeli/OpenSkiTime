@@ -170,6 +170,15 @@ public static class TimingTime
     public static string FormatTimeOfDay(long? ticks) => ticks is { } value
         ? new DateTime(value).ToString(TimeOfDayFormat, CultureInfo.InvariantCulture) : "—";
 
+    /// <summary>The time behind a leader: "0.00" for the leader, "+0.45", "+1:02.34" from a minute; blank without a time.</summary>
+    public static string FormatGap(long? hundredths) => hundredths switch
+    {
+        null => "",
+        0 => "0.00",
+        { } value when value < 6000 => "+" + (value / 100).ToString(CultureInfo.InvariantCulture) + "." + (value % 100).ToString("00", CultureInfo.InvariantCulture),
+        { } value => "+" + Format(value),
+    };
+
     public static string Format(long? hundredths) => hundredths is not { } value ? "—"
         : string.Create(CultureInfo.InvariantCulture, $"{value / 6000}:{value / 100 % 60:00}.{value % 100:00}");
 

@@ -56,9 +56,13 @@ public sealed partial class SeriesWorkspace
         }, ct);
 }
 public sealed record PdfReportDescriptor(string Id, PdfReportType Type, string DisplayName,
-    Guid? CompetitionId, int? RunNumber, string FileName, bool CanGenerate, string? UnavailableReason);
+    Guid? CompetitionId, int? RunNumber, string FileName, bool CanGenerate, string? UnavailableReason, string? Folder = null)
+{
+    /// <summary>The file's path below the series file's folder: a competition's files are in a subfolder named after its short name.</summary>
+    public string RelativePath => string.IsNullOrEmpty(Folder) ? FileName : Folder + "/" + FileName;
+}
 public sealed record EntryReportRow(Guid Id, CompetitorValues Athlete, string Category, int? Bib = null,
-    int? Position = null, decimal? Points = null, CompetitorFisPoints? FisPoints = null);
+    int? Position = null, decimal? Points = null, CompetitorFisPoints? FisPoints = null, long? GapHundredths = null);
 public sealed record ReportGroup(string Label, IReadOnlyList<EntryReportRow> Entries);
 public sealed record RunReportData(StartListRevision List, TimingSnapshot Timing, TimingReplayData Source);
 public sealed record FinalReportData(FisRaceResult Race, FisPenaltyResult? Penalty, ApprovedResult? Approval, string? PenaltyUnavailableReason)
@@ -87,6 +91,13 @@ public static class ReportFileNameBuilder
             PdfReportType.StartList or PdfReportType.RefereeReport => type + "_Run" + (run ?? throw new ArgumentException("Run is required.", nameof(run))).ToString(CultureInfo.InvariantCulture),
             _ => type.ToString()
         };
+        return CleanName(shortName) + "_" + date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "_" + suffix + ".pdf";
+    }
+
+    /// <summary>A short name as a portable file or folder name: no path or reserved characters, at most 100 characters.</summary>
+    public static string CleanName(string shortName)
+    {
+        ArgumentNullException.ThrowIfNull(shortName);
         var clean = new StringBuilder();
         foreach (var c in shortName.Normalize(NormalizationForm.FormC))
         {
@@ -96,7 +107,16 @@ public static class ReportFileNameBuilder
         var name = clean.ToString().Trim('_', '.', ' ');
         if (name.Length == 0) { name = "Event"; }
         if (name.Length > 100) { name = name[..100].TrimEnd('.', ' '); }
-        return name + "_" + date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "_" + suffix + ".pdf";
+        return name;
+    }
+
+    /// <summary>The subfolder of a competition's files: its short name as a folder name, never a Windows device name.</summary>
+    public static string FolderName(string shortName)
+    {
+        var name = CleanName(shortName);
+        var stem = name.Split('.')[0].TrimEnd(' ');
+        return stem.Length is 3 or 4 && (stem.ToUpperInvariant() is "CON" or "PRN" or "AUX" or "NUL"
+            || stem.Length == 4 && stem[3] is >= '1' and <= '9' && stem[..3].ToUpperInvariant() is "COM" or "LPT") ? "_" + name : name;
     }
 }
 
@@ -117,7 +137,8 @@ public static class ReportCatalog
             { shortName += "_" + competition.Id.ToString("N"); }
             result.Add(new($"{(seriesScope ? source.Series.Id : competition!.Id):N}/{type}/{run ?? 0}", type, name,
                 competition?.Id, run, ReportFileNameBuilder.Build(shortName,
-                    competition?.Values.Date ?? source.Series.Values.StartDate, type, run), reason is null, reason));
+                    competition?.Values.Date ?? source.Series.Values.StartDate, type, run), reason is null, reason,
+                seriesScope ? null : ReportFileNameBuilder.FolderName(shortName)));
         }
         Add(PdfReportType.EventSeriesEntries, "Event Series Entries");
         Add(PdfReportType.EventSeriesEntriesByNation, "Event Series Entries by Nation");
@@ -160,7 +181,20 @@ public static class EntryReportBuilder
                 .OrderBy(x => x.Values.Surname, StringComparer.Ordinal).ThenBy(x => x.Values.FirstName, StringComparer.Ordinal).ThenBy(x => x.Id)
                 .Select(x => new EntryReportRow(x.Id, x.Values, CategoryResolver.Resolve(x.Values, source.Desk.Categories),
                     source.Desk.Participations.FirstOrDefault(p => p.CompetitorId == x.Id && p.CompetitionId == descriptor.CompetitionId)?.ImportedBib)).ToArray();
-        if (descriptor.Type == PdfReportType.StartList)
+        if (descriptor.Type == PdfReportType.StartList && descriptor.RunNumber > 1)
+        {
+            // Later runs show how far each racer is behind the leader of Run 1 instead of draw points.
+            var gaps = new Dictionary<Guid, long>();
+            foreach (var first in source.Runs.Where(x => x.List.Plan.RunNumber == 1))
+            {
+                var finished = first.Timing.Results.Where(x => !x.IsForerunner && x.Status == TimingStatus.Finished && x.Hundredths is > 0).ToArray();
+                if (finished.Length == 0) { continue; }
+                var leader = finished.Min(x => x.Hundredths!.Value);
+                foreach (var result in finished) { gaps[result.Entry.Entrant.CompetitorId] = result.Hundredths!.Value - leader; }
+            }
+            entries = entries.Select(x => x with { Points = null, GapHundredths = gaps.TryGetValue(x.Id, out var gap) ? gap : null }).ToArray();
+        }
+        else if (descriptor.Type == PdfReportType.StartList)
         {
             // A start list shows the points its draw used. A list drawn without points (a club race) shows the saved
             // FIS points of the competition's discipline instead; one source per list, never mixed row by row.
