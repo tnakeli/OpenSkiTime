@@ -556,6 +556,7 @@
               <Button Grid.Column="4" Content="Save rule" Command="{Binding SaveCategoryRuleCommand}" Classes="primaryAction" />
             </Grid>
             <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Name="DefaultCategoriesButton" Content="Default classes (replace)" Command="{Binding LoadDefaultCategoriesCommand}" Classes="secondaryAction" ToolTip.Tip="Replace the rules with the age classes of this season: N and M 10, 12, 14, 16, 18, 21 and general." />
               <Button Content="Save rules for reuse" Command="{Binding SaveCategoryRulesPresetCommand}" Classes="secondaryAction" />
               <Button Content="Load saved rules (replace)" Command="{Binding LoadCategoryRulesPresetCommand}" Classes="secondaryAction" />
               <Button Content="Update categories" Command="{Binding UpdateCategoriesCommand}" Classes="secondaryAction" />

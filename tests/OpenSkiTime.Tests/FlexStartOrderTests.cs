@@ -181,6 +181,30 @@ public sealed class FlexStartOrderTests
     }
 
 
+
+    [Fact]
+    public void DefaultClassesFollowTheSeasonAndNeverOverlap()
+    {
+        // 2025/26: the age classes of the 2025/26 rules; each season every birth year moves on by one.
+        var last = DefaultCategories.ForSeason(2026);
+        (int From, int To) Years(string label) { var r = last.Single(x => x.Label == label); return (r.BirthYearMin, r.BirthYearMax); }
+        Assert.Equal((2016, 2018), Years("N10")); Assert.Equal((2014, 2015), Years("M12")); Assert.Equal((2012, 2013), Years("N14"));
+        Assert.Equal((2010, 2011), Years("M16")); Assert.Equal((2008, 2009), Years("N18")); Assert.Equal((2005, 2007), Years("M21"));
+        var now = DefaultCategories.ForSeason(2027);
+        Assert.Equal((2017, 2019), (now.Single(x => x.Label == "N10").BirthYearMin, now.Single(x => x.Label == "N10").BirthYearMax));
+        Assert.Equal(14, now.Count);
+        Assert.All(now, x => Assert.Equal(x, x.Validated(2027)));
+        var rules = now.Select((x, i) => new CategoryRuleDetails(Guid.NewGuid(), x)).ToArray();
+        foreach (var gender in new[] { Gender.Female, Gender.Male })
+        {
+            for (var year = 1950; year <= 2019; year++)
+            {
+                var label = CategoryResolver.Resolve(new("A", "B", year, null, null, null, gender), rules);
+                Assert.StartsWith(gender == Gender.Female ? "N" : "M", label, StringComparison.Ordinal);
+            }
+        }
+        Assert.Equal(CategoryResolver.Unclassified, CategoryResolver.Resolve(new("A", "B", 2020, null, null, null, Gender.Female), rules));
+    }
     [Fact]
     public async Task PointsColumnIsPreviewedAndTheGeneralValueWinsOverDisciplinePoints()
     {

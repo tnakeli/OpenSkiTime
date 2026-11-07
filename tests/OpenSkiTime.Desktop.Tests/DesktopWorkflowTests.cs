@@ -651,6 +651,14 @@ public partial class DesktopWorkflowTests
             await vm.CreateSeriesCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.True(File.Exists(file));
+            // A new series starts with the age classes of its season (2025/26 here); this test brings its own rule.
+            Assert.Equal(14, vm.CategoryRules.Count);
+            foreach (var rule in vm.CategoryRules.ToArray())
+            {
+                vm.SelectedCategoryRule = rule;
+                await vm.RemoveCategoryRuleCommand.ExecuteAsync(null);
+            }
+            Assert.Empty(vm.CategoryRules);
 
             Click(window, "Event series");
             vm.StartDateText = "31.02.2026";

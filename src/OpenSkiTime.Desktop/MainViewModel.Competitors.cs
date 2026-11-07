@@ -556,6 +556,22 @@ public sealed partial class MainViewModel
         });
     }
 
+    [RelayCommand]
+    private async Task LoadDefaultCategoriesAsync()
+    {
+        await GuardAsync(async () =>
+        {
+            EnsureDeskClean();
+            var series = _current ?? throw new SeriesFileException("Open an event series first.");
+            var rules = DefaultCategories.ForSeason(FisSeason.FromSeries(series.Values.Season, series.Values.StartDate));
+            var revision = await workspace.ReplaceCategoryRulesAsync(rules, series.Revision);
+            _current = series with { Revision = revision };
+            await LoadCompetitorDeskAsync();
+            NewCategoryRule();
+            SetStatus($"Loaded the {rules.Count} default classes of season {series.Values.Season} (N/M 10–21 and general). Categories updated.");
+        });
+    }
+
     private static Gender? ParseCategoryGender(string text) => text.Trim().ToUpperInvariant() switch
     {
         "" or "ANY" => null,
