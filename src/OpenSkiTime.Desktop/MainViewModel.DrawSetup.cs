@@ -37,6 +37,10 @@ public sealed partial class DrawBlockRow : ObservableObject
     [ObservableProperty] private string _reverseFirst = "30";
     [ObservableProperty] private string _nonFinishers = NonFinisherChoices[0];
     [ObservableProperty] private string _firstBib = string.Empty;
+    // Worked out from the order, the starters of every block, the draw settings and the first bibs typed in other rows.
+    [ObservableProperty] private string _autoFirstBib = string.Empty;
+    [ObservableProperty] private string _bibRange = string.Empty;
+    [ObservableProperty] private bool _bibConflict;
 
     public bool IsByPoints => FirstRun == FirstRunChoices[1];
     public bool IsReverseResults => LaterRun == LaterRunChoices[1];
@@ -166,10 +170,50 @@ public sealed partial class MainViewModel
         RenumberDrawBlocks();
     }
 
+    private readonly HashSet<DrawBlockRow> _trackedDrawBlocks = [];
+
     private void RenumberDrawBlocks()
     {
-        for (var i = 0; i < DrawBlocks.Count; i++) { DrawBlocks[i].Order = i + 1; }
+        for (var i = 0; i < DrawBlocks.Count; i++)
+        {
+            DrawBlocks[i].Order = i + 1;
+            if (_trackedDrawBlocks.Add(DrawBlocks[i]))
+            { DrawBlocks[i].PropertyChanged += (_, e) => { if (e.PropertyName == nameof(DrawBlockRow.FirstBib)) { RecomputeDrawBibs(); } }; }
+        }
+        RecomputeDrawBibs();
         OnPropertyChanged(nameof(CanPrepareDraw)); OnPropertyChanged(nameof(DrawBlockReason));
+    }
+
+    partial void OnDrawFirstBibChanged(int value) => RecomputeDrawBibs();
+    partial void OnDrawSkippedBibsTextChanged(string value) => RecomputeDrawBibs();
+
+    // Shows the bib range of every block. A block starts after the one before it, at the first bib of the draw settings
+    // for the first block, leaving out the skipped bibs; a first bib typed in a row moves that row and all after it.
+    private void RecomputeDrawBibs()
+    {
+        IReadOnlyCollection<int> skipped;
+        try { skipped = FisStartOrder.ParseBibList(DrawSkippedBibsText); }
+        catch (DomainValidationException) { skipped = []; }
+        var next = Math.Max(1, DrawFirstBib);
+        foreach (var row in DrawBlocks)
+        {
+            row.BibConflict = false;
+            if (row.Starters == 0) { row.AutoFirstBib = string.Empty; row.BibRange = string.Empty; continue; }
+            var start = next;
+            if (int.TryParse(row.FirstBib.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var own) && own >= 1)
+            {
+                row.BibConflict = own < next;
+                start = own;
+            }
+            try
+            {
+                var bibs = FisStartOrder.Bibs(start, skipped, row.Starters);
+                row.AutoFirstBib = FisStartOrder.Bibs(next, skipped, 1)[0].ToString(CultureInfo.InvariantCulture);
+                row.BibRange = row.BibConflict ? $"{bibs[0]}–{bibs[^1]} overlaps" : $"{bibs[0]}–{bibs[^1]}";
+                next = Math.Max(next, bibs[^1] + 1);
+            }
+            catch (DomainValidationException) { row.AutoFirstBib = string.Empty; row.BibRange = "Over 99999"; row.BibConflict = true; }
+        }
     }
 
     [RelayCommand]
@@ -216,7 +260,7 @@ public sealed partial class MainViewModel
         var at = index;
         foreach (var className in row.Classes)
         {
-            DrawBlocks.Insert(at++, new([className], counts.GetValueOrDefault(className)) { FirstRun = row.FirstRun, BetterPoints = row.BetterPoints,
+            DrawBlocks.Insert(at, new([className], counts.GetValueOrDefault(className)) { FirstBib = at++ == index ? row.FirstBib : string.Empty, FirstRun = row.FirstRun, BetterPoints = row.BetterPoints,
                 FirstGroup = row.FirstGroup, ZeroIsNoPoints = row.ZeroIsNoPoints, LaterRun = row.LaterRun, ReverseFirst = row.ReverseFirst,
                 NonFinishers = row.NonFinishers });
         }

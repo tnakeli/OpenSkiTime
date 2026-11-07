@@ -55,11 +55,22 @@ public sealed class FlexDrawWorkflowTests
             vm.SelectedDrawBlock = vm.DrawBlocks[1];
             vm.MergeDrawBlockCommand.Execute(null);
             Assert.Equal(["N12", "N10 + M10"], vm.DrawBlocks.Select(x => x.ClassesText));
+            // First bibs are worked out from the order and the draw settings; a typed first bib moves the blocks after it.
+            Assert.Equal(["1–4", "5–12"], vm.DrawBlocks.Select(x => x.BibRange));
+            Assert.Equal(["1", "5"], vm.DrawBlocks.Select(x => x.AutoFirstBib));
+            vm.DrawFirstBib = 11; vm.DrawSkippedBibsText = "13";
+            Assert.Equal(["11–15", "16–23"], vm.DrawBlocks.Select(x => x.BibRange));
+            vm.DrawFirstBib = 1; vm.DrawSkippedBibsText = "";
+            vm.DrawBlocks[1].FirstBib = "20";
+            Assert.Equal(["1–4", "20–27"], vm.DrawBlocks.Select(x => x.BibRange));
+            vm.DrawBlocks[1].FirstBib = "3";
+            Assert.True(vm.DrawBlocks[1].BibConflict);
+            vm.DrawBlocks[1].FirstBib = "11";
             await vm.PrepareDrawCommand.ExecuteAsync(null);
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(12, vm.DrawEntries.Count);
             Assert.All(vm.DrawEntries.Take(4), x => Assert.Equal("N12", x.Entrant.Class));
-            Assert.Equal(Enumerable.Range(1, 12), vm.DrawEntries.Select(x => x.Bib));
+            Assert.Equal(Enumerable.Range(1, 4).Concat(Enumerable.Range(11, 8)), vm.DrawEntries.Select(x => x.Bib));
             Assert.Null(vm.DrawRevision!.Plan.Gender);
             // Later runs reverse the start order without any results; run 3 repeats the order of run 2.
             var runOne = vm.DrawEntries.Select(x => x.Bib).ToArray();

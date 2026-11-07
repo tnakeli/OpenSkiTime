@@ -20,7 +20,7 @@ One row per block, in start order (**Up** / **Down** move the selected block). *
 | Better points | **Lower** (FIS style) or **Higher**. |
 | First group | Size of the best group (1–1000). |
 | 0 = no points | Treat a points value of 0 as no points. |
-| First bib | Optional start of a bib range for the block (for example 101); empty continues from the previous block. The global **First bib** and **Skipped bibs** settings still apply. |
+| First bib / Bibs | The **Bibs** column shows the range of every block, worked out from the order, the number of starters, the global **First bib** and **Skipped bibs** of the draw settings. **First bib** shows the calculated start as a hint; type a number (for example 11 after a block of 1–7) to start that block there. The blocks after it follow, and a number that overlaps the block before is marked. |
 
 **Later runs** (every run after the first, from the run before it)
 
