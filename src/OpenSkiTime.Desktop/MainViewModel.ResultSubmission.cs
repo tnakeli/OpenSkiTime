@@ -17,7 +17,10 @@ public sealed partial class MainViewModel
     private bool _submissionClientDisposed;
     private readonly Dictionary<(string?, Guid), (string Id, FisUploadOutcome? Outcome)> _submissionDisplays = [];
     private (string?, Guid)? _submissionDisplayKey;
-    private (string?, Guid) CurrentSubmissionKey => _submissionDisplayKey ?? (workspace.FilePath, Guid.Empty);
+    // True while the display shows a pasted submission this revision never sent: it is not remembered.
+    private bool _showingLookup;
+    // Without a saved XML revision the key is the competition itself, so an answer never shows on another race.
+    private (string?, Guid) CurrentSubmissionKey => _submissionDisplayKey ?? (workspace.FilePath, ResultsCompetition?.Id ?? Guid.Empty);
 
     // Real submissions are the default; test mode is a deliberate, visible choice that is not remembered between runs.
     [ObservableProperty] private bool _fisUploadTestMode;
@@ -71,7 +74,7 @@ public sealed partial class MainViewModel
     partial void OnIsFisResponseVisibleChanged(bool value) => OnPropertyChanged(nameof(FisResponseButtonLabel));
     partial void OnSelectedFisTestScenarioChanged(FisTestScenarioChoice value) => OnPropertyChanged(nameof(FisTestScenarioDetail));
     partial void OnFisUploadTestModeChanged(bool value)
-    { IsSendConfirmationOpen = false; OnPropertyChanged(nameof(SendToFisLabel)); }
+    { IsSendConfirmationOpen = false; IsReportSendConfirmationOpen = false; OnPropertyChanged(nameof(SendToFisLabel)); }
     partial void OnIsSendConfirmationOpenChanged(bool value) => OnPropertyChanged(nameof(SendConfirmationText));
     partial void OnResultsXmlFileNameChanged(string value) => OnPropertyChanged(nameof(SendConfirmationText));
     partial void OnResultSubmissionOutcomeChanged(FisUploadOutcome? value)
@@ -93,13 +96,14 @@ public sealed partial class MainViewModel
 
     private void ShowRememberedSubmission()
     {
+        _showingLookup = false;
         if (_submissionDisplays.TryGetValue(CurrentSubmissionKey, out var saved)) { ResultSubmissionId = saved.Id; ResultSubmissionOutcome = saved.Outcome; }
         else { ResultSubmissionId = ""; ResultSubmissionOutcome = null; }
     }
 
     private void RememberSubmissionDisplay()
     {
-        if (_submissionDisplayKey is { } key) { _submissionDisplays[key] = (ResultSubmissionId, ResultSubmissionOutcome); }
+        if (_submissionDisplayKey is { } key && !_showingLookup) { _submissionDisplays[key] = (ResultSubmissionId, ResultSubmissionOutcome); }
     }
 
     // What the left card says about the XML: its file name and whether the saved revision still matches the results.
@@ -136,7 +140,8 @@ public sealed partial class MainViewModel
         var xml = FisResultXml.Create(xmlRace, _current.Values, penalty, metadata);
         var latest = ResultApprovals.FirstOrDefault();
         if (latest is not null && latest.SourceFingerprint == _resultFingerprint && latest.Xml.AsSpan().SequenceEqual(xml)
-            && latest.AppliedPenalty == penalty.Applied && latest.CalculatedPenalty == penalty.Calculated)
+            && latest.AppliedPenalty == penalty.Applied && latest.CalculatedPenalty == penalty.Calculated
+            && latest.Information is not null && System.Text.Json.JsonSerializer.Serialize(latest.Information) == System.Text.Json.JsonSerializer.Serialize(information))
         { return latest; }
         var competitionId = ResultsCompetition.Id;
         var path = workspace.FilePath;
@@ -180,6 +185,8 @@ public sealed partial class MainViewModel
     {
         if (!IsSendConfirmationOpen) { return; }
         IsSendConfirmationOpen = false;
+        // The confirmation was for a real send; it never turns into one after test mode was switched on.
+        if (FisUploadTestMode) { return; }
         await SendCoreAsync(test: false);
     }
 
@@ -222,6 +229,13 @@ public sealed partial class MainViewModel
     {
         if (IsSubmissionBusy || !Guid.TryParse(ResultSubmissionId, out var uuid) || uuid == Guid.Empty) { return; }
         var key = CurrentSubmissionKey;
+        // The answer of a submission this revision never sent is shown, not remembered under it.
+        var known = _submissionDisplays.GetValueOrDefault(key).Id == uuid.ToString("D");
+        void Show(FisUploadOutcome outcome)
+        {
+            if (known) { Publish(key, outcome); }
+            else if (CurrentSubmissionKey == key) { _showingLookup = true; ResultSubmissionOutcome = outcome; }
+        }
         IsSubmissionBusy = true;
         _submissionOperations++;
         using var cancellation = new CancellationTokenSource();
@@ -232,12 +246,12 @@ public sealed partial class MainViewModel
             _submissionClient ??= new(_submissionHttp);
             var token = _fisStore.ReadMemberToken() ?? "";
             var response = await _submissionClient.PollAsync(uuid, token, cancellation.Token);
-            await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", "", outcome => Publish(key, outcome), null, cancellation.Token);
+            await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", "", Show, null, cancellation.Token);
         }
         catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or IOException or HttpRequestException
             or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
         {
-            Publish(key, FisUploadOutcomes.FailureOutcome(ex, ResultSubmissionOutcome?.IsTest ?? false, mode, uuid.ToString("D"), ResultSubmissionOutcome?.FileName ?? ""));
+            Show(FisUploadOutcomes.FailureOutcome(ex, ResultSubmissionOutcome?.IsTest ?? false, mode, uuid.ToString("D"), ResultSubmissionOutcome?.FileName ?? ""));
         }
         finally { _submissionCancellation = null; IsSubmissionBusy = false; _submissionOperations--; TryDisposeSubmissionClient(); }
     }
@@ -272,9 +286,10 @@ public sealed partial class MainViewModel
 
     private void Publish((string?, Guid) key, FisUploadOutcome outcome)
     {
-        _submissionDisplays[key] = (outcome.SubmissionId.Length > 0 ? outcome.SubmissionId : _submissionDisplays.GetValueOrDefault(key).Id ?? "", outcome);
-        if (CurrentSubmissionKey != key && _submissionDisplayKey is not null) { return; }
-        if (outcome.SubmissionId.Length > 0) { ResultSubmissionId = outcome.SubmissionId; }
+        _submissionDisplays[key] = (outcome.SubmissionId, outcome);
+        if (CurrentSubmissionKey != key) { return; }
+        _showingLookup = false;
+        ResultSubmissionId = outcome.SubmissionId;
         ResultSubmissionOutcome = outcome;
     }
 

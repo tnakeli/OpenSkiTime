@@ -170,6 +170,7 @@ public sealed partial class MainViewModel
             ReportApprovals.Clear();
             foreach (var approval in (await workspace.ReadApprovedTimingReportsAsync(competition.Id)).Reverse()) { ReportApprovals.Add(approval); }
             SelectedReportApproval = ReportApprovals.FirstOrDefault();
+            ShowReportSubmission(SelectedReportApproval);
             await LoadReportHistoryAsync();
 
             // A and connected auxiliary evidence are projections of the current database,

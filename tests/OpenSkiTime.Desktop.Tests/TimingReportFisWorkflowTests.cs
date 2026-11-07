@@ -49,6 +49,16 @@ public partial class DesktopWorkflowTests
             Assert.True(vm.IsReportSendConfirmationOpen); Assert.Empty(handler.Calls);
             vm.CancelSendTimingReportCommand.Execute(null);
             Assert.False(vm.IsReportSendConfirmationOpen);
+
+            // Switching test mode on cancels a pending real send; a confirmation never becomes a real send in test mode.
+            await vm.SendTimingReportToFisCommand.ExecuteAsync(null);
+            Assert.True(vm.IsReportSendConfirmationOpen);
+            vm.FisUploadTestMode = true;
+            Assert.False(vm.IsReportSendConfirmationOpen);
+            vm.IsReportSendConfirmationOpen = true;
+            await vm.ConfirmSendTimingReportCommand.ExecuteAsync(null);
+            Assert.False(vm.IsReportSendConfirmationOpen); Assert.Empty(handler.Calls); Assert.Null(vm.ReportSubmissionOutcome);
+            vm.FisUploadTestMode = false;
             await vm.SendTimingReportToFisCommand.ExecuteAsync(null);
             await vm.ConfirmSendTimingReportCommand.ExecuteAsync(null);
             var outcome = Assert.IsType<FisUploadOutcome>(vm.ReportSubmissionOutcome);

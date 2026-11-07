@@ -46,21 +46,22 @@ public partial class DesktopWorkflowTests
     private static HttpResponseMessage FisJson(object body, HttpStatusCode status = HttpStatusCode.OK)
         => new(status) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
 
-    private static object FisAnswer(string fileName, string fileStatus, string? comment, bool test, string codex = "0592")
+    private static object FisAnswer(string fileName, string fileStatus, string? comment, bool test, string codex = "0592", Guid? uuid = null)
     {
+        var id = uuid ?? s_fisSubmission;
         var processed = fileStatus == "processed"; var rejected = fileStatus == "rejected";
         var file = new { index = 0, fileName, detectedType = "XML", status = fileStatus, sectorCode = "AL", seasonCode = 2027, raceCodex = codex, comments = comment, updatedAt = "2026-11-07T10:38:53+01:00" };
         var summary = new { total = 1, accepted = fileStatus == "accepted" ? 1 : 0, processed = processed ? 1 : 0, rejected = rejected ? 1 : 0, isComplete = processed || rejected };
         var outcome = rejected ? "rejected" : "success";
         var message = rejected ? "All competition files were rejected." : "Competition files uploaded successfully.";
         return test
-            ? new { uuid = s_fisSubmission, outcome, summary, message, files = new[] { file }, testMode = (bool?)true }
-            : new { uuid = s_fisSubmission, outcome, summary, message, files = new[] { file }, testMode = (bool?)null };
+            ? new { uuid = id, outcome, summary, message, files = new[] { file }, testMode = (bool?)true }
+            : new { uuid = id, outcome, summary, message, files = new[] { file }, testMode = (bool?)null };
     }
 
     // A complete one-run FIS race with results, a penalty and full race information, ready for the XML.
     private static async Task<(string Folder, string XmlPath, SeriesWorkspace Workspace, MainViewModel Vm, Guid Competition)> FisXmlRaceAsync(
-        FisHandler handler, bool withToken = true)
+        FisHandler handler, bool withToken = true, bool secondRace = false)
     {
         var folder = Path.Combine(Path.GetTempPath(), "openskitime-fisxml-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -72,6 +73,11 @@ public partial class DesktopWorkflowTests
             Calendar: new(2027, "Test", "FIN", "TEST", "W", new("TEST", "Delegate", "FIN", "1047")));
         series = await workspace.SaveCompetitionAsync(null, race, series.Revision);
         var competition = series.Competitions[0].Id; var revision = series.Revision;
+        if (secondRace)
+        {
+            series = await workspace.SaveCompetitionAsync(null, race with { Name = "Other race", ShortLabel = "SG2 W", FisCode = "0593" }, series.Revision);
+            revision = series.Revision;
+        }
         var entrants = new List<DrawEntrant>();
         for (var i = 1; i <= 6; i++)
         {
@@ -159,6 +165,108 @@ public partial class DesktopWorkflowTests
             await vm.SendToFisCommand.ExecuteAsync(null); await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
             Assert.Equal(2, handler.Calls.Count);
             Assert.Single(await workspace.ReadApprovedResultsAsync(competition));
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task ChangingTheUploadModeCancelsAPendingRealSendAndAConfirmationNeverBecomesARealSendInTestMode()
+    {
+        using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName!, "processed", "File successfully saved!", test: false)));
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler);
+        try
+        {
+            await vm.SendToFisCommand.ExecuteAsync(null);
+            Assert.True(vm.IsSendConfirmationOpen);
+            vm.FisUploadTestMode = true;
+            Assert.False(vm.IsSendConfirmationOpen);
+            // Even a confirmation that is somehow open again must not send for real once test mode is on.
+            vm.IsSendConfirmationOpen = true;
+            await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
+            Assert.False(vm.IsSendConfirmationOpen); Assert.Empty(handler.Calls);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task ANewAttemptNeverShowsTheSubmissionIdOfAnEarlierOne()
+    {
+        // A simulated upload is answered; the real upload that follows loses its response.
+        using var handler = new FisHandler(call => call.TestMode == "true"
+            ? FisJson(FisAnswer(call.FileName!, "processed", "File successfully saved!", test: true, codex: "9991"))
+            : throw new HttpRequestException("The connection was lost."));
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler);
+        try
+        {
+            vm.FisUploadTestMode = true;
+            await vm.SendToFisCommand.ExecuteAsync(null);
+            Assert.Equal(s_fisSubmission.ToString("D"), vm.ResultSubmissionId);
+
+            vm.FisUploadTestMode = false;
+            await vm.SendToFisCommand.ExecuteAsync(null); await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
+            var outcome = Assert.IsType<FisUploadOutcome>(vm.ResultSubmissionOutcome);
+            Assert.True(outcome.IsError); Assert.False(outcome.IsTest); Assert.Equal("Could not reach FIS", outcome.Title);
+            // Check status must not lead back to the test submission.
+            Assert.Equal("", outcome.SubmissionId); Assert.Equal("", vm.ResultSubmissionId); Assert.False(vm.CanCheckResultsSubmission);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task TheFisAnswerStaysWithItsRaceAndAPastedSubmissionIdIsShownButNotRemembered()
+    {
+        var pasted = new Guid("00000000-0000-0000-0000-0000000000f7");
+        using var handler = new FisHandler(call => call.Url.Contains("/status/", StringComparison.Ordinal)
+            ? FisJson(FisAnswer("FIN0593.xml", "processed", "File successfully saved!", test: false, codex: "0593", uuid: Guid.Parse(call.Url[^36..])))
+            : FisJson(FisAnswer(call.FileName!, "processed", "File successfully saved!", test: false)));
+        var (folder, _, workspace, vm, _) = await FisXmlRaceAsync(handler, secondRace: true);
+        try
+        {
+            var first = vm.ResultsCompetition!; var other = vm.Competitions.Single(x => x.Values.ShortLabel == "SG2 W");
+            await vm.SendToFisCommand.ExecuteAsync(null); await vm.ConfirmSendToFisCommand.ExecuteAsync(null);
+            Assert.Equal("Results accepted by FIS", vm.ResultSubmissionOutcome!.Title);
+
+            // Another race starts without the first race's answer or submission id.
+            await vm.SelectActiveCompetitionCommand.ExecuteAsync(other);
+            Assert.Null(vm.ResultSubmissionOutcome); Assert.Equal("", vm.ResultSubmissionId); Assert.Equal("", vm.ResultsXmlFileName);
+            await vm.SelectActiveCompetitionCommand.ExecuteAsync(first);
+            Assert.Equal("Results accepted by FIS", vm.ResultSubmissionOutcome!.Title);
+            Assert.Equal(s_fisSubmission.ToString("D"), vm.ResultSubmissionId);
+
+            // An id pasted from elsewhere is looked up and shown, but this revision still remembers its own submission.
+            vm.ResultSubmissionId = pasted.ToString("D");
+            await vm.CheckResultsSubmissionCommand.ExecuteAsync(null);
+            Assert.Equal(pasted.ToString("D"), vm.ResultSubmissionOutcome!.SubmissionId);
+            await vm.SelectActiveCompetitionCommand.ExecuteAsync(other);
+            await vm.SelectActiveCompetitionCommand.ExecuteAsync(first);
+            Assert.Equal(s_fisSubmission.ToString("D"), vm.ResultSubmissionId);
+            Assert.Equal(s_fisSubmission.ToString("D"), vm.ResultSubmissionOutcome!.SubmissionId);
+        }
+        finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task ARevisionIsReusedOnlyWhileTheRaceInformationSnapshotIsTheSame()
+    {
+        using var handler = new FisHandler(call => FisJson(FisAnswer(call.FileName!, "processed", "File successfully saved!", test: false)));
+        var (folder, _, workspace, vm, competition) = await FisXmlRaceAsync(handler);
+        try
+        {
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            Assert.Single(await workspace.ReadApprovedResultsAsync(competition));
+
+            // The weather source is race information that is not part of the XML: the XML bytes stay the same, but the
+            // snapshot differs, so a new revision is needed for the Official Results PDF to count it as current.
+            vm.ResultsRuns[0].WeatherSource = "Measured by the course crew";
+            Assert.True(await vm.FlushRaceInformationAsync(), vm.StatusMessage);
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            var revisions = await workspace.ReadApprovedResultsAsync(competition);
+            Assert.Equal(2, revisions.Count);
+            Assert.Equal(revisions[0].Xml, revisions[1].Xml);
+            Assert.NotEqual(revisions[0].Information, revisions[1].Information);
+            await vm.SaveFisXmlCommand.ExecuteAsync(null);
+            Assert.Equal(2, (await workspace.ReadApprovedResultsAsync(competition)).Count);
         }
         finally { vm.Dispose(); await workspace.DisposeAsync(); Directory.Delete(folder, true); }
     }

@@ -77,9 +77,12 @@ public sealed partial class MainViewModel
     }
 
     // The answers FIS gave to this XML revision: from this session, or read back from the event file.
+    // Without an XML revision the key is the competition itself, so an answer never shows on another report.
+    private Guid ReportDisplayKey(ApprovedTimingReport? approval) => approval?.Id ?? ReportCompetition?.Id ?? Guid.Empty;
+
     private void ShowReportSubmission(ApprovedTimingReport? approval)
     {
-        if (approval is not null && _reportSubmissionDisplays.TryGetValue(approval.Id, out var shown)) { ReportSubmissionId = shown.Id; ReportSubmissionOutcome = shown.Outcome; }
+        if (_reportSubmissionDisplays.TryGetValue(ReportDisplayKey(approval), out var shown)) { ReportSubmissionId = shown.Id; ReportSubmissionOutcome = shown.Outcome; }
         else { ReportSubmissionId = ""; ReportSubmissionOutcome = null; }
     }
 
@@ -112,9 +115,9 @@ public sealed partial class MainViewModel
 
     private void PublishReport(Guid approvalId, FisUploadOutcome outcome)
     {
-        _reportSubmissionDisplays[approvalId] = (outcome.SubmissionId.Length > 0 ? outcome.SubmissionId : _reportSubmissionDisplays.GetValueOrDefault(approvalId).Id ?? "", outcome);
-        if ((SelectedReportApproval?.Id ?? Guid.Empty) != approvalId) { return; }
-        if (outcome.SubmissionId.Length > 0) { ReportSubmissionId = outcome.SubmissionId; }
+        _reportSubmissionDisplays[approvalId] = (outcome.SubmissionId, outcome);
+        if (ReportDisplayKey(SelectedReportApproval) != approvalId) { return; }
+        ReportSubmissionId = outcome.SubmissionId;
         ReportSubmissionOutcome = outcome;
     }
 
@@ -131,12 +134,25 @@ public sealed partial class MainViewModel
         else { await SaveReportCoreAsync(); }
         if (ReportValidation.Length > 0) { return null; }
         var latest = ReportApprovals.FirstOrDefault();
-        if (latest is not null && latest.DraftRevision == _reportSaved!.Revision && latest.SourceFingerprint == _reportDraft!.SourceFingerprint) { return latest; }
+        // Timing can be committed after the report was loaded (clocks stay connected): reuse a revision only when the
+        // persisted timing still matches it. Otherwise the approval below refuses the stale report as before.
+        var committed = await CurrentReportFingerprintAsync(_reportDraft!.CompetitionId);
+        if (latest is not null && latest.DraftRevision == _reportSaved!.Revision && latest.SourceFingerprint == _reportDraft.SourceFingerprint
+            && _reportDraft.SourceFingerprint == committed) { return latest; }
         var approved = await workspace.ApproveTimingReportAsync(new(_reportDraft!.CompetitionId, _reportSaved!.Revision,
             _current!.Revision, TimingOperator, DateTimeOffset.UtcNow, ReportSoftwareVersion));
         ReportApprovals.Insert(0, approved); SelectedReportApproval = approved;
         _current = await workspace.ReadAsync();
         return approved;
+    }
+
+    private async Task<string> CurrentReportFingerprintAsync(Guid competitionId)
+    {
+        var desk = await workspace.ReadStartListsAsync(competitionId);
+        var sources = new List<TimingReplayData>();
+        foreach (var list in desk.Revisions.GroupBy(x => x.Plan.RunNumber).Select(g => g.MaxBy(x => x.Revision)!))
+        { sources.Add(await workspace.ReadTimingAsync(list.Id)); }
+        return TimingReportProjection.Fingerprint(sources);
     }
 
     [RelayCommand]
@@ -172,6 +188,8 @@ public sealed partial class MainViewModel
     {
         if (!IsReportSendConfirmationOpen) { return; }
         IsReportSendConfirmationOpen = false;
+        // The confirmation was for a real send; it never turns into one after test mode was switched on.
+        if (FisUploadTestMode) { return; }
         await SendReportCoreAsync(test: false);
     }
 
@@ -188,7 +206,7 @@ public sealed partial class MainViewModel
         IsReportBusy = true; IsReportSubmitting = true;
         using var cancellation = new CancellationTokenSource(); _reportSubmissionCancellation = cancellation;
         var mode = test ? "TEST · " + SelectedFisTestScenario.Label.ToLowerInvariant() : "LIVE";
-        var key = SelectedReportApproval?.Id ?? Guid.Empty;
+        var key = ReportDisplayKey(SelectedReportApproval);
         try
         {
             ApprovedTimingReport? approval;
@@ -240,23 +258,31 @@ public sealed partial class MainViewModel
         var file = workspace.FilePath;
         IsReportBusy = true; IsReportSubmitting = true;
         using var cancellation = new CancellationTokenSource(); _reportSubmissionCancellation = cancellation;
-        var key = approval?.Id ?? Guid.Empty;
+        var key = ReportDisplayKey(approval);
+        var adHoc = true;
+        void Show(FisUploadOutcome outcome)
+        {
+            if (workspace.FilePath != file) { return; }
+            if (!adHoc) { PublishReport(key, outcome); }
+            else if (ReportDisplayKey(SelectedReportApproval) == key) { ReportSubmissionOutcome = outcome; }
+        }
         try
         {
-            if (uuid is null && approval is not null) { uuid = (await workspace.ReadTimingReportSubmissionAsync(approval.Id))?.Uuid; }
+            var associated = approval is null ? null : (await workspace.ReadTimingReportSubmissionAsync(approval.Id))?.Uuid;
+            if (uuid is null) { uuid = associated; }
             if (uuid is null) { throw new DomainValidationException("No submission ID is saved for this XML revision. Send it first."); }
+            // Only the submission this revision sent is saved with it; any other ID is looked up and shown.
+            adHoc = approval is null || associated != uuid;
             _submissionClient ??= new(_submissionHttp);
             var token = _fisStore.ReadMemberToken() ?? "";
             var response = await _submissionClient.PollAsync(uuid.Value, token, cancellation.Token);
             await FollowFisSubmissionAsync(_submissionClient, token, response, response.Submission.IsTest ? "TEST" : "LIVE", approval?.XmlFileName ?? "",
-                outcome => { if (workspace.FilePath == file) { PublishReport(key, outcome); } },
-                approval is null ? null : r => PersistReportSubmissionAsync(approval, r, file), cancellation.Token);
+                Show, adHoc ? null : r => PersistReportSubmissionAsync(approval!, r, file), cancellation.Token);
         }
         catch (Exception ex) when (ex is DomainValidationException or FisSubmissionException or SeriesFileException or SeriesConflictException
             or IOException or UnauthorizedAccessException or HttpRequestException or OperationCanceledException or PlatformNotSupportedException or ArgumentException)
         {
-            if (workspace.FilePath == file)
-            { PublishReport(key, FisUploadOutcomes.FailureOutcome(ex, ReportSubmissionOutcome?.IsTest ?? false, ReportSubmissionOutcome?.Mode ?? "", uuid?.ToString("D") ?? "", ReportSubmissionOutcome?.FileName ?? "")); }
+            Show(FisUploadOutcomes.FailureOutcome(ex, ReportSubmissionOutcome?.IsTest ?? false, ReportSubmissionOutcome?.Mode ?? "", uuid?.ToString("D") ?? "", ReportSubmissionOutcome?.FileName ?? ""));
         }
         finally { _reportSubmissionCancellation = null; IsReportSubmitting = false; IsReportBusy = false; }
     }

@@ -105,6 +105,8 @@ public sealed partial class MainViewModel
         _resultRace = null; _resultFingerprint = null;
         _resultsRuleProfile = null; ResultsRuleSource = ""; ResultsRuleFigures = null;
         _reviewedPenalty = null;
+        // The XML revision and the FIS answer shown belong to the race being loaded, never to the previous one.
+        SelectedResultApproval = null;
         ResultRows.Clear(); ResultBestClassified.Clear(); ResultBestStarted.Clear(); ResultApprovals.Clear();
         ResultTopTen.Clear();
         ResultsPenaltyFigures = null;
