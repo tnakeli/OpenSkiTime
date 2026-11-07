@@ -344,7 +344,7 @@ public sealed class PdfFactoryTests
             RaceInformation.Empty(Competition).Runs[0] with { Gates = 42, TurningGates = 40, StartTime = "12:00", CourseSetter = new("Test", "Setter", "FIN") },
             RaceInformation.Empty(Competition).Runs[1] with { Gates = 42, TurningGates = 40, StartTime = "13:00", CourseSetter = new("Test", "Setter", "FIN") }] };
         var details = new FisXmlDetails("FIS", new("Test", "TD", "FIN"), new("Test", "Chief", "FIN"),
-            information.Runs.Select(x => new FisRunXmlDetails(42, 40, x.StartTime, x.CourseSetter)).ToArray(), information);
+            information.Runs.Select(x => new FisRunXmlDetails(42, 40, x.StartTime, x.CourseSetter)).ToArray(), information, CourseChief: new("Course", "Chief", "FIN"));
         var xml = FisResultXml.Create(race, Series, penalty, details);
         await workspace.ApproveResultAsync(new(competition.Id, first.Id, second.Id, ResultSourceFingerprint.Create(firstReplay, secondReplay),
             (await workspace.ReadAsync()).Revision, "Synthetic TD", "FIN1234.xml", xml, penalty.Calculated, penalty.Applied, information));

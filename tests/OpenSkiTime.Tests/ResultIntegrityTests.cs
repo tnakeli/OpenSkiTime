@@ -19,7 +19,7 @@ public sealed class ResultIntegrityTests
         HomologationNumber: "12345/01/26", Calendar: new(2027, "Levi", "FIN", "FIS", "M"));
     private static readonly SeriesValues s_series = new("Series", "Levi", "Club", s_race.Date, s_race.Date, "FIN", "2026/27");
     private static readonly FisXmlDetails s_details = new("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"),
-        [new(45, 43, "10:00", new("S", "Setter", "FIN"))]);
+        [new(45, 43, "10:00", new("S", "Setter", "FIN"))], CourseChief: new("Course", "Chief", "FIN"));
 
     private static StartListEntry Entry(int bib, CompetitorValues? athlete = null) => new(bib, bib, new DrawEntrant(new Guid(bib, 3, 3, new byte[8]),
         athlete ?? new("RACER" + bib.ToString(CultureInfo.InvariantCulture), "Test", 2000, (800000 + bib).ToString(CultureInfo.InvariantCulture), "FIN", "Club", Gender.Male),

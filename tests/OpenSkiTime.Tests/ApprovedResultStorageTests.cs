@@ -58,7 +58,7 @@ public sealed class ApprovedResultStorageTests
             var race = FisRaceResults.Assemble(raw.List, TimingReplay.Restore(raw, new AlgeDecoderFactory()));
             var penalty = FisPenalty.Calculate(values.Discipline, race.PenaltyCompetitors, new(0, 999, 0));
             var metadata = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"),
-                new("C", "Chief", "FIN"), [new(42, 40, "12:00", new("S", "Setter", "FIN"))]);
+                new("C", "Chief", "FIN"), [new(42, 40, "12:00", new("S", "Setter", "FIN"))], CourseChief: new("Course", "Chief", "FIN"));
             var xml = FisResultXml.Create(race, (await workspace.ReadAsync()).Values, penalty, metadata);
             var information = RaceInformation.Empty(values) with { Category = "FIS" };
             var request = new ApproveResultRequest(competition.Id, list.Id, null,

@@ -33,7 +33,7 @@ public sealed class FisResultsTests
         var race = FisRaceResults.Assemble(list, timing);
         var series = new SeriesValues("Series", "Default place", "Club", s_race.Date, s_race.Date, "FIN", "2026/27");
         var penalty = FisPenalty.Calculate(Discipline.Slalom, race.PenaltyCompetitors, new(0, 999, 0));
-        var details = new FisXmlDetails("FIS", new("Old", "Delegate", "FIN"), new("Test", "Chief", "FIN"), [new(45, 43, "10:00", new("Test", "Setter", "FIN"))]);
+        var details = new FisXmlDetails("FIS", new("Old", "Delegate", "FIN"), new("Test", "Chief", "FIN"), [new(45, 43, "10:00", new("Test", "Setter", "FIN"))], CourseChief: new("Course", "Chief", "FIN"));
         var doc = XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race, series, penalty, details)));
         Assert.Equal("Competition place", doc.Descendants("Place").Single().Value);
         Assert.Equal("NC", doc.Descendants("Category").Single().Value);
@@ -43,6 +43,111 @@ public sealed class FisResultsTests
         Assert.Equal("SWE1234.xml", FisResultXml.FileName(race, series));
         var differentGender = race with { FirstList = list with { Plan = list.Plan with { Competition = list.Plan.Competition with { Calendar = calendar with { Gender = "W" } } } } };
         Assert.Throws<DomainValidationException>(() => FisResultXml.Create(differentGender, series, penalty, details));
+    }
+
+    private static RaceInformation Information(CompetitionValues competition)
+    {
+        var information = RaceInformation.Empty(competition);
+        return information with
+        {
+            Jury = information.Jury.Select(x => x.Function == "TechnicalDelegate" ? x : x with { Person = new("Synthetic", x.Function.ToUpperInvariant(), "FIN") }).ToArray(),
+            Runs = information.Runs.Select(r => r with
+            {
+                CourseSetter = new("Course", "SETTER", "FIN"), Gates = 45, TurningGates = 43, StartTime = "10:00",
+                Forerunners = [new("A", new("Fore", "RUNNER", "FIN"))], Weather = new("Clear", "Hard", StartTemperature: -1m, FinishTemperature: 0m),
+            }).ToArray(),
+        };
+    }
+
+    private static XDocument TwoRunXml(TimingStatus status, bool withInformation = true, FisPerson? courseChief = null)
+    {
+        var (oneRunList, firstTiming) = Fixture();
+        var first = oneRunList with { Plan = oneRunList.Plan with { Competition = oneRunList.Plan.Competition with { RunCount = 2 } } };
+        var secondPlan = FisStartOrder.SecondRun(first, firstTiming.ToRunFinishes());
+        var second = first with { Id = Guid.NewGuid(), Plan = secondPlan };
+        var secondTiming = new TimingSnapshot(second.Id, 0, secondPlan.Entries.Select(entry =>
+            new TimingResult(entry, entry.Bib == 1 ? status : TimingStatus.Finished,
+                entry.Bib == 1 ? null : 5100 + entry.Bib * 100, null, null, null, "")
+            { Disqualification = entry.Bib == 1 && status == TimingStatus.DSQ ? new(19, "ICR 629.3", "Judge") : null }).ToArray(), [], []);
+        var race = FisRaceResults.Assemble(first, firstTiming with { ListId = first.Id }, second, secondTiming);
+        var penalty = FisPenalty.Calculate(Discipline.Slalom, race.PenaltyCompetitors, new(0, 999, 0));
+        var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN", "718"), new("C", "Chief", "FIN"),
+            [new(45, 43, "10:00", new("S", "Setter", "FIN")), new(44, 42, "13:00", new("S", "Setter", "FIN"))],
+            withInformation ? Information(first.Plan.Competition) : null, courseChief);
+        return XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race,
+            new("Series", "Ruka", "Club", s_race.Date, s_race.Date, "FIN", "2026-27"), penalty, details)), LoadOptions.None);
+    }
+
+    // The element tables of the Alpine Result XML specification are checked as a whole; see FisResultXmlSpec.
+    [Theory]
+    [InlineData(TimingStatus.DNS)]
+    [InlineData(TimingStatus.DNF)]
+    [InlineData(TimingStatus.DSQ)]
+    public void GeneratedXmlConformsToTheAlpineResultXmlSpecification(TimingStatus status)
+        => Assert.Empty(FisResultXmlSpec.Validate(TwoRunXml(status), "FIN1234.xml"));
+
+    [Fact]
+    public void OneRunXmlConformsToTheAlpineResultXmlSpecification()
+    {
+        var (list, timing) = Fixture();
+        var race = FisRaceResults.Assemble(list, timing);
+        var penalty = FisPenalty.Calculate(Discipline.Slalom, race.PenaltyCompetitors, new(0, 999, 0));
+        var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"), [new(45, 43, "10:00", new("S", "Setter", "FIN"))],
+            CourseChief: new("Course", "Chief", "FIN"));
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race,
+            new("Series", "Ruka", "Club", s_race.Date, s_race.Date, "FIN", "2026-27"), penalty, details)));
+        Assert.Empty(FisResultXmlSpec.Validate(doc, "FIN1234.xml"));
+    }
+
+    [Fact]
+    public void OfficialsAreSplitIntoJuryAndMembersAndTheSoftwareIsDescribed()
+    {
+        var doc = TwoRunXml(TimingStatus.DNF);
+        var raceInfo = doc.Descendants("AL_raceinfo").Single();
+        // Jury: technical delegate, chief of race and referees. Members: the other officials (2.3.1-2.3.3).
+        Assert.Equal(["TechnicalDelegate", "ChiefRace", "Referee"], raceInfo.Elements("Jury").Select(x => x.Attribute("Function")!.Value));
+        Assert.Equal(["ChiefCourse", "Startreferee", "Finishreferee"], raceInfo.Elements("Member").Select(x => x.Attribute("Function")!.Value));
+        Assert.True(raceInfo.Elements("Jury").Last().IsBefore(raceInfo.Elements("Member").First()));
+        Assert.Equal("718", raceInfo.Elements("Jury").First().Element("Number")!.Value);
+        Assert.Equal(["Course", "Starttime"], raceInfo.Elements("Runinfo").First().Elements().Select(x => x.Name.LocalName).Where(x => x is "Course" or "Starttime"));
+        Assert.Equal("Weather", raceInfo.Elements("Runinfo").First().Elements().ElementAt(1).Name.LocalName);
+        Assert.Equal("Starttime", raceInfo.Elements("Runinfo").First().Elements().Last().Name.LocalName);
+        Assert.Equal(["Softwarecompany", "Softwarename", "Softwareversion"], raceInfo.Elements().Where(x => x.Name.LocalName.StartsWith("Software", StringComparison.Ordinal)).Select(x => x.Name.LocalName));
+        Assert.Equal(ProductInfo.Version, raceInfo.Element("Softwareversion")!.Value);
+        Assert.All(raceInfo.Elements("Runinfo"), x => Assert.NotNull(x.Attribute("No")));
+    }
+
+    [Fact]
+    public void AMemberIsRequiredSoXmlWithoutAnyOtherOfficialIsRefused()
+    {
+        var ex = Assert.Throws<DomainValidationException>(() => TwoRunXml(TimingStatus.DNF, withInformation: false));
+        Assert.Contains("race official", ex.Message, StringComparison.Ordinal);
+        // A course chief given with the details satisfies the requirement when the race information lists none.
+        var doc = TwoRunXml(TimingStatus.DNF, withInformation: false, courseChief: new("Course", "Chief", "FIN"));
+        Assert.Equal("ChiefCourse", Assert.Single(doc.Descendants("Member")).Attribute("Function")!.Value);
+    }
+
+    [Fact]
+    public void NonFinishersCarryNoPartialResultBecauseRacepointsWouldBeRequired()
+    {
+        var doc = TwoRunXml(TimingStatus.DNF);
+        Assert.Empty(doc.Descendants("AL_notranked").Elements("AL_result"));
+    }
+
+    [Fact]
+    public void TheSpecificationCheckerFlagsRealDeviations()
+    {
+        string[] Check(Action<XDocument> change) { var doc = TwoRunXml(TimingStatus.DSQ); change(doc); return [.. FisResultXmlSpec.Validate(doc, "FIN1234.xml")]; }
+        Assert.Contains(Check(d => d.Descendants("Member").Remove()), x => x.Contains("required element Member", StringComparison.Ordinal));
+        Assert.Contains(Check(d => d.Descendants("Timerun1").First().Value = "48.01"), x => x.Contains("Timerun1", StringComparison.Ordinal));
+        Assert.Contains(Check(d => d.Descendants("Runinfo").First().Attribute("No")!.Value = "x"), x => x.Contains("@No", StringComparison.Ordinal));
+        Assert.Contains(Check(d => { var run = d.Descendants("Runinfo").First(); var start = run.Element("Starttime")!; start.Remove(); run.AddFirst(start); }),
+            x => x.Contains("out of order", StringComparison.Ordinal));
+        Assert.Contains(Check(d => d.Descendants("AL_notranked").First().Add(new XElement("AL_result", new XElement("Timerun1", "00:50:00")))),
+            x => x.Contains("Racepoints is missing", StringComparison.Ordinal) || x.Contains("required element Racepoints", StringComparison.Ordinal));
+        Assert.Contains(Check(d => d.Descendants("AL_notranked").First().SetAttributeValue("Status", "DNF9")), x => x.Contains("Status", StringComparison.Ordinal));
+        Assert.Contains(Check(d => d.Descendants("Gender").First().Value = "W"), x => x.Contains("Gender", StringComparison.Ordinal));
+        Assert.Contains(Check(d => d.Root!.Add(new XElement("Surprise"))), x => x.Contains("Surprise", StringComparison.Ordinal));
     }
 
     private static readonly CompetitionValues s_race = new("Public race", "SL1", new(2026, 9, 28), Discipline.Slalom,
@@ -156,14 +261,15 @@ public sealed class FisResultsTests
         var penalty = FisPenalty.Calculate(Discipline.Slalom, race.PenaltyCompetitors, new(0, 999, 0));
         var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"),
             [new(45, 43, "10:00", new("S", "Setter", "FIN")),
-             new(44, 42, "13:00", new("S", "Setter", "FIN"))]);
+             new(44, 42, "13:00", new("S", "Setter", "FIN"))], CourseChief: new("Course", "Chief", "FIN"));
         var doc = XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race,
             new("Series", "Ruka", "Club", s_race.Date, s_race.Date, "FIN", "2026-27"), penalty, details)));
         var notRanked = Assert.Single(doc.Descendants("AL_notranked"));
         Assert.Equal(status + "2", notRanked.Attribute("Status")?.Value);
         Assert.Equal("1", notRanked.Element("Bib")?.Value);
         Assert.Equal("2", notRanked.Element("Run")?.Value);
-        Assert.Equal("00:50:00", notRanked.Element("AL_result")?.Element("Timerun1")?.Value);
+        // A non-finisher has no race points, which AL_result requires (3.11), so it carries no AL_result.
+        Assert.Null(notRanked.Element("AL_result"));
         Assert.Equal(status == TimingStatus.DSQ ? "19" : null, notRanked.Element("Gate")?.Value);
         Assert.Equal(status == TimingStatus.DSQ ? "629.3" : null, notRanked.Element("Reason")?.Value);
         Assert.DoesNotContain("Test judge", doc.ToString(), StringComparison.Ordinal);
@@ -201,7 +307,7 @@ public sealed class FisResultsTests
         var race = FisRaceResults.Assemble(list, timing);
         var penalty = FisPenalty.Calculate(Discipline.Slalom, race.PenaltyCompetitors, new(0, 999, 0));
         var metadata = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"),
-            [new(45, 43, "10:00", new("S", "Setter", "FIN"))]);
+            [new(45, 43, "10:00", new("S", "Setter", "FIN"))], CourseChief: new("Course", "Chief", "FIN"));
         var xml = FisResultXml.Create(race, new("Series", "Ruka", "Club", s_race.Date, s_race.Date, "FIN", "2026-27"),
             penalty, metadata);
         Assert.StartsWith("<?xml", Encoding.UTF8.GetString(xml));
@@ -224,7 +330,7 @@ public sealed class FisResultsTests
         var information = empty with { Runs = [empty.Runs[0] with
             { Weather = new("Clear", "Hard", UnlocatedTemperature: -2.5m) }] };
         var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"),
-            [new(45, 43, "10:00", new("S", "Setter", "FIN"))], information);
+            [new(45, 43, "10:00", new("S", "Setter", "FIN"))], information, CourseChief: new("Course", "Chief", "FIN"));
         var doc = XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race,
             new("Series", "Test", "Club", s_race.Date, s_race.Date, "FIN", "2026/27"), penalty, details)));
         var weather = Assert.Single(doc.Descendants("Runinfo").Single().Elements("Weather"));
@@ -244,7 +350,7 @@ public sealed class FisResultsTests
                 Forerunners = [new("A", new("Test", "RUNNER", "FIN")), new("B", new("Other", "RUNNER", "SWE"))],
                 Weather = new("Clear", "Hard", 0m, -1.2m) }] };
         var details = new FisXmlDetails("FIS", new("T", "Delegate", "FIN"), new("C", "Chief", "FIN"),
-            [new(45, 43, "10:00", new("S", "Setter", "FIN"))], information);
+            [new(45, 43, "10:00", new("S", "Setter", "FIN"))], information, CourseChief: new("Course", "Chief", "FIN"));
         var doc = XDocument.Parse(Encoding.UTF8.GetString(FisResultXml.Create(race,
             new("Series", "Test", "Club", s_race.Date, s_race.Date, "FIN", "2026/27"), penalty, details)));
         Assert.Equal("Reviewed course", doc.Descendants("Course").Single().Element("Name")!.Value);

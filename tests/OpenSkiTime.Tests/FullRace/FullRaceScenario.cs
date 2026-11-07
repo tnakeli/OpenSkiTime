@@ -189,7 +189,7 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root, FullRace
             $"Penalty expected {expectedPenalty} actual ({penalty.Calculated}, {penalty.Applied})");
         Log(FormattableString.Invariant($"Penalty F={profile.FValue} max={profile.MaximumPoints}: calculated {penalty.Calculated}, applied {penalty.Applied} (expected {expectedPenalty.Calculated}/{expectedPenalty.Applied}; double minimum {penalty.DoubleMinimum})."));
         var details = new FisXmlDetails("FIS", new("Tanja", "SYNTHDELEGATE", "SWE", "9001"), new("Pekka", "SYNTHCHIEF", "FIN"),
-            [new(58, 56, "10:00", new("Ola", "SYNTHSETTER", "NOR")), new(60, 58, "13:00", new("Ulla", "SYNTHSETTER", "AUT"))]);
+            [new(58, 56, "10:00", new("Ola", "SYNTHSETTER", "NOR")), new(60, 58, "13:00", new("Ulla", "SYNTHSETTER", "AUT"))], CourseChief: new("Course", "Chief", "FIN"));
         var xml = FisResultXml.Create(result, race.Series, penalty, details);
         var xmlName = FisResultXml.FileName(result, race.Series);
         var (ranked, notRanked) = CheckXml(xml, expectedFinal);
@@ -475,6 +475,8 @@ internal sealed class FullRaceScenario(SyntheticRace race, string root, FullRace
     private (int Ranked, int NotRanked) CheckXml(byte[] xml, IReadOnlyList<ExpectedFinalRow> expected)
     {
         var document = XDocument.Parse(Encoding.UTF8.GetString(xml));
+        // The whole file against the element tables of the Alpine Result XML specification.
+        Check(FisResultXmlSpec.Validate(document).Count == 0, "XML deviates from the Alpine Result XML specification: " + string.Join("; ", FisResultXmlSpec.Validate(document).Take(5)));
         XElement[] Elements(string name) => document.Descendants().Where(x => x.Name.LocalName == name).ToArray();
         string Child(XElement e, string name) => e.Elements().Single(x => x.Name.LocalName == name).Value;
         var ranked = Elements("AL_ranked");

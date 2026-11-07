@@ -8,8 +8,9 @@ namespace OpenSkiTime.Application;
 
 public sealed record FisPerson(string FirstName, string LastName, string Nation, string Number = "");
 public sealed record FisRunXmlDetails(int Gates, int TurningGates, string StartTime, FisPerson CourseSetter);
+// CourseChief: the member the FIS XML needs when the race information does not list one (spec 2.3.1 requires a Member).
 public sealed record FisXmlDetails(string Category, FisPerson TechnicalDelegate, FisPerson ChiefOfRace,
-    IReadOnlyList<FisRunXmlDetails> Runs, RaceInformation? Information = null);
+    IReadOnlyList<FisRunXmlDetails> Runs, RaceInformation? Information = null, FisPerson? CourseChief = null);
 
 public static class FisResultXml
 {
@@ -75,6 +76,20 @@ public static class FisResultXml
             if (member.Person.FirstName.Length + member.Person.LastName.Length + member.Person.Nation.Length > 0)
             { Validate(member.Person); }
         }
+        // Alpine Result XML 2.3.1-2.3.3: the Jury is the technical delegate, the chief of race and the referees; the other
+        // officials (course chief, start and finish referee) are Members, and at least one Member is required.
+        var referees = new List<(string Function, FisPerson Person)>();
+        var members = new List<(string Function, FisPerson Person)>();
+        foreach (var official in details.Information?.Jury ?? [])
+        {
+            if (official.Function is "TechnicalDelegate" or "ChiefRace" || string.IsNullOrWhiteSpace(official.Person.LastName)) { continue; }
+            var function = official.Function switch { "StartReferee" => "Startreferee", "FinishReferee" => "Finishreferee", _ => official.Function };
+            (function is "Referee" or "Assistantreferee" ? referees : members).Add((function, official.Person));
+        }
+        if (details.CourseChief is { } courseChief && members.All(x => x.Function != "ChiefCourse"))
+        { Validate(courseChief); members.Insert(0, ("ChiefCourse", courseChief)); }
+        if (members.Count == 0)
+        { throw new DomainValidationException("FIS XML needs at least one race official besides the jury. Enter the course chief, the start referee or the finish referee in Race information."); }
         if (race.Rows.Count(x => x.Status == TimingStatus.Finished) != penalty.RacePoints.Count)
         { throw new DomainValidationException("Penalty and classified results do not match."); }
 
@@ -108,12 +123,8 @@ public static class FisResultXml
             E(writer, "Fvalue", penalty.FValue.ToString(CultureInfo.InvariantCulture));
             Person(writer, "Jury", "TechnicalDelegate", technicalDelegate);
             Person(writer, "Jury", "ChiefRace", details.ChiefOfRace);
-            foreach (var member in details.Information?.Jury ?? [])
-            {
-                if (member.Function is "TechnicalDelegate" or "ChiefRace" || string.IsNullOrWhiteSpace(member.Person.LastName)) { continue; }
-                var function = member.Function switch { "StartReferee" => "Startreferee", "FinishReferee" => "Finishreferee", _ => member.Function };
-                Person(writer, "Jury", function, member.Person);
-            }
+            foreach (var (function, person) in referees) { Person(writer, "Jury", function, person); }
+            foreach (var (function, person) in members) { Person(writer, "Member", function, person); }
             for (var i = 0; i < details.Runs.Count; i++)
             {
                 var run = details.Runs[i]; writer.WriteStartElement("Runinfo");
@@ -136,7 +147,7 @@ public static class FisResultXml
                     E(writer, "Lastname", runners[n].Person.LastName); E(writer, "Firstname", runners[n].Person.FirstName);
                     E(writer, "Nation", runners[n].Person.Nation); writer.WriteEndElement();
                 }
-                writer.WriteEndElement(); E(writer, "Starttime", run.StartTime);
+                writer.WriteEndElement();
                 if (report?.Weather is { } weather)
                 {
                     // Preserve known measurement locations; do not invent a location for imported temperatures.
@@ -145,9 +156,11 @@ public static class FisResultXml
                     WriteWeather(writer, weather, "Start", weather.StartTemperature, weather.UnlocatedTemperature is null);
                     WriteWeather(writer, weather, "Finish", weather.FinishTemperature, false);
                 }
+                E(writer, "Starttime", run.StartTime);
                 writer.WriteEndElement();
             }
-            E(writer, "Softwarename", "OpenSkiTime"); writer.WriteEndElement();
+            E(writer, "Softwarecompany", "OpenSkiTime project"); E(writer, "Softwarename", "OpenSkiTime");
+            E(writer, "Softwareversion", ProductInfo.Version); writer.WriteEndElement();
             writer.WriteStartElement("AL_classified");
             var winner = race.Rows.Where(x => x.TotalHundredths is not null).Min(x => x.TotalHundredths)!.Value;
             foreach (var row in race.Rows.Where(x => x.Status == TimingStatus.Finished).OrderByOfficialResult(x => x.Rank, x => x.Entry.Bib))
@@ -173,10 +186,6 @@ public static class FisResultXml
                 E(writer, "Bib", row.Entry.Bib.ToString(CultureInfo.InvariantCulture)); Competitor(writer, row.Entry);
                 if (row.Status == TimingStatus.DSQ && row.Disqualification?.Gate is { } gate)
                 { E(writer, "Gate", gate.ToString(CultureInfo.InvariantCulture)); }
-                if (row.StatusRun > 1 && row.Run1Hundredths is { } firstTime)
-                {
-                    writer.WriteStartElement("AL_result"); E(writer, "Timerun1", T(firstTime)); writer.WriteEndElement();
-                }
                 if (row.Status == TimingStatus.DSQ && !string.IsNullOrWhiteSpace(row.Disqualification?.Reason))
                 { E(writer, "Reason", row.Disqualification.Reason.Trim()); }
                 writer.WriteEndElement();
