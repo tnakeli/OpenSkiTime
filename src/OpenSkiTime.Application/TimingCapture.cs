@@ -851,8 +851,13 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                 { throw new DomainValidationException("The EET calculation does not belong to this competitor and position. Calculate it again."); }
                 // Every reference must still be eligible now, by the same rules that prepared the table: the competitor's
                 // only System A time at this position, an original device impulse, not in review, on the same clock.
-                var eligible = EetPreparation.Prepare(_snapshot, entry.Bib, entry.Channel, [], 0).StartOrder
-                    .Where(x => x.A is not null).ToDictionary(x => x.Bib, x => x.A!);
+                var prepared = EetPreparation.Prepare(_snapshot, entry.Bib, entry.Channel, [], 0);
+                // The set of eligible references must be the one the calculation was made from: a competitor who became
+                // eligible since then could be one of the nearest ten.
+                if (entry.ReferenceKeys is null
+                    || !CompetitorTimeEntry.EligibleKeys(prepared).SequenceEqual(entry.ReferenceKeys.Order(StringComparer.Ordinal), StringComparer.Ordinal))
+                { throw new DomainValidationException("The System A times of the run changed after the EET was calculated. Calculate it again."); }
+                var eligible = prepared.StartOrder.Where(x => x.A is not null).ToDictionary(x => x.Bib, x => x.A!);
                 foreach (var pair in eet.Pairs)
                 {
                     if (!eligible.TryGetValue(pair.Bib, out var a) || a.Key != pair.AKey || a.DeviceTicks != pair.ATicks || a.Precision != pair.APrecision)

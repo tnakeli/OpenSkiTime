@@ -166,7 +166,14 @@ public sealed class CompetitorTimeEntryTests
         Assert.Equal(7, eet.CorrectionPrecision);
         Assert.Equal(123_000 + selection.Pairs.Sum(x => (long)x.Bib), eet.CorrectionTicks);
 
-        var key = await timing.EnterCompetitorTimeAsync(list.Id, new(target, 1, ManualTimeSource.Eet, Eet: eet), "Operator", "EET for missing finish");
+        // The EET is saved only for the set of eligible references it was calculated from.
+        var referenceKeys = CompetitorTimeEntry.EligibleKeys(preparation);
+        await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
+            new(target, 1, ManualTimeSource.Eet, Eet: eet, ReferenceKeys: referenceKeys.Skip(1).ToArray()), "Operator", "EET for missing finish"));
+        await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
+            new(target, 1, ManualTimeSource.Eet, Eet: eet), "Operator", "EET for missing finish"));
+        var key = await timing.EnterCompetitorTimeAsync(list.Id, new(target, 1, ManualTimeSource.Eet, Eet: eet, ReferenceKeys: referenceKeys),
+            "Operator", "EET for missing finish");
         // The EET belongs to its competitor: it cannot be moved to a reference competitor.
         var other = order[0];
         var moveError = await Assert.ThrowsAsync<DomainValidationException>(() => timing.CorrectAsync(new(DecisionKind.Assignment, key, Bib: other), "Operator", "Move"));
@@ -245,6 +252,10 @@ public sealed class CompetitorTimeEntryTests
         // A repeated copy of a paired reading is the same reading, not a second candidate.
         var copied = EetPreparation.Prepare(timing.Snapshot!, order[2], 1, [.. backup, B("b0-copy", backup[0].DeviceTicks!.Value)], 2 * TimeSpan.TicksPerSecond);
         Assert.Equal("b2", copied.ProposedTarget?.Key);
+        // An unassigned System A impulse at that reading may be its owner: nothing is proposed while it is unresolved.
+        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[2]]), "Operator", "Found");
+        Assert.Null(EetPreparation.Prepare(timing.Snapshot!, order[2], 1, backup, 2 * TimeSpan.TicksPerSecond).ProposedTarget);
+        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[2]], Ignored: true), "Operator", "Lost");
         // A reference that gets a second finish after the calculation is in review, also behind a classification:
         // the EET is no longer saved.
         await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[1]], Bib: order[0]), "Operator", "Wrong bib");
@@ -254,8 +265,8 @@ public sealed class CompetitorTimeEntryTests
             .StartOrder.Single(x => x.Bib == order[0]).Unavailable);
         var version = timing.Snapshot!.AuditVersion;
         var error = await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
-            new(order[2], 1, ManualTimeSource.Eet, Eet: eet), "Operator", "EET"));
-        Assert.Contains($"bib {order[0]} changed", error.Message, StringComparison.Ordinal);
+            new(order[2], 1, ManualTimeSource.Eet, Eet: eet, ReferenceKeys: CompetitorTimeEntry.EligibleKeys(preparation)), "Operator", "EET"));
+        Assert.Contains("changed after the EET was calculated", error.Message, StringComparison.Ordinal);
         Assert.Equal(version, timing.Snapshot.AuditVersion);
         await timing.StopAsync();
     }

@@ -136,6 +136,20 @@ public partial class DesktopWorkflowTests
             // A left-out reference's backup text is not used, so an unreadable value does not block saving.
             left.BackupText = "unreadable";
             Assert.True(vm.CanSaveEet, vm.EetMessage);
+            // A captured backup time is removed only by leaving the reference out with a reason, never by clearing it.
+            var cleared = vm.EetRows.Single(x => x.Bib == order[9]);
+            cleared.BackupText = "";
+            Assert.False(vm.CanSaveEet);
+            Assert.Contains("leave it out with a reason", vm.EetMessage, StringComparison.Ordinal);
+            cleared.BackupText = cleared.PairedText;
+            Assert.True(vm.CanSaveEet, vm.EetMessage);
+            // Looking at another tab keeps the table and what was typed in it.
+            dialog.KeyPressQwerty(PhysicalKey.Digit2, RawInputModifiers.Alt);
+            dialog.KeyPressQwerty(PhysicalKey.Digit3, RawInputModifiers.Alt);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(left, vm.EetRows.Single(x => x.Bib == order[10]));
+            Assert.True(left.Excluded);
+            Assert.True(vm.CanSaveEet, vm.EetMessage);
             // Optional rendered review of the dialog (set OPENSKITIME_EDIT_RESULT_VISUAL_DIR).
             var visual = Environment.GetEnvironmentVariable("OPENSKITIME_EDIT_RESULT_VISUAL_DIR");
             void Capture(string name)

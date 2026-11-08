@@ -9,8 +9,11 @@ namespace OpenSkiTime.Application;
 /// lists the impulses assigned to the competitor at that position when the operator saw them (none when the time was
 /// missing); the entry is refused when they changed, so a late System A impulse is never replaced unseen.
 /// </summary>
+/// For an EET, <see cref="ReferenceKeys"/> are the System A times that were eligible references when the table was
+/// prepared; the EET is refused when that set changed, because the nearest ten could then be others.
 public sealed record CompetitorTimeEntry(int Bib, int Channel, ManualTimeSource Source, string? TimeOfDay = null,
-    string? SourceReference = null, EetCalculation? Eet = null, IReadOnlyList<string>? Replacing = null)
+    string? SourceReference = null, EetCalculation? Eet = null, IReadOnlyList<string>? Replacing = null,
+    IReadOnlyList<string>? ReferenceKeys = null)
 {
     /// <summary>The impulses an entry for <paramref name="bib"/> at <paramref name="channel"/> replaces (unassigns).</summary>
     public static IReadOnlyList<string> AssignedKeys(TimingSnapshot snapshot, int bib, int channel)
@@ -19,6 +22,13 @@ public sealed record CompetitorTimeEntry(int Bib, int Channel, ManualTimeSource 
         return snapshot.Observations.Where(x => x.Bib == bib && !x.Ignored && x.DuplicateOf is null
                 && x.Observation.Kind == ObservationKind.Impulse && x.Observation.Channel == channel)
             .Select(x => x.Observation.Key).Order(StringComparer.Ordinal).ToArray();
+    }
+
+    /// <summary>The System A times of a preparation that can be EET references, for <see cref="ReferenceKeys"/>.</summary>
+    public static IReadOnlyList<string> EligibleKeys(EetPreparationResult preparation)
+    {
+        ArgumentNullException.ThrowIfNull(preparation);
+        return preparation.StartOrder.Where(x => x.A is not null).Select(x => x.A!.Key).Order(StringComparer.Ordinal).ToArray();
     }
 }
 
@@ -134,6 +144,9 @@ public static class EetPreparation
         bool CouldHaveMade(TimingResult other, TimingObservation reading)
         {
             var timeOfDay = reading.DeviceTicks!.Value % TimeSpan.TicksPerDay;
+            // An unresolved System A passage near the reading (an unassigned impulse, or one matched ambiguously) may own it.
+            if (targets.Any(t => !paired.Contains(t.Key) && Math.Abs(EetCalculator.TimeOfDayDifference(timeOfDay, t.Ticks)) <= pairingToleranceTicks))
+            { return true; }
             if (At(other, channel) is { } a && Original(a))
             { return !paired.Contains(a.Key) && Math.Abs(EetCalculator.TimeOfDayDifference(timeOfDay, a.DeviceTicks!.Value)) <= pairingToleranceTicks; }
             if (other.Status == TimingStatus.DNS) { return false; }

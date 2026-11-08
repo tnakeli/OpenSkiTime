@@ -117,7 +117,9 @@ public sealed partial class MainViewModel
     partial void OnTimingResultTabChanged(int value)
     {
         OnPropertyChanged(nameof(IsStatusTab)); OnPropertyChanged(nameof(IsTimeEntryTab)); OnPropertyChanged(nameof(IsEetTab));
-        if (value == 2) { _ = LoadEetAsync(); }
+        // Back on the EET tab, the table of the same competitor, position and source keeps what the operator typed.
+        if (value == 2 && (_eetLoaded is not { } loaded || loaded != (TimingClassificationTarget?.Bib ?? -1, EetChannel, EetSource)))
+        { _ = LoadEetAsync(); }
     }
     partial void OnEetPositionChanged(string value) => _ = LoadEetAsync();
     partial void OnEetSourceChanged(string value) => _ = LoadEetAsync();
@@ -276,6 +278,9 @@ public sealed partial class MainViewModel
             foreach (var row in EetRows.Where(x => x.CanEdit && !x.Excluded))
             {
                 var text = row.BackupText.Trim();
+                // A captured backup time is removed only by leaving the reference out with a reason.
+                if (text.Length == 0 && row.PairedText.Length > 0)
+                { problems.Add($"Bib {row.Bib}: to remove its backup time, leave it out with a reason."); continue; }
                 if (text.Length == 0) { continue; }
                 if (TimingTime.TryTimeOfDay(text, out var ticks, out var precision) && precision >= 2)
                 { values[row.Bib] = (ticks, precision, text == row.PairedText ? row.PairedKey : null); }
@@ -339,7 +344,8 @@ public sealed partial class MainViewModel
             if (calculation.ReplacementReason.Length == 0)
             { throw new DomainValidationException("Choose why System A missed the time; the timing report needs the reason."); }
             var position = calculation.Channel == 0 ? "start" : "finish";
-            await timing.EnterCompetitorTimeAsync(listId, new(calculation.Bib, calculation.Channel, ManualTimeSource.Eet, Eet: calculation, Replacing: _eetReplacing),
+            await timing.EnterCompetitorTimeAsync(listId, new(calculation.Bib, calculation.Channel, ManualTimeSource.Eet, Eet: calculation, Replacing: _eetReplacing,
+                    ReferenceKeys: _eetPreparation is { } prepared ? CompetitorTimeEntry.EligibleKeys(prepared) : null),
                 TimingOperator, $"EET for missing {position} from {(calculation.Source == EetBackupSource.SystemB ? "System B" : EetSheetBuilder.SourceLabel(calculation.Source).ToLowerInvariant())} · {calculation.ReplacementReason}");
             RefreshTiming();
             SetStatus($"Bib {calculation.Bib}: EET {position} {EetResult} saved with correction history and the calculation.");
