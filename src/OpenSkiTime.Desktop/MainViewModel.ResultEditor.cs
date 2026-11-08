@@ -186,16 +186,17 @@ public sealed partial class MainViewModel
         {
             if (TimingClassificationTarget is not { IsForerunner: false } row || workspace.Timing is not { } timing || timing.ListId is not { } listId)
             { throw new DomainValidationException("Choose a competitor of this run."); }
-            var position = TimeEntryPosition;
+            // The submitted values: the operator may start the next entry while this one is being saved.
+            var (position, text, reference) = (TimeEntryPosition, TimeEntryText, TimeEntryReference);
             await timing.EnterCompetitorTimeAsync(listId,
-                new(row.Bib, TimeEntryChannel, TimeEntryKind, TimeEntryText, TimeEntryReference,
+                new(row.Bib, TimeEntryChannel, TimeEntryKind, text, reference,
                     Replacing: _shownTiming is { } shown ? CompetitorTimeEntry.AssignedKeys(shown, row.Bib, TimeEntryChannel) : []),
                 TimingOperator, TimeEntryReason);
             RefreshTiming();
             OnResultEditorTargetChanged();
-            SetStatus($"Bib {row.Bib}: {position.ToLowerInvariant()} {TimeEntryText.Trim()} saved with correction history.");
-            TimeEntryText = "";
-            TimeEntryReference = "";
+            SetStatus($"Bib {row.Bib}: {position.ToLowerInvariant()} {text.Trim()} saved with correction history.");
+            if (TimeEntryText == text && TimeEntryReference == reference && TimingClassificationTarget?.Bib == row.Bib)
+            { TimeEntryText = ""; TimeEntryReference = ""; }
         });
     }
 
@@ -249,10 +250,14 @@ public sealed partial class MainViewModel
             _eetLoaded = (target.Bib, channel, EetSource);
             foreach (var row in rows) { row.Changed = RecalculateEet; EetRows.Add(row); }
             var proposed = preparation.ProposedTarget;
-            EetCandidates = proposed is null && preparation.TargetCandidates.Count > 0
-                ? "Unpaired backup times: " + string.Join(", ", preparation.TargetCandidates.Take(6)
-                    .Select(x => TimingTime.FormatTimeOfDay(x.DeviceTicks!.Value, x.Precision)))
-                : "";
+            EetCandidates = string.Join(" ", new[]
+            {
+                preparation.BackupNote ?? "",
+                proposed is null && preparation.TargetCandidates.Count > 0
+                    ? "Unpaired backup times: " + string.Join(", ", preparation.TargetCandidates.Take(6)
+                        .Select(x => TimingTime.FormatTimeOfDay(x.DeviceTicks!.Value, x.Precision)))
+                    : ""
+            }.Where(x => x.Length > 0));
             EetBackupText = proposed is { DeviceTicks: { } proposedTicks } ? TimingTime.FormatTimeOfDay(proposedTicks, proposed.Precision) : "";
             RecalculateEet();
         }
@@ -348,8 +353,9 @@ public sealed partial class MainViewModel
                     ReferenceKeys: _eetPreparation is { } prepared ? CompetitorTimeEntry.EligibleKeys(prepared) : null),
                 TimingOperator, $"EET for missing {position} from {(calculation.Source == EetBackupSource.SystemB ? "System B" : EetSheetBuilder.SourceLabel(calculation.Source).ToLowerInvariant())} · {calculation.ReplacementReason}");
             RefreshTiming();
-            SetStatus($"Bib {calculation.Bib}: EET {position} {EetResult} saved with correction history and the calculation.");
-            await LoadEetAsync();
+            SetStatus($"Bib {calculation.Bib}: EET {position} {TimingTime.FormatTimeOfDay(calculation.ResultTimeOfDay, calculation.ResultPrecision)} saved with correction history and the calculation.");
+            // Reload only the table that was saved; another competitor chosen meanwhile keeps its own table.
+            if (TimingClassificationTarget?.Bib == calculation.Bib && EetChannel == calculation.Channel) { await LoadEetAsync(); }
         });
     }
 

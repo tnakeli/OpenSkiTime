@@ -150,7 +150,25 @@ public sealed class CompetitorTimeEntryTests
         }).Append(B("b-target", TimingRulesTests.Date.ToDateTime(TimeOnly.MinValue).Ticks + Noon + 11 * TimeSpan.TicksPerMinute + 41 * TimeSpan.TicksPerSecond))
           .Append(B("b-start", TimingRulesTests.Date.ToDateTime(TimeOnly.MinValue).Ticks + Noon, channel: 0)).ToArray();
 
+        // A reconnected backup clock is another session with its own offset: only the session around the competitor
+        // is used, and when two sessions span it nothing is filled in.
+        var early = order.Take(5).ToHashSet();
+        var sessions = backup.Select(x => early.Contains(snapshot.Results.FirstOrDefault(r => "b" + r.Bib == x.Key)?.Bib ?? -1)
+            ? x with { ClockId = "b-old", DeviceTicks = x.DeviceTicks + 8_000_000 } : x).ToArray();
+        var split = EetPreparation.Prepare(snapshot, target, 1, sessions, 2 * TimeSpan.TicksPerSecond);
+        Assert.NotNull(split.BackupNote);
+        Assert.Equal("b-target", split.ProposedTarget?.Key);
+        Assert.All(split.StartOrder.Where(x => x.Backup is not null), x => Assert.Equal("b-clock", x.Backup!.ClockId));
+        Assert.Equal(order.Skip(5).Take(6), split.StartOrder.Where(x => x.Backup is not null).Select(x => x.Bib));
+        var overlapping = EetPreparation.Prepare(snapshot, target, 1, [.. backup, B("b-old-1", backup.Single(x => x.Key == $"b{order[10]}").DeviceTicks!.Value - 10 * TimeSpan.TicksPerSecond, clock: "b-old"),
+                B("b-old-2", backup[^2].DeviceTicks!.Value + 500_000, clock: "b-old")],
+            2 * TimeSpan.TicksPerSecond);
+        Assert.Contains("type the backup times", overlapping.BackupNote, StringComparison.Ordinal);
+        Assert.Null(overlapping.ProposedTarget);
+        Assert.All(overlapping.StartOrder, x => Assert.Null(x.Backup));
+
         var preparation = EetPreparation.Prepare(snapshot, target, 1, backup, 2 * TimeSpan.TicksPerSecond);
+        Assert.Null(preparation.BackupNote);
         Assert.Equal("b-target", preparation.ProposedTarget?.Key);
         Assert.Equal(11, preparation.TargetIndex);
         Assert.All(preparation.StartOrder, x => Assert.Equal("Paired", x.BackupState));
@@ -426,8 +444,8 @@ public sealed class CompetitorTimeEntryTests
         Assert.Empty((await store.ReadTimingAsync(list.Id)).Audit);
     }
 
-    private static TimingObservation B(string key, long ticks, int channel = 1) =>
-        new(key, Guid.Empty, 0, "B", key, ObservationKind.Impulse, channel, ticks, 7, null, false, "b-clock", "B impulse");
+    private static TimingObservation B(string key, long ticks, int channel = 1, string clock = "b-clock") =>
+        new(key, Guid.Empty, 0, "B", key, ObservationKind.Impulse, channel, ticks, 7, null, false, clock, "B impulse");
 
     private static async Task Pulse(TimingWorkspace timing, SimulatorTimingSource source, int channel, long ticks)
     {

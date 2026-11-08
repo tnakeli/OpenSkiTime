@@ -52,8 +52,9 @@ public sealed record EetReference(int Bib, TimingObservation? A, string? Unavail
 /// only when exactly one fits between the neighbouring System A times and no other competitor could have made it).
 /// <see cref="StartOrder"/> is the order the competitors actually started in.
 /// </summary>
+/// <see cref="BackupNote"/> says why captured backup readings were left aside (several backup clock sessions).
 public sealed record EetPreparationResult(int Bib, int Channel, string? ClockId, IReadOnlyList<EetReference> StartOrder,
-    int TargetIndex, IReadOnlyList<TimingObservation> TargetCandidates, TimingObservation? ProposedTarget);
+    int TargetIndex, IReadOnlyList<TimingObservation> TargetCandidates, TimingObservation? ProposedTarget, string? BackupNote = null);
 
 public static class EetPreparation
 {
@@ -109,6 +110,33 @@ public static class EetPreparation
                 : null;
             return (Bib: other, A: unavailable is null ? a : null, Unavailable: unavailable);
         }).ToArray();
+
+        // One calculation uses one backup clock: readings of different backup sessions (a reconnected or replaced clock)
+        // may have different offsets from System A. With several, only the session whose readings span the competitor's
+        // place is used; when that is not clear, nothing is filled in and the operator types the backup times.
+        string? backupNote = null;
+        var readings = backup.Where(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.Channel == channel).ToArray();
+        var backupClocks = readings.Select(x => x.ClockId).Distinct(StringComparer.Ordinal).ToArray();
+        if (backupClocks.Length > 1)
+        {
+            var near = references.Take(index).LastOrDefault(x => x.A is not null).A ?? references.Skip(index).FirstOrDefault(x => x.A is not null).A;
+            var covering = near is null ? [] : backupClocks.Where(c =>
+            {
+                var differences = readings.Where(x => x.ClockId == c)
+                    .Select(x => EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, near.DeviceTicks!.Value)).ToArray();
+                return differences.Min() <= pairingToleranceTicks && differences.Max() >= -pairingToleranceTicks;
+            }).ToArray();
+            if (covering is [var session])
+            {
+                backup = backup.Where(x => x.ClockId == session).ToArray();
+                backupNote = "Backup timing has several clock sessions; only the one around this competitor is used.";
+            }
+            else
+            {
+                backup = [];
+                backupNote = "Backup timing has several clock sessions around this competitor: type the backup times from one clock.";
+            }
+        }
 
         // Backup readings are matched against every original System A passage at this position (forerunners, competitors
         // in review, unassigned impulses), so a reading near an ineligible passage is never taken as a reference's.
@@ -168,7 +196,7 @@ public static class EetPreparation
             (before is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, before.DeviceTicks!.Value) > -pairingToleranceTicks)
             && (after is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, after.DeviceTicks!.Value) < pairingToleranceTicks))
             .ToArray();
-        return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window is [var only] && !others.Any(x => CouldHaveMade(x, only)) ? only : null);
+        return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window is [var only] && !others.Any(x => CouldHaveMade(x, only)) ? only : null, backupNote);
     }
 
     /// <summary>The EET reference candidates in start order, using the backup values the operator confirmed or typed.</summary>
