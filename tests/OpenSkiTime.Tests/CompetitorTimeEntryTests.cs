@@ -172,6 +172,18 @@ public sealed class CompetitorTimeEntryTests
             new(target, 1, ManualTimeSource.Eet, Eet: eet, ReferenceKeys: referenceKeys.Skip(1).ToArray()), "Operator", "EET for missing finish"));
         await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
             new(target, 1, ManualTimeSource.Eet, Eet: eet), "Operator", "EET for missing finish"));
+        // A corrected start that moves the competitor in the actual start order changes the nearest ten: refused.
+        var startKey = timing.Snapshot!.Results.Single(x => x.Bib == target).StartKey!;
+        var auditBefore = timing.Snapshot.AuditVersion;
+        await timing.EnterCompetitorTimeAsync(list.Id, new(target, 0, ManualTimeSource.DeviceRecord, "12:05:30.000", Replacing: [startKey]), "Operator", "Start");
+        var moved = EetPreparation.Prepare(timing.Snapshot!, target, 1, backup, 2 * TimeSpan.TicksPerSecond);
+        Assert.Equal(6, moved.TargetIndex);
+        var error = await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
+            new(target, 1, ManualTimeSource.Eet, Eet: eet, ReferenceKeys: referenceKeys), "Operator", "EET for missing finish"));
+        Assert.Contains("changed after the EET was calculated", error.Message, StringComparison.Ordinal);
+        foreach (var row in timing.Snapshot!.Audit.Where(x => x.Id > auditBefore).Reverse().ToArray())
+        { await timing.UndoAsync(row.Id, "Operator", "Undo start"); }
+        Assert.Equal(startKey, timing.Snapshot!.Results.Single(x => x.Bib == target).StartKey);
         var key = await timing.EnterCompetitorTimeAsync(list.Id, new(target, 1, ManualTimeSource.Eet, Eet: eet, ReferenceKeys: referenceKeys),
             "Operator", "EET for missing finish");
         // The EET belongs to its competitor: it cannot be moved to a reference competitor.

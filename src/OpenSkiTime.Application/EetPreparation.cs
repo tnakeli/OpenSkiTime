@@ -24,11 +24,18 @@ public sealed record CompetitorTimeEntry(int Bib, int Channel, ManualTimeSource 
             .Select(x => x.Observation.Key).Order(StringComparer.Ordinal).ToArray();
     }
 
-    /// <summary>The System A times of a preparation that can be EET references, for <see cref="ReferenceKeys"/>.</summary>
+    /// <summary>
+    /// The System A times of a preparation that can be EET references, in start order with the competitor's own place
+    /// marked, for <see cref="ReferenceKeys"/>: a change of eligibility or of the order changes the nearest ten.
+    /// </summary>
     public static IReadOnlyList<string> EligibleKeys(EetPreparationResult preparation)
     {
         ArgumentNullException.ThrowIfNull(preparation);
-        return preparation.StartOrder.Where(x => x.A is not null).Select(x => x.A!.Key).Order(StringComparer.Ordinal).ToArray();
+        var keys = preparation.StartOrder.Select((x, i) => (x, i)).Where(x => x.x.A is not null).ToList();
+        var before = keys.Count(x => x.i < preparation.TargetIndex);
+        var result = keys.Select(x => x.x.A!.Key).ToList();
+        result.Insert(before, "target:" + preparation.Bib.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return result;
     }
 }
 
