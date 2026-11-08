@@ -35,7 +35,7 @@ This sequence is not implemented yet because only protocol 1 exists. Implement m
 
 ## Development phase and series file migrations
 
-OpenSkiTime is in development and is not yet intended for timing real races. It will be tested at real competitions during the 2026-27 season. Every application release says this in a fixed *Development status* section of its notes (`scripts/release-notes.mjs`) and on the download page. During this phase releases are `0.x` previews for rehearsal and evaluation, and there is no migration code. A version with breaking changes to the `.ost` format refuses to open files created by earlier versions and leaves them unchanged; the operator creates a new series file. Keeping older versions and their files lets earlier series still be opened.
+OpenSkiTime is in development. The race-day workflows are complete and have been tested on the test bench with simulated timing; during the 2026-27 season it is tested at real FIS and club races as a B system next to the main timing, and it is not yet intended as the only timing system. Every application release says this in a fixed *Development status* section of its notes (`scripts/release-notes.mjs`) and on the download page. During this phase releases are `0.x` previews for rehearsal and evaluation, and there is no migration code. A version with breaking changes to the `.ost` format refuses to open files created by earlier versions and leaves them unchanged; the operator creates a new series file. Keeping older versions and their files lets earlier series still be opened.
 
 Each changelog section states whether the version breaks `.ost` compatibility ("Series files from earlier versions cannot be opened; create a new series file") or keeps it.
 
