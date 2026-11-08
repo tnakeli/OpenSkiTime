@@ -17,8 +17,8 @@ OpenSkiTime is a desktop race-office application for alpine skiing. It brings re
 3. **Competitors:** edit a dense, keyboard-friendly grid, paste rows from Excel, assign participation per competition, review highlighted changes and save them together. Save and apply category rules. An optional alpine FIS points-list download supports searching and updating athletes by code; the list can then be used offline.
 4. **Start lists:** choose a competition and run, draw the first-run bib order, then export TSV or open a printable view. Prepare Run 2 from classified Run 1 results, with first-run times visible alongside its starters. Club races can put several classes, men and women together, in one list and arrange the order of each class and run freely.
 5. **Timing:** use **At start**, **Running**, **Timestamps** and **Ranking** to follow the race. Reorder starters, assign impulses, see elapsed times and splits, and classify competitors. Original device input and correction history remain in the event file.
-6. **Results:** prepare jury, course, forerunner and weather information; review calculated race points and the FIS penalty; then record TD approval and export the approved XML. Optional FIS submission is currently limited to test mode.
-7. **Timing report:** review automatically populated A timing, collect optional B and hand-clock evidence, read receipt images or a timing device in one review dialog, and prepare the alpine timing report XML. Equipment and timekeeper defaults are reusable; FIS submission remains test-only.
+6. **Results:** prepare jury, course, forerunner and weather information; review calculated race points and the FIS penalty; then record TD approval and export the approved XML. The approved results are sent to FIS from the application, with an optional test mode.
+7. **Timing report:** review automatically populated A timing, collect optional B and hand-clock evidence, read receipt images or a timing device in one review dialog, and prepare the alpine timing report XML. Equipment and timekeeper defaults are reusable; the report is sent to FIS like the results.
 
 ### 1 · Event series
 
@@ -74,7 +74,7 @@ Prepare race information before timing begins, or complete it afterwards. Jury m
 
 After the required runs are complete, Results assembles classified times and race points and calculates the FIS penalty using the saved starter points and matching points-list rule tables. Review the finishers, best starters and calculation with the TD. **TD approves · create XML** stores the exact XML and race-information snapshot as an immutable revision in the event file; **Export approved XML** writes that saved revision.
 
-**Send XML · test mode** can validate the approved file through the FIS Member API using the single FIS API key saved in Settings. It does not publish official results. See [race information and XML operation](docs/results-race-information.md) and [FIS penalty calculation](docs/fis-penalty-review.md).
+**Send to FIS** sends the approved file through the FIS Member API with the FIS Member Section token saved in Settings. Normal mode is the default; **test mode** lets FIS validate the file without storing it. See [race information and XML operation](docs/results-race-information.md) and [FIS penalty calculation](docs/fis-penalty-review.md).
 
 ### 7 · Timing report
 
@@ -119,9 +119,9 @@ Details: [ALGE timing devices](docs/timing.md#alge-timy-2--timy-3-native-usb--wi
 
 ## Current scope
 
-**OpenSkiTime is still in development and is not yet intended for timing real races. It will be tested at real competitions during the 2026/27 season.** Use it for evaluation and rehearsals only, together with independent backup timing.
+**OpenSkiTime is ready to be tested at real races as a B system. The race-day workflows are complete and have been tested on the test bench with simulated timing. During the 2026/27 season it runs next to the main timing at FIS and club races; do not use it as the only timing system yet.**
 
-OpenSkiTime is in pre-release development. FIS races use the standard FIS draw for two-run SL/GS and single-run DH/SG. Club races use a flexible start order (see [Start orders for Club races](docs/non-fis-start-orders.md)); special FIS Cup, snow-seed and parallel formats are not supported. Automatic backup-time substitution and production FIS result submission are pending. Generated XML acceptance by FIS and physical-device race operation still require verification, including a complete rehearsal with independent backup timing.
+OpenSkiTime is in pre-release development. FIS races use the standard FIS draw for two-run SL/GS and single-run DH/SG. Club races use a flexible start order (see [Start orders for Club races](docs/non-fis-start-orders.md)); special FIS Cup, snow-seed and parallel formats are not supported. Operation with physical timing devices at real races is verified during the 2026/27 season, with OpenSkiTime as the B system.
 
 New series files use the current development format. Incompatible older development files are rejected without modification; automatic schema upgrades are not available. Create a new series for the current version and retain older files and backups.
 

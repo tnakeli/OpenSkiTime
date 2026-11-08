@@ -8,10 +8,10 @@ Key facts:
 - Platform: Windows 11 (x64); built with .NET 10 and Avalonia
 - Price and license: free, MIT license, source code on GitHub
 - Timing input: ALGE Timy (USB), ALGE MT1 (serial) and ALGE Results sources; optional B timing and hand-timing evidence
-- FIS: points-list lookup, start list draw, race points and FIS penalty calculation, TD-approved FIS XML results and timing report; FIS submission is currently test mode only
+- FIS: points-list lookup, start list draw, race points and FIS penalty calculation, TD-approved FIS XML results and timing report; results and timing reports sent to FIS from the application
 - Live results: self-hosted live timing server or the hosted live.openskiti.me service
 {{release}}
-- Status: in development and not yet intended for timing real races; testing at real competitions during the 2026/27 season. Rehearse with the simulator and independent backup timing
+- Status: ready to be tested at real races as a B system; the race-day workflows are complete and tested on the test bench with simulated timing. During the 2026/27 season it runs next to the main timing at FIS and club races; not yet for use as the only timing system
 - Languages: user interface and documentation in English; Finnish overview page available
 - Maintainer: Teemu Niemi (GitHub @tnakeli, tniemi@gmail.com)
 

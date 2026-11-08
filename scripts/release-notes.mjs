@@ -20,7 +20,7 @@ export function section(changelog, version) {
   return body;
 }
 
-export const developmentStatus = 'OpenSkiTime is still in development and is not yet intended for timing real races. It will be tested at real competitions during the 2026/27 season. Use it for evaluation and rehearsals only, always with independent backup timing.';
+export const developmentStatus = 'OpenSkiTime is ready to be tested at real races as a B system. The race-day workflows are complete and have been tested on the test bench with simulated timing. During the 2026/27 season it runs next to the main timing at FIS and club races; do not use it as the only timing system yet.';
 
 export function appNotes(changes, live, version) {
   const protocol = /live protocol (\d+)/i.exec(changes)?.[1];
