@@ -472,7 +472,16 @@ public sealed class CompetitorTimeEntryTests
         Assert.Equal(TimingStatus.Finished, result.Status);
         Assert.Equal(2000L, Assert.Single(result.Splits).Hundredths);
 
-        // A reference start withdrawn afterwards outdates the EET start and the intermediate time measured from it.
+        // A second finish puts the result in review; its intermediate time still stands on the valid EET start.
+        var count = timing.Snapshot.Observations.Count;
+        await source.PulseAsync(1, Noon + 3 * TimeSpan.TicksPerMinute);
+        await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Observations.Count > count);
+        await timing.CorrectAsync(new(DecisionKind.Assignment, timing.Snapshot!.Observations[^1].Observation.Key, Bib: target), "Operator", "Second finish");
+        result = timing.Snapshot!.Results.Single(x => x.Bib == target);
+        Assert.Equal(TimingStatus.Review, result.Status);
+        Assert.Equal(2000L, Assert.Single(result.Splits).Hundredths);
+        // A reference start withdrawn afterwards outdates the EET start and the intermediate time measured from it,
+        // whatever the result's status.
         await timing.CorrectAsync(new(DecisionKind.Assignment, Start(order[0]).Key, Ignored: true), "Operator", "False impulse");
         result = timing.Snapshot!.Results.Single(x => x.Bib == target);
         Assert.Equal(TimingStatus.Review, result.Status);

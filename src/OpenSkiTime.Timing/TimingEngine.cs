@@ -93,12 +93,12 @@ public static class TimingEngine
             }
             // A saved EET stays valid only while every System A time it was calculated from is still its reference
             // competitor's only assigned impulse at that position; otherwise it needs a new calculation.
-            var staleStart = false;
+            // Intermediate times depend on the start whatever the result's status.
+            var staleStart = StaleEetReference(starts) is not null;
             if (status is TimingStatus.Finished or TimingStatus.OnCourse && StaleEetReference(starts.Concat(finishes)) is { } stale)
             {
                 status = TimingStatus.Review; time = null;
                 detail = $"The EET uses the System A time of bib {stale.Bib}, which changed afterwards. Calculate the EET again.";
-                staleStart = StaleEetReference(starts) is not null;
             }
             if (decisions.TryGetValue("t:" + id, out var correction) && correction.Hundredths is { } corrected)
             { time = corrected; status = TimingStatus.Finished; detail = "Corrected time · see history"; }
@@ -148,33 +148,37 @@ public static class TimingEngine
         while (true)
         {
             var snapshot = Snapshot(current);
-            var outdated = current.Where(x => x.Status is TimingStatus.Finished or TimingStatus.OnCourse && (x.StartEet || x.FinishEet))
-                .Select(x => (x.Bib, Problem: EetSelectionProblem(snapshot, x, decisions))).Where(x => x.Problem is not null)
-                .ToDictionary(x => x.Bib, x => x.Problem!);
-            if (outdated.Count == 0) { return snapshot; }
-            current = current.Select(x => outdated.TryGetValue(x.Bib, out var problem)
-                ? x with { Status = TimingStatus.Review, Hundredths = null, Detail = problem, Splits = x.StartEet ? OutdatedStartSplits(x.Splits) : x.Splits }
-                : x).ToArray();
+            var changed = false;
+            current = current.Select(x =>
+            {
+                if (!x.StartEet && !x.FinishEet) { return x; }
+                var startProblem = x.StartEet ? EetSelectionProblem(snapshot, x, x.StartKey, decisions) : null;
+                var problem = startProblem ?? (x.FinishEet ? EetSelectionProblem(snapshot, x, x.FinishKey, decisions) : null);
+                if (problem is null) { return x; }
+                var updated = x;
+                // The result needs review; intermediate times measured from an outdated start are withdrawn whatever its status.
+                if (x.Status is TimingStatus.Finished or TimingStatus.OnCourse) { updated = updated with { Status = TimingStatus.Review, Hundredths = null, Detail = problem }; }
+                if (startProblem is not null && x.Splits.Any(s => s.ObservationKey is not null && s.Hundredths is not null)) { updated = updated with { Splits = OutdatedStartSplits(x.Splits) }; }
+                changed |= !ReferenceEquals(updated, x);
+                return updated;
+            }).ToArray();
+            if (!changed) { return snapshot; }
         }
     }
 
     private static TimingSplit[] OutdatedStartSplits(IEnumerable<TimingSplit> splits) => splits
         .Select(x => x.ObservationKey is null ? x : x with { Hundredths = null, Detail = "Review: the EET start needs a new calculation" }).ToArray();
 
-    private static string? EetSelectionProblem(TimingSnapshot snapshot, TimingResult result, Dictionary<string, TimingDecision> decisions)
+    private static string? EetSelectionProblem(TimingSnapshot snapshot, TimingResult result, string? key, Dictionary<string, TimingDecision> decisions)
     {
-        foreach (var key in new[] { result.StartEet ? result.StartKey : null, result.FinishEet ? result.FinishKey : null })
+        if (key is null || decisions.GetValueOrDefault(DecisionKey(new(DecisionKind.ManualTime, key)))?.Timestamp?.Eet is not { } eet) { return null; }
+        try
         {
-            if (key is null || decisions.GetValueOrDefault(DecisionKey(new(DecisionKind.ManualTime, key)))?.Timestamp?.Eet is not { } eet) { continue; }
-            try
-            {
-                var prepared = EetPreparation.Placed(EetPreparation.Prepare(snapshot, result.Bib, eet.Channel, [], 0), eet.ResultTimeOfDay);
-                if (!EetPreparation.SelectionMatches(prepared, eet))
-                { return "The EET references are no longer the competitors started nearest before (start order changed). Calculate the EET again."; }
-            }
-            catch (DomainValidationException) { return "The EET references can no longer be checked. Calculate the EET again."; }
+            var prepared = EetPreparation.Placed(EetPreparation.Prepare(snapshot, result.Bib, eet.Channel, [], 0), eet.ResultTimeOfDay);
+            return EetPreparation.SelectionMatches(prepared, eet) ? null
+                : "The EET references are no longer the competitors started nearest before (start order changed). Calculate the EET again.";
         }
-        return null;
+        catch (DomainValidationException) { return "The EET references can no longer be checked. Calculate the EET again."; }
     }
 
     // Operator-entered timestamps come only from audited ManualTime decisions (their latest state, so an undo removes

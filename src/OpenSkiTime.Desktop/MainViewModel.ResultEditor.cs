@@ -270,6 +270,23 @@ public sealed partial class MainViewModel
         }
     }
 
+    private async Task ReloadEetKeepingInputAsync()
+    {
+        var typed = EetRows.Where(x => x.CanEdit).ToDictionary(x => x.Bib, x => (x.BackupText, x.PairedText, x.Excluded, x.ExcludeReason));
+        var backupText = EetBackupText;
+        await LoadEetAsync();
+        foreach (var row in EetRows.Where(x => x.CanEdit))
+        {
+            if (!typed.TryGetValue(row.Bib, out var before)) { continue; }
+            // A typed value is kept; a value that was only captured follows the new capture.
+            if (before.BackupText != before.PairedText) { row.BackupText = before.BackupText; }
+            row.ExcludeReason = before.ExcludeReason;
+            row.Excluded = before.Excluded;
+        }
+        if (backupText.Length > 0) { EetBackupText = backupText; }
+        RecalculateEet();
+    }
+
     // Recalculates the selection and the EET from the table; never writes anything.
     private void RecalculateEet()
     {
@@ -367,9 +384,19 @@ public sealed partial class MainViewModel
             if (calculation.ReplacementReason.Length == 0)
             { throw new DomainValidationException("Choose why System A missed the time; the timing report needs the reason."); }
             var position = calculation.Channel == 0 ? "start" : "finish";
-            await timing.EnterCompetitorTimeAsync(listId, new(calculation.Bib, calculation.Channel, ManualTimeSource.Eet, Eet: calculation, Replacing: _eetReplacing,
-                    ReferenceKeys: _eetPreparation is { } prepared ? CompetitorTimeEntry.EligibleKeys(EetPreparation.Placed(prepared, calculation.ResultTimeOfDay)) : null),
-                TimingOperator, $"EET for missing {position} from {(calculation.Source == EetBackupSource.SystemB ? "System B" : EetSheetBuilder.SourceLabel(calculation.Source).ToLowerInvariant())} · {calculation.ReplacementReason}");
+            try
+            {
+                await timing.EnterCompetitorTimeAsync(listId, new(calculation.Bib, calculation.Channel, ManualTimeSource.Eet, Eet: calculation, Replacing: _eetReplacing,
+                        ReferenceKeys: _eetPreparation is { } prepared ? CompetitorTimeEntry.EligibleKeys(EetPreparation.Placed(prepared, calculation.ResultTimeOfDay)) : null),
+                    TimingOperator, $"EET for missing {position} from {(calculation.Source == EetBackupSource.SystemB ? "System B" : EetSheetBuilder.SourceLabel(calculation.Source).ToLowerInvariant())} · {calculation.ReplacementReason}");
+            }
+            catch (DomainValidationException)
+            {
+                // The run changed since the table was prepared: prepare it again on the current run, keeping what the
+                // operator typed, so the recalculated EET can be saved.
+                await ReloadEetKeepingInputAsync();
+                throw;
+            }
             RefreshTiming();
             SetStatus($"Bib {calculation.Bib}: EET {position} {TimingTime.FormatTimeOfDay(calculation.ResultTimeOfDay, calculation.ResultPrecision)} saved with correction history and the calculation.");
             // Reload only the table that was saved; another competitor chosen meanwhile keeps its own table.
