@@ -45,7 +45,7 @@ Sharing previews use `docs/screenshots/og-image.png` (1200×630). It, `website/a
 
 `staticwebapp.config.json` uses `trailingSlash: "auto"`, so `/download` redirects to `/download/`. Route-level redirects for these folders were not applied by Static Web Apps. Set `openskiti.me` as the Static Web App's default domain (Azure portal: Custom domains → Set default) so that `www.openskiti.me` and the generated `azurestaticapps.net` hostname redirect to the canonical apex domain; `Configure-Domains.ps1` does not set this.
 
-Security headers are in `website/staticwebapp.config.json`. Download links are generated from the newest published stable `vX.Y.Z` release with the expected upstream installer. While no stable release exists, the newest `vX.Y.Z-preview.N` release is offered instead, labelled as a preview with a backup-timing warning. Without either, the site offers source instructions.
+Security headers are in `website/staticwebapp.config.json`. Download links are generated from the newest published stable `vX.Y.Z` release with the expected upstream installer. The download card shows that version as its heading with the release date, its button says "Download X.Y.Z for Windows", and the English and Finnish landing-page buttons name the version; `website/check.mjs` verifies this when the build had a release. While no stable release exists, the newest `vX.Y.Z-preview.N` release is offered instead, labelled as a preview with a backup-timing warning. Without either, the site offers source instructions.
 
 ```powershell
 node website/build.mjs

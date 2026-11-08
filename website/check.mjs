@@ -42,6 +42,15 @@ for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide
     if (fragment) assert((await readFile(target, 'utf8')).includes(`id="${fragment}"`), `Missing cross-page anchor ${value}`);
   }
 }
+// The version on offer is visible in the download card and the landing-page download buttons.
+if (process.env.OPENSKITIME_RELEASE_FILE) {
+  const version = JSON.parse(await readFile(process.env.OPENSKITIME_RELEASE_FILE, 'utf8')).tag_name.slice(1);
+  const read = page => readFile(path.join(root, page), 'utf8');
+  assert((await read('download/index.html')).includes(`<h2>OpenSkiTime ${version}</h2>`), 'The download page must show the version.');
+  assert((await read('download/index.html')).includes(`Download ${version} for Windows`), 'The download button must show the version.');
+  assert((await read('index.html')).includes(`Get OpenSkiTime ${version} <`), 'The landing page button must show the version.');
+  assert((await read('fi/index.html')).includes(`Lataa OpenSkiTime ${version} <`), 'The Finnish landing page button must show the version.');
+}
 const guide = await readFile(path.join(root, 'guide', 'index.html'), 'utf8');
 const guideSteps = [...guide.match(/<nav class="guide-nav"[^>]*>([\s\S]*?)<\/nav>/)[1].matchAll(/<a href="#[^"]+">(\d\d) (\S+) /g)];
 assert(guideSteps.length > 0, 'Missing numbered guide navigation steps.');
