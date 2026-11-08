@@ -1,43 +1,6 @@
 using OpenSkiTime.Domain;
-using OpenSkiTime.Timing;
 
-namespace OpenSkiTime.Application;
-
-/// <summary>
-/// A start or finish time of day for one competitor from the Edit result dialog. <see cref="TimeOfDay"/> is the typed
-/// value for a hand or device-record time; an EET carries its complete calculation instead. <see cref="Replacing"/>
-/// lists the impulses assigned to the competitor at that position when the operator saw them (none when the time was
-/// missing); the entry is refused when they changed, so a late System A impulse is never replaced unseen.
-/// </summary>
-/// For an EET, <see cref="ReferenceKeys"/> are the System A times that were eligible references when the table was
-/// prepared; the EET is refused when that set changed, because the nearest ten could then be others.
-public sealed record CompetitorTimeEntry(int Bib, int Channel, ManualTimeSource Source, string? TimeOfDay = null,
-    string? SourceReference = null, EetCalculation? Eet = null, IReadOnlyList<string>? Replacing = null,
-    IReadOnlyList<string>? ReferenceKeys = null)
-{
-    /// <summary>The impulses an entry for <paramref name="bib"/> at <paramref name="channel"/> replaces (unassigns).</summary>
-    public static IReadOnlyList<string> AssignedKeys(TimingSnapshot snapshot, int bib, int channel)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        return snapshot.Observations.Where(x => x.Bib == bib && !x.Ignored && x.DuplicateOf is null
-                && x.Observation.Kind == ObservationKind.Impulse && x.Observation.Channel == channel)
-            .Select(x => x.Observation.Key).Order(StringComparer.Ordinal).ToArray();
-    }
-
-    /// <summary>
-    /// The System A times of a preparation that can be EET references, in start order with the competitor's own place
-    /// marked, for <see cref="ReferenceKeys"/>: a change of eligibility or of the order changes the nearest ten.
-    /// </summary>
-    public static IReadOnlyList<string> EligibleKeys(EetPreparationResult preparation)
-    {
-        ArgumentNullException.ThrowIfNull(preparation);
-        var keys = preparation.StartOrder.Select((x, i) => (x, i)).Where(x => x.x.A is not null).ToList();
-        var before = keys.Count(x => x.i < preparation.TargetIndex);
-        var result = keys.Select(x => x.x.A!.Key).ToList();
-        result.Insert(before, "target:" + preparation.Bib.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        return result;
-    }
-}
+namespace OpenSkiTime.Timing;
 
 /// <summary>
 /// A competitor considered as an EET reference at one timing position, in start order. <see cref="A"/> is the usable
@@ -59,6 +22,15 @@ public sealed record EetPreparationResult(int Bib, int Channel, string? ClockId,
 
 public static class EetPreparation
 {
+    /// <summary>The impulses assigned to <paramref name="bib"/> at <paramref name="channel"/> (duplicates and ignored ones excluded).</summary>
+    public static IReadOnlyList<string> AssignedKeys(TimingSnapshot snapshot, int bib, int channel)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return snapshot.Observations.Where(x => x.Bib == bib && !x.Ignored && x.DuplicateOf is null
+                && x.Observation.Kind == ObservationKind.Impulse && x.Observation.Channel == channel)
+            .Select(x => x.Observation.Key).Order(StringComparer.Ordinal).ToArray();
+    }
+
     /// <summary>
     /// Pairs System A times with captured backup times (System B or hand-timing devices) for the EET of
     /// <paramref name="bib"/>. Reads only the given snapshot and backup observations; it changes nothing.
@@ -103,7 +75,7 @@ public static class EetPreparation
                 }
                 : result.Status == TimingStatus.Review ? "Timing needs review"
                 // A classification or net-time correction can hide a review: the A time must be the only one assigned.
-                : CompetitorTimeEntry.AssignedKeys(snapshot, other, channel) is not [var only] || only != a.Key ? "Timing needs review"
+                : AssignedKeys(snapshot, other, channel) is not [var only] || only != a.Key ? "Timing needs review"
                 // Only original device impulses: an entered time (even a System A device-record time) is not used.
                 : a.ManualEntry ? "Entered time" : a.Manual ? "Device keyboard time"
                 : a.DeviceTicks is null || a.Precision < 3 ? "Below millisecond precision"
@@ -113,19 +85,25 @@ public static class EetPreparation
         }).ToArray();
 
         // One calculation uses one backup clock: readings of different backup sessions (a reconnected or replaced clock)
-        // may have different offsets from System A. With several, only the session whose readings span the competitor's
-        // place is used; when that is not clear, nothing is filled in and the operator types the backup times.
+        // may have different offsets from System A. With several, only a session that runs through the competitor's own
+        // passage is used: it has readings at or before the preceding System A time and at or after the following one
+        // (after the preceding one when nobody follows). When that is not one session, nothing is filled in and the
+        // operator types the backup times.
         string? backupNote = null;
         var readings = backup.Where(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.Channel == channel).ToArray();
         var backupClocks = readings.Select(x => x.ClockId).Distinct(StringComparer.Ordinal).ToArray();
         if (backupClocks.Length > 1)
         {
-            var near = references.Take(index).LastOrDefault(x => x.A is not null).A ?? references.Skip(index).FirstOrDefault(x => x.A is not null).A;
-            var covering = near is null ? [] : backupClocks.Where(c =>
+            var previous = references.Take(index).LastOrDefault(x => x.A is not null).A;
+            var next = references.Skip(index).FirstOrDefault(x => x.A is not null).A;
+            var covering = previous is null && next is null ? [] : backupClocks.Where(c =>
             {
-                var differences = readings.Where(x => x.ClockId == c)
-                    .Select(x => EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, near.DeviceTicks!.Value)).ToArray();
-                return differences.Min() <= pairingToleranceTicks && differences.Max() >= -pairingToleranceTicks;
+                var times = readings.Where(x => x.ClockId == c).Select(x => x.DeviceTicks!.Value % TimeSpan.TicksPerDay).ToArray();
+                long Offset(long time, TimingObservation a) => EetCalculator.TimeOfDayDifference(time, a.DeviceTicks!.Value);
+                var startsBefore = previous is null || times.Any(t => Offset(t, previous) <= pairingToleranceTicks);
+                var endsAfter = next is not null ? times.Any(t => Offset(t, next) >= -pairingToleranceTicks)
+                    : times.Any(t => Offset(t, previous!) > pairingToleranceTicks);
+                return startsBefore && endsAfter;
             }).ToArray();
             if (covering is [var session])
             {
@@ -201,10 +179,11 @@ public static class EetPreparation
     }
 
     /// <summary>
-    /// For a missing start, the competitor's place in the actual start order follows from the backup start time: before
-    /// the first competitor who started later, after everyone who started earlier. A missing finish keeps its place.
+    /// For a missing start, the competitor's place in the actual start order follows from its start time on the System A
+    /// scale (the EET, or the backup start minus the references' mean difference): before the first competitor who
+    /// started later, after everyone who started earlier. A missing finish keeps its place.
     /// </summary>
-    public static EetPreparationResult Placed(EetPreparationResult preparation, long backupTimeOfDay)
+    public static EetPreparationResult Placed(EetPreparationResult preparation, long timeOfDay)
     {
         ArgumentNullException.ThrowIfNull(preparation);
         if (preparation.Channel != 0) { return preparation; }
@@ -214,10 +193,30 @@ public static class EetPreparation
         for (var i = 0; i < rows.Count; i++)
         {
             if (rows[i].Started is not { } started) { continue; }
-            if (EetCalculator.TimeOfDayDifference(backupTimeOfDay, started) < 0) { index = i; break; }
+            if (EetCalculator.TimeOfDayDifference(timeOfDay, started) < 0) { index = i; break; }
             lastStarted = i;
         }
         return preparation with { TargetIndex = index >= 0 ? index : lastStarted + 1 };
+    }
+
+    /// <summary>The reason recorded for a reference skipped because it has System A but no backup time.</summary>
+    public const string NoBackupTime = "No backup time";
+
+    /// <summary>
+    /// Whether <paramref name="eet"/> uses exactly the references the selection rule chooses on the run as it is now.
+    /// Every eligible competitor that the calculation neither uses nor records as left out (including "No backup
+    /// time") is assumed to have a backup time, so a competitor who became eligible or moved nearer is noticed.
+    /// </summary>
+    public static bool SelectionMatches(EetPreparationResult prepared, EetCalculation eet)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        ArgumentNullException.ThrowIfNull(eet);
+        var excluded = eet.Exclusions.Select(x => x.Bib).ToHashSet();
+        var values = eet.Pairs.ToDictionary(x => x.Bib, x => (x.BackupTimeOfDay, x.BackupPrecision, x.BackupKey));
+        foreach (var other in prepared.StartOrder.Where(x => x.A is not null && !values.ContainsKey(x.Bib) && !excluded.Contains(x.Bib)))
+        { values[other.Bib] = (other.A!.DeviceTicks!.Value % TimeSpan.TicksPerDay, 7, null); }
+        var selected = EetCalculator.Select(Candidates(prepared, values, excluded), eet.Bib).Pairs;
+        return selected.Select(x => x.Bib).Order().SequenceEqual(eet.Pairs.Select(x => x.Bib).Order());
     }
 
     /// <summary>The EET reference candidates in start order, using the backup values the operator confirmed or typed.</summary>
@@ -231,7 +230,7 @@ public static class EetPreparation
         {
             if (x.A is null) { return new EetCandidate(x.Bib, null, x.Unavailable); }
             if (excluded.Contains(x.Bib)) { return new EetCandidate(x.Bib, null, "Left out by operator"); }
-            if (!backup.TryGetValue(x.Bib, out var value)) { return new EetCandidate(x.Bib, null, "No backup time"); }
+            if (!backup.TryGetValue(x.Bib, out var value)) { return new EetCandidate(x.Bib, null, NoBackupTime); }
             return new EetCandidate(x.Bib, new EetPair(x.Bib, x.A.Key, x.A.DeviceTicks!.Value, x.A.Precision, value.TimeOfDay,
                 value.Precision, value.Key));
         }).ToList();

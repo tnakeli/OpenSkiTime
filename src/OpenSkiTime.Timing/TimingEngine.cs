@@ -124,16 +124,45 @@ public static class TimingEngine
               StartEet = starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Eet,
               FinishEet = finishes.Length == 1 && finishes[0].EntrySource == ManualTimeSource.Eet };
         }
-        var finishedTimes = rows.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
         // Forerunners test the timing: an inconsistent intermediate of theirs needs review like a competitor's.
         var badSplits = rows.Concat(forerunnerRows).SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
             .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
         var startOrder = decisions.TryGetValue("q", out var queue) && queue.StartOrder is { } savedOrder
             ? ParseStartOrder(savedOrder) : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
-        return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
-            rows.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
-            reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray())
-        { StartOrder = startOrder, Forerunners = forerunnerRows };
+        var observationsReviewed = reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray();
+        TimingSnapshot Snapshot(IEnumerable<TimingResult> results)
+        {
+            var all = results.ToArray();
+            var finishedTimes = all.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
+            return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
+                all.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
+                observationsReviewed, audit.ToArray())
+            { StartOrder = startOrder, Forerunners = forerunnerRows };
+        }
+        var snapshot = Snapshot(rows);
+        // A saved EET must still be the calculation the selection rule gives on the run as it is now (start corrections
+        // can change who started before); otherwise it needs a new calculation. The audited calculation is unchanged.
+        var outdated = rows.Where(x => x.Status is TimingStatus.Finished or TimingStatus.OnCourse && (x.StartEet || x.FinishEet))
+            .Select(x => (x.Bib, Problem: EetSelectionProblem(snapshot, x, decisions))).Where(x => x.Problem is not null)
+            .ToDictionary(x => x.Bib, x => x.Problem!);
+        return outdated.Count == 0 ? snapshot : Snapshot(rows.Select(x => outdated.TryGetValue(x.Bib, out var problem)
+            ? x with { Status = TimingStatus.Review, Hundredths = null, Detail = problem } : x));
+    }
+
+    private static string? EetSelectionProblem(TimingSnapshot snapshot, TimingResult result, Dictionary<string, TimingDecision> decisions)
+    {
+        foreach (var key in new[] { result.StartEet ? result.StartKey : null, result.FinishEet ? result.FinishKey : null })
+        {
+            if (key is null || decisions.GetValueOrDefault(DecisionKey(new(DecisionKind.ManualTime, key)))?.Timestamp?.Eet is not { } eet) { continue; }
+            try
+            {
+                var prepared = EetPreparation.Placed(EetPreparation.Prepare(snapshot, result.Bib, eet.Channel, [], 0), eet.ResultTimeOfDay);
+                if (!EetPreparation.SelectionMatches(prepared, eet))
+                { return "The EET references are no longer the competitors started nearest before (start order changed). Calculate the EET again."; }
+            }
+            catch (DomainValidationException) { return "The EET references can no longer be checked. Calculate the EET again."; }
+        }
+        return null;
     }
 
     // Operator-entered timestamps come only from audited ManualTime decisions (their latest state, so an undo removes

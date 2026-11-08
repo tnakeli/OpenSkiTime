@@ -79,7 +79,9 @@ public static class EetSheetBuilder
             else
             {
                 rows.Add(excluded.TryGetValue(bib, out var reason)
-                    ? new(EetSheetRowKind.LeftOut, bib, name.Surname, name.FirstName, "", "", "", "Left out: " + reason)
+                    ? reason == EetPreparation.NoBackupTime
+                        ? new(EetSheetRowKind.NotUsed, bib, name.Surname, name.FirstName, "", "", "", reason)
+                        : new(EetSheetRowKind.LeftOut, bib, name.Surname, name.FirstName, "", "", "", "Left out: " + reason)
                     : new(EetSheetRowKind.NotUsed, bib, name.Surname, name.FirstName, "", "", "", notUsable.GetValueOrDefault(bib) ?? "No backup time"));
             }
         }

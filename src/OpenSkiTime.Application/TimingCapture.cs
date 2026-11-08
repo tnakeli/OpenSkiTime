@@ -851,15 +851,13 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                 { throw new DomainValidationException("The EET calculation does not belong to this competitor and position. Calculate it again."); }
                 // Every reference must still be eligible now, by the same rules that prepared the table: the competitor's
                 // only System A time at this position, an original device impulse, not in review, on the same clock.
-                var prepared = EetPreparation.Placed(EetPreparation.Prepare(_snapshot, entry.Bib, entry.Channel, [], 0), eet.BackupTimeOfDay);
+                var prepared = EetPreparation.Placed(EetPreparation.Prepare(_snapshot, entry.Bib, entry.Channel, [], 0), eet.ResultTimeOfDay);
                 // The set of eligible references must be the one the calculation was made from: a competitor who became
                 // eligible since then could be one of the nearest ten.
                 if (entry.ReferenceKeys is null || !CompetitorTimeEntry.EligibleKeys(prepared).SequenceEqual(entry.ReferenceKeys, StringComparer.Ordinal))
                 { throw new DomainValidationException("The System A times of the run changed after the EET was calculated. Calculate it again."); }
                 // The stored pairs must be exactly the nearest ones that the selection rule chooses now.
-                var values = eet.Pairs.ToDictionary(x => x.Bib, x => (x.BackupTimeOfDay, x.BackupPrecision, x.BackupKey));
-                var selected = EetCalculator.Select(EetPreparation.Candidates(prepared, values, eet.Exclusions.Select(x => x.Bib).ToHashSet()), entry.Bib).Pairs;
-                if (!selected.Select(x => x.Bib).Order().SequenceEqual(eet.Pairs.Select(x => x.Bib).Order()))
+                if (!EetPreparation.SelectionMatches(prepared, eet))
                 { throw new DomainValidationException("The start order changed after the EET was calculated. Calculate it again."); }
                 var eligible = prepared.StartOrder.Where(x => x.A is not null).ToDictionary(x => x.Bib, x => x.A!);
                 foreach (var pair in eet.Pairs)

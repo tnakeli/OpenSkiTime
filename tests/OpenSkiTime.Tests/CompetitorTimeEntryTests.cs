@@ -166,6 +166,12 @@ public sealed class CompetitorTimeEntryTests
         Assert.Contains("type the backup times", overlapping.BackupNote, StringComparison.Ordinal);
         Assert.Null(overlapping.ProposedTarget);
         Assert.All(overlapping.StartOrder, x => Assert.Null(x.Backup));
+        // Reconnected just before the competitor's own passage: the old session ends before it, the new one starts
+        // after it, so neither runs through it and nothing is filled in.
+        var reconnected = EetPreparation.Prepare(snapshot, target, 1,
+            backup.Select(x => x.Key == "b-target" ? x with { ClockId = "b-new" } : x).ToArray(), 2 * TimeSpan.TicksPerSecond);
+        Assert.Contains("type the backup times", reconnected.BackupNote, StringComparison.Ordinal);
+        Assert.Null(reconnected.ProposedTarget);
 
         var preparation = EetPreparation.Prepare(snapshot, target, 1, backup, 2 * TimeSpan.TicksPerSecond);
         Assert.Null(preparation.BackupNote);
@@ -384,6 +390,51 @@ public sealed class CompetitorTimeEntryTests
         await Pulse(timing, source, 1, Noon + 100 * second);
         Assert.Equal(TimingStatus.Finished, timing.Snapshot!.Forerunners.Single().Status);
         Assert.Equal("b1", EetPreparation.Prepare(timing.Snapshot!, order[1], 1, backup, 2 * second).ProposedTarget?.Key);
+        await timing.StopAsync();
+    }
+
+    [Fact]
+    public async Task ASavedEetIsOutdatedByAStartCorrectionThatChangesTheNearestTen()
+    {
+        using var folder = new TestFolder();
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, folder.File, 13);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id); await timing.FollowStartOrderAsync(true);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, new("Simulator", "Test", TimingRulesTests.Date, Simulation: true), "Operator");
+        for (var i = 0; i < 13; i++)
+        {
+            await Pulse(timing, source, 0, Noon + i * TimeSpan.TicksPerMinute);
+            if (i < 12) { await Pulse(timing, source, 1, Noon + i * TimeSpan.TicksPerMinute + 40 * TimeSpan.TicksPerSecond); }
+        }
+        await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Results.Count(x => x.Status == TimingStatus.Finished) == 12);
+        var snapshot = timing.Snapshot!;
+        var order = snapshot.StartOrder;
+        var target = order[^1];
+        var day = TimingRulesTests.Date.ToDateTime(TimeOnly.MinValue).Ticks;
+        var backup = snapshot.Results.Where(x => x.FinishKey is not null)
+            .Select(x => B($"b{x.Bib}", snapshot.Observations.Single(o => o.Observation.Key == x.FinishKey).Observation.DeviceTicks!.Value + 123_000))
+            .Append(B("b-target", day + Noon + 12 * TimeSpan.TicksPerMinute + 40 * TimeSpan.TicksPerSecond + 123_000)).ToArray();
+        var preparation = EetPreparation.Prepare(snapshot, target, 1, backup, 2 * TimeSpan.TicksPerSecond);
+        var values = preparation.StartOrder.ToDictionary(x => x.Bib, x => (x.Backup!.DeviceTicks!.Value % TimeSpan.TicksPerDay, x.Backup.Precision, (string?)x.Backup.Key));
+        var pairs = EetCalculator.Select(EetPreparation.Candidates(preparation, values, new HashSet<int>()), target).Pairs;
+        Assert.Equal(order.Skip(2).Take(10).Order(), pairs.Select(x => x.Bib).Order());
+        var proposed = preparation.ProposedTarget!;
+        var eet = EetCalculator.Calculate(target, 1, EetBackupSource.SystemB, proposed.DeviceTicks!.Value % TimeSpan.TicksPerDay, proposed.Precision,
+            proposed.Key, pairs, [], "Wire break");
+        await timing.EnterCompetitorTimeAsync(list.Id, new(target, 1, ManualTimeSource.Eet, Eet: eet, ReferenceKeys: CompetitorTimeEntry.EligibleKeys(preparation)),
+            "Operator", "EET");
+        Assert.Equal(TimingStatus.Finished, timing.Snapshot!.Results.Single(x => x.Bib == target).Status);
+
+        // Corrected to 12:05:30 the competitor started sixth: the nearest ten are others, so the start correction is
+        // refused while the EET stands, and replay puts such an EET in review.
+        var startKey = timing.Snapshot.Results.Single(x => x.Bib == target).StartKey!;
+        var version = timing.Snapshot.AuditVersion;
+        var error = await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
+            new(target, 0, ManualTimeSource.DeviceRecord, "12:05:30.000", Replacing: [startKey]), "Operator", "Start"));
+        Assert.Contains("start order changed", error.Message, StringComparison.Ordinal);
+        Assert.Equal(version, timing.Snapshot.AuditVersion);
         await timing.StopAsync();
     }
 
