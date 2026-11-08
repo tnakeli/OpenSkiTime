@@ -5,10 +5,22 @@ namespace OpenSkiTime.Application;
 
 /// <summary>
 /// A start or finish time of day for one competitor from the Edit result dialog. <see cref="TimeOfDay"/> is the typed
-/// value for a hand or device-record time; an EET carries its complete calculation instead.
+/// value for a hand or device-record time; an EET carries its complete calculation instead. <see cref="Replacing"/>
+/// lists the impulses assigned to the competitor at that position when the operator saw them (none when the time was
+/// missing); the entry is refused when they changed, so a late System A impulse is never replaced unseen.
 /// </summary>
 public sealed record CompetitorTimeEntry(int Bib, int Channel, ManualTimeSource Source, string? TimeOfDay = null,
-    string? SourceReference = null, EetCalculation? Eet = null);
+    string? SourceReference = null, EetCalculation? Eet = null, IReadOnlyList<string>? Replacing = null)
+{
+    /// <summary>The impulses an entry for <paramref name="bib"/> at <paramref name="channel"/> replaces (unassigns).</summary>
+    public static IReadOnlyList<string> AssignedKeys(TimingSnapshot snapshot, int bib, int channel)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return snapshot.Observations.Where(x => x.Bib == bib && !x.Ignored && x.DuplicateOf is null
+                && x.Observation.Kind == ObservationKind.Impulse && x.Observation.Channel == channel)
+            .Select(x => x.Observation.Key).Order(StringComparer.Ordinal).ToArray();
+    }
+}
 
 /// <summary>
 /// A competitor considered as an EET reference at one timing position, in start order. <see cref="A"/> is the usable

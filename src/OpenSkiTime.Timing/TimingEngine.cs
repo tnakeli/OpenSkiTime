@@ -254,6 +254,10 @@ public static class TimingEngine
                     || !knownChannel)
                 { throw new DomainValidationException("Only an original timing impulse can be assigned. Other input can be reviewed and ignored."); }
                 if (!snapshot.Participants.Any(x => x.Bib == bib)) { throw new DomainValidationException("That bib is not on this run's start list."); }
+                // An EET is calculated from one competitor's own backup reading: it never moves to another competitor.
+                if (ManualTimestamp.IsKey(decision.ObservationKey)
+                    && CurrentDecision(new(DecisionKind.ManualTime, decision.ObservationKey), snapshot.Audit).Timestamp?.Eet is { } eet && eet.Bib != bib)
+                { throw new DomainValidationException($"This EET was calculated for bib {eet.Bib}. Calculate a new EET in Edit result for bib {bib}."); }
             }
         }
         else if (decision.Kind == DecisionKind.ManualTime)

@@ -893,11 +893,17 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             var key = ManualTimestamp.KeyPrefix + Guid.NewGuid().ToString("N");
             var manual = new TimingDecision(DecisionKind.ManualTime, key, Timestamp: timestamp);
             TimingEngine.ValidateDecision(manual, _snapshot);
+            // The times the operator saw must still be the ones replaced: a System A impulse that arrived meanwhile is
+            // never unassigned unseen.
+            var replaced = CompetitorTimeEntry.AssignedKeys(_snapshot, entry.Bib, entry.Channel);
+            if (!replaced.SequenceEqual((entry.Replacing ?? []).Order(StringComparer.Ordinal), StringComparer.Ordinal))
+            {
+                throw new DomainValidationException($"Bib {entry.Bib}: the {(entry.Channel == 0 ? "start" : "finish")} changed after it was shown"
+                    + (replaced.Count > 0 ? " (a time is now assigned)" : "") + ". Check it and enter the time again. Nothing was saved.");
+            }
             var changes = new List<TimingAuditChange> { new(new(DecisionKind.ManualTime, key), manual) };
-            changes.AddRange(_snapshot.Observations.Where(x => x.Bib == entry.Bib && !x.Ignored && x.DuplicateOf is null
-                    && x.Observation.Kind == ObservationKind.Impulse && x.Observation.Channel == entry.Channel)
-                .Select(x => new TimingAuditChange(TimingEngine.CurrentDecision(new(DecisionKind.Assignment, x.Observation.Key), _audit),
-                    new(DecisionKind.Assignment, x.Observation.Key))));
+            changes.AddRange(replaced.Select(x => new TimingAuditChange(TimingEngine.CurrentDecision(new(DecisionKind.Assignment, x), _audit),
+                new(DecisionKind.Assignment, x))));
             var assignment = new TimingDecision(DecisionKind.Assignment, key, Bib: entry.Bib);
             changes.Add(new(new(DecisionKind.Assignment, key), assignment));
             // Validate the complete change on the replay it produces before anything is written.
@@ -909,6 +915,23 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             var outcome = trial.Results.Single(x => x.Bib == entry.Bib);
             if (outcome.Status == TimingStatus.Review)
             { throw new DomainValidationException($"Bib {entry.Bib}: {outcome.Detail} Nothing was saved."); }
+            // A classification or net-time correction would hide a review outcome: check the time pair itself as well.
+            var counterpart = other ?? (CompetitorTimeEntry.AssignedKeys(_snapshot, entry.Bib, 1 - entry.Channel) is [var only]
+                ? _snapshot.Observations.Single(x => x.Observation.Key == only).Observation : null);
+            if (counterpart is not null)
+            {
+                var placed = trial.Observations.Single(x => x.Observation.Key == key).Observation;
+                var elapsed = entry.Channel == 1 ? TimingEngine.Elapsed(counterpart, placed, finish: true) : TimingEngine.Elapsed(placed, counterpart, finish: true);
+                var problem = elapsed.Problem switch
+                {
+                    ElapsedProblem.None => null,
+                    ElapsedProblem.NotAfterStart => "the finish is not after the start.",
+                    ElapsedProblem.OverTwoHours => "the time is over two hours.",
+                    ElapsedProblem.LowPrecision => "the time has too few decimals.",
+                    _ => "the start and finish come from different device clocks."
+                };
+                if (problem is not null) { throw new DomainValidationException($"Bib {entry.Bib}: {problem} Nothing was saved."); }
+            }
             var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName.Trim(),
                 reason.Trim(), DateTimeOffset.UtcNow, startsRun: entry.Channel == 0, ct: ct);
             _audit.AddRange(saved); Rebuild();

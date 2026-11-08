@@ -85,13 +85,26 @@ public sealed class CompetitorTimeEntryTests
         // A finish before the start would leave the result in review: rejected before anything is written.
         var version = timing.Snapshot.AuditVersion;
         var error = await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
-            new(bib, 1, ManualTimeSource.Hand, "11:59:00.00"), "Operator", "Photocell missed"));
+            new(bib, 1, ManualTimeSource.Hand, "11:59:00.00", Replacing: [old]), "Operator", "Photocell missed"));
         Assert.Contains("Nothing was saved", error.Message, StringComparison.Ordinal);
         Assert.Equal(version, timing.Snapshot.AuditVersion);
         await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
             new(bib, 2, ManualTimeSource.Hand, "12:00:30.00"), "Operator", "Split"));
+        // An entry made while the finish looked missing never replaces the impulse assigned meanwhile.
+        error = await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
+            new(bib, 1, ManualTimeSource.Hand, "12:00:45.67"), "Operator", "Wrong impulse"));
+        Assert.Contains("changed after it was shown", error.Message, StringComparison.Ordinal);
+        Assert.Equal(version, timing.Snapshot.AuditVersion);
+        // A classification would hide the review outcome; the impossible time is still refused.
+        var competitor = timing.Snapshot.Results.Single().CompetitorId;
+        await timing.CorrectAsync(new(DecisionKind.Status, CompetitorId: competitor, Status: TimingStatus.DNF), "Operator", "Test");
+        error = await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
+            new(bib, 1, ManualTimeSource.Hand, "11:59:00.00", Replacing: [old]), "Operator", "Photocell missed"));
+        Assert.Contains("not after the start", error.Message, StringComparison.Ordinal);
+        await timing.CorrectAsync(new(DecisionKind.Status, CompetitorId: competitor), "Operator", "Test");
+        version = timing.Snapshot.AuditVersion;
 
-        var key = await timing.EnterCompetitorTimeAsync(list.Id, new(bib, 1, ManualTimeSource.Hand, "12:00:45.67"), "Operator", "Wrong impulse");
+        var key = await timing.EnterCompetitorTimeAsync(list.Id, new(bib, 1, ManualTimeSource.Hand, "12:00:45.67", Replacing: [old]), "Operator", "Wrong impulse");
         var result = timing.Snapshot!.Results.Single();
         Assert.Equal((TimingStatus.Finished, 4567L, key), (result.Status, result.Hundredths!.Value, result.FinishKey));
         Assert.True(result.FinishManual);
@@ -154,6 +167,10 @@ public sealed class CompetitorTimeEntryTests
         Assert.Equal(123_000 + selection.Pairs.Sum(x => (long)x.Bib), eet.CorrectionTicks);
 
         var key = await timing.EnterCompetitorTimeAsync(list.Id, new(target, 1, ManualTimeSource.Eet, Eet: eet), "Operator", "EET for missing finish");
+        // The EET belongs to its competitor: it cannot be moved to a reference competitor.
+        var other = order[0];
+        var moveError = await Assert.ThrowsAsync<DomainValidationException>(() => timing.CorrectAsync(new(DecisionKind.Assignment, key, Bib: other), "Operator", "Move"));
+        Assert.Contains($"calculated for bib {target}", moveError.Message, StringComparison.Ordinal);
         await timing.StopAsync();
         AssertResult(timing.Snapshot!);
         var saved = await workspace.ReadTimingAsync(list.Id);

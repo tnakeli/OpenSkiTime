@@ -52,7 +52,8 @@ public sealed record ManualTimestamp(int Channel, long DeviceTicks, int Precisio
 
     // A System A time read from the device's own record (printout or memory) keeps the System A precision rule; a hand,
     // B or EET time is a replacement and is flagged like a device-keyboard impulse.
-    public bool IsSystemA => Source == ManualTimeSource.DeviceRecord;
+    // Computed, so never serialized: audit JSON and approved-result fingerprints of existing entries stay unchanged.
+    [JsonIgnore] public bool IsSystemA => Source == ManualTimeSource.DeviceRecord;
 
     public bool IsValid => Channel is >= 0 and <= 21 && DeviceTicks > 0 && DeviceTicks < DateTime.MaxValue.Ticks
         && Precision is >= 2 and <= 7 && !string.IsNullOrWhiteSpace(ClockId) && ClockId.Length <= 200

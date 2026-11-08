@@ -149,6 +149,9 @@ public sealed class EetCalculationTests
         var json = JsonSerializer.Serialize(hand);
         Assert.DoesNotContain("Source", json, StringComparison.Ordinal);
         Assert.DoesNotContain("Eet", json, StringComparison.Ordinal);
+        // Exactly the JSON of a manual time before sources existed, so approved-result fingerprints are unchanged.
+        Assert.Equal($$"""{"Channel":1,"DeviceTicks":{{Day + 100_000}},"Precision":2,"ClockId":"clock","ReferenceKey":null,"IsValid":true}""",
+            JsonSerializer.Serialize(hand.Timestamp));
         Assert.Equal(ManualTimeSource.Hand, JsonSerializer.Deserialize<TimingDecision>(json)!.Timestamp!.Source);
         // A System A device-record time keeps the System A precision rule.
         Assert.False((hand.Timestamp! with { Source = ManualTimeSource.DeviceRecord }).IsValid);
