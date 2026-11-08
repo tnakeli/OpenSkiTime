@@ -288,7 +288,7 @@ public sealed class ForerunnerTimingTests
         await timing.MoveToStartAsync(listId, bib, participant.StartKey, assigned, "Test operator");
     }
 
-    private static async Task SaveForerunnersAsync(SeriesWorkspace workspace, StartListRevision list, params TimingForerunner[] runners)
+    internal static async Task SaveForerunnersAsync(SeriesWorkspace workspace, StartListRevision list, params TimingForerunner[] runners)
     {
         var information = (await workspace.ReadRaceInformationAsync(list.Plan.CompetitionId))?.Values ?? RaceInformation.Empty(list.Plan.Competition);
         information = information with { Runs = information.Runs.Select(x => x.Number != list.Plan.RunNumber ? x

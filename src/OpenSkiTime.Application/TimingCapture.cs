@@ -815,7 +815,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             { throw new DomainValidationException("Enter an operator and a reason for the manual time."); }
             var reference = _observations.LastOrDefault(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.ClockId.Length > 0);
             var timestamp = reference is { DeviceTicks: { } referenceTicks }
-                ? new ManualTimestamp(channel, PlaceOnClock(referenceTicks, timeOfDayTicks), precision, reference.ClockId, reference.Key)
+                ? new ManualTimestamp(channel, TimingTime.PlaceOnClock(referenceTicks, timeOfDayTicks), precision, reference.ClockId, reference.Key)
                 : new ManualTimestamp(channel, _list.Plan.Competition.Date.ToDateTime(TimeOnly.MinValue).Ticks + timeOfDayTicks,
                     precision, $"manual:{listId:N}");
             var key = ManualTimestamp.KeyPrefix + Guid.NewGuid().ToString("N");
@@ -825,15 +825,130 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         finally { _state.Release(); }
     }
 
-    // The typed time of day on the reference impulse's device clock: the nearest day, so a time just across midnight
-    // from the reference lands on the neighbouring day instead of almost 24 hours away.
-    private static long PlaceOnClock(long referenceTicks, long timeOfDayTicks)
+    // A missing (or wrong) start/finish of one competitor, entered in the Edit result dialog: a System A time read from
+    // the device record, a hand/B reading, or an EET calculated from a backup time. The ManualTime entry, its
+    // assignment to the competitor and the unassignment of the impulse it replaces are validated together on the
+    // resulting replay and committed in one audited batch; the replaced impulse stays in the journal.
+    public async Task<string> EnterCompetitorTimeAsync(Guid listId, CompetitorTimeEntry entry, string operatorName,
+        string reason, CancellationToken ct = default)
     {
-        var placed = referenceTicks - referenceTicks % TimeSpan.TicksPerDay + timeOfDayTicks;
-        if (placed - referenceTicks > TimeSpan.TicksPerDay / 2) { placed -= TimeSpan.TicksPerDay; }
-        else if (referenceTicks - placed > TimeSpan.TicksPerDay / 2) { placed += TimeSpan.TicksPerDay; }
-        return placed;
+        ArgumentNullException.ThrowIfNull(entry);
+        await _state.WaitAsync(ct);
+        try
+        {
+            if (_snapshot?.ListId != listId || _list is null) { throw new DomainValidationException("The active run changed. Choose the competitor again."); }
+            var result = _snapshot.Results.SingleOrDefault(x => x.Bib == entry.Bib)
+                ?? throw new DomainValidationException("Choose a competitor of this run. Enter forerunner times in Timestamps.");
+            if (entry.Channel is not (0 or 1)) { throw new DomainValidationException("Choose start or finish. Intermediate times are entered in Timestamps."); }
+            if (string.IsNullOrWhiteSpace(operatorName) || string.IsNullOrWhiteSpace(reason))
+            { throw new DomainValidationException("Enter an operator and a reason for the time."); }
+            var sourceReference = string.IsNullOrWhiteSpace(entry.SourceReference) ? null : entry.SourceReference.Trim();
+            long timeOfDay; int precision;
+            if (entry.Source == ManualTimeSource.Eet)
+            {
+                var eet = entry.Eet ?? throw new DomainValidationException("Calculate the EET first.");
+                if (eet.Bib != entry.Bib || eet.Channel != entry.Channel || !eet.IsConsistent())
+                { throw new DomainValidationException("The EET calculation does not belong to this competitor and position. Calculate it again."); }
+                // Every reference must still be eligible now, by the same rules that prepared the table: the competitor's
+                // only System A time at this position, an original device impulse, not in review, on the same clock.
+                var prepared = EetPreparation.Placed(EetPreparation.Prepare(_snapshot, entry.Bib, entry.Channel, [], 0), eet.ResultTimeOfDay);
+                // The set of eligible references must be the one the calculation was made from: a competitor who became
+                // eligible since then could be one of the nearest ten.
+                if (entry.ReferenceKeys is null || !CompetitorTimeEntry.EligibleKeys(prepared).SequenceEqual(entry.ReferenceKeys, StringComparer.Ordinal))
+                { throw new DomainValidationException("The System A times of the run changed after the EET was calculated. Calculate it again."); }
+                // The stored pairs must be exactly the nearest ones that the selection rule chooses now.
+                if (!EetPreparation.SelectionMatches(prepared, eet))
+                { throw new DomainValidationException("The start order changed after the EET was calculated. Calculate it again."); }
+                var eligible = prepared.StartOrder.Where(x => x.A is not null).ToDictionary(x => x.Bib, x => x.A!);
+                foreach (var pair in eet.Pairs)
+                {
+                    if (!eligible.TryGetValue(pair.Bib, out var a) || a.Key != pair.AKey || a.DeviceTicks != pair.ATicks || a.Precision != pair.APrecision)
+                    { throw new DomainValidationException($"The System A time of bib {pair.Bib} changed after the EET was calculated. Calculate it again."); }
+                }
+                (timeOfDay, precision) = (eet.ResultTimeOfDay, eet.ResultPrecision);
+            }
+            else
+            {
+                if (entry.Eet is not null || !Enum.IsDefined(entry.Source)) { throw new DomainValidationException("Choose how the time was obtained."); }
+                var minimum = entry.Source == ManualTimeSource.DeviceRecord ? 3 : 2;
+                if (!TimingTime.TryTimeOfDay((entry.TimeOfDay ?? "").Trim(), out timeOfDay, out precision) || precision < minimum)
+                {
+                    throw new DomainValidationException(entry.Source == ManualTimeSource.DeviceRecord
+                        ? "Enter the System A time of day as HH:mm:ss.fff with 3–7 decimals, as printed by the device."
+                        : "Enter the time of day as HH:mm:ss.ff with 2–7 decimals (for example 12:03:41.27).");
+                }
+            }
+            // The competitor's other impulse fixes the device clock (so start and finish combine); a manual time uses the
+            // clock and device reference of its own entry. Without one, an EET uses its reference A times, anything else
+            // the newest device impulse, as for a manual timestamp.
+            var otherKey = entry.Channel == 0 ? result.FinishKey : result.StartKey;
+            var other = _snapshot.Observations.SingleOrDefault(x => x.Observation.Key == otherKey)?.Observation;
+            var pairObservation = entry.Eet is { Pairs: [var first, ..] }
+                ? _snapshot.Observations.Single(x => x.Observation.Key == first.AKey).Observation : null;
+            var anchor = other ?? pairObservation
+                ?? _observations.LastOrDefault(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.ClockId.Length > 0);
+            if (entry.Eet is { } calculation && anchor is not null && calculation.Pairs.Any(pair =>
+                _snapshot.Observations.Single(x => x.Observation.Key == pair.AKey).Observation.ClockId != anchor.ClockId))
+            { throw new DomainValidationException("The EET reference times come from another device clock than the competitor's other time."); }
+            var referenceKey = anchor is null ? null : anchor.ManualEntry
+                ? TimingEngine.CurrentDecision(new(DecisionKind.ManualTime, anchor.Key), _audit).Timestamp?.ReferenceKey
+                : anchor.Key;
+            var timestamp = (anchor is { DeviceTicks: { } anchorTicks }
+                ? new ManualTimestamp(entry.Channel, TimingTime.PlaceOnClock(anchorTicks, timeOfDay), precision, anchor.ClockId, referenceKey)
+                : new ManualTimestamp(entry.Channel, _list.Plan.Competition.Date.ToDateTime(TimeOnly.MinValue).Ticks + timeOfDay,
+                    precision, $"manual:{listId:N}"))
+                with { Source = entry.Source, SourceReference = sourceReference, Eet = entry.Eet };
+            var key = ManualTimestamp.KeyPrefix + Guid.NewGuid().ToString("N");
+            var manual = new TimingDecision(DecisionKind.ManualTime, key, Timestamp: timestamp);
+            TimingEngine.ValidateDecision(manual, _snapshot);
+            // The times the operator saw must still be the ones replaced: a System A impulse that arrived meanwhile is
+            // never unassigned unseen.
+            var replaced = CompetitorTimeEntry.AssignedKeys(_snapshot, entry.Bib, entry.Channel);
+            if (!replaced.SequenceEqual((entry.Replacing ?? []).Order(StringComparer.Ordinal), StringComparer.Ordinal))
+            {
+                throw new DomainValidationException($"Bib {entry.Bib}: the {(entry.Channel == 0 ? "start" : "finish")} changed after it was shown"
+                    + (replaced.Count > 0 ? " (a time is now assigned)" : "") + ". Check it and enter the time again. Nothing was saved.");
+            }
+            var changes = new List<TimingAuditChange> { new(new(DecisionKind.ManualTime, key), manual) };
+            changes.AddRange(replaced.Select(x => new TimingAuditChange(TimingEngine.CurrentDecision(new(DecisionKind.Assignment, x), _audit),
+                new(DecisionKind.Assignment, x))));
+            var assignment = new TimingDecision(DecisionKind.Assignment, key, Bib: entry.Bib);
+            changes.Add(new(new(DecisionKind.Assignment, key), assignment));
+            // Validate the complete change on the replay it produces before anything is written.
+            var nextId = _audit.Count == 0 ? 1 : _audit[^1].Id + 1;
+            var trialAudit = _audit.Concat(changes.Select((x, i) => new TimingAudit(nextId + i, listId, DateTimeOffset.UnixEpoch,
+                operatorName, reason, x.Before, x.After))).ToArray();
+            var trial = TimingEngine.Replay(_list, _observations, trialAudit, 0, 1, _forerunners);
+            TimingEngine.ValidateDecision(assignment, trial);
+            var outcome = trial.Results.Single(x => x.Bib == entry.Bib);
+            if (outcome.Status == TimingStatus.Review)
+            { throw new DomainValidationException($"Bib {entry.Bib}: {outcome.Detail} Nothing was saved."); }
+            // A classification or net-time correction would hide a review outcome: check the time pair itself as well.
+            var counterpart = other ?? (CompetitorTimeEntry.AssignedKeys(_snapshot, entry.Bib, 1 - entry.Channel) is [var only]
+                ? _snapshot.Observations.Single(x => x.Observation.Key == only).Observation : null);
+            if (counterpart is not null)
+            {
+                var placed = trial.Observations.Single(x => x.Observation.Key == key).Observation;
+                var elapsed = entry.Channel == 1 ? TimingEngine.Elapsed(counterpart, placed, finish: true) : TimingEngine.Elapsed(placed, counterpart, finish: true);
+                var problem = elapsed.Problem switch
+                {
+                    ElapsedProblem.None => null,
+                    ElapsedProblem.NotAfterStart => "the finish is not after the start.",
+                    ElapsedProblem.OverTwoHours => "the time is over two hours.",
+                    ElapsedProblem.LowPrecision => "the time has too few decimals.",
+                    _ => "the start and finish come from different device clocks."
+                };
+                if (problem is not null) { throw new DomainValidationException($"Bib {entry.Bib}: {problem} Nothing was saved."); }
+            }
+            var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName.Trim(),
+                reason.Trim(), DateTimeOffset.UtcNow, startsRun: entry.Channel == 0, ct: ct);
+            _audit.AddRange(saved); Rebuild();
+            foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
+            return key;
+        }
+        finally { _state.Release(); }
     }
+
 
     private async Task AppendDecisionAsync(TimingDecision decision, string operatorName, string reason, long? reversesId = null)
     {

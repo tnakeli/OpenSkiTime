@@ -10,8 +10,15 @@ public sealed record TimingTimestampCell(Guid ListId, ObservationReview Review, 
     public string Position => MainViewModel.TimingPositionLabel(Channel);
     public string State => Review.Ignored ? "Ignored" : Review.Bib is null ? "Unassigned"
         : TimingForerunner.IsKey(Review.Bib.Value) ? "Forerunner" : $"Bib {Review.Bib}";
-    // Operator-entered (not received from a device); shown as a small "m" next to the time.
+    // Operator-entered (not received from a device); shown as a small mark next to the time: "m" for a hand/B time,
+    // "e" for an EET replacement and "r" for a System A time read from the device record.
     public bool IsManual => Review.Observation.ManualEntry;
+    public string Mark => Review.Observation.EntrySource switch
+    {
+        ManualTimeSource.Eet => "e",
+        ManualTimeSource.DeviceRecord => "r",
+        _ => IsManual ? "m" : ""
+    };
     public string Hint => $"{Position} · {Time}{(IsManual ? " · " + Review.Observation.Message : "")} · {State}. "
         + "Drop a competitor here to assign this timestamp. Double-click to enter a missing time manually.";
 }

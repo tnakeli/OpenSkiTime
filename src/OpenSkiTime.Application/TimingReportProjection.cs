@@ -44,8 +44,25 @@ public static class TimingReportProjection
         var best = snapshot.Results.Where(x => x.Status == TimingStatus.Finished && x.Hundredths is > 0)
             .OrderBy(x => x.Hundredths).ThenBy(x => x.Entry.Position).FirstOrDefault();
         var timed = snapshot.Results.Where(x => x.Hundredths is not null).Concat(complete).DistinctBy(x => x.CompetitorId);
-        var missed = timed.Where(x => !IsSystemA(x))
-            .Select(x => new TimingReportMissed(x.Bib, "", "")).ToArray();
+        // An EET replacement already says why A was missing and where the time came from; other replacements are
+        // explained by the operator in the report. Photo finish counts as the B system here (the report offers only
+        // System B or Manual); the EET history keeps the exact source.
+        EetCalculation? Eet(string? key) => Find(key) is { EntrySource: ManualTimeSource.Eet } entry
+            ? TimingEngine.CurrentDecision(new(DecisionKind.ManualTime, entry.Key), snapshot.Audit).Timestamp?.Eet : null;
+        TimingReportMissed Missed(TimingResult result)
+        {
+            // Only when every replaced time of the result is an EET; a mix with another replacement needs the operator.
+            var start = Find(result.StartKey); var finish = Find(result.FinishKey);
+            var replaced = new[] { start, finish }.Where(x => x is { Manual: true }).ToArray();
+            var calculations = replaced.Select(x => Eet(x!.Key)).ToArray();
+            if (calculations.Length == 0 || calculations.Any(x => x is null)
+                || timeDecisions.TryGetValue(result.CompetitorId, out var corrected) && corrected.Hundredths is not null)
+            { return new(result.Bib, "", ""); }
+            var sources = calculations.Select(x => x!.Source == EetBackupSource.HandTime ? "Manual" : "System B").Distinct().ToArray();
+            var reasons = calculations.Select(x => x!.ReplacementReason).Where(x => x.Length > 0).Distinct().ToArray();
+            return new(result.Bib, reasons.Length == 1 ? reasons[0] : "", sources.Length == 1 ? sources[0] : "");
+        }
+        var missed = timed.Where(x => !IsSystemA(x)).Select(Missed).ToArray();
         return new()
         {
             Run = source.List.Plan.RunNumber,

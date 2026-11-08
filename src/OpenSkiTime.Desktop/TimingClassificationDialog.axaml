@@ -1,54 +1,192 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:OpenSkiTime.Desktop" x:Class="OpenSkiTime.Desktop.TimingClassificationDialog" x:CompileBindings="False"
-        Title="Edit classification" Width="780" MinWidth="620" SizeToContent="Height" CanResize="True" ShowInTaskbar="False"
+        Title="Edit result" Width="1040" MinWidth="760" SizeToContent="Height" CanResize="True" ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner" Background="{DynamicResource CanvasBrush}">
- <!-- Post-run classification of one competitor at a time: choose by bib or name, set the status, save with the
-      correction history. The dialog stays open for the next competitor. -->
- <StackPanel Margin="12" Spacing="12">
-  <Border Classes="card">
-   <StackPanel Spacing="{DynamicResource FormGap}">
-    <local:FormRow>
-     <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
-      <TextBlock Text="COMPETITOR" Classes="fieldLabel" />
-      <AutoCompleteBox Name="TimingClassificationCompetitor" ItemsSource="{Binding TimingRows}" SelectedItem="{Binding TimingClassificationTarget, Mode=TwoWay}"
-                       ValueMemberBinding="{Binding Label}" FilterMode="Custom" ItemFilter="{x:Static local:TimingClassificationDialog.CompetitorFilter}"
-                       MinimumPrefixLength="1" PlaceholderText="Bib or name" ToolTip.Tip="Type a bib or a name and press Enter">
-       <AutoCompleteBox.ItemTemplate>
-        <DataTemplate>
-         <StackPanel Orientation="Horizontal" Spacing="8">
-          <TextBlock Text="{Binding BibText}" MinWidth="32" FontWeight="SemiBold" />
-          <local:CompetitorNameBlock Surname="{Binding Surname}" FirstName="{Binding FirstName}" />
-         </StackPanel>
-        </DataTemplate>
-       </AutoCompleteBox.ItemTemplate>
-      </AutoCompleteBox>
-     </StackPanel>
-     <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field">
-      <TextBlock Text="CURRENT" Classes="fieldLabel" />
-      <TextBlock Name="TimingClassificationCurrent" Text="{Binding TimingClassificationTarget.DisplayTime}" FontWeight="SemiBold"
-                 MinHeight="{DynamicResource ControlHeight}" Padding="0,6,0,0" />
-     </StackPanel>
-     <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
-      <TextBlock Text="STATUS" Classes="fieldLabel" />
-      <ComboBox Name="TimingClassificationChoice" ItemsSource="{Binding TimingClassifications}" SelectedItem="{Binding TimingClassification}" HorizontalAlignment="Stretch" />
-     </StackPanel>
-    </local:FormRow>
-    <local:FormRow IsEnabled="{Binding IsTimingDsq}">
-     <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="GATE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqGate}" /></StackPanel>
-     <StackPanel Grid.Column="2" Grid.ColumnSpan="7" Classes="field"><TextBlock Text="DSQ REASON / ICR RULE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqReason}" /></StackPanel>
-     <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="JUDGE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqJudge}" /></StackPanel>
-    </local:FormRow>
-    <local:FormRow>
-     <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="OPERATOR" Classes="fieldLabel" /><TextBox Text="{Binding TimingOperator}" /></StackPanel>
-     <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingReason}" PlaceholderText="Default classification note is recorded when empty" /></StackPanel>
-    </local:FormRow>
-   </StackPanel>
+ <!-- One competitor at a time, chosen by bib or name: the classification (Status), a missing or wrong start/finish
+      time of day (Time of day) or an FIS EET for a missing System A time (EET). Every save goes to the correction
+      history; the dialog stays open for the next competitor. -->
+ <!-- The action bar stays visible: on a short screen the tab content scrolls (the window height is capped to the screen). -->
+ <Grid Margin="12" RowDefinitions="Auto,12,*,12,Auto">
+  <Border Grid.Row="0" Classes="card">
+   <local:FormRow>
+    <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+     <TextBlock Text="COMPETITOR" Classes="fieldLabel" />
+     <AutoCompleteBox Name="TimingClassificationCompetitor" ItemsSource="{Binding TimingRows}" SelectedItem="{Binding TimingClassificationTarget, Mode=TwoWay}"
+                      ValueMemberBinding="{Binding Label}" FilterMode="Custom" ItemFilter="{x:Static local:TimingClassificationDialog.CompetitorFilter}"
+                      MinimumPrefixLength="1" PlaceholderText="Bib or name" ToolTip.Tip="Type a bib or a name and press Enter">
+      <AutoCompleteBox.ItemTemplate>
+       <DataTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+         <TextBlock Text="{Binding BibText}" MinWidth="32" FontWeight="SemiBold" />
+         <local:CompetitorNameBlock Surname="{Binding Surname}" FirstName="{Binding FirstName}" />
+        </StackPanel>
+       </DataTemplate>
+      </AutoCompleteBox.ItemTemplate>
+     </AutoCompleteBox>
+    </StackPanel>
+    <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field">
+     <TextBlock Text="CURRENT" Classes="fieldLabel" />
+     <TextBlock Name="TimingClassificationCurrent" Text="{Binding TimingClassificationTarget.DisplayTime}" FontWeight="SemiBold"
+                MinHeight="{DynamicResource ControlHeight}" Padding="0,6,0,0" />
+    </StackPanel>
+    <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
+     <TextBlock Text="OPERATOR" Classes="fieldLabel" />
+     <TextBox Name="TimingResultOperator" Text="{Binding TimingOperator}" />
+    </StackPanel>
+   </local:FormRow>
   </Border>
+
+  <TabControl Grid.Row="2" Name="TimingResultTabs" Classes="pageTabs" Padding="0,8,0,0" SelectedIndex="{Binding TimingResultTab}">
+   <TabItem Name="TimingResultStatusTab" Header="Status" ToolTip.Tip="Alt+1">
+    <Border Classes="card">
+     <StackPanel Spacing="{DynamicResource FormGap}">
+      <local:FormRow>
+       <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Classes="field">
+        <TextBlock Text="STATUS" Classes="fieldLabel" />
+        <ComboBox Name="TimingClassificationChoice" ItemsSource="{Binding TimingClassifications}" SelectedItem="{Binding TimingClassification}" HorizontalAlignment="Stretch" />
+       </StackPanel>
+       <StackPanel Grid.Column="3" Grid.ColumnSpan="9" Classes="field">
+        <TextBlock Text="CORRECTION NOTE (OPTIONAL)" Classes="fieldLabel" />
+        <TextBox Text="{Binding TimingReason}" PlaceholderText="Default classification note is recorded when empty" />
+       </StackPanel>
+      </local:FormRow>
+      <local:FormRow IsEnabled="{Binding IsTimingDsq}">
+       <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="GATE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqGate}" /></StackPanel>
+       <StackPanel Grid.Column="3" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="DSQ REASON / ICR RULE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqReason}" /></StackPanel>
+       <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="JUDGE (OPTIONAL)" Classes="fieldLabel" /><TextBox Text="{Binding TimingDsqJudge}" /></StackPanel>
+      </local:FormRow>
+     </StackPanel>
+    </Border>
+   </TabItem>
+
+   <TabItem Name="TimingResultTimeTab" Header="Time of day" ToolTip.Tip="Alt+2">
+    <Border Classes="card">
+     <StackPanel Spacing="{DynamicResource FormGap}">
+      <local:FormRow>
+       <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+        <TextBlock Text="START" Classes="fieldLabel" />
+        <TextBlock Name="TimeEntryCurrentStart" Text="{Binding TimeEntryStart}" FontWeight="SemiBold" MinHeight="{DynamicResource ControlHeight}" Padding="0,6,0,0" />
+       </StackPanel>
+       <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Classes="field">
+        <TextBlock Text="FINISH" Classes="fieldLabel" />
+        <TextBlock Name="TimeEntryCurrentFinish" Text="{Binding TimeEntryFinish}" FontWeight="SemiBold" MinHeight="{DynamicResource ControlHeight}" Padding="0,6,0,0" />
+       </StackPanel>
+      </local:FormRow>
+      <local:FormRow>
+       <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field">
+        <TextBlock Text="POSITION" Classes="fieldLabel" />
+        <ComboBox Name="TimeEntryPositionChoice" ItemsSource="{Binding TimeEntryPositions}" SelectedItem="{Binding TimeEntryPosition}" HorizontalAlignment="Stretch" />
+       </StackPanel>
+       <StackPanel Grid.Column="2" Grid.ColumnSpan="4" Classes="field">
+        <TextBlock Text="TIME OF DAY" Classes="fieldLabel" />
+        <TextBox Name="TimeEntryTime" Text="{Binding TimeEntryText}" PlaceholderText="HH:mm:ss.ffff" />
+       </StackPanel>
+       <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Classes="field">
+        <TextBlock Text="SOURCE" Classes="fieldLabel" />
+        <ComboBox Name="TimeEntrySourceChoice" ItemsSource="{Binding TimeEntrySources}" SelectedItem="{Binding TimeEntrySource}" HorizontalAlignment="Stretch"
+                  ToolTip.Tip="A device tape / memory: the System A time printed or stored by the timing device (at least milliseconds). Hand / B: a backup reading, marked m and counted as not timed by System A; for FIS races use EET." />
+       </StackPanel>
+       <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
+        <TextBlock Text="NET TIME" Classes="fieldLabel" />
+        <TextBlock Name="TimeEntryNetTime" Text="{Binding TimeEntryPreview}" FontWeight="SemiBold" MinHeight="{DynamicResource ControlHeight}" Padding="0,6,0,0" />
+       </StackPanel>
+      </local:FormRow>
+      <local:FormRow>
+       <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+        <TextBlock Text="SOURCE REFERENCE (OPTIONAL)" Classes="fieldLabel" />
+        <TextBox Name="TimeEntrySourceReference" Text="{Binding TimeEntryReference}" PlaceholderText="Printout line, memory number or hand-timing sheet" />
+       </StackPanel>
+       <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Classes="field">
+        <TextBlock Text="REASON" Classes="fieldLabel" />
+        <TextBox Name="TimeEntryReasonText" Text="{Binding TimeEntryReason}" />
+       </StackPanel>
+      </local:FormRow>
+     </StackPanel>
+    </Border>
+   </TabItem>
+
+   <TabItem Name="TimingResultEetTab" Header="EET" ToolTip.Tip="Alt+3 · Equivalent Electronic Time, FIS Timing Booklet section 14">
+    <ScrollViewer Name="EetScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="12">
+     <Border Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field">
+         <TextBlock Text="MISSING A TIME" Classes="fieldLabel" />
+         <ComboBox Name="EetPositionChoice" ItemsSource="{Binding TimeEntryPositions}" SelectedItem="{Binding EetPosition}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Grid.ColumnSpan="3" Classes="field">
+         <TextBlock Text="BACKUP SOURCE" Classes="fieldLabel" />
+         <ComboBox Name="EetSourceChoice" ItemsSource="{Binding EetSources}" SelectedItem="{Binding EetSource}" HorizontalAlignment="Stretch"
+                   ToolTip.Tip="System B first, then photo finish, then hand time. Captured B and hand-timing devices fill the table; other times are typed." />
+        </StackPanel>
+        <StackPanel Grid.Column="5" Grid.ColumnSpan="4" Classes="field">
+         <TextBlock Text="BACKUP TIME OF DAY" Classes="fieldLabel" />
+         <TextBox Name="EetBackupTime" Text="{Binding EetBackupText}" PlaceholderText="HH:mm:ss.ff" />
+        </StackPanel>
+        <StackPanel Grid.Column="9" Grid.ColumnSpan="3" Classes="field">
+         <TextBlock Text="WHY A MISSED (REPORT)" Classes="fieldLabel" />
+         <ComboBox Name="EetReplacementReasonChoice" ItemsSource="{Binding EetReplacementReasons}" SelectedItem="{Binding EetReplacementReason}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+       </local:FormRow>
+       <TextBlock Name="EetCandidatesText" Text="{Binding EetCandidates}" IsVisible="{Binding HasEetCandidates}" Classes="supportingText" TextWrapping="Wrap" />
+      </StackPanel>
+     </Border>
+     <Border Classes="card">
+      <DockPanel>
+       <Grid DockPanel.Dock="Top" Classes="cardHeader" ColumnDefinitions="Auto,8,Auto">
+        <TextBlock Text="Reference pairs" Classes="cardTitle" VerticalAlignment="Center" />
+        <Border Grid.Column="2" Classes="chip"><TextBlock Name="EetPairCountText" Text="{Binding EetPairCount}" /></Border>
+       </Grid>
+       <DataGrid Name="EetReferenceGrid" Classes="raceGrid" ItemsSource="{Binding EetRows}" Height="260" AutoGenerateColumns="False"
+                 CanUserReorderColumns="False" CanUserSortColumns="False" SelectionMode="Single" HeadersVisibility="Column">
+        <DataGrid.Columns>
+         <DataGridTextColumn Header="USED" Binding="{Binding UsedMark}" IsReadOnly="True" Width="76" MinWidth="76" />
+         <DataGridTextColumn Header="BIB" Binding="{Binding Bib}" IsReadOnly="True" Width="66" MinWidth="66" />
+         <local:CompetitorNameColumn Header="COMPETITOR" Binding="{Binding Name}" IsReadOnly="True" Width="180" MinWidth="150" />
+         <DataGridTextColumn Header="SYSTEM A" Binding="{Binding ATime}" IsReadOnly="True" Width="136" MinWidth="136" />
+         <DataGridTemplateColumn Header="BACKUP" Width="140" MinWidth="140"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+          <TextBox Text="{Binding BackupText}" IsVisible="{Binding CanEdit}" PlaceholderText="HH:mm:ss.ff" Height="{DynamicResource ControlHeight}" MinHeight="0" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+         <DataGridTextColumn Header="DIFF B − A" Binding="{Binding Difference}" IsReadOnly="True" Width="112" MinWidth="112" />
+         <DataGridTemplateColumn Header="LEAVE OUT" Width="106" MinWidth="106"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+          <CheckBox IsChecked="{Binding Excluded}" IsVisible="{Binding CanEdit}" HorizontalAlignment="Center" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+         <DataGridTemplateColumn Header="REASON / NOTE" Width="*" MinWidth="150"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+          <Panel>
+           <TextBox Text="{Binding ExcludeReason}" IsVisible="{Binding Excluded}" PlaceholderText="Why left out" Height="{DynamicResource ControlHeight}" MinHeight="0" />
+           <TextBlock Text="{Binding Note}" IsVisible="{Binding !Excluded}" Classes="gridCell" />
+          </Panel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+        </DataGrid.Columns>
+       </DataGrid>
+      </DockPanel>
+     </Border>
+     <Border Classes="card">
+      <local:FormRow>
+       <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="SUM B − A" Classes="fieldLabel" /><TextBlock Name="EetSumText" Text="{Binding EetSum}" Classes="figureValue" /></StackPanel>
+       <StackPanel Grid.Column="2" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="AVERAGE" Classes="fieldLabel" /><TextBlock Name="EetAverageText" Text="{Binding EetAverage}" Classes="figureValue" /></StackPanel>
+       <StackPanel Grid.Column="4" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="CORRECTION" Classes="fieldLabel" ToolTip.Tip="{Binding EetCorrectionLabel}" /><TextBlock Name="EetCorrectionText" Text="{Binding EetCorrection}" Classes="figureValue" ToolTip.Tip="{Binding EetCorrectionLabel}" /></StackPanel>
+       <StackPanel Grid.Column="7" Grid.ColumnSpan="3" Classes="field"><TextBlock Text="EET = BACKUP − CORRECTION" Classes="fieldLabel" /><TextBlock Name="EetResultText" Text="{Binding EetResult}" Classes="figureValue" Foreground="{DynamicResource SuccessBrush}" /></StackPanel>
+       <StackPanel Grid.Column="10" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="NET TIME" Classes="fieldLabel" /><TextBlock Name="EetNetTimeText" Text="{Binding EetNetTime}" Classes="figureValue" /></StackPanel>
+      </local:FormRow>
+     </Border>
+     <TextBlock Name="EetMessageText" Text="{Binding EetMessage}" IsVisible="{Binding HasEetMessage}" Classes="supportingText attention" TextWrapping="Wrap" />
+    </StackPanel>
+    </ScrollViewer>
+   </TabItem>
+  </TabControl>
+
+  <StackPanel Grid.Row="4" Spacing="12">
   <TextBlock Name="TimingClassificationMessage" TextWrapping="Wrap" IsVisible="False" />
-  <Grid ColumnDefinitions="*,Auto,8,Auto">
+  <Grid ColumnDefinitions="*,Auto,8,Auto,8,Auto">
    <Button Grid.Column="1" Name="CloseTimingClassification" Content="Close" Classes="secondaryAction" Click="Close_Click" ToolTip.Tip="Esc" />
-   <Button Grid.Column="3" Name="SaveTimingClassification" Content="Save classification" Classes="primaryAction" Command="{Binding SaveTimingClassificationCommand}"
-           ToolTip.Tip="Enter · saved with operator, reason and time in the correction history" />
+   <Button Grid.Column="5" Name="SaveTimingClassification" Content="Save classification" Classes="primaryAction" Command="{Binding SaveTimingClassificationCommand}"
+           IsVisible="{Binding IsStatusTab}" ToolTip.Tip="Enter · saved with operator, reason and time in the correction history" />
+   <Button Grid.Column="5" Name="SaveTimeEntry" Content="Save time" Classes="primaryAction" Command="{Binding SaveTimeEntryCommand}"
+           IsVisible="{Binding IsTimeEntryTab}" ToolTip.Tip="Enter · assigns the time to the competitor; a replaced impulse stays unassigned in Timestamps" />
+   <Button Grid.Column="3" Name="SaveEetPdf" Content="Save PDF…" Classes="secondaryAction" Command="{Binding SaveEetPdfCommand}"
+           IsVisible="{Binding IsEetTab}" ToolTip.Tip="Saves the EET calculation as a PDF for the timing documentation: the saved EET, or the calculation shown marked as a draft" />
+   <Button Grid.Column="5" Name="SaveEet" Content="Save EET time" Classes="primaryAction" Command="{Binding SaveEetCommand}"
+           IsVisible="{Binding IsEetTab}" ToolTip.Tip="Saves the EET with its complete calculation in the correction history" />
   </Grid>
- </StackPanel>
+  </StackPanel>
+ </Grid>
 </Window>

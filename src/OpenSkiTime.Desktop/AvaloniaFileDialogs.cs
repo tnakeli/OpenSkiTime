@@ -12,6 +12,7 @@ public interface IFileDialogs
     Task<bool> ConfirmDiscardChangesAsync(int changeCount);
     Task<string?> ChooseStartListExportAsync(string suggestedName, bool print);
     Task<string?> ChooseResultXmlExportAsync(string suggestedName);
+    Task<string?> ChoosePdfExportAsync(string title, string suggestedName);
 }
 
 public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
@@ -73,6 +74,16 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
         {
             Title = "Save FIS Alpine results XML", SuggestedFileName = suggestedName,
             DefaultExtension = "xml", FileTypeChoices = [new FilePickerFileType("FIS results XML") { Patterns = ["*.xml"] }],
+        });
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> ChoosePdfExportAsync(string title, string suggestedName)
+    {
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title, SuggestedFileName = suggestedName,
+            DefaultExtension = "pdf", FileTypeChoices = [new FilePickerFileType("PDF") { Patterns = ["*.pdf"] }],
         });
         return file?.TryGetLocalPath();
     }

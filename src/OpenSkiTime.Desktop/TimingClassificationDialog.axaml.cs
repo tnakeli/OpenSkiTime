@@ -9,7 +9,7 @@ using Avalonia.VisualTree;
 namespace OpenSkiTime.Desktop;
 
 /// <summary>
-/// Classification of one competitor after the run. The Timing view opens it while
+/// Edit result: classification, a start/finish time of day or an EET for one competitor. The Timing view opens it while
 /// <see cref="MainViewModel.ShowTimingClassificationEditor"/> is set and clears the flag when the operator closes it.
 /// </summary>
 public sealed partial class TimingClassificationDialog : Window
@@ -26,15 +26,46 @@ public sealed partial class TimingClassificationDialog : Window
         competitor.AddHandler(KeyDownEvent, ChooseCompetitor, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnDialogKey);
         DataContextChanged += (_, _) => Watch(DataContext as MainViewModel);
-        Opened += (_, _) => Dispatcher.UIThread.Post(() => FocusCompetitor(selectAll: true), DispatcherPriority.Input);
+        Opened += (_, _) =>
+        {
+            FitToScreen();
+            Dispatcher.UIThread.Post(() => FocusCompetitor(selectAll: true), DispatcherPriority.Input);
+        };
         Closed += (_, _) => Watch(null);
+        SizeChanged += (_, _) => KeepOnScreen();
+    }
+
+    // Caps the height to the working area of the screen, so the action bar stays visible on a short display and the tab
+    // content scrolls instead. The height follows the tab (SizeToContent), so every size change keeps it on screen.
+    private void FitToScreen()
+    {
+        if (Screens.ScreenFromWindow(this) is not { } screen) { return; }
+        MaxHeight = Math.Max(MinHeight, screen.WorkingArea.Height / screen.Scaling - 16);
+        Dispatcher.UIThread.Post(KeepOnScreen, DispatcherPriority.Loaded);
+    }
+
+    // A dialog that reaches below the working area (for example after switching to the taller EET tab) moves up.
+    private void KeepOnScreen()
+    {
+        if (!IsVisible || Screens.ScreenFromWindow(this) is not { } screen) { return; }
+        var area = screen.WorkingArea;
+        var height = (int)Math.Ceiling(Bounds.Height * screen.Scaling);
+        if (Position.Y + height > area.Bottom || Position.Y < area.Y)
+        { Position = new Avalonia.PixelPoint(Position.X, Math.Max(area.Y, area.Bottom - height)); }
     }
 
     private void Watch(MainViewModel? vm)
     {
-        if (_viewModel is not null) { _viewModel.PropertyChanged -= ShowStatus; }
+        if (_viewModel is not null) { _viewModel.PropertyChanged -= ShowStatus; _viewModel.EetRows.CollectionChanged -= ShowEetTarget; }
         _viewModel = vm;
-        if (vm is not null) { vm.PropertyChanged += ShowStatus; }
+        if (vm is not null) { vm.PropertyChanged += ShowStatus; vm.EetRows.CollectionChanged += ShowEetTarget; }
+    }
+
+    // The EET table lists the whole start order; keep the competitor with the missing time in view.
+    private void ShowEetTarget(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems?.OfType<EetEntryRow>().FirstOrDefault(x => x.IsTarget) is not { } target) { return; }
+        Dispatcher.UIThread.Post(() => this.FindControl<DataGrid>("EetReferenceGrid")?.ScrollIntoView(target, null), DispatcherPriority.Background);
     }
 
     // Only messages raised while the dialog is open are shown here (a save, a lookup that found nobody).
@@ -55,18 +86,51 @@ public sealed partial class TimingClassificationDialog : Window
         if (vm.ChooseTimingClassificationCompetitor(box.Text))
         {
             vm.TimingReason = "";
-            this.FindControl<ComboBox>("TimingClassificationChoice")!.Focus();
+            FocusTab(vm.TimingResultTab);
         }
+    }
+
+    // The first field of each tab, focused after choosing a competitor or switching tab with Alt+1/2/3.
+    private void FocusTab(int tab)
+    {
+        Control? target = tab switch
+        {
+            1 => this.FindControl<TextBox>("TimeEntryTime"),
+            2 => this.FindControl<TextBox>("EetBackupTime"),
+            _ => this.FindControl<ComboBox>("TimingClassificationChoice")
+        };
+        Dispatcher.UIThread.Post(() => target?.Focus(), DispatcherPriority.Input);
     }
 
     private async void OnDialogKey(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape) { e.Handled = true; Close(); return; }
-        // Enter in a text field saves; the competitor box handles its own Enter (choose the competitor).
+        if (e.KeyModifiers == KeyModifiers.Alt && e.Key is Key.D1 or Key.D2 or Key.D3 && _viewModel is { } tabs)
+        {
+            e.Handled = true;
+            tabs.TimingResultTab = e.Key - Key.D1;
+            FocusTab(tabs.TimingResultTab);
+            return;
+        }
+        // Enter in a text field saves the current tab; the competitor box handles its own Enter (choose the
+        // competitor) and Enter in the EET table only commits the typed backup time.
         if (e.Key != Key.Enter || e.KeyModifiers != KeyModifiers.None || _viewModel is not { } vm
-            || e.Source is not TextBox box || box.GetVisualAncestors().OfType<AutoCompleteBox>().Any()) { return; }
+            || e.Source is not TextBox box || box.GetVisualAncestors().OfType<AutoCompleteBox>().Any()
+            || box.GetVisualAncestors().OfType<DataGrid>().Any()) { return; }
         e.Handled = true;
-        await vm.SaveTimingClassificationCommand.ExecuteAsync(null);
+        switch (vm.TimingResultTab)
+        {
+            case 1:
+                await vm.SaveTimeEntryCommand.ExecuteAsync(null);
+                break;
+            case 2:
+                if (!vm.SaveEetCommand.CanExecute(null)) { return; }
+                await vm.SaveEetCommand.ExecuteAsync(null);
+                break;
+            default:
+                await vm.SaveTimingClassificationCommand.ExecuteAsync(null);
+                break;
+        }
         if (!vm.IsError) { FocusCompetitor(selectAll: true); }
     }
 

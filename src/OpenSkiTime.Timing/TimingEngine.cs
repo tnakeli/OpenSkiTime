@@ -45,6 +45,17 @@ public static class TimingEngine
         foreach (var (forerunner, index) in (forerunners ?? []).Select((x, i) => (x, i)))
         { forerunnerRows.Add(Evaluate(forerunner.Entry(index + 1)) with { IsForerunner = true, ForerunnerLetter = forerunner.Letter }); }
         foreach (var entry in list.Plan.Entries) { rows.Add(Evaluate(entry)); }
+        EetPair? StaleEetReference(IEnumerable<TimingObservation> times)
+        {
+            foreach (var time in times.Where(x => x.EntrySource == ManualTimeSource.Eet))
+            {
+                if (decisions.GetValueOrDefault(DecisionKey(new(DecisionKind.ManualTime, time.Key)))?.Timestamp?.Eet is not { } eet) { continue; }
+                var stale = eet.Pairs.FirstOrDefault(pair => assignedByBib.GetValueOrDefault(pair.Bib) is not { } own
+                    || own.Count(x => x.Channel == eet.Channel) != 1 || !own.Any(x => x.Key == pair.AKey && x.DeviceTicks == pair.ATicks));
+                if (stale is not null) { return stale; }
+            }
+            return null;
+        }
         TimingResult Evaluate(StartListEntry entry)
         {
             var id = entry.Entrant.CompetitorId;
@@ -72,9 +83,22 @@ public static class TimingEngine
                 {
                     status = TimingStatus.Finished;
                     time = elapsed.Hundredths;
-                    if (starts[0].ManualEntry || finishes[0].ManualEntry) { detail = "Includes a manually entered time; verify against backup timing."; }
-                    else if (starts[0].Manual || finishes[0].Manual) { detail = "Includes a device keyboard impulse; verify against backup timing."; }
+                    var sources = new[] { starts[0].EntrySource, finishes[0].EntrySource };
+                    if (sources.Contains(ManualTimeSource.Hand)) { detail = "Includes a manually entered time; verify against backup timing."; }
+                    else if (starts[0].Manual && !starts[0].ManualEntry || finishes[0].Manual && !finishes[0].ManualEntry)
+                    { detail = "Includes a device keyboard impulse; verify against backup timing."; }
+                    else if (sources.Contains(ManualTimeSource.Eet)) { detail = "Includes an EET replacement time · see history."; }
+                    else if (sources.Contains(ManualTimeSource.DeviceRecord)) { detail = "Includes a System A time entered from the device record · see history."; }
                 }
+            }
+            // A saved EET stays valid only while every System A time it was calculated from is still its reference
+            // competitor's only assigned impulse at that position; otherwise it needs a new calculation.
+            // Intermediate times depend on the start whatever the result's status.
+            var staleStart = StaleEetReference(starts) is not null;
+            if (status is TimingStatus.Finished or TimingStatus.OnCourse && StaleEetReference(starts.Concat(finishes)) is { } stale)
+            {
+                status = TimingStatus.Review; time = null;
+                detail = $"The EET uses the System A time of bib {stale.Bib}, which changed afterwards. Calculate the EET again.";
             }
             if (decisions.TryGetValue("t:" + id, out var correction) && correction.Hundredths is { } corrected)
             { time = corrected; status = TimingStatus.Finished; detail = "Corrected time · see history"; }
@@ -90,22 +114,71 @@ public static class TimingEngine
                     && (finishes.Length == 0 || pulse.DeviceTicks < finishes[0].DeviceTicks);
                 return new TimingSplit(number, pulse.Key, valid ? elapsed.Hundredths : null,
                     valid ? "" : "Review intermediate impulses / clock continuity")
-                { Manual = pulse.ManualEntry || starts.Length == 1 && starts[0].ManualEntry };
+                {
+                    Manual = pulse.EntrySource == ManualTimeSource.Hand || starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Hand,
+                    Eet = pulse.EntrySource == ManualTimeSource.Eet || starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Eet
+                };
             }).ToArray();
+            // Intermediate times measured from an outdated EET start are not valid either.
+            if (staleStart) { splits = OutdatedStartSplits(splits); }
             return new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
             { Splits = splits, Disqualification = status == TimingStatus.DSQ ? classification?.Disqualification : null,
-              StartManual = starts.Length == 1 && starts[0].ManualEntry, FinishManual = finishes.Length == 1 && finishes[0].ManualEntry };
+              StartManual = starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Hand,
+              FinishManual = finishes.Length == 1 && finishes[0].EntrySource == ManualTimeSource.Hand,
+              StartEet = starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Eet,
+              FinishEet = finishes.Length == 1 && finishes[0].EntrySource == ManualTimeSource.Eet };
         }
-        var finishedTimes = rows.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
-        // Forerunners test the timing: an inconsistent intermediate of theirs needs review like a competitor's.
-        var badSplits = rows.Concat(forerunnerRows).SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
-            .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
         var startOrder = decisions.TryGetValue("q", out var queue) && queue.StartOrder is { } savedOrder
             ? ParseStartOrder(savedOrder) : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
-        return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
-            rows.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
-            reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray())
-        { StartOrder = startOrder, Forerunners = forerunnerRows };
+        TimingSnapshot Snapshot(IReadOnlyList<TimingResult> results)
+        {
+            // Forerunners test the timing: an inconsistent intermediate of theirs needs review like a competitor's.
+            var badSplits = results.Concat(forerunnerRows).SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
+                .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
+            var finishedTimes = results.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
+            return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
+                results.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
+                reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray())
+            { StartOrder = startOrder, Forerunners = forerunnerRows };
+        }
+        // A saved EET must still be the calculation the selection rule gives on the run as it is now (start corrections
+        // can change who started before); otherwise it needs a new calculation. The audited calculation is unchanged.
+        // A result put in review can make another EET outdated, so this repeats until nothing changes.
+        IReadOnlyList<TimingResult> current = rows;
+        while (true)
+        {
+            var snapshot = Snapshot(current);
+            var changed = false;
+            current = current.Select(x =>
+            {
+                if (!x.StartEet && !x.FinishEet) { return x; }
+                var startProblem = x.StartEet ? EetSelectionProblem(snapshot, x, x.StartKey, decisions) : null;
+                var problem = startProblem ?? (x.FinishEet ? EetSelectionProblem(snapshot, x, x.FinishKey, decisions) : null);
+                if (problem is null) { return x; }
+                var updated = x;
+                // The result needs review; intermediate times measured from an outdated start are withdrawn whatever its status.
+                if (x.Status is TimingStatus.Finished or TimingStatus.OnCourse) { updated = updated with { Status = TimingStatus.Review, Hundredths = null, Detail = problem }; }
+                if (startProblem is not null && x.Splits.Any(s => s.ObservationKey is not null && s.Hundredths is not null)) { updated = updated with { Splits = OutdatedStartSplits(x.Splits) }; }
+                changed |= !ReferenceEquals(updated, x);
+                return updated;
+            }).ToArray();
+            if (!changed) { return snapshot; }
+        }
+    }
+
+    private static TimingSplit[] OutdatedStartSplits(IEnumerable<TimingSplit> splits) => splits
+        .Select(x => x.ObservationKey is null ? x : x with { Hundredths = null, Detail = "Review: the EET start needs a new calculation" }).ToArray();
+
+    private static string? EetSelectionProblem(TimingSnapshot snapshot, TimingResult result, string? key, Dictionary<string, TimingDecision> decisions)
+    {
+        if (key is null || decisions.GetValueOrDefault(DecisionKey(new(DecisionKind.ManualTime, key)))?.Timestamp?.Eet is not { } eet) { return null; }
+        try
+        {
+            var prepared = EetPreparation.Placed(EetPreparation.Prepare(snapshot, result.Bib, eet.Channel, [], 0), eet.ResultTimeOfDay);
+            return EetPreparation.SelectionMatches(prepared, eet) ? null
+                : "The EET references are no longer the competitors started nearest before (start order changed). Calculate the EET again.";
+        }
+        catch (DomainValidationException) { return "The EET references can no longer be checked. Calculate the EET again."; }
     }
 
     // Operator-entered timestamps come only from audited ManualTime decisions (their latest state, so an undo removes
@@ -120,10 +193,16 @@ public static class TimingEngine
         var manual = latest.Values.Where(x => x.After.Timestamp is not null).Select(change =>
         {
             var entry = change.After.Timestamp!;
+            var label = entry.Source switch
+            {
+                ManualTimeSource.DeviceRecord => "System A time from the device record",
+                ManualTimeSource.Eet => "EET replacement time",
+                _ => "Manual time"
+            };
             return new TimingObservation(change.After.ObservationKey!, Guid.Empty, 0, "Manual entry",
                 "manual-entry:" + change.After.ObservationKey, ObservationKind.Impulse, entry.Channel, entry.DeviceTicks,
-                entry.Precision, null, true, entry.ClockId, $"Manual time entered by {change.Operator} · {change.Reason}")
-            { ManualEntry = true };
+                entry.Precision, null, !entry.IsSystemA, entry.ClockId, $"{label} entered by {change.Operator} · {change.Reason}")
+            { ManualEntry = true, EntrySource = entry.Source };
         }).ToArray();
         if (manual.Length == 0) { return observations; }
         var byReference = manual.Where(x => latest[x.Key].After.Timestamp!.ReferenceKey is not null)
@@ -238,6 +317,10 @@ public static class TimingEngine
                     || !knownChannel)
                 { throw new DomainValidationException("Only an original timing impulse can be assigned. Other input can be reviewed and ignored."); }
                 if (!snapshot.Participants.Any(x => x.Bib == bib)) { throw new DomainValidationException("That bib is not on this run's start list."); }
+                // An EET is calculated from one competitor's own backup reading: it never moves to another competitor.
+                if (ManualTimestamp.IsKey(decision.ObservationKey)
+                    && CurrentDecision(new(DecisionKind.ManualTime, decision.ObservationKey), snapshot.Audit).Timestamp?.Eet is { } eet && eet.Bib != bib)
+                { throw new DomainValidationException($"This EET was calculated for bib {eet.Bib}. Calculate a new EET in Edit result for bib {bib}."); }
             }
         }
         else if (decision.Kind == DecisionKind.ManualTime)

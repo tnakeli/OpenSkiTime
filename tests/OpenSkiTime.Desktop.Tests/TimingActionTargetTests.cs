@@ -274,5 +274,6 @@ public sealed class TimingActionTargetTests
         public Task<bool> ConfirmDiscardChangesAsync(int changeCount) => Task.FromResult(false);
         public Task<string?> ChooseStartListExportAsync(string suggestedName, bool print) => Task.FromResult<string?>(null);
         public Task<string?> ChooseResultXmlExportAsync(string suggestedName) => Task.FromResult<string?>(null);
+        public Task<string?> ChoosePdfExportAsync(string title, string suggestedName) => Task.FromResult<string?>(null);
     }
 }

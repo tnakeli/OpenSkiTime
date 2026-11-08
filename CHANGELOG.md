@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- **Edit result** (Timing → Ranking heading, formerly *Edit classification*) has three tabs, Alt+1/2/3: **Status** for DNS/DNF/DSQ/NPS as before, **Time of day** and **EET**.
+- **Time of day:** enter a missing or wrong start or finish for one competitor. *A device tape / memory* is the System A time printed or stored by the timing device when the impulse never reached the computer (for example a loose USB cable); it needs milliseconds and counts as System A. *Hand / B (not EET)* is a backup reading, marked **m**. The net time is previewed while typing; the replaced impulse stays in Timestamps; an entry that would put the result in review is refused and nothing is saved.
+- **EET (Equivalent Electronic Time)** for a missing System A start or finish, by the FIS Timing Booklet (Alpine 2.67, section 14), from System B, photo finish or hand time. The table lists the run in the order the competitors started; the ten nearest started before are used, completed with those after when needed. Captured B or hand-timing readings fill in automatically when they belong to one competitor beyond doubt; any value can be typed. A reference can be left out with a reason. The sum, the rounded correction, the EET and the net time are shown as they change. The saved EET is marked **e**, keeps its complete calculation in the history and is listed in the timing report as a replacement with the reason chosen. A saved EET goes back to review when its reference times or the start order change later.
+- **Save PDF** on the EET tab prints the calculation in the layout of the booklet examples, with signature lines for the chief of timing and the technical delegate. Before saving it prints a draft.
+
+### Changed
+
+- The Timestamps grid marks an entered time **m** (hand or B), **e** (EET) or **r** (System A time from the device record).
+
 ## [0.3.0] - 2026-11-08
 
 This version uses live protocol 2. It changes the `.ost` series format (start lists of all genders, up to 99 runs). Series files from earlier versions cannot be opened; create a new series file.

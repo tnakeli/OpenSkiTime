@@ -11,6 +11,7 @@
     <PackageReference Include="xunit.v3.mtp-v2" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="PdfPig" PrivateAssets="all" />
     <ProjectReference Include="../../src/OpenSkiTime.Desktop/OpenSkiTime.Desktop.csproj" />
     <ProjectReference Include="../../src/OpenSkiTime.LiveTiming.ControlPanel/OpenSkiTime.LiveTiming.ControlPanel.csproj" />
     <Compile Include="../OpenSkiTime.LiveTiming.Tests/ProcessFixture.cs" Link="LiveTimingProcessFixture.cs" />
