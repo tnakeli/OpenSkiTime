@@ -72,8 +72,12 @@ public static class TimingEngine
                 {
                     status = TimingStatus.Finished;
                     time = elapsed.Hundredths;
-                    if (starts[0].ManualEntry || finishes[0].ManualEntry) { detail = "Includes a manually entered time; verify against backup timing."; }
-                    else if (starts[0].Manual || finishes[0].Manual) { detail = "Includes a device keyboard impulse; verify against backup timing."; }
+                    var sources = new[] { starts[0].EntrySource, finishes[0].EntrySource };
+                    if (sources.Contains(ManualTimeSource.Hand)) { detail = "Includes a manually entered time; verify against backup timing."; }
+                    else if (starts[0].Manual && !starts[0].ManualEntry || finishes[0].Manual && !finishes[0].ManualEntry)
+                    { detail = "Includes a device keyboard impulse; verify against backup timing."; }
+                    else if (sources.Contains(ManualTimeSource.Eet)) { detail = "Includes an EET replacement time · see history."; }
+                    else if (sources.Contains(ManualTimeSource.DeviceRecord)) { detail = "Includes a System A time entered from the device record · see history."; }
                 }
             }
             if (decisions.TryGetValue("t:" + id, out var correction) && correction.Hundredths is { } corrected)
@@ -90,11 +94,17 @@ public static class TimingEngine
                     && (finishes.Length == 0 || pulse.DeviceTicks < finishes[0].DeviceTicks);
                 return new TimingSplit(number, pulse.Key, valid ? elapsed.Hundredths : null,
                     valid ? "" : "Review intermediate impulses / clock continuity")
-                { Manual = pulse.ManualEntry || starts.Length == 1 && starts[0].ManualEntry };
+                {
+                    Manual = pulse.EntrySource == ManualTimeSource.Hand || starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Hand,
+                    Eet = pulse.EntrySource == ManualTimeSource.Eet || starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Eet
+                };
             }).ToArray();
             return new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
             { Splits = splits, Disqualification = status == TimingStatus.DSQ ? classification?.Disqualification : null,
-              StartManual = starts.Length == 1 && starts[0].ManualEntry, FinishManual = finishes.Length == 1 && finishes[0].ManualEntry };
+              StartManual = starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Hand,
+              FinishManual = finishes.Length == 1 && finishes[0].EntrySource == ManualTimeSource.Hand,
+              StartEet = starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Eet,
+              FinishEet = finishes.Length == 1 && finishes[0].EntrySource == ManualTimeSource.Eet };
         }
         var finishedTimes = rows.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
         // Forerunners test the timing: an inconsistent intermediate of theirs needs review like a competitor's.
@@ -120,10 +130,16 @@ public static class TimingEngine
         var manual = latest.Values.Where(x => x.After.Timestamp is not null).Select(change =>
         {
             var entry = change.After.Timestamp!;
+            var label = entry.Source switch
+            {
+                ManualTimeSource.DeviceRecord => "System A time from the device record",
+                ManualTimeSource.Eet => "EET replacement time",
+                _ => "Manual time"
+            };
             return new TimingObservation(change.After.ObservationKey!, Guid.Empty, 0, "Manual entry",
                 "manual-entry:" + change.After.ObservationKey, ObservationKind.Impulse, entry.Channel, entry.DeviceTicks,
-                entry.Precision, null, true, entry.ClockId, $"Manual time entered by {change.Operator} · {change.Reason}")
-            { ManualEntry = true };
+                entry.Precision, null, !entry.IsSystemA, entry.ClockId, $"{label} entered by {change.Operator} · {change.Reason}")
+            { ManualEntry = true, EntrySource = entry.Source };
         }).ToArray();
         if (manual.Length == 0) { return observations; }
         var byReference = manual.Where(x => latest[x.Key].After.Timestamp!.ReferenceKey is not null)

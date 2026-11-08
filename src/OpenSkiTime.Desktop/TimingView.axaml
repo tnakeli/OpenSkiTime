@@ -147,9 +147,9 @@
     <Grid Classes="paneHeader" ColumnDefinitions="*,Auto,Auto">
      <TextBlock Text="RANKING" Classes="raceHeadingText" />
      <TextBlock Grid.Column="1" Text="◆ Latest finisher" Classes="raceHeadingNote" />
-     <!-- Classification after the run: a dialog that edits one competitor at a time, chosen by bib or name. -->
-     <ToggleButton Grid.Column="2" Name="EditClassificationToggle" Content="Edit classification" Classes="secondaryAction" IsChecked="{Binding ShowTimingClassificationEditor}"
-                   MinHeight="24" Padding="10,1" FontSize="{DynamicResource LabelSize}" VerticalAlignment="Center" ToolTip.Tip="DSQ with gate, reason and judge, or another status, saved with the correction history" />
+     <!-- Edit result: classification, a start/finish time of day or an EET for one competitor at a time, chosen by bib or name. -->
+     <ToggleButton Grid.Column="2" Name="EditClassificationToggle" Content="Edit result…" Classes="secondaryAction" IsChecked="{Binding ShowTimingClassificationEditor}"
+                   MinHeight="24" Padding="10,1" FontSize="{DynamicResource LabelSize}" VerticalAlignment="Center" ToolTip.Tip="Status (DSQ with gate, reason and judge, DNF, DNS, NPS), a missing start or finish time of day, or an FIS EET for a missing System A time. Saved with the correction history." />
     </Grid>
     <!-- The two latest finishers stay in view above the full ranking (latest first); the code keeps the columns in
          line with the ranking grid. -->

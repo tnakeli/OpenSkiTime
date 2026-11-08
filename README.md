@@ -60,7 +60,7 @@ At start, Running and Timestamps show the immediate race state side by side; Ran
 
 ![Race-control workspace during a simulated run](docs/screenshots/05-timing.png)
 
-**Edit classification** in the Ranking heading opens a dialog where you choose a competitor by bib or name and record DNS, DNF, DSQ or NPS, including after the run or after disconnecting capture. DSQ entries can include a gate, reason or ICR reference, and reporting judge. Corrections record the operator and reason; clearing or undoing a classification adds history and restores the underlying time. Raw input is preserved.
+**Edit result…** in the Ranking heading opens a dialog where you choose a competitor by bib or name and record DNS, DNF, DSQ or NPS, including after the run or after disconnecting capture. DSQ entries can include a gate, reason or ICR reference, and reporting judge. The same dialog enters a missing start or finish time of day, either the System A time from the timing device's printout or memory or a hand/B reading, and calculates the FIS EET (Equivalent Electronic Time) from System B, photo finish or hand times when System A missed a time. **Save PDF…** saves the EET calculation as a PDF with signature lines for the chief of timing and the technical delegate, to keep with the timing documentation. Corrections record the operator and reason; clearing or undoing a correction adds history and restores the underlying time. Raw input is preserved.
 
 ![Classification editor with a saved synthetic disqualification, gate, reason and judge](docs/screenshots/06-classification.png)
 

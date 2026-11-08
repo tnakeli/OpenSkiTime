@@ -352,7 +352,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         if (toggle.Patterns.Toggle.PatternOrDefault?.ToggleState.ValueOrDefault != FlaUI.Core.Definitions.ToggleState.On) { DesktopApp.Invoke(toggle); }
         Pause(400);
         // The dialog is its own top-level window.
-        var dialog = app.Retry(() => app.Automation.GetDesktop().FindFirstChild(app.By.ByName("Edit classification").And(app.By.ByControlType(ControlType.Window))));
+        var dialog = app.Retry(() => app.Automation.GetDesktop().FindFirstChild(app.By.ByName("Edit result").And(app.By.ByControlType(ControlType.Window))));
         Select(app.ById("TimingClassificationChoice", dialog), "DSQ");
         app.SetText(FieldAfter("STATUS", "GATE (OPTIONAL)", dialog), plan.DsqGate!.Value.ToString(CultureInfo.InvariantCulture)); Pause();
         app.SetText(FieldAfter("STATUS", "DSQ REASON / ICR RULE (OPTIONAL)", dialog), plan.DsqReason!); Pause();

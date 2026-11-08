@@ -20,16 +20,19 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public IReadOnlyList<int?> IntermediateRanks { get; init; } = [];
     public string PreviousRunRanked => WithRank(PreviousRunTime, PreviousRunRank);
     public IReadOnlyList<string> RankedIntermediates => Result.Splits
-        .Select((x, i) => WithRank(x.Time + ManualMark(x.Manual && x.Hundredths is not null), IntermediateRanks.ElementAtOrDefault(i))).ToArray();
+        .Select((x, i) => WithRank(x.Time + SplitMark(x), IntermediateRanks.ElementAtOrDefault(i))).ToArray();
     public string Category { get; init; } = "";
     public int? DisplayRank { get; init; }
     public bool IsLatestFinish { get; init; }
     public string FinishMarker => IsLatestFinish ? "◆" : "";
-    public IReadOnlyList<string> Intermediates => Result.Splits.Select(x => x.Time + ManualMark(x.Manual && x.Hundredths is not null)).ToArray();
-    // A small "m" marks a time that uses an operator-entered timestamp.
-    public static string ManualMark(bool manual) => manual ? " m" : "";
+    public IReadOnlyList<string> Intermediates => Result.Splits.Select(x => x.Time + SplitMark(x)).ToArray();
+    // A small "m" marks a time that uses an operator-entered hand time, an "e" one that uses an EET replacement time.
+    public static string ManualMark(bool manual, bool eet = false) => manual ? " m" : eet ? " e" : "";
+    private static string SplitMark(TimingSplit split) => ManualMark(split.Manual && split.Hundredths is not null, split.Eet && split.Hundredths is not null);
     public string ClockManualMark => ManualMark(Result.Status == TimingStatus.OnCourse && Result.StartManual
-        || Result.Status == TimingStatus.Finished && (Result.StartManual || Result.FinishManual));
+        || Result.Status == TimingStatus.Finished && (Result.StartManual || Result.FinishManual),
+        Result.Status == TimingStatus.OnCourse && Result.StartEet
+        || Result.Status == TimingStatus.Finished && (Result.StartEet || Result.FinishEet));
     public RunningTimeDisplay Clock { get; } = new();
     public int Position => Result.Entry.Position;
     public int Bib => Result.Bib;
@@ -47,7 +50,7 @@ public sealed record TimingGridRow(TimingResult Result, long? Total, int? TotalR
     public int? Rank => Result.Rank;
     public string Detail => Result.Detail;
     public string Label => $"{Bib} · {Name}";
-    public string SplitTimes => string.Join("  ·  ", Result.Splits.Where(x => x.ObservationKey is not null).Select(x => $"I{x.Number} {x.Time}{ManualMark(x.Manual && x.Hundredths is not null)}"));
+    public string SplitTimes => string.Join("  ·  ", Result.Splits.Where(x => x.ObservationKey is not null).Select(x => $"I{x.Number} {x.Time}{SplitMark(x)}"));
     public bool HasSplits => Result.Splits.Any(x => x.ObservationKey is not null);
     private static string WithRank(string time, int? rank) =>
         rank is { } value ? string.Create(CultureInfo.InvariantCulture, $"{time} ({value})") : time;
@@ -128,7 +131,12 @@ public sealed partial class MainViewModel
     public bool IsTimingDsq => TimingClassification == "DSQ";
     partial void OnTimingClassificationChanged(string value) => OnPropertyChanged(nameof(IsTimingDsq));
     partial void OnShowTimingClassificationEditorChanged(bool value)
-    { if (value) { LoadTimingClassificationEditor(SelectedTimingRow); } }
+    {
+        if (!value) { return; }
+        LoadTimingClassificationEditor(SelectedTimingRow);
+        OnResultEditorTargetChanged();
+        if (TimingResultTab == 2) { _ = LoadEetAsync(); }
+    }
 
     private void LoadTimingClassificationEditor(TimingGridRow? row)
     {
@@ -150,6 +158,7 @@ public sealed partial class MainViewModel
             ?? TimingRows.FirstOrDefault(x => SelectedTimingBibs.Count > 0 && x.Bib == SelectedTimingBibs[0]);
         OnPropertyChanged(nameof(SelectedTimingIdentity));
         OnPropertyChanged(nameof(TimingClassificationTarget));
+        OnResultEditorTargetChanged();
     }
     // The competitor the classification dialog edits: the single selected competitor, chosen there by bib or name.
     // Choosing one selects it in every grid; clearing the choice clears the selection, so a save never falls back
@@ -226,6 +235,7 @@ public sealed partial class MainViewModel
         }
         OnPropertyChanged(nameof(SelectedTimingIdentity));
         OnPropertyChanged(nameof(TimingClassificationTarget));
+        OnResultEditorTargetChanged();
         OnPropertyChanged(nameof(SelectedTimingProblem));
         OnPropertyChanged(nameof(HasSelectedTimingProblem));
         ReturnToStartCommand.NotifyCanExecuteChanged();
@@ -671,8 +681,16 @@ public sealed partial class MainViewModel
                 dsq.Reason.Length > 0 ? " · " + dsq.Reason : "",
                 dsq.Judge.Length > 0 ? " · Judge " + dsq.Judge : "") : ""),
         DecisionKind.StartOrder => value.StartOrder ?? "Draw order",
-        DecisionKind.ManualTime => value.Timestamp is { } entry
-            ? $"Manual {TimingPositionLabel(entry.Channel)} {TimingTime.FormatTimeOfDay(entry.DeviceTicks)}" : "No manual time",
+        DecisionKind.ManualTime => value.Timestamp is { } entry ? entry.Source switch
+            {
+                ManualTimeSource.DeviceRecord => $"System A {TimingPositionLabel(entry.Channel)} {TimingTime.FormatTimeOfDay(entry.DeviceTicks)} (device record{(entry.SourceReference is { } reference ? ": " + reference : "")})",
+                ManualTimeSource.Eet when entry.Eet is { } eet => $"EET {TimingPositionLabel(entry.Channel)} {TimingTime.FormatTimeOfDay(entry.DeviceTicks)}"
+                    + $" = backup {TimingTime.FormatTimeOfDay(eet.BackupTimeOfDay, eet.BackupPrecision)} − correction ({TimingTime.FormatSignedSeconds(eet.CorrectionTicks, eet.CorrectionPrecision)})"
+                    + $" from {eet.Pairs.Count} pairs (bibs {string.Join(", ", eet.Pairs.Select(x => x.Bib))})"
+                    + (eet.Exclusions.Count > 0 ? "; left out " + string.Join(", ", eet.Exclusions.Select(x => $"{x.Bib}: {x.Reason}")) : ""),
+                _ => $"Manual {TimingPositionLabel(entry.Channel)} {TimingTime.FormatTimeOfDay(entry.DeviceTicks)}"
+                    + (entry.SourceReference is { } note ? $" ({note})" : "")
+            } : "No manual time",
         _ => value.Hundredths is null ? "Use recorded times" : TimingTime.Format(value.Hundredths)
     };
 

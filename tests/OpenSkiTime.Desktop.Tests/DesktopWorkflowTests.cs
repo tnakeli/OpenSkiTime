@@ -1048,6 +1048,13 @@ public partial class DesktopWorkflowTests
         public Task<bool> ConfirmRemoveAsync(string competitionName) => Task.FromResult(true);
         public Task<string?> ChooseStartListExportAsync(string suggestedName, bool print) => Task.FromResult(ExportPath);
         public Task<string?> ChooseResultXmlExportAsync(string suggestedName) => Task.FromResult(ExportPath);
+        public string? PdfTitle { get; private set; }
+        public string? PdfSuggestedName { get; private set; }
+        public Task<string?> ChoosePdfExportAsync(string title, string suggestedName)
+        {
+            PdfTitle = title; PdfSuggestedName = suggestedName;
+            return Task.FromResult(ExportPath);
+        }
         public Task<bool> ConfirmDiscardChangesAsync(int changeCount)
         {
             RequestedDiscardCount = changeCount;

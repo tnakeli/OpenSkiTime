@@ -20,8 +20,11 @@ public sealed record TimingObservation(string Key, Guid SessionId, long PacketSe
     // device memory for the timing report does.
     public DateOnly? CalendarDate { get; init; }
     // A time of day typed by the operator for a missing impulse. It comes from an audited ManualTime decision, never
-    // from a device; Manual is also set so the hand-clock precision rule (hundredths) applies.
+    // from a device; Manual is also set (except for a System A device-record time) so the hand-clock precision rule
+    // (hundredths) applies.
     public bool ManualEntry { get; init; }
+    // How the operator-entered time was obtained; null for device input.
+    public ManualTimeSource? EntrySource { get; init; }
 }
 
 public sealed record TimingDecision(DecisionKind Kind, string? ObservationKey = null, Guid? CompetitorId = null,
@@ -37,13 +40,36 @@ public sealed record ManualTimestamp(int Channel, long DeviceTicks, int Precisio
 {
     public const string KeyPrefix = "manual:";
 
+    // How the time was obtained. Omitted for Hand, so entries saved before the source existed keep their meaning.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public ManualTimeSource Source { get; init; }
+    // Where the operator read a device-record time (for example the printout line). Omitted when empty.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? SourceReference { get; init; }
+    // The complete EET calculation when Source is Eet.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public EetCalculation? Eet { get; init; }
+
     public static bool IsKey(string? key) => key is not null && key.Length == KeyPrefix.Length + 32
         && key.StartsWith(KeyPrefix, StringComparison.Ordinal) && Guid.TryParseExact(key[KeyPrefix.Length..], "N", out _);
 
+    // A System A time read from the device's own record (printout or memory) keeps the System A precision rule; a hand,
+    // B or EET time is a replacement and is flagged like a device-keyboard impulse.
+    public bool IsSystemA => Source == ManualTimeSource.DeviceRecord;
+
     public bool IsValid => Channel is >= 0 and <= 21 && DeviceTicks > 0 && DeviceTicks < DateTime.MaxValue.Ticks
         && Precision is >= 2 and <= 7 && !string.IsNullOrWhiteSpace(ClockId) && ClockId.Length <= 200
-        && ReferenceKey is null or { Length: > 0 and <= 200 };
+        && ReferenceKey is null or { Length: > 0 and <= 200 }
+        && Enum.IsDefined(Source) && SourceReference is null or { Length: > 0 and <= 200 }
+        && (SourceReference is null || TextRules.IsPortable(SourceReference))
+        && (Source != ManualTimeSource.DeviceRecord || Precision >= 3)
+        && (Source == ManualTimeSource.Eet
+            ? Eet is { } eet && eet.Channel == Channel && eet.ResultPrecision == Precision
+                && eet.ResultTimeOfDay == DeviceTicks % TimeSpan.TicksPerDay && eet.IsConsistent()
+            : Eet is null);
 }
+
+// Hand is a hand-clock, B or otherwise unverified reading (the original manual time); DeviceRecord is the System A
+// time read from the timing device's printout or memory when the impulse never reached the computer; Eet is the
+// Equivalent Electronic Time calculated from a backup time (Timing Booklet section 14).
+public enum ManualTimeSource { Hand, DeviceRecord, Eet }
 
 public sealed record DisqualificationDetails(int? Gate = null, string Reason = "", string Judge = "")
 {
@@ -116,9 +142,12 @@ public sealed record TimingResult(StartListEntry Entry, TimingStatus Status, lon
     public string? ForerunnerLetter { get; init; }
     public IReadOnlyList<TimingSplit> Splits { get; init; } = [];
     public DisqualificationDetails? Disqualification { get; init; }
-    // The assigned start/finish is an operator-entered time (shown as "m" next to the time).
+    // The assigned start/finish is an operator-entered hand time (shown as "m" next to the time).
     public bool StartManual { get; init; }
     public bool FinishManual { get; init; }
+    // The assigned start/finish is an EET replacement time (shown as "e" next to the time).
+    public bool StartEet { get; init; }
+    public bool FinishEet { get; init; }
     public int Bib => Entry.Bib;
     public Guid CompetitorId => Entry.Entrant.CompetitorId;
     public string Name => Entry.Entrant.Athlete.Surname + " " + Entry.Entrant.Athlete.FirstName;
@@ -127,8 +156,10 @@ public sealed record TimingResult(StartListEntry Entry, TimingStatus Status, lon
 
 public sealed record TimingSplit(int Number, string? ObservationKey, long? Hundredths, string Detail)
 {
-    // The intermediate impulse, or the start it is measured from, is an operator-entered time.
+    // The intermediate impulse, or the start it is measured from, is an operator-entered hand time.
     public bool Manual { get; init; }
+    // The intermediate, or the start it is measured from, is an EET replacement time.
+    public bool Eet { get; init; }
     public string Time => TimingTime.Format(Hundredths);
 }
 
@@ -181,6 +212,31 @@ public static class TimingTime
 
     public static string Format(long? hundredths) => hundredths is not { } value ? "—"
         : string.Create(CultureInfo.InvariantCulture, $"{value / 6000}:{value / 100 % 60:00}.{value % 100:00}");
+
+    // A typed time of day on a reference impulse's device clock: the nearest day, so a time just across midnight from
+    // the reference lands on the neighbouring day instead of almost 24 hours away.
+    public static long PlaceOnClock(long referenceTicks, long timeOfDayTicks)
+    {
+        var placed = referenceTicks - referenceTicks % TimeSpan.TicksPerDay + timeOfDayTicks;
+        if (placed - referenceTicks > TimeSpan.TicksPerDay / 2) { placed -= TimeSpan.TicksPerDay; }
+        else if (referenceTicks - placed > TimeSpan.TicksPerDay / 2) { placed += TimeSpan.TicksPerDay; }
+        return placed;
+    }
+
+    // The time of day of a device timestamp with the source's own number of decimals ("12:03:41.2345").
+    public static string FormatTimeOfDay(long ticks, int precision) =>
+        FormatTimeOfDay(ticks)[..(9 + Math.Clamp(precision, 0, 7))].TrimEnd('.');
+
+    // Signed seconds for display ("+0.0123", "-0.082"), rounded half away from zero to the given decimals. Display only:
+    // authoritative values stay integer ticks.
+    public static string FormatSignedSeconds(long ticks, int digits) => FormatSignedSeconds((decimal)ticks / TimeSpan.TicksPerSecond, digits);
+
+    public static string FormatSignedSeconds(decimal seconds, int digits)
+    {
+        digits = Math.Clamp(digits, 1, 7);
+        var value = decimal.Round(seconds, digits, MidpointRounding.AwayFromZero);
+        return (value > 0 ? "+" : "") + value.ToString("0." + new string('0', digits), CultureInfo.InvariantCulture);
+    }
 
     public static bool TryTimeOfDay(string text, out long ticks, out int precision)
     {

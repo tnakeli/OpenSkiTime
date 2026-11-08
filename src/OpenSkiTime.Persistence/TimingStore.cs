@@ -291,6 +291,12 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 {
                     if (after.Timestamp?.ReferenceKey is { } reference && !await ReferencesRunInputAsync(db, listId, reference, ct))
                     { throw new DomainValidationException("The manual time must reference device input in this run."); }
+                    // EET reference times are original System A impulses of this run.
+                    foreach (var pair in after.Timestamp?.Eet?.Pairs ?? [])
+                    {
+                        if (!await ReferencesRunInputAsync(db, listId, pair.AKey, ct))
+                        { throw new DomainValidationException("The EET reference times must be device input in this run."); }
+                    }
                 }
                 else if (after.Kind == DecisionKind.StartOrder)
                 {
