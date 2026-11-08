@@ -77,17 +77,16 @@ public static class EetCalculator
         ArgumentNullException.ThrowIfNull(startOrder);
         var index = startOrder.Select((x, i) => (x, i)).Where(x => x.x.Bib == targetBib).Select(x => x.i).DefaultIfEmpty(-1).Single();
         if (index < 0) { throw new DomainValidationException("The competitor with the missing time is not in the start order."); }
+        // Skipped holds every competitor the search passed over without a pair, wherever the search ended.
         var chosen = new List<int>();
+        var skipped = new List<int>();
         for (var i = index - 1; i >= 0 && chosen.Count < RequiredPairs; i--)
-        { if (startOrder[i].Pair is not null) { chosen.Add(i); } }
+        { (startOrder[i].Pair is not null ? chosen : skipped).Add(i); }
         for (var i = index + 1; i < startOrder.Count && chosen.Count < RequiredPairs; i++)
-        { if (startOrder[i].Pair is not null) { chosen.Add(i); } }
+        { (startOrder[i].Pair is not null ? chosen : skipped).Add(i); }
         chosen.Sort();
-        var first = chosen.Count == 0 ? index : Math.Min(chosen[0], index);
-        var last = chosen.Count == 0 ? index : Math.Max(chosen[^1], index);
-        var skipped = startOrder.Select((x, i) => (x, i))
-            .Where(x => x.i >= first && x.i <= last && x.i != index && x.x.Pair is null).Select(x => x.x).ToArray();
-        return new(chosen.Select(i => startOrder[i].Pair!).ToArray(), skipped);
+        skipped.Sort();
+        return new(chosen.Select(i => startOrder[i].Pair!).ToArray(), skipped.Select(i => startOrder[i]).ToArray());
     }
 
     /// <summary>

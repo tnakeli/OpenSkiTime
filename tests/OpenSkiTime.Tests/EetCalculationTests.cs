@@ -33,6 +33,21 @@ public sealed class EetCalculationTests
     }
 
     [Fact]
+    public void EveryCompetitorPassedOverIsSkippedWhereverTheSearchEnds()
+    {
+        // Bib 1 has no pair; bib 2 has the missing time; bibs 3–12 give ten pairs after it.
+        var candidates = Enumerable.Range(1, 12).Select(bib => bib switch
+        {
+            1 => new EetCandidate(1, null, "No backup time"),
+            2 => new EetCandidate(2, null, "Missing time"),
+            _ => new EetCandidate(bib, new EetPair(bib, $"a{bib}", Day + bib * TimeSpan.TicksPerMinute, 3, bib * TimeSpan.TicksPerMinute + 10_000, 3))
+        }).ToArray();
+        var selection = EetCalculator.Select(candidates, 2);
+        Assert.Equal(Enumerable.Range(3, 10), selection.Pairs.Select(x => x.Bib));
+        Assert.Equal(1, Assert.Single(selection.Skipped).Bib);
+    }
+
+    [Fact]
     public void Example142TenThousandthsCompletesWithCompetitorsStartedAfter()
     {
         var rows = Example142("10:00:50.3548", "10:01:52.0189", "10:02:49.4978", "10:03:50.6148", "10:04:49.2741",
@@ -99,7 +114,7 @@ public sealed class EetCalculationTests
         var rows = Example142("10:00:50.3548", "10:01:52.0189", "10:02:49.4978", null, null, null, null, "10:07:51.5814", null, null, null);
         var selection = EetCalculator.Select(Candidates(rows), 8);
         Assert.Equal([1, 2, 3], selection.Pairs.Select(x => x.Bib));
-        Assert.Equal([4, 5, 6, 7], selection.Skipped.Select(x => x.Bib));
+        Assert.Equal([4, 5, 6, 7, 9, 10, 11], selection.Skipped.Select(x => x.Bib));
         Assert.Equal(3, Calculate(8, "10:07:51.5814", selection.Pairs).Pairs.Count);
     }
 

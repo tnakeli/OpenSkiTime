@@ -93,10 +93,12 @@ public static class TimingEngine
             }
             // A saved EET stays valid only while every System A time it was calculated from is still its reference
             // competitor's only assigned impulse at that position; otherwise it needs a new calculation.
+            var staleStart = false;
             if (status is TimingStatus.Finished or TimingStatus.OnCourse && StaleEetReference(starts.Concat(finishes)) is { } stale)
             {
                 status = TimingStatus.Review; time = null;
                 detail = $"The EET uses the System A time of bib {stale.Bib}, which changed afterwards. Calculate the EET again.";
+                staleStart = StaleEetReference(starts) is not null;
             }
             if (decisions.TryGetValue("t:" + id, out var correction) && correction.Hundredths is { } corrected)
             { time = corrected; status = TimingStatus.Finished; detail = "Corrected time · see history"; }
@@ -117,6 +119,8 @@ public static class TimingEngine
                     Eet = pulse.EntrySource == ManualTimeSource.Eet || starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Eet
                 };
             }).ToArray();
+            // Intermediate times measured from an outdated EET start are not valid either.
+            if (staleStart) { splits = OutdatedStartSplits(splits); }
             return new(entry, status, time, null, starts.FirstOrDefault()?.Key, finishes.FirstOrDefault()?.Key, detail)
             { Splits = splits, Disqualification = status == TimingStatus.DSQ ? classification?.Disqualification : null,
               StartManual = starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Hand,
@@ -124,30 +128,38 @@ public static class TimingEngine
               StartEet = starts.Length == 1 && starts[0].EntrySource == ManualTimeSource.Eet,
               FinishEet = finishes.Length == 1 && finishes[0].EntrySource == ManualTimeSource.Eet };
         }
-        // Forerunners test the timing: an inconsistent intermediate of theirs needs review like a competitor's.
-        var badSplits = rows.Concat(forerunnerRows).SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
-            .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
         var startOrder = decisions.TryGetValue("q", out var queue) && queue.StartOrder is { } savedOrder
             ? ParseStartOrder(savedOrder) : list.Plan.Entries.OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
-        var observationsReviewed = reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray();
-        TimingSnapshot Snapshot(IEnumerable<TimingResult> results)
+        TimingSnapshot Snapshot(IReadOnlyList<TimingResult> results)
         {
-            var all = results.ToArray();
-            var finishedTimes = all.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
+            // Forerunners test the timing: an inconsistent intermediate of theirs needs review like a competitor's.
+            var badSplits = results.Concat(forerunnerRows).SelectMany(x => x.Splits).Where(x => x.ObservationKey is not null && x.Hundredths is null)
+                .Select(x => x.ObservationKey!).ToHashSet(StringComparer.Ordinal);
+            var finishedTimes = results.Where(x => x.Status == TimingStatus.Finished).Select(x => x.Hundredths).ToArray();
             return new(list.Id, audit.Count == 0 ? 0 : audit[^1].Id,
-                all.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
-                observationsReviewed, audit.ToArray())
+                results.Select(x => x with { Rank = x.Status == TimingStatus.Finished ? ResultOrder.Rank(x.Hundredths, finishedTimes) : null }).ToArray(),
+                reviewed.Select(x => badSplits.Contains(x.Observation.Key) ? x with { State = "Review" } : x).ToArray(), audit.ToArray())
             { StartOrder = startOrder, Forerunners = forerunnerRows };
         }
-        var snapshot = Snapshot(rows);
         // A saved EET must still be the calculation the selection rule gives on the run as it is now (start corrections
         // can change who started before); otherwise it needs a new calculation. The audited calculation is unchanged.
-        var outdated = rows.Where(x => x.Status is TimingStatus.Finished or TimingStatus.OnCourse && (x.StartEet || x.FinishEet))
-            .Select(x => (x.Bib, Problem: EetSelectionProblem(snapshot, x, decisions))).Where(x => x.Problem is not null)
-            .ToDictionary(x => x.Bib, x => x.Problem!);
-        return outdated.Count == 0 ? snapshot : Snapshot(rows.Select(x => outdated.TryGetValue(x.Bib, out var problem)
-            ? x with { Status = TimingStatus.Review, Hundredths = null, Detail = problem } : x));
+        // A result put in review can make another EET outdated, so this repeats until nothing changes.
+        IReadOnlyList<TimingResult> current = rows;
+        while (true)
+        {
+            var snapshot = Snapshot(current);
+            var outdated = current.Where(x => x.Status is TimingStatus.Finished or TimingStatus.OnCourse && (x.StartEet || x.FinishEet))
+                .Select(x => (x.Bib, Problem: EetSelectionProblem(snapshot, x, decisions))).Where(x => x.Problem is not null)
+                .ToDictionary(x => x.Bib, x => x.Problem!);
+            if (outdated.Count == 0) { return snapshot; }
+            current = current.Select(x => outdated.TryGetValue(x.Bib, out var problem)
+                ? x with { Status = TimingStatus.Review, Hundredths = null, Detail = problem, Splits = x.StartEet ? OutdatedStartSplits(x.Splits) : x.Splits }
+                : x).ToArray();
+        }
     }
+
+    private static TimingSplit[] OutdatedStartSplits(IEnumerable<TimingSplit> splits) => splits
+        .Select(x => x.ObservationKey is null ? x : x with { Hundredths = null, Detail = "Review: the EET start needs a new calculation" }).ToArray();
 
     private static string? EetSelectionProblem(TimingSnapshot snapshot, TimingResult result, Dictionary<string, TimingDecision> decisions)
     {

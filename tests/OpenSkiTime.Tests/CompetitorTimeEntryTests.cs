@@ -439,6 +439,48 @@ public sealed class CompetitorTimeEntryTests
     }
 
     [Fact]
+    public async Task AnOutdatedEetStartAlsoWithdrawsItsIntermediateTimes()
+    {
+        using var folder = new TestFolder();
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, folder.File, 3, intermediates: 1);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id); await timing.FollowStartOrderAsync(true);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, new("Simulator", "Test", TimingRulesTests.Date, Simulation: true) { IntermediateChannels = [2] }, "Operator");
+        for (var i = 0; i < 3; i++)
+        {
+            await Pulse(timing, source, 0, Noon + i * TimeSpan.TicksPerMinute);
+            await Pulse(timing, source, 2, Noon + i * TimeSpan.TicksPerMinute + 20 * TimeSpan.TicksPerSecond);
+            await Pulse(timing, source, 1, Noon + i * TimeSpan.TicksPerMinute + 40 * TimeSpan.TicksPerSecond);
+        }
+        await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Results.Count(x => x.Status == TimingStatus.Finished) == 3);
+        var snapshot = timing.Snapshot!;
+        var order = snapshot.StartOrder;
+        var target = order[2];
+        TimingObservation Start(int bib) => snapshot.Observations.Single(x => x.Observation.Key == snapshot.Results.Single(r => r.Bib == bib).StartKey).Observation;
+        // The third racer's start impulse is replaced by an EET from System B (the run has only two references).
+        var backup = order.Select(bib => B($"b{bib}", Start(bib).DeviceTicks!.Value + 123_000, channel: 0)).ToArray();
+        var preparation = EetPreparation.Prepare(snapshot, target, 0, backup.Take(2).ToArray(), 2 * TimeSpan.TicksPerSecond);
+        var values = preparation.StartOrder.ToDictionary(x => x.Bib, x => (x.Backup!.DeviceTicks!.Value % TimeSpan.TicksPerDay, x.Backup.Precision, (string?)x.Backup.Key));
+        var pairs = EetCalculator.Select(EetPreparation.Candidates(preparation, values, new HashSet<int>()), target).Pairs;
+        var eet = EetCalculator.Calculate(target, 0, EetBackupSource.SystemB, backup[2].DeviceTicks!.Value % TimeSpan.TicksPerDay, 7, null, pairs, [], "Wire break");
+        await timing.EnterCompetitorTimeAsync(list.Id, new(target, 0, ManualTimeSource.Eet, Eet: eet, Replacing: [Start(target).Key],
+            ReferenceKeys: CompetitorTimeEntry.EligibleKeys(EetPreparation.Placed(preparation, eet.ResultTimeOfDay))), "Operator", "EET start");
+        var result = timing.Snapshot!.Results.Single(x => x.Bib == target);
+        Assert.True(result.StartEet);
+        Assert.Equal(TimingStatus.Finished, result.Status);
+        Assert.Equal(2000L, Assert.Single(result.Splits).Hundredths);
+
+        // A reference start withdrawn afterwards outdates the EET start and the intermediate time measured from it.
+        await timing.CorrectAsync(new(DecisionKind.Assignment, Start(order[0]).Key, Ignored: true), "Operator", "False impulse");
+        result = timing.Snapshot!.Results.Single(x => x.Bib == target);
+        Assert.Equal(TimingStatus.Review, result.Status);
+        Assert.Null(Assert.Single(result.Splits).Hundredths);
+        await timing.StopAsync();
+    }
+
+    [Fact]
     public void AMissingStartTakesItsPlaceInTheActualStartOrderFromTheBackupTime()
     {
         var minute = TimeSpan.TicksPerMinute;
