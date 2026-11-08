@@ -216,8 +216,8 @@ public sealed class CompetitorTimeEntryTests
         var order = timing.Snapshot!.StartOrder;
         var finish = order.ToDictionary(x => x, x => timing.Snapshot.Results.Single(r => r.Bib == x).FinishKey!);
         // The second and third racers' finishes are lost; System B has the first, the third and the fourth.
-        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[1]]), "Operator", "Lost");
-        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[2]]), "Operator", "Lost");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[1]], Ignored: true), "Operator", "Lost");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[2]], Ignored: true), "Operator", "Lost");
         TimingObservation A(int bib) => timing.Snapshot!.Observations.Single(x => x.Observation.Key == finish[bib]).Observation;
         var backup = new[] { B("b0", A(order[0]).DeviceTicks!.Value + 123_000), B("b2", A(order[2]).DeviceTicks!.Value + 123_000),
             B("b3", A(order[3]).DeviceTicks!.Value + 123_000) };
@@ -281,8 +281,8 @@ public sealed class CompetitorTimeEntryTests
         var backup = Enumerable.Range(0, 4).Select(i => B($"b{i}", A(keys[order[i]].Finish).DeviceTicks!.Value + 123_000)).ToArray();
         // The second and the last racer's finishes are lost. The last one started before the second one's B reading and
         // could have overtaken, so the reading is not proposed until that racer is known not to have finished.
-        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[1]].Finish), "Operator", "Lost");
-        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[4]].Finish), "Operator", "Lost");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[1]].Finish, Ignored: true), "Operator", "Lost");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[4]].Finish, Ignored: true), "Operator", "Lost");
         var preparation = EetPreparation.Prepare(timing.Snapshot!, order[1], 1, backup, 2 * TimeSpan.TicksPerSecond);
         Assert.Null(preparation.ProposedTarget);
         Assert.Equal("b1", Assert.Single(preparation.TargetCandidates).Key);
@@ -300,6 +300,40 @@ public sealed class CompetitorTimeEntryTests
         var swapped = EetPreparation.Prepare(timing.Snapshot!, order[3], 1, backup, 2 * TimeSpan.TicksPerSecond);
         Assert.Equal([order[0], order[2], order[1], order[4]], swapped.StartOrder.Select(x => x.Bib));
         Assert.Equal(3, swapped.TargetIndex);
+        await timing.StopAsync();
+    }
+
+    [Fact]
+    public async Task AForerunnerOnCourseCouldHaveMadeTheBackupReading()
+    {
+        using var folder = new TestFolder();
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, folder.File, 2);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        var forerunner = new TimingForerunner("A", "Ada", "SYNTHRUNNER", "FIN");
+        await ForerunnerTimingTests.SaveForerunnersAsync(workspace, list, forerunner);
+        await timing.SetForerunnersAsync(list.Id, [forerunner]);
+        await timing.FollowStartOrderAsync(true);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, new("Simulator", "Test", TimingRulesTests.Date, Simulation: true), "Operator");
+        var second = TimeSpan.TicksPerSecond;
+        await Pulse(timing, source, 0, Noon);
+        await Pulse(timing, source, 0, Noon + 20 * second);
+        await Pulse(timing, source, 0, Noon + 40 * second);
+        // The forerunner's finish is lost; the first competitor's finish is assigned to them by hand. The second
+        // competitor's finish is lost too, and System B read one finish at 12:01:30.
+        await Pulse(timing, source, 1, Noon + 70 * second);
+        var order = timing.Snapshot!.StartOrder;
+        var first = timing.Snapshot.Forerunners.Single().FinishKey!;
+        await timing.CorrectAsync(new(DecisionKind.Assignment, first, Bib: order[0]), "Operator", "Forerunner missed the finish");
+        var day = TimingRulesTests.Date.ToDateTime(TimeOnly.MinValue).Ticks;
+        var backup = new[] { B("b0", day + Noon + 70 * second + 123_000), B("b1", day + Noon + 90 * second + 123_000) };
+        Assert.Null(EetPreparation.Prepare(timing.Snapshot!, order[1], 1, backup, 2 * second).ProposedTarget);
+        // Once the forerunner's own finish is known, the reading can only be the competitor's.
+        await Pulse(timing, source, 1, Noon + 100 * second);
+        Assert.Equal(TimingStatus.Finished, timing.Snapshot!.Forerunners.Single().Status);
+        Assert.Equal("b1", EetPreparation.Prepare(timing.Snapshot!, order[1], 1, backup, 2 * second).ProposedTarget?.Key);
         await timing.StopAsync();
     }
 

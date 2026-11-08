@@ -32,21 +32,26 @@ public sealed partial class TimingClassificationDialog : Window
             Dispatcher.UIThread.Post(() => FocusCompetitor(selectAll: true), DispatcherPriority.Input);
         };
         Closed += (_, _) => Watch(null);
+        SizeChanged += (_, _) => KeepOnScreen();
     }
 
     // Caps the height to the working area of the screen, so the action bar stays visible on a short display and the tab
-    // content scrolls instead; a dialog that would reach below the screen moves up.
+    // content scrolls instead. The height follows the tab (SizeToContent), so every size change keeps it on screen.
     private void FitToScreen()
     {
         if (Screens.ScreenFromWindow(this) is not { } screen) { return; }
+        MaxHeight = Math.Max(MinHeight, screen.WorkingArea.Height / screen.Scaling - 16);
+        Dispatcher.UIThread.Post(KeepOnScreen, DispatcherPriority.Loaded);
+    }
+
+    // A dialog that reaches below the working area (for example after switching to the taller EET tab) moves up.
+    private void KeepOnScreen()
+    {
+        if (!IsVisible || Screens.ScreenFromWindow(this) is not { } screen) { return; }
         var area = screen.WorkingArea;
-        MaxHeight = Math.Max(MinHeight, area.Height / screen.Scaling - 16);
-        Dispatcher.UIThread.Post(() =>
-        {
-            var bottom = Position.Y + (int)Math.Ceiling(Bounds.Height * screen.Scaling);
-            if (bottom > area.Bottom || Position.Y < area.Y)
-            { Position = new Avalonia.PixelPoint(Position.X, Math.Max(area.Y, area.Bottom - (int)Math.Ceiling(Bounds.Height * screen.Scaling))); }
-        }, DispatcherPriority.Loaded);
+        var height = (int)Math.Ceiling(Bounds.Height * screen.Scaling);
+        if (Position.Y + height > area.Bottom || Position.Y < area.Y)
+        { Position = new Avalonia.PixelPoint(Position.X, Math.Max(area.Y, area.Bottom - height)); }
     }
 
     private void Watch(MainViewModel? vm)

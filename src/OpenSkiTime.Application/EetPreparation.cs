@@ -93,17 +93,23 @@ public static class EetPreparation
             return (Bib: other, A: unavailable is null ? a : null, Unavailable: unavailable);
         }).ToArray();
 
-        var targets = references.Where(x => x.A is not null)
-            .Select(x => new EvidenceTarget(x.A!.Key, x.Bib, channel, x.A.DeviceTicks!.Value)).ToArray();
+        // Backup readings are matched against every original System A passage at this position (forerunners, competitors
+        // in review, unassigned impulses), so a reading near an ineligible passage is never taken as a reference's.
+        bool Original(TimingObservation x) => x is { Kind: ObservationKind.Impulse, Manual: false, ManualEntry: false, DeviceTicks: not null }
+            && x.Channel == channel;
+        var targets = snapshot.Observations.Where(x => !x.Ignored && x.DuplicateOf is null && Original(x.Observation))
+            .Select(x => new EvidenceTarget(x.Observation.Key, x.Bib ?? 0, channel, x.Observation.DeviceTicks!.Value)).ToArray();
         var evidence = backup.Where(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.Channel == channel)
             .Select(x => new EvidenceTimestamp(x.Key, x.DeviceTicks!.Value, x.Precision, x.Channel, x.Message)).ToArray();
         var matches = targets.Length == 0 || evidence.Length == 0 ? []
             : TimingEvidenceMatching.Match(targets, evidence, pairingToleranceTicks, allowAdjacentDay: true);
         var byKey = backup.Where(x => x.Key is not null).GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
-        var matched = matches.Where(x => x.Evidence is not null).ToDictionary(x => x.Target.Bib, x => byKey[x.Evidence!.Key]);
+        var byTarget = matches.ToDictionary(x => x.Target.Key, StringComparer.Ordinal);
+        var matched = references.Where(x => x.A is not null && byTarget.GetValueOrDefault(x.A.Key)?.Evidence is not null)
+            .ToDictionary(x => x.Bib, x => byKey[byTarget[x.A!.Key].Evidence!.Key]);
         var rows = references.Select(x =>
         {
-            var match = matches.FirstOrDefault(m => m.Target.Bib == x.Bib);
+            var match = x.A is null ? null : byTarget.GetValueOrDefault(x.A.Key);
             var state = x.A is null ? "" : evidence.Length == 0 ? "No backup captured"
                 : match?.Evidence is not null ? "Paired" : match?.State ?? "Not found";
             return new EetReference(x.Bib, x.A, x.Unavailable, matched.GetValueOrDefault(x.Bib), state);
@@ -111,7 +117,7 @@ public static class EetPreparation
 
         // Backup readings no reference claimed, between the System A times of the nearest neighbours in start order.
         // A repeated reading (the same time under another journal key) is one reading: a copy of a paired one is paired too.
-        var used = matched.Values.Select(x => x.DeviceTicks!.Value).ToHashSet();
+        var used = matches.Where(x => x.Evidence is not null).Select(x => byKey[x.Evidence!.Key].DeviceTicks!.Value).ToHashSet();
         var unpaired = backup.Where(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.Channel == channel
                 && !used.Contains(x.DeviceTicks.Value))
             .GroupBy(x => x.DeviceTicks!.Value).Select(x => x.First()).OrderBy(x => x.DeviceTicks % TimeSpan.TicksPerDay).ToArray();
@@ -120,28 +126,29 @@ public static class EetPreparation
         var afterIndex = index < rows.Length ? Array.FindIndex(rows, index, x => x.A is not null) : -1;
         var before = beforeIndex >= 0 ? rows[beforeIndex].A : null;
         var after = afterIndex >= 0 ? rows[afterIndex].A : null;
-        // The reading in that window is the competitor's own only when no other competitor of the run could have made it
-        // (a racer may overtake another): one with a System A time but no paired backup, within the pairing tolerance;
-        // one without a usable System A time unless they did not start or, at the finish, did not finish, never started
-        // or started after the reading. Otherwise the operator chooses from the listed readings.
-        bool CouldHaveMade(EetReference other, TimingObservation reading)
+        // The reading in that window is the competitor's own only when nobody else in the run, forerunners included,
+        // could have made it (a racer may overtake another): one with an original System A passage whose backup is not
+        // paired, within the pairing tolerance; one without such a passage unless they did not start or, at the finish,
+        // did not finish, never started or started after the reading. Otherwise the operator chooses from the list.
+        var paired = matches.Where(x => x.Evidence is not null).Select(x => x.Target.Key).ToHashSet(StringComparer.Ordinal);
+        bool CouldHaveMade(TimingResult other, TimingObservation reading)
         {
             var timeOfDay = reading.DeviceTicks!.Value % TimeSpan.TicksPerDay;
-            if (other.A is { DeviceTicks: { } aTicks })
-            { return other.Backup is null && Math.Abs(EetCalculator.TimeOfDayDifference(timeOfDay, aTicks)) <= pairingToleranceTicks; }
-            if (other.Unavailable is "Did not start") { return false; }
+            if (At(other, channel) is { } a && Original(a))
+            { return !paired.Contains(a.Key) && Math.Abs(EetCalculator.TimeOfDayDifference(timeOfDay, a.DeviceTicks!.Value)) <= pairingToleranceTicks; }
+            if (other.Status == TimingStatus.DNS) { return false; }
             if (channel == 0) { return true; }
-            if (other.Unavailable is "Did not finish") { return false; }
-            var result = results[other.Bib];
-            return At(result, 0) is { DeviceTicks: { } start }
+            if (other.Status == TimingStatus.DNF) { return false; }
+            return At(other, 0) is { DeviceTicks: { } start }
                 ? EetCalculator.TimeOfDayDifference(timeOfDay, start) > 0
-                : result.Status != TimingStatus.Ready;
+                : other.Status != TimingStatus.Ready;
         }
+        var others = snapshot.Results.Where(x => x.Bib != bib).Concat(snapshot.Forerunners).ToArray();
         var window = unpaired.Where(x =>
             (before is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, before.DeviceTicks!.Value) > -pairingToleranceTicks)
             && (after is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, after.DeviceTicks!.Value) < pairingToleranceTicks))
             .ToArray();
-        return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window is [var only] && !rows.Any(x => CouldHaveMade(x, only)) ? only : null);
+        return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window is [var only] && !others.Any(x => CouldHaveMade(x, only)) ? only : null);
     }
 
     /// <summary>The EET reference candidates in start order, using the backup values the operator confirmed or typed.</summary>
