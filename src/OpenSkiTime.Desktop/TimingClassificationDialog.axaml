@@ -5,8 +5,9 @@
  <!-- One competitor at a time, chosen by bib or name: the classification (Status), a missing or wrong start/finish
       time of day (Time of day) or an FIS EET for a missing System A time (EET). Every save goes to the correction
       history; the dialog stays open for the next competitor. -->
- <StackPanel Margin="12" Spacing="12">
-  <Border Classes="card">
+ <!-- The action bar stays visible: on a short screen the tab content scrolls (the window height is capped to the screen). -->
+ <Grid Margin="12" RowDefinitions="Auto,12,*,12,Auto">
+  <Border Grid.Row="0" Classes="card">
    <local:FormRow>
     <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
      <TextBlock Text="COMPETITOR" Classes="fieldLabel" />
@@ -35,7 +36,7 @@
    </local:FormRow>
   </Border>
 
-  <TabControl Name="TimingResultTabs" Classes="pageTabs" Padding="0,8,0,0" SelectedIndex="{Binding TimingResultTab}">
+  <TabControl Grid.Row="2" Name="TimingResultTabs" Classes="pageTabs" Padding="0,8,0,0" SelectedIndex="{Binding TimingResultTab}">
    <TabItem Name="TimingResultStatusTab" Header="Status" ToolTip.Tip="Alt+1">
     <Border Classes="card">
      <StackPanel Spacing="{DynamicResource FormGap}">
@@ -105,6 +106,7 @@
    </TabItem>
 
    <TabItem Name="TimingResultEetTab" Header="EET" ToolTip.Tip="Alt+3 · Equivalent Electronic Time, FIS Timing Booklet section 14">
+    <ScrollViewer Name="EetScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Spacing="12">
      <Border Classes="card">
       <StackPanel Spacing="{DynamicResource FormGap}">
@@ -168,9 +170,11 @@
      </Border>
      <TextBlock Name="EetMessageText" Text="{Binding EetMessage}" IsVisible="{Binding HasEetMessage}" Classes="supportingText attention" TextWrapping="Wrap" />
     </StackPanel>
+    </ScrollViewer>
    </TabItem>
   </TabControl>
 
+  <StackPanel Grid.Row="4" Spacing="12">
   <TextBlock Name="TimingClassificationMessage" TextWrapping="Wrap" IsVisible="False" />
   <Grid ColumnDefinitions="*,Auto,8,Auto,8,Auto">
    <Button Grid.Column="1" Name="CloseTimingClassification" Content="Close" Classes="secondaryAction" Click="Close_Click" ToolTip.Tip="Esc" />
@@ -183,5 +187,6 @@
    <Button Grid.Column="5" Name="SaveEet" Content="Save EET time" Classes="primaryAction" Command="{Binding SaveEetCommand}"
            IsVisible="{Binding IsEetTab}" ToolTip.Tip="Saves the EET with its complete calculation in the correction history" />
   </Grid>
- </StackPanel>
+  </StackPanel>
+ </Grid>
 </Window>

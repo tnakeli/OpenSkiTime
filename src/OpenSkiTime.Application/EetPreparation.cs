@@ -32,7 +32,8 @@ public sealed record EetReference(int Bib, TimingObservation? A, string? Unavail
 /// <summary>
 /// Everything the EET dialog needs for one missing time: the run's start order around the competitor, the captured
 /// backup paired with System A, and the unpaired backup readings that may be the competitor's own (the proposal is set
-/// only when exactly one fits between the neighbouring System A times).
+/// only when exactly one fits between the neighbouring System A times and no other competitor between them passed
+/// without a usable System A time).
 /// </summary>
 public sealed record EetPreparationResult(int Bib, int Channel, string? ClockId, IReadOnlyList<EetReference> StartOrder,
     int TargetIndex, IReadOnlyList<TimingObservation> TargetCandidates, TimingObservation? ProposedTarget);
@@ -104,13 +105,24 @@ public static class EetPreparation
         var used = matched.Values.Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
         var unpaired = backup.Where(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.Channel == channel
             && !used.Contains(x.Key)).OrderBy(x => x.DeviceTicks % TimeSpan.TicksPerDay).ToArray();
-        var before = rows.Take(index).LastOrDefault(x => x.A is not null)?.A;
-        var after = rows.Skip(index).FirstOrDefault(x => x.A is not null)?.A;
+        var head = Math.Min(index, rows.Length);
+        var beforeIndex = head > 0 ? Array.FindLastIndex(rows, head - 1, head, x => x.A is not null) : -1;
+        var afterIndex = index < rows.Length ? Array.FindIndex(rows, index, x => x.A is not null) : -1;
+        var before = beforeIndex >= 0 ? rows[beforeIndex].A : null;
+        var after = afterIndex >= 0 ? rows[afterIndex].A : null;
+        // The reading in that window is the competitor's own only when nobody else between the neighbours could have
+        // made it without a usable System A time: a competitor who did not start, did not finish (at the finish) or
+        // started after the reading (at the finish) made no such passage. Otherwise the operator chooses from the list.
+        var gap = rows.Skip(beforeIndex + 1).Take((afterIndex < 0 ? rows.Length : afterIndex) - beforeIndex - 1).ToArray();
+        bool CouldHaveMade(EetReference other, TimingObservation reading) => !(other.Unavailable is "Did not start"
+            || channel == 1 && other.Unavailable is "Did not finish"
+            || channel == 1 && At(results[other.Bib], 0) is { DeviceTicks: { } start }
+                && EetCalculator.TimeOfDayDifference(reading.DeviceTicks!.Value % TimeSpan.TicksPerDay, start) <= 0);
         var window = unpaired.Where(x =>
             (before is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, before.DeviceTicks!.Value) > -pairingToleranceTicks)
             && (after is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, after.DeviceTicks!.Value) < pairingToleranceTicks))
             .ToArray();
-        return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window.Length == 1 ? window[0] : null);
+        return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window is [var only] && !gap.Any(x => CouldHaveMade(x, only)) ? only : null);
     }
 
     /// <summary>The EET reference candidates in start order, using the backup values the operator confirmed or typed.</summary>

@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia;
 using OpenSkiTime.Application;
 using OpenSkiTime.Desktop;
 using OpenSkiTime.Devices;
@@ -104,6 +105,17 @@ public partial class DesktopWorkflowTests
             Assert.Equal(2, vm.TimingResultTab);
             Assert.True(dialog.FindControl<Button>("SaveEet")!.IsVisible);
             Assert.False(dialog.FindControl<Button>("SaveTimingClassification")!.IsVisible);
+            // On a short screen the window height is capped: the EET content scrolls and the action bar stays in view.
+            var fullHeight = dialog.Bounds.Height;
+            dialog.MaxHeight = 560;
+            dialog.UpdateLayout(); Dispatcher.UIThread.RunJobs(); dialog.UpdateLayout();
+            Assert.True(fullHeight > 560, $"The EET tab is {fullHeight} px tall.");
+            var saveEet = dialog.FindControl<Button>("SaveEet")!;
+            var bottom = saveEet.TranslatePoint(new Point(0, saveEet.Bounds.Height), dialog)!.Value.Y;
+            Assert.True(bottom <= dialog.Bounds.Height, $"Save EET ends at {bottom} px in a {dialog.Bounds.Height} px dialog.");
+            Assert.True(dialog.FindControl<ScrollViewer>("EetScroll")!.Extent.Height > dialog.FindControl<ScrollViewer>("EetScroll")!.Viewport.Height);
+            dialog.ClearValue(Window.MaxHeightProperty);
+            dialog.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             Assert.Equal("12:11:40.0123000", vm.EetBackupText);
             Assert.Equal("10 / 10", vm.EetPairCount);
             Assert.Equal(order.Skip(1).Take(10), vm.EetRows.Where(x => x.Used).Select(x => x.Bib));

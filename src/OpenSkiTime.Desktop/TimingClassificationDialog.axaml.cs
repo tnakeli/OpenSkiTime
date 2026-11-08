@@ -26,8 +26,27 @@ public sealed partial class TimingClassificationDialog : Window
         competitor.AddHandler(KeyDownEvent, ChooseCompetitor, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnDialogKey);
         DataContextChanged += (_, _) => Watch(DataContext as MainViewModel);
-        Opened += (_, _) => Dispatcher.UIThread.Post(() => FocusCompetitor(selectAll: true), DispatcherPriority.Input);
+        Opened += (_, _) =>
+        {
+            FitToScreen();
+            Dispatcher.UIThread.Post(() => FocusCompetitor(selectAll: true), DispatcherPriority.Input);
+        };
         Closed += (_, _) => Watch(null);
+    }
+
+    // Caps the height to the working area of the screen, so the action bar stays visible on a short display and the tab
+    // content scrolls instead; a dialog that would reach below the screen moves up.
+    private void FitToScreen()
+    {
+        if (Screens.ScreenFromWindow(this) is not { } screen) { return; }
+        var area = screen.WorkingArea;
+        MaxHeight = Math.Max(MinHeight, area.Height / screen.Scaling - 16);
+        Dispatcher.UIThread.Post(() =>
+        {
+            var bottom = Position.Y + (int)Math.Ceiling(Bounds.Height * screen.Scaling);
+            if (bottom > area.Bottom || Position.Y < area.Y)
+            { Position = new Avalonia.PixelPoint(Position.X, Math.Max(area.Y, area.Bottom - (int)Math.Ceiling(Bounds.Height * screen.Scaling))); }
+        }, DispatcherPriority.Loaded);
     }
 
     private void Watch(MainViewModel? vm)

@@ -849,12 +849,13 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                 var eet = entry.Eet ?? throw new DomainValidationException("Calculate the EET first.");
                 if (eet.Bib != entry.Bib || eet.Channel != entry.Channel || !eet.IsConsistent())
                 { throw new DomainValidationException("The EET calculation does not belong to this competitor and position. Calculate it again."); }
+                // Every reference must still be eligible now, by the same rules that prepared the table: the competitor's
+                // only System A time at this position, an original device impulse, not in review, on the same clock.
+                var eligible = EetPreparation.Prepare(_snapshot, entry.Bib, entry.Channel, [], 0).StartOrder
+                    .Where(x => x.A is not null).ToDictionary(x => x.Bib, x => x.A!);
                 foreach (var pair in eet.Pairs)
                 {
-                    var current = _snapshot.Observations.SingleOrDefault(x => x.Observation.Key == pair.AKey);
-                    if (current is not { State: "Assigned" } || current.Bib != pair.Bib || current.Observation.Channel != entry.Channel
-                        || current.Observation.DeviceTicks != pair.ATicks || current.Observation.Precision != pair.APrecision
-                        || current.Observation.Manual || current.Observation.ManualEntry)
+                    if (!eligible.TryGetValue(pair.Bib, out var a) || a.Key != pair.AKey || a.DeviceTicks != pair.ATicks || a.Precision != pair.APrecision)
                     { throw new DomainValidationException($"The System A time of bib {pair.Bib} changed after the EET was calculated. Calculate it again."); }
                 }
                 (timeOfDay, precision) = (eet.ResultTimeOfDay, eet.ResultPrecision);

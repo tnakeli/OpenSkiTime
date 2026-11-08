@@ -198,6 +198,61 @@ public sealed class CompetitorTimeEntryTests
     }
 
     [Fact]
+    public async Task TheBackupReadingIsProposedOnlyForTheOneCompetitorWhoCouldHaveMadeIt()
+    {
+        using var folder = new TestFolder();
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, folder.File, 4);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id); await timing.FollowStartOrderAsync(true);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, new("Simulator", "Test", TimingRulesTests.Date, Simulation: true), "Operator");
+        for (var i = 0; i < 4; i++)
+        {
+            await Pulse(timing, source, 0, Noon + i * TimeSpan.TicksPerMinute);
+            await Pulse(timing, source, 1, Noon + i * TimeSpan.TicksPerMinute + 40 * TimeSpan.TicksPerSecond);
+        }
+        await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Results.Count(x => x.Status == TimingStatus.Finished) == 4);
+        var order = timing.Snapshot!.StartOrder;
+        var finish = order.ToDictionary(x => x, x => timing.Snapshot.Results.Single(r => r.Bib == x).FinishKey!);
+        // The second and third racers' finishes are lost; System B has the first, the third and the fourth.
+        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[1]]), "Operator", "Lost");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[2]]), "Operator", "Lost");
+        TimingObservation A(int bib) => timing.Snapshot!.Observations.Single(x => x.Observation.Key == finish[bib]).Observation;
+        var backup = new[] { B("b0", A(order[0]).DeviceTicks!.Value + 123_000), B("b2", A(order[2]).DeviceTicks!.Value + 123_000),
+            B("b3", A(order[3]).DeviceTicks!.Value + 123_000) };
+
+        // Either racer without a finish could have made the reading between the neighbours: nothing is proposed.
+        foreach (var bib in new[] { order[1], order[2] })
+        {
+            var ambiguous = EetPreparation.Prepare(timing.Snapshot!, bib, 1, backup, 2 * TimeSpan.TicksPerSecond);
+            Assert.Null(ambiguous.ProposedTarget);
+            Assert.Equal("b2", Assert.Single(ambiguous.TargetCandidates).Key);
+        }
+        // A racer who did not finish made no passage, so the reading is the other one's.
+        var dnf = timing.Snapshot!.Results.Single(x => x.Bib == order[1]).CompetitorId;
+        await timing.CorrectAsync(new(DecisionKind.Status, CompetitorId: dnf, Status: TimingStatus.DNF), "Operator", "Fell");
+        var preparation = EetPreparation.Prepare(timing.Snapshot!, order[2], 1, backup, 2 * TimeSpan.TicksPerSecond);
+        Assert.Equal("b2", preparation.ProposedTarget?.Key);
+
+        var values = preparation.StartOrder.Where(x => x.Backup is not null)
+            .ToDictionary(x => x.Bib, x => (x.Backup!.DeviceTicks!.Value % TimeSpan.TicksPerDay, x.Backup.Precision, (string?)x.Backup.Key));
+        var pairs = EetCalculator.Select(EetPreparation.Candidates(preparation, values, new HashSet<int>()), order[2]).Pairs;
+        Assert.Equal([order[0], order[3]], pairs.Select(x => x.Bib));
+        var proposed = preparation.ProposedTarget!;
+        var eet = EetCalculator.Calculate(order[2], 1, EetBackupSource.SystemB, proposed.DeviceTicks!.Value % TimeSpan.TicksPerDay, proposed.Precision,
+            proposed.Key, pairs, [], "Wire break");
+        // A reference that gets a second finish after the calculation is in review: the EET is no longer saved.
+        await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[1]], Bib: order[0]), "Operator", "Wrong bib");
+        var version = timing.Snapshot!.AuditVersion;
+        var error = await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
+            new(order[2], 1, ManualTimeSource.Eet, Eet: eet), "Operator", "EET"));
+        Assert.Contains($"bib {order[0]} changed", error.Message, StringComparison.Ordinal);
+        Assert.Equal(version, timing.Snapshot.AuditVersion);
+        await timing.StopAsync();
+    }
+
+    [Fact]
     public async Task AnEetIsRejectedWhenItsReferenceTimesChanged()
     {
         using var folder = new TestFolder();
