@@ -106,6 +106,17 @@ OpenSkiTime has adapters for ALGE Timy 2/3 native USB, MT1 USB/serial and the AL
 
 Settings → About shows the software version (Semantic Versioning) and the implemented FIS rule season (2026-27), with links to the license, issue reporting, [security policy](SECURITY.md) and privacy statement.
 
+## Before you install
+
+The application needs nothing else: the Windows installer includes the .NET runtime, installs for the current user without administrator rights and works offline. Timing devices need the following, once per race computer:
+
+- **ALGE Timy 2 / Timy 3 over USB:** install ALGE's [Timy USB driver](https://alge-timing.com/alge/download/driver/TimyUSB_Driver_Setup_2.80.0.exe) before connecting the Timy (Windows asks for administrator rights). Then, while online, choose **Timy 2/3 · USB** in Settings → Timing devices and press **Set up USB library**: OpenSkiTime downloads ALGE's USB library for your user, after which USB timing works offline. Set the Timy to **PC Timer** mode. The driver and library come from ALGE and are not included in OpenSkiTime.
+- **ALGE MT1 over USB or serial:** the MT1 appears as a COM port. If Windows shows no COM port for it, install the device's USB driver from ALGE.
+- **ALGE Results (cloud):** an ALGE Results account with the Timekeeper role and an internet connection; nothing to install.
+- **Simulator:** nothing to install.
+
+Details: [ALGE timing devices](docs/timing.md#alge-timy-2--timy-3-native-usb--windows-x64).
+
 ## Current scope
 
 **OpenSkiTime is still in development and is not yet intended for timing real races. It will be tested at real competitions during the 2026/27 season.** Use it for evaluation and rehearsals only, together with independent backup timing.
