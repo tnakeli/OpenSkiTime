@@ -208,6 +208,15 @@ public sealed class CompetitorTimeEntryTests
         var other = order[0];
         var moveError = await Assert.ThrowsAsync<DomainValidationException>(() => timing.CorrectAsync(new(DecisionKind.Assignment, key, Bib: other), "Operator", "Move"));
         Assert.Contains($"calculated for bib {target}", moveError.Message, StringComparison.Ordinal);
+        // A reference time withdrawn afterwards (ignored as a false impulse) puts the EET result in review until it is
+        // calculated again; undoing the withdrawal restores it.
+        var reference = eet.Pairs[0];
+        await timing.CorrectAsync(new(DecisionKind.Assignment, reference.AKey, Ignored: true), "Operator", "False impulse");
+        var withdrawn = timing.Snapshot!.Results.Single(x => x.Bib == target);
+        Assert.Equal(TimingStatus.Review, withdrawn.Status);
+        Assert.Contains($"bib {reference.Bib}", withdrawn.Detail, StringComparison.Ordinal);
+        await timing.UndoAsync(timing.Snapshot.Audit[^1].Id, "Operator", "Undo");
+        Assert.Equal(TimingStatus.Finished, timing.Snapshot!.Results.Single(x => x.Bib == target).Status);
         await timing.StopAsync();
         AssertResult(timing.Snapshot!);
         var saved = await workspace.ReadTimingAsync(list.Id);
@@ -376,6 +385,21 @@ public sealed class CompetitorTimeEntryTests
         Assert.Equal(TimingStatus.Finished, timing.Snapshot!.Forerunners.Single().Status);
         Assert.Equal("b1", EetPreparation.Prepare(timing.Snapshot!, order[1], 1, backup, 2 * second).ProposedTarget?.Key);
         await timing.StopAsync();
+    }
+
+    [Fact]
+    public void AMissingStartTakesItsPlaceInTheActualStartOrderFromTheBackupTime()
+    {
+        var minute = TimeSpan.TicksPerMinute;
+        // Queue order 1, 2, 3, 4; bib 9 (queued first) has no System A start, bib 4 has not started.
+        var rows = new[] { new EetReference(1, null, null, null, "", Noon), new EetReference(2, null, null, null, "", Noon + minute),
+            new EetReference(3, null, null, null, "", Noon + 2 * minute), new EetReference(4, null, "No start time", null, "") };
+        var preparation = new EetPreparationResult(9, 0, null, rows, 0, [], null);
+        Assert.Equal(2, EetPreparation.Placed(preparation, Noon + minute + 30 * TimeSpan.TicksPerSecond).TargetIndex);
+        Assert.Equal(0, EetPreparation.Placed(preparation, Noon - minute).TargetIndex);
+        Assert.Equal(3, EetPreparation.Placed(preparation, Noon + 5 * minute).TargetIndex);
+        // A missing finish keeps the place of its start.
+        Assert.Equal(0, EetPreparation.Placed(preparation with { Channel = 1 }, Noon + 5 * minute).TargetIndex);
     }
 
     [Fact]

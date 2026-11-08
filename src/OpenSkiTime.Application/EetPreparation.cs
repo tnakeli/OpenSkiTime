@@ -44,7 +44,8 @@ public sealed record CompetitorTimeEntry(int Bib, int Channel, ManualTimeSource 
 /// System A observation (null with <see cref="Unavailable"/> saying why); <see cref="Backup"/> is the backup
 /// observation paired with it, uniquely, when backup timing was captured.
 /// </summary>
-public sealed record EetReference(int Bib, TimingObservation? A, string? Unavailable, TimingObservation? Backup, string BackupState);
+public sealed record EetReference(int Bib, TimingObservation? A, string? Unavailable, TimingObservation? Backup, string BackupState,
+    long? Started = null);
 
 /// <summary>
 /// Everything the EET dialog needs for one missing time: the run's start order around the competitor, the captured
@@ -157,7 +158,7 @@ public static class EetPreparation
             var match = x.A is null ? null : byTarget.GetValueOrDefault(x.A.Key);
             var state = x.A is null ? "" : evidence.Length == 0 ? "No backup captured"
                 : match?.Evidence is not null ? "Paired" : match?.State ?? "Not found";
-            return new EetReference(x.Bib, x.A, x.Unavailable, matched.GetValueOrDefault(x.Bib), state);
+            return new EetReference(x.Bib, x.A, x.Unavailable, matched.GetValueOrDefault(x.Bib), state, At(results[x.Bib], 0)?.DeviceTicks);
         }).ToArray();
 
         // Backup readings no reference claimed, between the System A times of the nearest neighbours in start order.
@@ -197,6 +198,26 @@ public static class EetPreparation
             && (after is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, after.DeviceTicks!.Value) < pairingToleranceTicks))
             .ToArray();
         return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window is [var only] && !others.Any(x => CouldHaveMade(x, only)) ? only : null, backupNote);
+    }
+
+    /// <summary>
+    /// For a missing start, the competitor's place in the actual start order follows from the backup start time: before
+    /// the first competitor who started later, after everyone who started earlier. A missing finish keeps its place.
+    /// </summary>
+    public static EetPreparationResult Placed(EetPreparationResult preparation, long backupTimeOfDay)
+    {
+        ArgumentNullException.ThrowIfNull(preparation);
+        if (preparation.Channel != 0) { return preparation; }
+        var rows = preparation.StartOrder;
+        var index = -1;
+        var lastStarted = -1;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Started is not { } started) { continue; }
+            if (EetCalculator.TimeOfDayDifference(backupTimeOfDay, started) < 0) { index = i; break; }
+            lastStarted = i;
+        }
+        return preparation with { TargetIndex = index >= 0 ? index : lastStarted + 1 };
     }
 
     /// <summary>The EET reference candidates in start order, using the backup values the operator confirmed or typed.</summary>

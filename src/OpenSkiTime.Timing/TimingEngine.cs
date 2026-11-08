@@ -45,6 +45,17 @@ public static class TimingEngine
         foreach (var (forerunner, index) in (forerunners ?? []).Select((x, i) => (x, i)))
         { forerunnerRows.Add(Evaluate(forerunner.Entry(index + 1)) with { IsForerunner = true, ForerunnerLetter = forerunner.Letter }); }
         foreach (var entry in list.Plan.Entries) { rows.Add(Evaluate(entry)); }
+        EetPair? StaleEetReference(IEnumerable<TimingObservation> times)
+        {
+            foreach (var time in times.Where(x => x.EntrySource == ManualTimeSource.Eet))
+            {
+                if (decisions.GetValueOrDefault(DecisionKey(new(DecisionKind.ManualTime, time.Key)))?.Timestamp?.Eet is not { } eet) { continue; }
+                var stale = eet.Pairs.FirstOrDefault(pair => assignedByBib.GetValueOrDefault(pair.Bib) is not { } own
+                    || own.Count(x => x.Channel == eet.Channel) != 1 || !own.Any(x => x.Key == pair.AKey && x.DeviceTicks == pair.ATicks));
+                if (stale is not null) { return stale; }
+            }
+            return null;
+        }
         TimingResult Evaluate(StartListEntry entry)
         {
             var id = entry.Entrant.CompetitorId;
@@ -79,6 +90,13 @@ public static class TimingEngine
                     else if (sources.Contains(ManualTimeSource.Eet)) { detail = "Includes an EET replacement time · see history."; }
                     else if (sources.Contains(ManualTimeSource.DeviceRecord)) { detail = "Includes a System A time entered from the device record · see history."; }
                 }
+            }
+            // A saved EET stays valid only while every System A time it was calculated from is still its reference
+            // competitor's only assigned impulse at that position; otherwise it needs a new calculation.
+            if (status is TimingStatus.Finished or TimingStatus.OnCourse && StaleEetReference(starts.Concat(finishes)) is { } stale)
+            {
+                status = TimingStatus.Review; time = null;
+                detail = $"The EET uses the System A time of bib {stale.Bib}, which changed afterwards. Calculate the EET again.";
             }
             if (decisions.TryGetValue("t:" + id, out var correction) && correction.Hundredths is { } corrected)
             { time = corrected; status = TimingStatus.Finished; detail = "Corrected time · see history"; }

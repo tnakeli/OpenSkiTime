@@ -137,6 +137,8 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(TimeEntryPreview));
         if (ShowTimingClassificationEditor && TimingResultTab == 2 && TimingClassificationTarget?.Bib != _eetLoaded?.Bib)
         { _ = LoadEetAsync(); }
+        // The same competitor's other time may have changed: the kept table recalculates its net time.
+        else if (_eetLoaded?.Bib == TimingClassificationTarget?.Bib) { RecalculateEet(); }
     }
 
     private TimingObservation? TargetObservation(int channel)
@@ -292,7 +294,10 @@ public sealed partial class MainViewModel
                 else { problems.Add($"Bib {row.Bib}: enter the backup time as HH:mm:ss.ff."); }
             }
             var excluded = EetRows.Where(x => x.CanEdit && x.Excluded).Select(x => x.Bib).ToHashSet();
-            var selection = EetCalculator.Select(EetPreparation.Candidates(preparation, values, excluded), preparation.Bib);
+            // A missing start takes its place in the actual start order from the backup start time.
+            var placed = TimingTime.TryTimeOfDay(EetBackupText.Trim(), out var typedBackup, out var typedPrecision) && typedPrecision >= 2
+                ? EetPreparation.Placed(preparation, typedBackup) : preparation;
+            var selection = EetCalculator.Select(EetPreparation.Candidates(placed, values, excluded), preparation.Bib);
             var used = selection.Pairs.ToDictionary(x => x.Bib);
             foreach (var row in EetRows.Where(x => !x.IsTarget))
             {
@@ -350,7 +355,7 @@ public sealed partial class MainViewModel
             { throw new DomainValidationException("Choose why System A missed the time; the timing report needs the reason."); }
             var position = calculation.Channel == 0 ? "start" : "finish";
             await timing.EnterCompetitorTimeAsync(listId, new(calculation.Bib, calculation.Channel, ManualTimeSource.Eet, Eet: calculation, Replacing: _eetReplacing,
-                    ReferenceKeys: _eetPreparation is { } prepared ? CompetitorTimeEntry.EligibleKeys(prepared) : null),
+                    ReferenceKeys: _eetPreparation is { } prepared ? CompetitorTimeEntry.EligibleKeys(EetPreparation.Placed(prepared, calculation.BackupTimeOfDay)) : null),
                 TimingOperator, $"EET for missing {position} from {(calculation.Source == EetBackupSource.SystemB ? "System B" : EetSheetBuilder.SourceLabel(calculation.Source).ToLowerInvariant())} · {calculation.ReplacementReason}");
             RefreshTiming();
             SetStatus($"Bib {calculation.Bib}: EET {position} {TimingTime.FormatTimeOfDay(calculation.ResultTimeOfDay, calculation.ResultPrecision)} saved with correction history and the calculation.");
@@ -387,7 +392,7 @@ public sealed partial class MainViewModel
                 ? $"Saved to the result {audit.At.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)} by {audit.Operator}. History: {audit.Reason}"
                 : $"Calculated by {TimingOperator}; not saved to the result.";
             var prepared = _eetPreparation is { } preparation && preparation.Bib == calculation.Bib && preparation.Channel == calculation.Channel
-                ? preparation : null;
+                ? EetPreparation.Placed(preparation, calculation.BackupTimeOfDay) : null;
             var notUsable = prepared?.StartOrder.Where(x => x.Unavailable is not null || x.Backup is null)
                 .ToDictionary(x => x.Bib, x => x.Unavailable ?? x.BackupState) ?? new Dictionary<int, string>();
             // The lines follow the order the competitors actually started in, as the table does.
