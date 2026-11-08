@@ -32,8 +32,8 @@ public sealed record EetReference(int Bib, TimingObservation? A, string? Unavail
 /// <summary>
 /// Everything the EET dialog needs for one missing time: the run's start order around the competitor, the captured
 /// backup paired with System A, and the unpaired backup readings that may be the competitor's own (the proposal is set
-/// only when exactly one fits between the neighbouring System A times and no other competitor between them passed
-/// without a usable System A time).
+/// only when exactly one fits between the neighbouring System A times and no other competitor could have made it).
+/// <see cref="StartOrder"/> is the order the competitors actually started in.
 /// </summary>
 public sealed record EetPreparationResult(int Bib, int Channel, string? ClockId, IReadOnlyList<EetReference> StartOrder,
     int TargetIndex, IReadOnlyList<TimingObservation> TargetCandidates, TimingObservation? ProposedTarget);
@@ -55,9 +55,15 @@ public static class EetPreparation
         var observations = snapshot.Observations.ToDictionary(x => x.Observation.Key, x => x.Observation, StringComparer.Ordinal);
         TimingObservation? At(TimingResult result, int position)
             => (position == 0 ? result.StartKey : result.FinishKey) is { } key ? observations.GetValueOrDefault(key) : null;
-        var order = snapshot.StartOrder.Where(x => snapshot.Results.Any(r => r.Bib == x)).ToList();
-        if (!order.Contains(bib)) { order.Add(bib); }
         var results = snapshot.Results.ToDictionary(x => x.Bib);
+        var order = snapshot.StartOrder.Where(results.ContainsKey).ToList();
+        if (!order.Contains(bib)) { order.Add(bib); }
+        // "Started before" is the order competitors actually started in: a competitor may start out of queue order.
+        // Those with a start time take the queue places of the started competitors in start-time order; the others
+        // (not started, or the start is the missing time) keep their queue place.
+        var started = order.Where(x => At(results[x], 0)?.DeviceTicks is not null).ToArray();
+        var byStart = new Queue<int>(started.OrderBy(x => At(results[x], 0)!.DeviceTicks!.Value).ThenBy(x => Array.IndexOf(started, x)));
+        for (var i = 0; i < order.Count; i++) { if (started.Contains(order[i])) { order[i] = byStart.Dequeue(); } }
         var index = order.IndexOf(bib);
         // The device clock the replacement joins: the competitor's other time, else the nearest A time in start order.
         var clock = At(target, 1 - channel)?.ClockId
@@ -77,6 +83,8 @@ public static class EetPreparation
                     _ => channel == 0 ? "No start time" : "No finish time"
                 }
                 : result.Status == TimingStatus.Review ? "Timing needs review"
+                // A classification or net-time correction can hide a review: the A time must be the only one assigned.
+                : CompetitorTimeEntry.AssignedKeys(snapshot, other, channel) is not [var only] || only != a.Key ? "Timing needs review"
                 // Only original device impulses: an entered time (even a System A device-record time) is not used.
                 : a.ManualEntry ? "Entered time" : a.Manual ? "Device keyboard time"
                 : a.DeviceTicks is null || a.Precision < 3 ? "Below millisecond precision"
@@ -102,27 +110,38 @@ public static class EetPreparation
         }).ToArray();
 
         // Backup readings no reference claimed, between the System A times of the nearest neighbours in start order.
-        var used = matched.Values.Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
+        // A repeated reading (the same time under another journal key) is one reading: a copy of a paired one is paired too.
+        var used = matched.Values.Select(x => x.DeviceTicks!.Value).ToHashSet();
         var unpaired = backup.Where(x => x.Kind == ObservationKind.Impulse && x.DeviceTicks is not null && x.Channel == channel
-            && !used.Contains(x.Key)).OrderBy(x => x.DeviceTicks % TimeSpan.TicksPerDay).ToArray();
+                && !used.Contains(x.DeviceTicks.Value))
+            .GroupBy(x => x.DeviceTicks!.Value).Select(x => x.First()).OrderBy(x => x.DeviceTicks % TimeSpan.TicksPerDay).ToArray();
         var head = Math.Min(index, rows.Length);
         var beforeIndex = head > 0 ? Array.FindLastIndex(rows, head - 1, head, x => x.A is not null) : -1;
         var afterIndex = index < rows.Length ? Array.FindIndex(rows, index, x => x.A is not null) : -1;
         var before = beforeIndex >= 0 ? rows[beforeIndex].A : null;
         var after = afterIndex >= 0 ? rows[afterIndex].A : null;
-        // The reading in that window is the competitor's own only when nobody else between the neighbours could have
-        // made it without a usable System A time: a competitor who did not start, did not finish (at the finish) or
-        // started after the reading (at the finish) made no such passage. Otherwise the operator chooses from the list.
-        var gap = rows.Skip(beforeIndex + 1).Take((afterIndex < 0 ? rows.Length : afterIndex) - beforeIndex - 1).ToArray();
-        bool CouldHaveMade(EetReference other, TimingObservation reading) => !(other.Unavailable is "Did not start"
-            || channel == 1 && other.Unavailable is "Did not finish"
-            || channel == 1 && At(results[other.Bib], 0) is { DeviceTicks: { } start }
-                && EetCalculator.TimeOfDayDifference(reading.DeviceTicks!.Value % TimeSpan.TicksPerDay, start) <= 0);
+        // The reading in that window is the competitor's own only when no other competitor of the run could have made it
+        // (a racer may overtake another): one with a System A time but no paired backup, within the pairing tolerance;
+        // one without a usable System A time unless they did not start or, at the finish, did not finish, never started
+        // or started after the reading. Otherwise the operator chooses from the listed readings.
+        bool CouldHaveMade(EetReference other, TimingObservation reading)
+        {
+            var timeOfDay = reading.DeviceTicks!.Value % TimeSpan.TicksPerDay;
+            if (other.A is { DeviceTicks: { } aTicks })
+            { return other.Backup is null && Math.Abs(EetCalculator.TimeOfDayDifference(timeOfDay, aTicks)) <= pairingToleranceTicks; }
+            if (other.Unavailable is "Did not start") { return false; }
+            if (channel == 0) { return true; }
+            if (other.Unavailable is "Did not finish") { return false; }
+            var result = results[other.Bib];
+            return At(result, 0) is { DeviceTicks: { } start }
+                ? EetCalculator.TimeOfDayDifference(timeOfDay, start) > 0
+                : result.Status != TimingStatus.Ready;
+        }
         var window = unpaired.Where(x =>
             (before is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, before.DeviceTicks!.Value) > -pairingToleranceTicks)
             && (after is null || EetCalculator.TimeOfDayDifference(x.DeviceTicks!.Value % TimeSpan.TicksPerDay, after.DeviceTicks!.Value) < pairingToleranceTicks))
             .ToArray();
-        return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window is [var only] && !gap.Any(x => CouldHaveMade(x, only)) ? only : null);
+        return new(bib, channel, clock, rows, index, window.Length > 0 ? window : unpaired, window is [var only] && !rows.Any(x => CouldHaveMade(x, only)) ? only : null);
     }
 
     /// <summary>The EET reference candidates in start order, using the backup values the operator confirmed or typed.</summary>

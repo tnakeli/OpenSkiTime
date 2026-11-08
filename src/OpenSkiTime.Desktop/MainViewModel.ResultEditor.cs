@@ -272,7 +272,8 @@ public sealed partial class MainViewModel
             if (_eetPreparation is not { } preparation) { EetPairCount = ""; return; }
             var values = new Dictionary<int, (long TimeOfDay, int Precision, string? Key)>();
             var problems = new List<string>();
-            foreach (var row in EetRows.Where(x => x.CanEdit))
+            // A left-out reference is not used, so its backup text need not be valid.
+            foreach (var row in EetRows.Where(x => x.CanEdit && !x.Excluded))
             {
                 var text = row.BackupText.Trim();
                 if (text.Length == 0) { continue; }
@@ -373,10 +374,17 @@ public sealed partial class MainViewModel
             var status = saved is { Audit: var audit }
                 ? $"Saved to the result {audit.At.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)} by {audit.Operator}. History: {audit.Reason}"
                 : $"Calculated by {TimingOperator}; not saved to the result.";
-            var notUsable = _eetPreparation is { } preparation && preparation.Bib == calculation.Bib && preparation.Channel == calculation.Channel
-                ? preparation.StartOrder.Where(x => x.Unavailable is not null || x.Backup is null)
-                    .ToDictionary(x => x.Bib, x => x.Unavailable ?? x.BackupState)
-                : new Dictionary<int, string>();
+            var prepared = _eetPreparation is { } preparation && preparation.Bib == calculation.Bib && preparation.Channel == calculation.Channel
+                ? preparation : null;
+            var notUsable = prepared?.StartOrder.Where(x => x.Unavailable is not null || x.Backup is null)
+                .ToDictionary(x => x.Bib, x => x.Unavailable ?? x.BackupState) ?? new Dictionary<int, string>();
+            // The lines follow the order the competitors actually started in, as the table does.
+            var startOrder = snapshot.StartOrder.ToList();
+            if (prepared is not null)
+            {
+                startOrder = prepared.StartOrder.Select(x => x.Bib).ToList();
+                startOrder.Insert(Math.Clamp(prepared.TargetIndex, 0, startOrder.Count), prepared.Bib);
+            }
             var values = competition.Values;
             var race = string.Join(" | ", new[]
             {
@@ -386,7 +394,7 @@ public sealed partial class MainViewModel
             }.Where(x => x.Length > 0));
             var result = TimingTime.FormatTimeOfDay(calculation.ResultTimeOfDay, calculation.ResultPrecision);
             var net = PreviewNetTime(calculation.Channel, result, manual: true);
-            var sheet = EetSheetBuilder.Build(calculation, snapshot.StartOrder,
+            var sheet = EetSheetBuilder.Build(calculation, startOrder,
                 TimingRows.ToDictionary(x => x.Bib, x => new EetSheetName(x.Surname, x.FirstName)), notUsable,
                 _current?.Values.Name ?? "", race, net.StartsWith("Net ", StringComparison.Ordinal) ? net[4..] : net.Length == 0 ? "-" : net,
                 draft: saved is null, status, now);

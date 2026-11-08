@@ -133,6 +133,9 @@ public partial class DesktopWorkflowTests
             Assert.Contains($"Bib {order[10]}", vm.EetMessage, StringComparison.Ordinal);
             left.ExcludeReason = "Synthetic: backup cell blocked";
             Assert.True(vm.CanSaveEet);
+            // A left-out reference's backup text is not used, so an unreadable value does not block saving.
+            left.BackupText = "unreadable";
+            Assert.True(vm.CanSaveEet, vm.EetMessage);
             // Optional rendered review of the dialog (set OPENSKITIME_EDIT_RESULT_VISUAL_DIR).
             var visual = Environment.GetEnvironmentVariable("OPENSKITIME_EDIT_RESULT_VISUAL_DIR");
             void Capture(string name)

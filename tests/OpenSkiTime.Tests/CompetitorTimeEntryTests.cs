@@ -242,13 +242,64 @@ public sealed class CompetitorTimeEntryTests
         var proposed = preparation.ProposedTarget!;
         var eet = EetCalculator.Calculate(order[2], 1, EetBackupSource.SystemB, proposed.DeviceTicks!.Value % TimeSpan.TicksPerDay, proposed.Precision,
             proposed.Key, pairs, [], "Wire break");
-        // A reference that gets a second finish after the calculation is in review: the EET is no longer saved.
+        // A repeated copy of a paired reading is the same reading, not a second candidate.
+        var copied = EetPreparation.Prepare(timing.Snapshot!, order[2], 1, [.. backup, B("b0-copy", backup[0].DeviceTicks!.Value)], 2 * TimeSpan.TicksPerSecond);
+        Assert.Equal("b2", copied.ProposedTarget?.Key);
+        // A reference that gets a second finish after the calculation is in review, also behind a classification:
+        // the EET is no longer saved.
         await timing.CorrectAsync(new(DecisionKind.Assignment, finish[order[1]], Bib: order[0]), "Operator", "Wrong bib");
+        var classified = timing.Snapshot!.Results.Single(x => x.Bib == order[0]).CompetitorId;
+        await timing.CorrectAsync(new(DecisionKind.Status, CompetitorId: classified, Status: TimingStatus.DSQ), "Operator", "Gate 3");
+        Assert.Equal("Timing needs review", EetPreparation.Prepare(timing.Snapshot!, order[2], 1, backup, 2 * TimeSpan.TicksPerSecond)
+            .StartOrder.Single(x => x.Bib == order[0]).Unavailable);
         var version = timing.Snapshot!.AuditVersion;
         var error = await Assert.ThrowsAsync<DomainValidationException>(() => timing.EnterCompetitorTimeAsync(list.Id,
             new(order[2], 1, ManualTimeSource.Eet, Eet: eet), "Operator", "EET"));
         Assert.Contains($"bib {order[0]} changed", error.Message, StringComparison.Ordinal);
         Assert.Equal(version, timing.Snapshot.AuditVersion);
+        await timing.StopAsync();
+    }
+
+    [Fact]
+    public async Task AnOvertakingRacerBlocksTheProposalAndReferencesFollowTheActualStartOrder()
+    {
+        using var folder = new TestFolder();
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var list = await TimingStorageTests.SeedAsync(workspace, folder.File, 5);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id); await timing.FollowStartOrderAsync(true);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, new("Simulator", "Test", TimingRulesTests.Date, Simulation: true), "Operator");
+        // Starts every 20 s, runs of 90 s: several racers are on course at once.
+        for (var i = 0; i < 5; i++) { await Pulse(timing, source, 0, Noon + i * 20 * TimeSpan.TicksPerSecond); }
+        for (var i = 0; i < 5; i++) { await Pulse(timing, source, 1, Noon + (i * 20 + 90) * TimeSpan.TicksPerSecond); }
+        await TimingStorageTests.UntilAsync(() => timing.Snapshot!.Results.Count(x => x.Status == TimingStatus.Finished) == 5);
+        var order = timing.Snapshot!.StartOrder;
+        var keys = order.ToDictionary(x => x, x => (Start: timing.Snapshot.Results.Single(r => r.Bib == x).StartKey!,
+            Finish: timing.Snapshot.Results.Single(r => r.Bib == x).FinishKey!));
+        TimingObservation A(string key) => timing.Snapshot!.Observations.Single(x => x.Observation.Key == key).Observation;
+        var backup = Enumerable.Range(0, 4).Select(i => B($"b{i}", A(keys[order[i]].Finish).DeviceTicks!.Value + 123_000)).ToArray();
+        // The second and the last racer's finishes are lost. The last one started before the second one's B reading and
+        // could have overtaken, so the reading is not proposed until that racer is known not to have finished.
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[1]].Finish), "Operator", "Lost");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[4]].Finish), "Operator", "Lost");
+        var preparation = EetPreparation.Prepare(timing.Snapshot!, order[1], 1, backup, 2 * TimeSpan.TicksPerSecond);
+        Assert.Null(preparation.ProposedTarget);
+        Assert.Equal("b1", Assert.Single(preparation.TargetCandidates).Key);
+        var dnf = timing.Snapshot!.Results.Single(x => x.Bib == order[4]).CompetitorId;
+        await timing.CorrectAsync(new(DecisionKind.Status, CompetitorId: dnf, Status: TimingStatus.DNF), "Operator", "Fell");
+        Assert.Equal("b1", EetPreparation.Prepare(timing.Snapshot!, order[1], 1, backup, 2 * TimeSpan.TicksPerSecond).ProposedTarget?.Key);
+
+        // The third racer actually started before the second one: "started before" follows the start times.
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[1]].Start), "Operator", "Swap");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[2]].Start), "Operator", "Swap");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[2]].Finish), "Operator", "Swap");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[1]].Start, Bib: order[2]), "Operator", "Swap");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[2]].Start, Bib: order[1]), "Operator", "Swap");
+        await timing.CorrectAsync(new(DecisionKind.Assignment, keys[order[2]].Finish, Bib: order[2]), "Operator", "Swap");
+        var swapped = EetPreparation.Prepare(timing.Snapshot!, order[3], 1, backup, 2 * TimeSpan.TicksPerSecond);
+        Assert.Equal([order[0], order[2], order[1], order[4]], swapped.StartOrder.Select(x => x.Bib));
+        Assert.Equal(3, swapped.TargetIndex);
         await timing.StopAsync();
     }
 
