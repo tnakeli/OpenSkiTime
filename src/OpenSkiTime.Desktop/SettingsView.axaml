@@ -230,6 +230,12 @@
        </DockPanel>
       </Border>
      </Grid>
+     <Border Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="Advanced" Classes="cardTitle"/></Grid>
+       <CheckBox Name="AdvancedModeCheckBox" Content="Enable advanced mode" IsChecked="{Binding AdvancedMode}"/>
+      </StackPanel>
+     </Border>
     </StackPanel>
    </TabItem>
   </TabControl>

@@ -79,6 +79,7 @@
         <Button Name="ResultsMenuButton" Content="Results" Click="ResultsMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsResultsSection}" />
         <Button Name="TimingReportMenuButton" Content="Timing report" Click="TimingReportMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsTimingReportSection}" />
         <Button Name="PdfFactoryButton" Content="PDF Factory" Click="PdfFactoryMenu_Click" IsEnabled="{Binding CanEditCompetitions}" Classes="sectionNav" Classes.active="{Binding IsPdfFactorySection}" />
+        <Button Name="AuditTrailButton" Content="Audit trail" Command="{Binding ShowAuditTrailCommand}" Click="Navigation_Click" IsVisible="{Binding AdvancedMode}" Classes="sectionNav" Classes.active="{Binding IsAuditTrailSection}" />
       </WrapPanel>
     </Border>
     <ScrollViewer Name="WorkspaceScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsFormSection}">
@@ -569,6 +570,7 @@
     </ScrollViewer>
     <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />
     <local:PdfFactoryView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsPdfFactorySection}" />
+    <local:AuditTrailView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsAuditTrailSection}" />
     <!-- No top inset: the device strip starts right under the navigation instead of being pulled under it. -->
     <local:TimingView Name="TimingWorkspace" Grid.Row="2" Margin="12,0,12,8" IsVisible="{Binding IsTimingSection}" />
     <local:ResultsView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsResultsSection}" />

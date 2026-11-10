@@ -56,3 +56,7 @@ Enter the Cloud server address and save its **publisher key**. A Cloud live timi
 ## About
 
 Shows the software version (Semantic Versioning `MAJOR.MINOR.PATCH`) and the FIS rule season the application implements (currently 2026-27), with links to the source code, MIT license, third-party notices, issue reporting, private vulnerability reporting and the privacy statement. The window title shows the same version and rule season.
+
+## Advanced mode
+
+**About > Advanced > Enable advanced mode** shows **Audit trail** immediately after **PDF Factory**. The preference is local to this user, outside event files. Audit trail inspects existing saved history and worker logs and creates local support ZIP files; it adds no logging or database schema changes. See [Audit trail and support bundles](audit-trail.md) for coverage, limits and complete-series export.

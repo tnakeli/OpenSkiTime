@@ -580,5 +580,5 @@ public sealed partial class MainViewModel
         _ => throw new DomainValidationException("Category gender must be Women or Men."),
     };
 
-    public void Dispose() { DisposeTimingUi(); DisposeReportUi(); DisposeInformationAutosave(); DisposeResultSubmission(); DisposePdfPreviews(); if (_ownsInformationHttp) { _informationHttp.Dispose(); } _deskCommitGate.Dispose(); }
+    public void Dispose() { DisposeAuditUi(); DisposeTimingUi(); DisposeReportUi(); DisposeInformationAutosave(); DisposeResultSubmission(); DisposePdfPreviews(); if (_ownsInformationHttp) { _informationHttp.Dispose(); } _deskCommitGate.Dispose(); }
 }

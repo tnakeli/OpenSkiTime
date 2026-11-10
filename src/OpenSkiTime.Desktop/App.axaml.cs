@@ -21,6 +21,7 @@ public sealed class App : Avalonia.Application, IDisposable
             _viewModel = new MainViewModel(_workspace, new AvaloniaFileDialogs(window),
                 new AvaloniaEntryExchange(window), timingPreferencesStore: new TimingPreferencesStore());
             _viewModel.LoadTimingPreferences();
+            _viewModel.LoadUiPreferences();
             window.DataContext = _viewModel;
             desktop.MainWindow = window;
             desktop.Exit += OnExit;
