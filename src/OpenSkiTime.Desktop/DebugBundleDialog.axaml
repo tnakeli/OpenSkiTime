@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:OpenSkiTime.Desktop" x:Class="OpenSkiTime.Desktop.DebugBundleDialog" x:CompileBindings="False"
+        Title="Create debug bundle" Width="{DynamicResource SupportDialogWidth}" Height="{DynamicResource SupportDialogHeight}" WindowStartupLocation="CenterOwner">
+ <Grid Margin="{DynamicResource PageInset}" RowDefinitions="*,Auto,Auto" RowSpacing="{DynamicResource FormGap}">
+  <ScrollViewer><StackPanel Spacing="{DynamicResource FormGap}">
+   <Border Classes="card"><StackPanel Spacing="{DynamicResource FormGap}" IsEnabled="{Binding !IsDebugBundleBusy}">
+    <Grid Classes="cardHeader"><TextBlock Text="Contents" Classes="cardTitle"/></Grid>
+    <local:FormRow>
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field"><TextBlock Text="LOG WINDOW" Classes="fieldLabel"/><ComboBox Name="DebugLogWindowBox" ItemsSource="{Binding DebugLogWindows}" SelectedItem="{Binding DebugLogWindow}"/></StackPanel>
+    </local:FormRow>
+    <CheckBox Name="IncludeDebugSeriesCheckBox" Content="Include complete event series (personal race data)" IsChecked="{Binding IncludeDebugSeries}" IsEnabled="{Binding CanIncludeDebugSeries}"/>
+    <TextBlock Text="Open a series and disconnect all timing to include it. Diagnostics can be exported while timing is connected." Classes="supportingText" TextWrapping="Wrap"/>
+    <CheckBox Name="IncludeDebugDescriptionCheckBox" Content="Include my issue description" IsChecked="{Binding IncludeDebugDescription}"/>
+    <TextBox Name="DebugIssueDescriptionBox" Text="{Binding DebugIssueDescription}" AcceptsReturn="True" MaxLength="10000" MinHeight="{DynamicResource SupportDescriptionHeight}" IsVisible="{Binding IncludeDebugDescription}"/>
+    <TextBlock Name="DebugBundlePreviewText" Text="{Binding DebugBundlePreview}" TextWrapping="Wrap"/>
+   </StackPanel></Border>
+  </StackPanel></ScrollViewer>
+  <TextBlock Grid.Row="1" Name="DebugBundleStatusText" Text="{Binding DebugBundleStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+  <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="{DynamicResource FormGap}">
+   <Button Content="Close" Click="Close_Click" IsEnabled="{Binding !IsDebugBundleBusy}" Classes="secondaryAction"/>
+   <Button Grid.Column="1" Content="Cancel export" Command="{Binding CancelDebugBundleCommand}" IsVisible="{Binding IsDebugBundleBusy}" Classes="secondaryAction"/>
+   <Button Grid.Column="2" Content="Open folder" Command="{Binding OpenDebugBundleFolderCommand}" IsVisible="{Binding HasSavedDebugBundle}" Classes="secondaryAction"/>
+   <Button Grid.Column="4" Name="SaveDebugBundleButton" Content="Save ZIP" Click="Save_Click" IsEnabled="{Binding !IsDebugBundleBusy}" Classes="primaryAction"/>
+  </Grid>
+ </Grid>
+</Window>

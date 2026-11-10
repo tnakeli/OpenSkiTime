@@ -13,10 +13,22 @@ public interface IFileDialogs
     Task<string?> ChooseStartListExportAsync(string suggestedName, bool print);
     Task<string?> ChooseResultXmlExportAsync(string suggestedName);
     Task<string?> ChoosePdfExportAsync(string title, string suggestedName);
+    Task<string?> ChooseDebugBundleAsync() => Task.FromResult<string?>(null);
 }
 
 public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
 {
+    public async Task<string?> ChooseDebugBundleAsync()
+    {
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save debug bundle", SuggestedFileName = "debug-bundle.zip", DefaultExtension = "zip",
+            FileTypeChoices = [new FilePickerFileType("Support ZIP") { Patterns = ["*.zip"] }]
+        });
+        return file is null ? null : file.TryGetLocalPath()
+            ?? throw new IOException("The selected destination is not a local file. Choose a local folder.");
+    }
+
     private static readonly FilePickerFileType s_seriesType = new("OpenSkiTime event series")
     {
         Patterns = ["*.ost"],

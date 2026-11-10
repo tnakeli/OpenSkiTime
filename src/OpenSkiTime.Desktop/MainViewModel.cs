@@ -6,7 +6,7 @@ using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Desktop;
 
-public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Results, TimingReport, Settings, PdfFactory }
+public enum WorkspaceSection { Series, Competitions, Competitors, Draw, Timing, Results, TimingReport, Settings, PdfFactory, AuditTrail }
 
 public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialogs dialogs,
     IEntryExchange? entryExchange = null, FisLocalStore? fisStore = null,
@@ -15,7 +15,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     HttpClient? informationHttp = null, TimingReportDefaultsStore? reportDefaultsStore = null,
     FisTimingDeviceCache? timingDeviceCache = null, HttpClient? submissionHttp = null,
     Reporting.ReportGenerationService? pdfGenerator = null, Reporting.IPdfOpener? pdfOpener = null,
-    TimeProvider? timeProvider = null) : ObservableObject, IDisposable
+    TimeProvider? timeProvider = null, UiPreferencesStore? uiPreferencesStore = null,
+    IAuditTrailReader? auditReader = null, DebugBundleExporter? debugBundleExporter = null) : ObservableObject, IDisposable
 {
     private static readonly string[] s_dateFormats = ["dd.MM.yyyy", "d.M.yyyy"];
     private readonly RecentSeriesStore _recentSeriesStore = recentSeriesStore ?? new();
@@ -59,6 +60,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [NotifyPropertyChangedFor(nameof(IsResultsSection))]
     [NotifyPropertyChangedFor(nameof(IsTimingReportSection))]
     [NotifyPropertyChangedFor(nameof(IsPdfFactorySection))]
+    [NotifyPropertyChangedFor(nameof(IsAuditTrailSection))]
     [NotifyPropertyChangedFor(nameof(ActiveRaceLabel))]
     [NotifyPropertyChangedFor(nameof(IsFormSection))]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
@@ -71,7 +73,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public bool IsTimingSection => ActiveSection == WorkspaceSection.Timing;
     public bool IsResultsSection => ActiveSection == WorkspaceSection.Results;
     public bool IsTimingReportSection => ActiveSection == WorkspaceSection.TimingReport;
-    public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection && !IsTimingReportSection && !IsPdfFactorySection;
+    public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection && !IsTimingReportSection && !IsPdfFactorySection && !IsAuditTrailSection;
     // Title bar heading of the active race: "SL Women / Run 1", only the competition in competition-wide views.
     public string ActiveRaceLabel => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
         ? IsResultsSection || IsTimingReportSection || IsPdfFactorySection ? race.Values.ShortLabel

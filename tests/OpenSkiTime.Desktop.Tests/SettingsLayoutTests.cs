@@ -45,7 +45,7 @@ public partial class DesktopWorkflowTests
             try
             {
                 var nav = window.GetVisualDescendants().OfType<Button>()
-                    .Where(x => x.Classes.Contains("sectionNav") && x.Parent is WrapPanel)
+                    .Where(x => x.Classes.Contains("sectionNav") && x.Parent is WrapPanel && x.IsVisible)
                     .ToArray();
                 Assert.Equal(8, nav.Length);
                 Assert.Contains(nav, x => Equals(x.Content, "PDF Factory"));
