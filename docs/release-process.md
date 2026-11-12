@@ -35,11 +35,9 @@ This sequence is not implemented yet because only protocol 1 exists. Implement m
 
 ## Development phase and series file migrations
 
-OpenSkiTime is in development. The race-day workflows are complete and have been tested on the test bench with simulated timing; during the 2026-27 season it is tested at real FIS and club races as a B system next to the main timing, and it is not yet intended as the only timing system. Every application release says this in a fixed *Development status* section of its notes (`scripts/release-notes.mjs`) and on the download page. During this phase releases are `0.x` previews for rehearsal and evaluation, and there is no migration code. A version with breaking changes to the `.ost` format refuses to open files created by earlier versions and leaves them unchanged; the operator creates a new series file. Keeping older versions and their files lets earlier series still be opened.
+OpenSkiTime is in development. The race-day workflows are complete and have been tested on the test bench with simulated timing; during the 2026-27 season it is tested at real FIS and club races as a B system next to the main timing, and it is not yet intended as the only timing system. Every application release says this in a fixed *Development status* section of its notes (`scripts/release-notes.mjs`) and on the download page. During this phase releases are `0.x` previews for rehearsal and evaluation.
 
-Each changelog section states whether the version breaks `.ost` compatibility ("Series files from earlier versions cannot be opened; create a new series file") or keeps it.
-
-Database migrations are introduced later, before the first release intended for real race use. Their design is decided then.
+Series files are upgraded from version 0.5.0 on: the schema of 0.4.0 is the supported baseline, and every later schema change ships with an upgrade step (see [series database and migration policy](development-database-policy.md)). Opening a file from an earlier version upgrades it after saving a backup copy next to it; a file saved by a newer version is refused unchanged. Each changelog section states whether the version upgrades series files ("Series files from earlier versions are upgraded when opened; a backup copy is kept next to the file") and that files it saves cannot be opened by earlier versions.
 
 ## Changelog practice
 
@@ -47,7 +45,7 @@ Add user-visible changes under `## [Unreleased]` in the relevant changelog durin
 
 ## Application release checklist
 
-1. **Decide the version.** Confirm that `.ost` compatibility and migration expectations for the version are stated in the changelog. Until migrations exist, state whether the version breaks `.ost` compatibility and requires a new series file.
+1. **Decide the version.** Confirm that the changelog states whether the version changes the `.ost` schema, and that every schema change has an upgrade step and test.
 2. **Rehearse on a clean Windows machine** using a CI build from the release candidate commit (the installer of a previous preview release, or a local `Package-Windows.ps1` build). CI does not cover the desktop GUI, physical timing devices or a Cloud publishing rehearsal against `live.openskiti.me`.
 3. **Prepare a release pull request** to master:
    - Move `## [Unreleased]` entries into `## [X.Y.Z] - YYYY-MM-DD` (or `X.Y.Z-preview.N`) and keep an empty `## [Unreleased]` heading. Update the link references at the bottom.

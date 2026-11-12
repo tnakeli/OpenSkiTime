@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed
+
+- Series files are now upgraded by later versions. From this version on, a series file created by an earlier supported version is upgraded when opened, after a backup copy is saved next to it (`<name>.v1-backup-<time>.ost`). If an upgrade cannot be completed, the file is left unchanged. A file saved by a newer version is refused with a request to update OpenSkiTime. Series files of 0.4.0 open unchanged.
+
+### Security
+
+- Opening an event series file checks that its database structure is exactly the one this version creates. A file whose history protection was removed, or that carries its own triggers, is refused with an error and left unchanged. Files created by OpenSkiTime open as before.
+- A series file with unreadable saved data shows an error instead of closing the application.
+
 ## [0.4.0] - 2026-11-08
 
 This version uses live protocol 2 and keeps the `.ost` series format of 0.3.0: series files from 0.3.0 open unchanged. Do not open a series that contains EET or device-record times with 0.3.0, which shows them as plain manual times.

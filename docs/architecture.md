@@ -115,10 +115,10 @@ PDF Factory renders locally and stores source-version/hash metadata in the serie
 | Engine | SQLite via EF Core; one `.ost` file per series. No central race database. |
 | Development format | `OpenSkiTime.Development/6`, stored in the single Series row. |
 | Creation/opening | Create the current model in a temporary sibling file, then move into place. Open checks format and SQLite integrity before accepting the session. |
-| Compatibility | Reject incompatible development files unchanged; no migrations or automatic schema upgrades during pre-release development. |
+| Compatibility | Schema version in `PRAGMA user_version`; older supported files are upgraded by explicit `SeriesMigrations` steps in one transaction after a backup copy. Newer, pre-baseline development and tampered files are rejected unchanged. See [series database and migration policy](development-database-policy.md). |
 | Connections | Short-lived contexts; WAL journal, `synchronous=FULL`, foreign keys enabled, pooling disabled, five-second SQLite timeout. |
 | Concurrency | Optimistic series revision; timing-version and approval source/revision checks. |
-| History | SQLite triggers reject UPDATE/DELETE on raw, audit and report/approval history tables listed below. |
+| History | SQLite triggers reject UPDATE/DELETE on raw, audit and report/approval history tables listed below. Opening a file verifies that its tables, indexes and triggers are exactly those of the current format (optionally plus the PDF factory table), so a transferred file cannot drop the history triggers or add its own; connections use `trusted_schema=OFF`. Malformed JSON stored in a file is reported as a recoverable file error. |
 | Backup | SQLite online backup includes committed WAL data, writes a temporary destination, normalizes its journal and verifies it before publishing the backup file. |
 | Transfer | Use verified backup or a safely closed series. Copying only `.ost` during WAL writes can omit data. Preferences/credentials are not required to read race history. |
 

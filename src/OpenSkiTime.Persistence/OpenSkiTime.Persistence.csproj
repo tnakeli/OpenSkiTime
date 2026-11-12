@@ -2,5 +2,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <ProjectReference Include="../OpenSkiTime.Application/OpenSkiTime.Application.csproj" />
+    <InternalsVisibleTo Include="OpenSkiTime.Tests" />
   </ItemGroup>
 </Project>

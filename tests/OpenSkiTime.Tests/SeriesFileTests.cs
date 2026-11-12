@@ -127,6 +127,58 @@ public class SeriesFileTests
         Assert.True(File.Exists(file));
     }
 
+    [Theory]
+    [InlineData("DROP TRIGGER TimingAudit_NoUpdate")]
+    [InlineData("DROP TRIGGER RawTimingPackets_NoDelete")]
+    [InlineData("CREATE TRIGGER Tamper AFTER INSERT ON RawTimingPackets BEGIN SELECT 1; END")]
+    [InlineData("CREATE VIEW Extra AS SELECT 1")]
+    [InlineData("CREATE INDEX Extra_Index ON Competitions(Name)")]
+    public async Task TransferredFileWithChangedSchemaIsRejectedWithoutChangingIt(string tamper)
+    {
+        using var folder = new TestFolder();
+        var path = folder.PathFor("transferred.ost");
+        await using (var creator = new SeriesWorkspace(new SqliteSeriesFileStore()))
+        {
+            var created = await creator.CreateAsync(path, s_series);
+            await creator.SaveCompetitionAsync(null, s_competition, created.Revision);
+        }
+        await Execute(path, tamper);
+        var original = await File.ReadAllBytesAsync(path);
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        var error = await Assert.ThrowsAsync<SeriesFileException>(() => workspace.OpenAsync(path));
+        Assert.Contains("unexpected database structure", error.Message, StringComparison.Ordinal);
+        Assert.Equal(original, await File.ReadAllBytesAsync(path));
+        Assert.False(workspace.IsOpen);
+    }
+
+    [Fact]
+    public async Task MalformedStoredJsonIsARecoverableFileError()
+    {
+        using var folder = new TestFolder();
+        var path = folder.PathFor("malformed.ost");
+        await using (var creator = new SeriesWorkspace(new SqliteSeriesFileStore()))
+        {
+            var created = await creator.CreateAsync(path, s_series);
+            await creator.SaveCompetitionAsync(null, s_competition, created.Revision);
+        }
+        await Execute(path, "UPDATE Competitions SET CalendarJson = '{\"Gender\":'");
+        var original = await File.ReadAllBytesAsync(path);
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        // A JsonException here would escape the desktop's error handling and end the process.
+        var error = await Assert.ThrowsAsync<SeriesFileException>(() => workspace.OpenAsync(path));
+        Assert.Contains("unreadable", error.Message, StringComparison.Ordinal);
+        Assert.Equal(original, await File.ReadAllBytesAsync(path));
+    }
+
+    private static async Task Execute(string path, string sql)
+    {
+        await using var connection = new SqliteConnection($"Data Source={path};Pooling=False");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
+    }
+
     private sealed class TestFolder : IDisposable
     {
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "openskitime-m1-tests", Guid.NewGuid().ToString("N"));
