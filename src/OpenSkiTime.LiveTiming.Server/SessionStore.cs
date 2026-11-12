@@ -202,7 +202,7 @@ public sealed class SessionStore
             _sessions.Remove(id);
             if (!_deleted.ContainsKey(id))
             {
-                var markers = _deleted.Where(x => x.Value.Publisher == grant.Publisher).ToArray();
+                var markers = _deleted.Where(x => SamePublisher(x.Value.Publisher, grant.Publisher)).ToArray();
                 if (markers.Length >= _markersPerPublisher) { _deleted.Remove(markers.MinBy(x => x.Value.Expires).Key); }
             }
             _deleted[id] = (grant.Expires, grant.Publisher);
@@ -343,7 +343,9 @@ public sealed class SessionStore
         _sessions[id] = entry with { Radio = room };
         return room;
     }
-    private int Owned(string publisher) => _sessions.Values.Count(x => x.Publisher == publisher);
+    // Publisher names compare like configured key names: case-insensitively.
+    private static bool SamePublisher(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+    private int Owned(string publisher) => _sessions.Values.Count(x => SamePublisher(x.Publisher, publisher));
     private void Prune()
     {
         var now = _time.GetUtcNow();

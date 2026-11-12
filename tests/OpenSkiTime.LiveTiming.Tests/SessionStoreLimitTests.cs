@@ -35,9 +35,11 @@ public sealed class SessionStoreLimitTests
         store.Create("http://localhost", "a"); // The deleted session's slot is free again; its marker takes none.
         Assert.Throws<LiveCapacityException>(() => store.Create("http://localhost", "b")); // The global capacity still holds.
         // Restoring a session after a restart counts against the same per-publisher limit.
+        // Publisher names compare case-insensitively, like configured key names.
         var restarted = Store(("LiveTiming:MaxSessions", "3"), ("LiveTiming:MaxSessionsPerPublisher", "1"));
         restarted.Replace(Guid.NewGuid(), new(DateTimeOffset.UtcNow.AddDays(1), "a"), SyntheticRace.Create(3));
-        Assert.Throws<LiveCapacityException>(() => restarted.Replace(Guid.NewGuid(), new(DateTimeOffset.UtcNow.AddDays(1), "a"), SyntheticRace.Create(3)));
+        Assert.Throws<LiveCapacityException>(() => restarted.Replace(Guid.NewGuid(), new(DateTimeOffset.UtcNow.AddDays(1), "A"), SyntheticRace.Create(3)));
+        Assert.Throws<LiveCapacityException>(() => restarted.Create("http://localhost", "A"));
     }
 
     [Fact]
