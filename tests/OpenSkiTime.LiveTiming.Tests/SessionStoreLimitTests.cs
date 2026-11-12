@@ -35,6 +35,14 @@ public sealed class SessionStoreLimitTests
         store.Create("http://localhost", "a"); // The deleted session's slot is free again; its marker takes none.
         Assert.Throws<LiveCapacityException>(() => store.Create("http://localhost", "b")); // The global capacity still holds.
         // Restoring a session after a restart counts against the same per-publisher limit.
+        // A deletion marker stays until its token expires, so the token never works again; a key holding its maximum of
+        // markers (four times its session limit) cannot create more sessions, and deleting never fails.
+        var churn = Store(("LiveTiming:MaxSessions", "3"), ("LiveTiming:MaxSessionsPerPublisher", "1"));
+        var deleted = new List<LiveSession>();
+        for (var i = 0; i < 4; i++) { var s = churn.Create("http://localhost", "a"); churn.Delete(s.SessionId, Grant(s, "a")); deleted.Add(s); }
+        Assert.Throws<LiveCapacityException>(() => churn.Create("http://localhost", "a"));
+        Assert.All(deleted, s => Assert.Null(churn.Authorize(s.SessionId, s.PublisherToken)));
+        churn.Create("http://localhost", "b");
         // Publisher names compare case-insensitively, like configured key names.
         var restarted = Store(("LiveTiming:MaxSessions", "3"), ("LiveTiming:MaxSessionsPerPublisher", "1"));
         restarted.Replace(Guid.NewGuid(), new(DateTimeOffset.UtcNow.AddDays(1), "a"), SyntheticRace.Create(3));

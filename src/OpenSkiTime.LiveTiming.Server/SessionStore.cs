@@ -28,7 +28,7 @@ public sealed class SessionStore
     }
     private sealed record StoredClip(RadioClipInfo Info, RacePhase[] Phases, RadioCondition[] Conditions, string ContentType, byte[] Audio);
     private readonly Dictionary<Guid, Entry> _sessions = [];
-    // Deletion markers do not take session capacity; each publisher keeps a bounded number of them.
+    // Deletion markers do not take session capacity; they stay until their token expires (see Create for the per-key bound).
     private readonly Dictionary<Guid, (DateTimeOffset Expires, string? Publisher)> _deleted = [];
     private readonly Lock _gate = new();
     private readonly byte[] _key;
@@ -64,7 +64,9 @@ public sealed class SessionStore
         lock (_gate)
         {
             Prune();
-            if (_sessions.Count >= _capacity || Owned(publisher) >= _perPublisher) { throw new LiveCapacityException(); }
+            // Markers are bounded per key by refusing new sessions, never by forgetting a revocation before its token expires.
+            if (_sessions.Count >= _capacity || Owned(publisher) >= _perPublisher || Markers(publisher) >= _markersPerPublisher)
+            { throw new LiveCapacityException(); }
             var id = Guid.NewGuid(); var expires = _time.GetUtcNow().Add(_lifetime);
             _sessions.Add(id, new(expires, null, Publisher: publisher));
             var payload = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new Claims(id, expires.ToUnixTimeSeconds(), publisher)));
@@ -190,8 +192,8 @@ public sealed class SessionStore
         }
     }
     /// <summary>
-    /// Removes the session and keeps a deletion marker until its token expires. Deleting frees the session's slot. When a
-    /// publisher already holds its maximum of markers, its marker that expires first is dropped, so deletion never fails.
+    /// Removes the session and keeps a deletion marker until its token expires, so the token can never recreate it. Deleting
+    /// frees the session's slot and never fails; a publisher holding its maximum of markers cannot create sessions (Create).
     /// </summary>
     public void Delete(Guid id, LiveGrant grant)
     {
@@ -200,11 +202,6 @@ public sealed class SessionStore
         {
             Prune();
             _sessions.Remove(id);
-            if (!_deleted.ContainsKey(id))
-            {
-                var markers = _deleted.Where(x => SamePublisher(x.Value.Publisher, grant.Publisher)).ToArray();
-                if (markers.Length >= _markersPerPublisher) { _deleted.Remove(markers.MinBy(x => x.Value.Expires).Key); }
-            }
             _deleted[id] = (grant.Expires, grant.Publisher);
         }
     }
@@ -346,6 +343,7 @@ public sealed class SessionStore
     // Publisher names compare like configured key names: case-insensitively.
     private static bool SamePublisher(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
     private int Owned(string publisher) => _sessions.Values.Count(x => SamePublisher(x.Publisher, publisher));
+    private int Markers(string publisher) => _deleted.Values.Count(x => SamePublisher(x.Publisher, publisher));
     private void Prune()
     {
         var now = _time.GetUtcNow();
