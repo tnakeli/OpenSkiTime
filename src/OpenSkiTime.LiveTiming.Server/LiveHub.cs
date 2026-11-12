@@ -31,6 +31,15 @@ public sealed class LiveHub(LiveFeed feed, SessionStore store, ServerStats stats
         if (!Guid.TryParse(sessionId, out var id)) { throw new HubException("Invalid session."); }
         // One public session subscription per connection, preventing unbounded group membership.
         var previous = Item("session") as Guid?;
+        // Every subscription answers with the full state, so subscriptions are paced like Resync: subscribing again to the
+        // watched session within the interval is ignored like a throttled Resync, and switching sessions within it is refused.
+        var now = time.GetTimestamp();
+        if (previous is not null && Item("subscribed") is long last && time.GetElapsedTime(last, now) < s_resyncInterval)
+        {
+            if (previous == id) { return; }
+            throw new HubException("Too many subscription changes.");
+        }
+        Context.Items["subscribed"] = now;
         Context.Items["session"] = id; Context.Items["sync"] = sync;
         stats.Watching(Context.ConnectionId, id);
         await feed.WatchAsync(Context.ConnectionId, id, previous, sync);

@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Security
+
+- One publisher key holds at most 25 live sessions (`LiveTiming__MaxSessionsPerPublisher`), so one key cannot fill the server. Deleting a session frees its slot, and removing a key revokes the tokens it issued. Tokens issued by earlier versions stay valid until they expire.
+- The server-wide music limit counts received tracks, so a declared playlist no longer blocks other sessions.
+- Over the server-wide clip limit, clips are evicted from the session holding the most clip bytes, so one session cannot silence another.
+- Subscriptions on a viewer connection are paced like resync requests.
+
 ## [0.10.0] - 2026-11-08
 
 Live protocol: 2

@@ -362,7 +362,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
     }
 
     private static CaptureSession ToCapture(CaptureRow row) => new(row.Id, row.ListId,
-        JsonSerializer.Deserialize<CaptureOptions>(row.OptionsJson) ?? throw new SeriesFileException("Invalid capture settings."), row.StartedAt, row.StoppedAt, row.CleanStop);
+        StoredJson.Read<CaptureOptions>(row.OptionsJson, "capture settings"), row.StartedAt, row.StoppedAt, row.CleanStop);
     private static TimingAudit ToAudit(TimingAuditRow row) => new(row.Id, row.ListId, row.At, row.Operator, row.Reason,
-        JsonSerializer.Deserialize<TimingDecision>(row.BeforeJson)!, JsonSerializer.Deserialize<TimingDecision>(row.AfterJson)!, row.ReversesId);
+        StoredJson.Read<TimingDecision>(row.BeforeJson, "timing audit decision"), StoredJson.Read<TimingDecision>(row.AfterJson, "timing audit decision"), row.ReversesId);
 }

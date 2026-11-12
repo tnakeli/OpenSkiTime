@@ -161,7 +161,7 @@ Use a new output directory for each local build (`-OutputDirectory artifacts/win
 
 The installer needs no administrator privileges, has stable AppId/shortcuts, and contains no event-data deletion rules. CI requires installation, reinstall and uninstall-preservation acceptance before publishing, for both the unsigned build and the signed release. Review the desktop GUI and hardware on a clean Windows machine before the first release. Release executables, the installer and its uninstaller are signed with the maintainer's Certum certificate; locally built packages are not. Checksums demonstrate integrity; the signature demonstrates the publisher.
 
-No production release/tag is created automatically by merging this setup. Rehearse and back up before updating. Development database files with incompatible schemas are rejected unchanged; automatic upgrades/migrations are absent. Establish the release/schema compatibility policy before declaring a stable release. Do not overwrite an existing release's assets.
+No production release/tag is created automatically by merging this setup. Rehearse and back up before updating. Series files of earlier supported versions are upgraded when opened, after a backup copy; files of newer versions or earlier development formats are rejected unchanged (see [series database and migration policy](development-database-policy.md)). Do not overwrite an existing release's assets.
 
 ## Verification record
 

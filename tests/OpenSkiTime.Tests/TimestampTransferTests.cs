@@ -126,7 +126,16 @@ public sealed class TimestampTransferTests
         await Assert.ThrowsAsync<SeriesFileException>(() => timing.MoveTimestampAsync(list.Id, b.Bib, a.FinishKey!, target, sourceKeys, "Operator"));
         Assert.Equal(snapshot.AuditVersion, timing.Snapshot!.AuditVersion);
         Assert.Equal(snapshot.Audit, (await workspace.ReadTimingAsync(list.Id)).Audit);
-        await workspace.CloseAsync(); await workspace.OpenAsync(folder.File); await workspace.Timing!.SelectRunAsync(list.Id);
+        await workspace.CloseAsync();
+        // The injected trigger is not part of a valid file; opening refuses a changed schema.
+        await using (var sql = new SqliteConnection($"Data Source={folder.File};Pooling=False"))
+        {
+            await sql.OpenAsync();
+            using var command = sql.CreateCommand();
+            command.CommandText = "DROP TRIGGER FailTransfer";
+            await command.ExecuteNonQueryAsync();
+        }
+        await workspace.OpenAsync(folder.File); await workspace.Timing!.SelectRunAsync(list.Id);
         Assert.All(workspace.Timing.Snapshot!.Results, x => Assert.Equal(4000, x.Hundredths));
     }
 

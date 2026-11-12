@@ -6,6 +6,8 @@ namespace OpenSkiTime.Persistence;
 
 internal sealed partial class SqliteSeriesFileSession : IPdfFactoryStore
 {
+    // Optional extension table, created on the first PDF settings save; a file is valid with or without it.
+    internal const string PdfFactorySchema = "CREATE TABLE IF NOT EXISTS PdfFactory (Id TEXT PRIMARY KEY NOT NULL, Json TEXT NOT NULL)";
     // Optional extension, read without DDL. Older supported files are unchanged on open.
     public async Task<PdfFactorySettings> ReadPdfFactoryAsync(CancellationToken ct = default)
     {
@@ -21,8 +23,8 @@ internal sealed partial class SqliteSeriesFileSession : IPdfFactoryStore
         var reports = new List<GeneratedPdf>();
         while (await reader.ReadAsync(ct))
         {
-            if (reader.GetString(0) == "profile") { profile = JsonSerializer.Deserialize<EventPrintProfile>(reader.GetString(1)) ?? new(); }
-            else { reports.Add(JsonSerializer.Deserialize<GeneratedPdf>(reader.GetString(1)) ?? throw new SeriesFileException("Invalid PDF generation metadata.")); }
+            if (reader.GetString(0) == "profile") { profile = StoredJson.Read<EventPrintProfile>(reader.GetString(1), "PDF print profile"); }
+            else { reports.Add(StoredJson.Read<GeneratedPdf>(reader.GetString(1), "PDF generation metadata")); }
         }
         return new(profile, reports.ToArray());
     }
@@ -51,7 +53,7 @@ internal sealed partial class SqliteSeriesFileSession : IPdfFactoryStore
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         // Explicit profile/report save opts into the optional extension; never upgrades race schema.
-        command.CommandText = "CREATE TABLE IF NOT EXISTS PdfFactory (Id TEXT PRIMARY KEY NOT NULL, Json TEXT NOT NULL)";
+        command.CommandText = PdfFactorySchema;
         await command.ExecuteNonQueryAsync(ct);
         command.CommandText = "INSERT INTO PdfFactory (Id, Json) VALUES ($id, $json) ON CONFLICT(Id) DO UPDATE SET Json=excluded.Json";
         command.Parameters.AddWithValue("$id", id);

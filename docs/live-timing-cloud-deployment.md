@@ -43,7 +43,8 @@ All application settings use ASP.NET Core configuration. Environment uses `__` f
 | `LiveTiming__PublicBaseUrl` | Local managed server supplies its URL | Public origin, e.g. `https://live.openskiti.me`; no trailing path. |
 | `LiveTiming__SigningKey` | Required; base64, at least 32 random bytes | Secret HMAC key. Server fails before listening if missing/invalid. |
 | `LiveTiming__TokenDays` | `14`; clamped 1–14 | Token **and** session lifetime; no independent longer session expiry. |
-| `LiveTiming__MaxSessions` | `100`; clamped 1–10,000 | Combined live-session/revocation-marker capacity. |
+| `LiveTiming__MaxSessions` | `100`; clamped 1–10,000 | Live-session capacity of the server. Deletion markers do not count. |
+| `LiveTiming__MaxSessionsPerPublisher` | `25`; clamped 1–`MaxSessions` | Live sessions one publisher key may hold, so one key cannot take the whole server. |
 | `LiveTiming__MaxBodyBytes` | `2097152`; clamped 64 KiB–8 MiB | Maximum snapshot/event request body. |
 | `LiveTiming__PublisherKeys` | Required; `name:sha256hex` entries separated by `;` | Publishers allowed to create sessions. Server fails before listening if missing/invalid. See [publisher keys](#publisher-keys). |
 | `LiveTiming__CreationPerMinute` | `5`; clamped 1–100 | Session-creation attempts per client fixed window, including rejected keys. |
@@ -51,8 +52,8 @@ All application settings use ASP.NET Core configuration. Environment uses `__` f
 | `LiveTiming__MaxConnections` | `1000`; clamped 10–10,000 | HTTP and upgraded WebSocket connection limits. |
 | `LiveTiming__ConnectionsPerClient` | `200`; clamped 1–`MaxConnections` | Concurrent viewer (SignalR) connections per client address, allowing a shared venue network while stopping one source from taking every slot. |
 | `LiveTiming__TrustForwardedFor` | `false` | Set `true` only behind exactly one trusted ingress proxy that appends the client address to `X-Forwarded-For` (Azure Container Apps). The last entry is then used as the client address for limits. The Bicep template sets it. |
-| `LiveTiming__RadioMaxMegabytes` | `64`; clamped 1–1,024 | RAM for race radio clips across all sessions; the oldest clips are evicted first. Each session also keeps at most 32 clips and 8 MiB. Include it in memory sizing. |
-| `LiveTiming__RadioMusicMaxMegabytes` | `256`; clamped 0–4,096 | RAM for race radio background music across all sessions (at most 48 MB per session). A playlist beyond it is refused with 503; `0` disables music. Include it in memory sizing. |
+| `LiveTiming__RadioMaxMegabytes` | `64`; clamped 1–1,024 | RAM for race radio clips across all sessions; beyond it the oldest clip of the session holding the most clip bytes is evicted, so one session's uploads cannot evict a session that holds less. Each session also keeps at most 32 clips and 8 MiB. Include it in memory sizing. |
+| `LiveTiming__RadioMusicMaxMegabytes` | `256`; clamped 0–4,096 | RAM for race radio background music across all sessions (at most 48 MB per session). It counts received tracks; a track beyond it is refused with 503; `0` disables music. Include it in memory sizing. |
 | `LiveTiming__SecurityContact` | GitHub private vulnerability reporting | `https:` or `mailto:` contact published in `/.well-known/security.txt`. |
 | `Logging__LogLevel__Default` | Image: `Warning` | Operational verbosity; never enable body/Authorization logging. |
 

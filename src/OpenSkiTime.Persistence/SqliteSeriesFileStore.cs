@@ -33,28 +33,7 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         {
             await using (var db = await NewContextAsync(temporary, SqliteOpenMode.ReadWriteCreate, ct))
             {
-                await db.Database.EnsureCreatedAsync(ct);
-                await db.Database.ExecuteSqlRawAsync("""
-                    CREATE TRIGGER RawTimingPackets_NoUpdate BEFORE UPDATE ON RawTimingPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER RawTimingPackets_NoDelete BEFORE DELETE ON RawTimingPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER AuxiliaryRawPackets_NoUpdate BEFORE UPDATE ON AuxiliaryRawPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER AuxiliaryRawPackets_NoDelete BEFORE DELETE ON AuxiliaryRawPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER TimingAudit_NoUpdate BEFORE UPDATE ON TimingAudit BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER TimingAudit_NoDelete BEFORE DELETE ON TimingAudit BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER ApprovedResults_NoUpdate BEFORE UPDATE ON ApprovedResults BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER ApprovedResults_NoDelete BEFORE DELETE ON ApprovedResults BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER RaceInformation_NoUpdate BEFORE UPDATE ON RaceInformation BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER RaceInformation_NoDelete BEFORE DELETE ON RaceInformation BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER TimingReports_NoUpdate BEFORE UPDATE ON TimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER TimingReports_NoDelete BEFORE DELETE ON TimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER TimingReportImages_NoUpdate BEFORE UPDATE ON TimingReportImages BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER TimingReportImages_NoDelete BEFORE DELETE ON TimingReportImages BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER ApprovedTimingReports_NoUpdate BEFORE UPDATE ON ApprovedTimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER ApprovedTimingReports_NoDelete BEFORE DELETE ON ApprovedTimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER TimingReportSubmissions_NoUpdate BEFORE UPDATE ON TimingReportSubmissions BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    CREATE TRIGGER TimingReportSubmissions_NoDelete BEFORE DELETE ON TimingReportSubmissions BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
-                    """, ct);
-                await db.Database.ExecuteSqlRawAsync(FisPointsStore.Schema, ct);
+                await CreateSchemaAsync(db, ct);
                 var row = new SeriesRow { Id = Guid.NewGuid(), Revision = 1 };
                 Assign(row, validated);
                 db.Series.Add(row);
@@ -83,6 +62,76 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         }
     }
 
+    // The complete schema of a series file: the EF model, the history triggers and the FIS points tables.
+    private static async Task CreateSchemaAsync(SeriesDbContext db, CancellationToken ct)
+    {
+        await db.Database.EnsureCreatedAsync(ct);
+        await db.Database.ExecuteSqlRawAsync(HistoryTriggers, ct);
+        await db.Database.ExecuteSqlRawAsync(FisPointsStore.Schema, ct);
+        var version = "PRAGMA user_version = " + SeriesMigrations.Current.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await db.Database.ExecuteSqlRawAsync(version, ct);
+    }
+
+    private const string HistoryTriggers = """
+                    CREATE TRIGGER RawTimingPackets_NoUpdate BEFORE UPDATE ON RawTimingPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER RawTimingPackets_NoDelete BEFORE DELETE ON RawTimingPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER AuxiliaryRawPackets_NoUpdate BEFORE UPDATE ON AuxiliaryRawPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER AuxiliaryRawPackets_NoDelete BEFORE DELETE ON AuxiliaryRawPackets BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingAudit_NoUpdate BEFORE UPDATE ON TimingAudit BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingAudit_NoDelete BEFORE DELETE ON TimingAudit BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER ApprovedResults_NoUpdate BEFORE UPDATE ON ApprovedResults BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER ApprovedResults_NoDelete BEFORE DELETE ON ApprovedResults BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER RaceInformation_NoUpdate BEFORE UPDATE ON RaceInformation BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER RaceInformation_NoDelete BEFORE DELETE ON RaceInformation BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReports_NoUpdate BEFORE UPDATE ON TimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReports_NoDelete BEFORE DELETE ON TimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReportImages_NoUpdate BEFORE UPDATE ON TimingReportImages BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReportImages_NoDelete BEFORE DELETE ON TimingReportImages BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER ApprovedTimingReports_NoUpdate BEFORE UPDATE ON ApprovedTimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER ApprovedTimingReports_NoDelete BEFORE DELETE ON ApprovedTimingReports BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReportSubmissions_NoUpdate BEFORE UPDATE ON TimingReportSubmissions BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    CREATE TRIGGER TimingReportSubmissions_NoDelete BEFORE DELETE ON TimingReportSubmissions BEGIN SELECT RAISE(ABORT, 'History is immutable'); END;
+                    """;
+
+    // The schemas a file of the current format may have exactly, built once from the same code that creates files: the
+    // complete schema, and the same with the optional PDF factory table that the first PDF settings save adds.
+    private static readonly Lazy<Task<string[][]>> s_expectedSchemas = new(async () =>
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using (var db = new SeriesDbContext(new DbContextOptionsBuilder<SeriesDbContext>().UseSqlite(connection).Options))
+        { await CreateSchemaAsync(db, CancellationToken.None); }
+        var complete = await SchemaAsync(connection, CancellationToken.None);
+        await using (var extension = connection.CreateCommand())
+        {
+            extension.CommandText = SqliteSeriesFileSession.PdfFactorySchema;
+            await extension.ExecuteNonQueryAsync();
+        }
+        return [complete, await SchemaAsync(connection, CancellationToken.None)];
+    });
+
+    // Every schema object except SQLite's internal ones, with its SQL text (whitespace normalized), in a stable order.
+    internal static Task<string[]> SchemaAsync(SqliteConnection connection, CancellationToken ct) => SchemaAsync(connection, null, ct);
+
+    private static async Task<string[]> SchemaAsync(SqliteConnection connection, SqliteTransaction? transaction, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        // Only SQLite's planner statistics are skipped. Internal tables and automatic indexes are compared too (a fresh file has
+        // the same ones), so an object hidden under the reserved "sqlite_" prefix, such as a trigger written with
+        // writable_schema, cannot escape the check.
+        command.CommandText = @"SELECT type, name, tbl_name, sql FROM sqlite_master
+            WHERE NOT (type = 'table' AND name IN ('sqlite_stat1', 'sqlite_stat2', 'sqlite_stat3', 'sqlite_stat4')) ORDER BY type, name";
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var objects = new List<string>();
+        while (await reader.ReadAsync(ct))
+        {
+            var sql = reader.IsDBNull(3) ? "" : string.Join(" ", (IEnumerable<string>)reader.GetString(3).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            objects.Add($"{reader.GetString(0)}\u001f{reader.GetString(1)}\u001f{reader.GetString(2)}\u001f{sql}");
+        }
+        return objects.ToArray();
+    }
+
     public async Task<ISeriesFileSession> OpenAsync(string filePath, CancellationToken ct = default)
     {
         var fullPath = FullPath(filePath);
@@ -93,7 +142,12 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
 
         try
         {
-            await VerifyFormatAsync(fullPath, ct);
+            var version = await VerifyFormatAsync(fullPath, ct);
+            if (version < SeriesMigrations.Current)
+            {
+                await MigrateAsync(fullPath, version, SeriesMigrations.All, SeriesMigrations.Current, await s_expectedSchemas.Value, ct);
+                await VerifyFormatAsync(fullPath, ct);
+            }
             var session = new SqliteSeriesFileSession(fullPath);
             await session.ReadAsync(ct);
             return session;
@@ -118,10 +172,19 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         }
     }
 
-    private static async Task VerifyFormatAsync(string path, CancellationToken ct)
+    /// <summary>
+    /// Checks a file read-only and returns its schema version. A file of the current version must have exactly the current
+    /// schema; an older supported version is returned for upgrade. Unsupported files are rejected without being changed.
+    /// </summary>
+    private static async Task<int> VerifyFormatAsync(string path, CancellationToken ct)
     {
         await using var connection = new SqliteConnection(ConnectionString(path, SqliteOpenMode.ReadOnly));
         await connection.OpenAsync(ct);
+        await using (var untrusted = connection.CreateCommand())
+        {
+            untrusted.CommandText = "PRAGMA trusted_schema=OFF";
+            await untrusted.ExecuteNonQueryAsync(ct);
+        }
         await using var tableCheck = connection.CreateCommand();
         tableCheck.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='Series'";
         if ((long)(await tableCheck.ExecuteScalarAsync(ct))! != 1)
@@ -136,7 +199,21 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         if (reader.GetInt64(0) != 1 || reader.IsDBNull(1) || reader.IsDBNull(2)
             || reader.GetString(1) != SeriesDbContext.Format || reader.GetString(2) != SeriesDbContext.Format)
         {
-            throw new SeriesFileException("This development file uses an incompatible format. Create a new event series file; existing files are not upgraded during development.");
+            throw new SeriesFileException("This development file uses an incompatible format. Create a new event series file; files from before the first supported release are not upgraded.");
+        }
+
+        var version = await VersionAsync(connection, null, ct);
+        if (version > SeriesMigrations.Current)
+        {
+            throw new SeriesFileException("This event series file was saved by a newer version of OpenSkiTime. Update OpenSkiTime to open it; the file was not changed.");
+        }
+
+        // A file can come from another machine. Its tables, indexes and history triggers must be exactly those this version
+        // creates: a removed immutability trigger or an added trigger would silently rewrite raw timing input or audit history.
+        // An older version is checked the same way after its upgrade, inside the upgrade transaction (MigrateAsync).
+        if (version == SeriesMigrations.Current && !Matches(await SchemaAsync(connection, ct), await s_expectedSchemas.Value))
+        {
+            throw UnexpectedSchema();
         }
 
         await using var integrity = connection.CreateCommand();
@@ -145,6 +222,91 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         {
             throw new SeriesFileException("The event series database failed its integrity check. Restore a verified backup.");
         }
+        return version;
+    }
+
+    private static bool Matches(string[] actual, IReadOnlyList<string[]> expected)
+        => expected.Any(schema => schema.AsEnumerable().SequenceEqual(actual));
+
+    private static SeriesFileException UnexpectedSchema() => new(
+        "This event series file has an unexpected database structure; it may have been changed outside OpenSkiTime. Open the original file or a verified backup.");
+
+    // user_version 0 marks a file written before schema versions were recorded: the release baseline.
+    private static async Task<int> VersionAsync(SqliteConnection connection, SqliteTransaction? transaction, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "PRAGMA user_version";
+        var stored = (long)(await command.ExecuteScalarAsync(ct))!;
+        return stored == 0 ? SeriesMigrations.Baseline : checked((int)stored);
+    }
+
+    /// <summary>
+    /// Upgrades a file from <paramref name="from"/> to <paramref name="target"/>. A copy of the file is saved first as
+    /// "name.v{from}-backup-{time}.ost" next to it. All steps run in one transaction that commits only when foreign keys hold
+    /// and the schema is exactly one of <paramref name="expectedSchemas"/>; otherwise nothing changes and the copy is removed.
+    /// </summary>
+    internal static async Task<string> MigrateAsync(string path, int from, IReadOnlyList<SeriesMigration> migrations, int target,
+        IReadOnlyList<string[]> expectedSchemas, CancellationToken ct)
+    {
+        var steps = migrations.Where(x => x.From >= from && x.From < target).OrderBy(x => x.From).ToArray();
+        if (steps.Length != target - from || steps.Where((x, i) => x.From != from + i).Any())
+        {
+            throw new SeriesFileException($"This event series file (version {from}) cannot be upgraded by this version of OpenSkiTime. The file was not changed.");
+        }
+
+        var backup = MigrationBackupPath(path, from);
+        await CopyDatabaseAsync(path, backup, ct);
+        var committed = false;
+        try
+        {
+            await using var connection = new SqliteConnection(ConnectionString(path, SqliteOpenMode.ReadWrite));
+            await connection.OpenAsync(ct);
+            await ExecuteAsync(connection, null, "PRAGMA foreign_keys=OFF", ct); // Table rebuilds need it; set outside the transaction.
+            await ExecuteAsync(connection, null, "PRAGMA trusted_schema=OFF", ct);
+            await using var transaction = connection.BeginTransaction();
+            if (await VersionAsync(connection, transaction, ct) != from)
+            {
+                throw new SeriesFileException("The event series file changed while it was being opened. Try again.");
+            }
+            foreach (var step in steps) { await ExecuteAsync(connection, transaction, step.Sql, ct); }
+            await ExecuteAsync(connection, transaction, $"PRAGMA user_version = {target}", ct);
+            await using (var keys = connection.CreateCommand())
+            {
+                keys.Transaction = transaction;
+                keys.CommandText = "PRAGMA foreign_key_check";
+                await using var violations = await keys.ExecuteReaderAsync(ct);
+                if (await violations.ReadAsync(ct))
+                {
+                    throw new SeriesFileException("The event series file could not be upgraded because its data violates a data rule. The file was not changed.");
+                }
+            }
+            if (!Matches(await SchemaAsync(connection, transaction, ct), expectedSchemas)) { throw UnexpectedSchema(); }
+            await transaction.CommitAsync(ct);
+            committed = true;
+            return backup;
+        }
+        finally
+        {
+            if (!committed && File.Exists(backup)) { File.Delete(backup); }
+        }
+    }
+
+    private static string MigrationBackupPath(string path, int from)
+    {
+        var folder = Path.GetDirectoryName(path)!;
+        var name = $"{Path.GetFileNameWithoutExtension(path)}.v{from}-backup-{DateTime.Now:yyyyMMdd-HHmmss}";
+        var candidate = Path.Combine(folder, name + ".ost");
+        for (var i = 2; File.Exists(candidate); i++) { candidate = Path.Combine(folder, $"{name}-{i}.ost"); }
+        return candidate;
+    }
+
+    private static async Task ExecuteAsync(SqliteConnection connection, SqliteTransaction? transaction, string sql, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(ct);
     }
 
     internal static async Task<SeriesDbContext> NewContextAsync(string path, SqliteOpenMode mode, CancellationToken ct)
@@ -159,6 +321,8 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
             await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL", ct);
             await db.Database.ExecuteSqlRawAsync("PRAGMA synchronous=FULL", ct);
             await db.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys=ON", ct);
+            // Schema objects may not call functions with side effects (defense in depth behind the schema check on open).
+            await db.Database.ExecuteSqlRawAsync("PRAGMA trusted_schema=OFF", ct);
             return db;
         }
         catch
@@ -193,6 +357,13 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
             throw new SeriesFileException("Choose an existing folder for the backup.");
         }
 
+        await CopyDatabaseAsync(source, destination, ct, verify: true);
+    }
+
+    // A consistent single-file copy through SQLite's backup API, written to a temporary file and moved into place.
+    private static async Task CopyDatabaseAsync(string source, string destination, CancellationToken ct, bool verify = false)
+    {
+        var parent = Path.GetDirectoryName(Path.GetFullPath(destination))!;
         var temporary = Path.Combine(parent, $".{Path.GetFileName(destination)}.{Guid.NewGuid():N}.tmp");
         try
         {
@@ -212,7 +383,7 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
                 await command.ExecuteScalarAsync(ct);
             }
 
-            await VerifyFormatAsync(temporary, ct);
+            if (verify) { await VerifyFormatAsync(temporary, ct); }
             File.Move(temporary, destination);
         }
         finally
@@ -303,7 +474,7 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
                 {
                     var plans = await (from list in db.StartLists join run in db.Runs on list.RunId equals run.Id
                         where run.CompetitionId == existingId select list.PlanJson).ToListAsync(ct);
-                    if (plans.Any(json => System.Text.Json.JsonSerializer.Deserialize<StartListPlan>(json)?.Setup is not null))
+                    if (plans.Any(json => StoredJson.Read<StartListPlan>(json, "start-list plan").Setup is not null))
                     { throw new DomainValidationException("This competition has a flexible start order, which a FIS competition cannot use. Keep it a Club race."); }
                 }
                 if (!Values(row).HasSameStartOrderRules(validated) && await db.Runs.AnyAsync(x => x.CompetitionId == existingId, ct))
@@ -457,5 +628,5 @@ internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeries
         row.RunCount, row.IntermediateCount, row.FisCode,
         row.CourseName, row.StartAltitudeMeters, row.FinishAltitudeMeters,
         row.VerticalDropMeters, row.HomologationNumber,
-        row.CalendarJson is null ? null : JsonSerializer.Deserialize<CompetitionCalendarData>(row.CalendarJson), row.CourseLengthMeters);
+        StoredJson.ReadOptional<CompetitionCalendarData>(row.CalendarJson, "competition calendar data"), row.CourseLengthMeters);
 }

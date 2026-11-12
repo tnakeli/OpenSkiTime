@@ -96,7 +96,7 @@ app.MapPost("/api/sessions", (HttpContext context, SessionStore store, Publisher
     var header = context.Request.Headers.Authorization.ToString();
     if (keys.Authenticate(header.StartsWith("Bearer ", StringComparison.Ordinal) ? header[7..] : null) is not { } publisher)
     { return Results.Unauthorized(); }
-    var session = store.Create(PublicBase(context, config));
+    var session = store.Create(PublicBase(context, config), publisher);
     PublisherAudit.SessionCreated(audit, session.SessionId, publisher);
     return Results.Ok(session);
 }).RequireRateLimiting("creation");
@@ -104,8 +104,8 @@ app.MapGet("/api/sessions/{id:guid}/state", (Guid id, SessionStore store) => sto
 // Viewers get every accepted change in revision order (LiveFeed): a delta when it can represent the change, else the state.
 app.MapPut("/api/sessions/{id:guid}/state", async (Guid id, LiveSnapshot state, HttpContext context, SessionStore store, LiveFeed feed, RadioBroadcaster radio) =>
 {
-    if (Authorize(context, store, id) is not { } expires) { return Results.Unauthorized(); }
-    await feed.PublishAsync(id, () => store.Replace(id, expires, state));
+    if (Authorize(context, store, id) is not { } grant) { return Results.Unauthorized(); }
+    await feed.PublishAsync(id, () => store.Replace(id, grant, state));
     await radio.SendAsync(id); // A new state can make queued radio clips stale.
     return Results.Ok();
 });
@@ -184,15 +184,15 @@ app.Run();
 static string Client(HttpContext context) => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 static string PublicBase(HttpContext context, IConfiguration config)
     => config["LiveTiming:PublicBaseUrl"] ?? $"{context.Request.Scheme}://{context.Request.Host}";
-static DateTimeOffset? Authorize(HttpContext context, SessionStore store, Guid id)
+static LiveGrant? Authorize(HttpContext context, SessionStore store, Guid id)
 {
     var header = context.Request.Headers.Authorization.ToString();
     return header.StartsWith("Bearer ", StringComparison.Ordinal) ? store.Authorize(id, header[7..]) : null;
 }
 static async Task<IResult> Delete(Guid id, HttpContext context, SessionStore store, LiveFeed feed, RadioBroadcaster radio)
 {
-    if (Authorize(context, store, id) is not { } expires) { return Results.Unauthorized(); }
-    await feed.DeleteAsync(id, () => store.Delete(id, expires)); // Radio clips are part of the session and are removed with it.
+    if (Authorize(context, store, id) is not { } grant) { return Results.Unauthorized(); }
+    await feed.DeleteAsync(id, () => store.Delete(id, grant)); // Radio clips are part of the session and are removed with it.
     await radio.SendAsync(id, force: true);
     return Results.NoContent();
 }

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Persistence;
@@ -27,5 +26,5 @@ internal static class EntryGenderCheck
     }
 
     private static string? CalendarGender(CompetitionRow competition)
-        => competition.CalendarJson is null ? null : JsonSerializer.Deserialize<CompetitionCalendarData>(competition.CalendarJson)?.Gender;
+        => StoredJson.ReadOptional<CompetitionCalendarData>(competition.CalendarJson, "competition calendar data")?.Gender;
 }

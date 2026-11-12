@@ -110,5 +110,5 @@ internal sealed partial class SqliteSeriesFileSession : IResultStore
     private static ApprovedResult ToApproval(ApprovedResultRow x) => new(x.Id, x.CompetitionId, x.Revision,
         x.FirstListId, x.SecondListId, x.SourceFingerprint, x.ApprovedAt, x.ApprovedBy,
         x.XmlFileName, x.Xml, x.CalculatedPenalty, x.AppliedPenalty,
-        x.InformationJson is null ? null : JsonSerializer.Deserialize<RaceInformation>(x.InformationJson));
+        StoredJson.ReadOptional<RaceInformation>(x.InformationJson, "approved race information"));
 }
