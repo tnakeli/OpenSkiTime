@@ -94,6 +94,7 @@ public sealed class LiveSyncE2ETests
             Assert.Equal("Awaiting", (await unknown.WaitAsync(x => x.Target == "Sync")).Argument.GetProperty("status").GetString());
             var beacon = (await unknown.WaitAsync(x => x.Target == "Beacon")).Argument;
             Assert.Equal(("Awaiting", JsonValueKind.Null, 0), (beacon.GetProperty("status").GetString(), beacon.GetProperty("generation").ValueKind, beacon.GetProperty("revision").GetInt32()));
+            await Task.Delay(2100); // Subscription changes are paced like Resync (see below).
             var mark = unknown.Messages.Count;
             await unknown.WatchAsync(unpublished.SessionId, sync: true);
             Assert.Equal("Awaiting", (await unknown.WaitAsync(x => x.Index >= mark && x.Target == "Sync")).Argument.GetProperty("status").GetString());
@@ -110,6 +111,13 @@ public sealed class LiveSyncE2ETests
             Assert.Equal((LiveSessionStatus.Live, 1L), (live.Status, live.Revision));
             Assert.Equal(JsonSerializer.Serialize(state, LiveJson.Options), JsonSerializer.Serialize(live.State, LiveJson.Options));
             Assert.NotNull(await legacy.WaitAsync(x => x.Target == "State" && x.Argument.ValueKind == JsonValueKind.Object));
+            // A subscription replies with the complete state too, so subscriptions are paced like Resync: within two seconds a
+            // new subscription to the watched session is ignored and a switch to another session is refused.
+            var subscribed = first.Messages.Count;
+            await first.WatchAsync(published.SessionId, sync: true);
+            await first.WatchAsync(unpublished.SessionId, sync: true);
+            Assert.Contains("Too many subscription changes", (await first.WaitAsync(x => x.Index >= subscribed && x.Target == "Completion")).Argument.GetString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(first.Messages, x => x.Index >= subscribed && x.Target == "Sync");
             // A resync replies with the complete state; a second request within two seconds is ignored.
             var mark = first.Messages.Count;
             await first.SendAsync("Resync"); await first.SendAsync("Resync");

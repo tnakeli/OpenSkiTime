@@ -178,7 +178,6 @@ internal sealed partial class SqliteSeriesFileSession : IAuxiliaryTimingStore
         { throw new SeriesFileException("Only this auxiliary capture's owner can append or close its session."); }
     }
     private static AuxiliaryCaptureSession ToAuxiliaryCapture(AuxiliaryCaptureRow row) => new(
-        new(row.Id, row.ListId, JsonSerializer.Deserialize<CaptureOptions>(row.OptionsJson)
-            ?? throw new SeriesFileException("Invalid auxiliary capture settings."), row.StartedAt, row.StoppedAt, row.CleanStop),
+        new(row.Id, row.ListId, StoredJson.Read<CaptureOptions>(row.OptionsJson, "auxiliary capture settings"), row.StartedAt, row.StoppedAt, row.CleanStop),
         row.Role, row.Live);
 }

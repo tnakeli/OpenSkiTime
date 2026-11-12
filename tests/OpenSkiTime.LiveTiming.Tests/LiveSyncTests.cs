@@ -141,6 +141,7 @@ public sealed class LiveSyncTests
         Assert.True(deltas > 100, $"only {deltas} deltas");
     }
 
+    private static LiveGrant Grant(LiveSession session) => new(session.ExpiresAt, "test");
     private static SessionStore Store() => new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
     { ["LiveTiming:SigningKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }).Build(), TimeProvider.System);
 
@@ -148,8 +149,8 @@ public sealed class LiveSyncTests
     public void EveryAcceptedMutationAdvancesTheRevisionOfOneGeneration()
     {
         var store = Store();
-        var session = store.Create("http://localhost");
-        var expires = session.ExpiresAt;
+        var session = store.Create("http://localhost", "test");
+        var expires = Grant(session);
         var state = SyntheticRace.Create(6);
         var first = store.Replace(session.SessionId, expires, state);
         Assert.Equal((1L, (LiveSnapshot?)null), (first.Revision, first.Before));
@@ -170,24 +171,24 @@ public sealed class LiveSyncTests
         Assert.Equal((LiveSessionStatus.Live, first.Generation, 4L), (sync.Status, sync.Generation, sync.Revision));
         Assert.Same(paused.State, sync.State);
         // A session without state has nothing to pause and nothing to tell its viewers.
-        Assert.Null(store.Pause(store.Create("http://localhost").SessionId));
+        Assert.Null(store.Pause(store.Create("http://localhost", "test").SessionId));
     }
 
     [Fact]
     public void StatusTellsLiveDeletedAndAwaitingAndARestartStartsANewGeneration()
     {
         var store = Store();
-        var published = store.Create("http://localhost"); var unpublished = store.Create("http://localhost");
-        var change = store.Replace(published.SessionId, published.ExpiresAt, SyntheticRace.Create(3));
+        var published = store.Create("http://localhost", "test"); var unpublished = store.Create("http://localhost", "test");
+        var change = store.Replace(published.SessionId, Grant(published), SyntheticRace.Create(3));
         Assert.Equal(LiveSessionStatus.Live, store.Sync(published.SessionId).Status);
         Assert.Equal(new LiveSyncState(LiveSessionStatus.Awaiting, null, 0, null), store.Sync(unpublished.SessionId));
         Assert.Equal(new LiveSyncState(LiveSessionStatus.Awaiting, null, 0, null), store.Sync(Guid.NewGuid()));
-        store.Delete(published.SessionId, published.ExpiresAt);
+        store.Delete(published.SessionId, Grant(published));
         Assert.Equal(new LiveSyncState(LiveSessionStatus.Deleted, null, 0, null), store.Sync(published.SessionId));
         // An empty store (a server restart) knows neither the session nor its deletion; the restored state is a new generation.
         var restarted = Store();
         Assert.Equal(LiveSessionStatus.Awaiting, restarted.Sync(published.SessionId).Status);
-        var restored = restarted.Replace(unpublished.SessionId, unpublished.ExpiresAt, SyntheticRace.Create(3));
+        var restored = restarted.Replace(unpublished.SessionId, Grant(unpublished), SyntheticRace.Create(3));
         Assert.Equal(1, restored.Revision);
         Assert.NotEqual(change.Generation, restored.Generation);
     }

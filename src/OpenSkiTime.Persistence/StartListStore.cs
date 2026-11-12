@@ -93,12 +93,10 @@ internal sealed partial class SqliteSeriesFileSession
 
     private static async Task<StartListRevision> ReadListAsync(SeriesDbContext db, StartListRow row, CancellationToken ct)
     {
-        var plan = JsonSerializer.Deserialize<StartListPlan>(row.PlanJson)
-            ?? throw new SeriesFileException("Invalid start-list metadata.");
+        var plan = StoredJson.Read<StartListPlan>(row.PlanJson, "start-list plan");
         var entries = await db.StartListEntries.AsNoTracking().Where(x => x.ListId == row.Id).OrderBy(x => x.Position).ToArrayAsync(ct);
         return new(row.Id, row.Revision, row.CreatedAt, row.ApprovedAt, row.Operator, row.Reason,
-            plan with { Entries = entries.Select(x => JsonSerializer.Deserialize<StartListEntry>(x.EntryJson)
-                ?? throw new SeriesFileException("Invalid saved start-list entry.")).ToArray() })
+            plan with { Entries = entries.Select(x => StoredJson.Read<StartListEntry>(x.EntryJson, "start-list entry")).ToArray() })
             { StartedAt = row.StartedAt, StartedBy = row.StartedBy, SourceTimingVersion = row.SourceTimingVersion };
     }
 

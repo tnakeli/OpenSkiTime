@@ -33,10 +33,49 @@ public sealed class CredentialE2ETests
         using(var response=await http.PutAsJsonAsync($"api/sessions/{session.SessionId}/state",SyntheticRace.Create(),LiveJson.Options)) { response.EnsureSuccessStatusCode(); }
         using(var response=await http.DeleteAsync($"api/sessions/{session.SessionId}/data")) { response.EnsureSuccessStatusCode(); }
         using(var response=await http.PutAsJsonAsync($"api/sessions/{session.SessionId}/state",SyntheticRace.Create(),LiveJson.Options)) { Assert.Equal(HttpStatusCode.Unauthorized,response.StatusCode); }
-        using(var request=server.CreateSession())
-        using(var response=await http.SendAsync(request)) { response.EnsureSuccessStatusCode(); }
+        // Deleting frees the session's slot (the deletion marker takes none); the capacity of two still holds.
+        for(var i=0;i<2;i++)
+        {
+            using var request=server.CreateSession();
+            using var response=await http.SendAsync(request); response.EnsureSuccessStatusCode();
+        }
         using(var request=server.CreateSession())
         using(var response=await http.SendAsync(request)) { Assert.Equal(HttpStatusCode.ServiceUnavailable,response.StatusCode); }
+    }
+
+    [Fact]
+    public async Task OnePublisherKeyCannotTakeTheWholeServerAndARemovedKeyLosesItsSessions()
+    {
+        var other=LivePublisherKey.Generate();
+        var keys=new Dictionary<string,string>{ ["LiveTiming__MaxSessionsPerPublisher"]="2" };
+        await using var server=new ServerProcess(maxSessions:3,environment:keys);
+        keys["LiveTiming__PublisherKeys"]="test-publisher:"+LivePublisherKey.Hash(server.PublisherKey)+";other:"+LivePublisherKey.Hash(other);
+        await server.Start();
+        using var http=new HttpClient { BaseAddress=new(server.Endpoint) };
+        async Task<HttpResponseMessage> Create(string? key=null) { using var request=server.CreateSession(key); return await http.SendAsync(request); }
+        async Task<HttpStatusCode> Publish(LiveSession session)
+        {
+            using var request=new HttpRequestMessage(HttpMethod.Put,$"api/sessions/{session.SessionId}/state") { Content=JsonContent.Create(SyntheticRace.Create(),options:LiveJson.Options) };
+            request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",session.PublisherToken);
+            using var response=await http.SendAsync(request); return response.StatusCode;
+        }
+        var mine=new List<LiveSession>();
+        for(var i=0;i<2;i++) { using var response=await Create(); mine.Add((await response.Content.ReadFromJsonAsync<LiveSession>(LiveJson.Options))!); }
+        // The key's own limit is reached while the server still has room for another organizer.
+        using(var response=await Create()) { Assert.Equal(HttpStatusCode.ServiceUnavailable,response.StatusCode); }
+        LiveSession theirs;
+        using(var response=await Create(other)) { response.EnsureSuccessStatusCode(); theirs=(await response.Content.ReadFromJsonAsync<LiveSession>(LiveJson.Options))!; }
+        Assert.Equal(HttpStatusCode.OK,await Publish(mine[0]));
+        // A legacy token (issued before tokens named their publisher) stays valid until it expires.
+        var legacyId=Guid.NewGuid();
+        var legacyPayload=Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new { SessionId=legacyId,Expires=DateTimeOffset.UtcNow.AddDays(1).ToUnixTimeSeconds() }));
+        var legacy=new LiveSession(legacyId,legacyPayload+"."+Convert.ToBase64String(HMACSHA256.HashData(Convert.FromBase64String(server.SigningKey),Encoding.UTF8.GetBytes(legacyPayload))),DateTimeOffset.UtcNow.AddDays(1),"");
+        // Removing a key from the configuration revokes its tokens; other keys' sessions keep working after the restart.
+        keys["LiveTiming__PublisherKeys"]="other:"+LivePublisherKey.Hash(other);
+        await server.Kill(); await server.Start();
+        Assert.Equal(HttpStatusCode.Unauthorized,await Publish(mine[0]));
+        Assert.Equal(HttpStatusCode.OK,await Publish(theirs));
+        Assert.Equal(HttpStatusCode.OK,await Publish(legacy));
     }
 }
 

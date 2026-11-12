@@ -6,9 +6,11 @@ namespace OpenSkiTime.LiveTiming.Server;
 
 public sealed class SessionStore
 {
-    private sealed record Claims(Guid SessionId, long Expires);
+    // Publisher is the name of the key that created the session; tokens issued before it was added carry none (legacy).
+    private sealed record Claims(Guid SessionId, long Expires, string? Publisher = null);
     // Generation and Revision identify the state for viewer synchronization; both are set whenever State is.
-    private sealed record Entry(DateTimeOffset Expires, LiveSnapshot? State, RadioRoom? Radio = null, string? Generation = null, long Revision = 0);
+    private sealed record Entry(DateTimeOffset Expires, LiveSnapshot? State, RadioRoom? Radio = null, string? Generation = null, long Revision = 0,
+        string? Publisher = null);
     // Race radio of one session: worker health and a RAM-only ring of clips. Removed with the session (delete, Delete All
     // Data, expiry); nothing is written to disk. Mutated only under the store lock.
     private sealed class RadioRoom
@@ -26,11 +28,15 @@ public sealed class SessionStore
     }
     private sealed record StoredClip(RadioClipInfo Info, RacePhase[] Phases, RadioCondition[] Conditions, string ContentType, byte[] Audio);
     private readonly Dictionary<Guid, Entry> _sessions = [];
-    private readonly Dictionary<Guid, DateTimeOffset> _deleted = [];
+    // Deletion markers do not take session capacity; each publisher keeps a bounded number of them.
+    private readonly Dictionary<Guid, (DateTimeOffset Expires, string? Publisher)> _deleted = [];
     private readonly Lock _gate = new();
     private readonly byte[] _key;
     private readonly TimeProvider _time;
     private readonly int _capacity;
+    private readonly int _perPublisher;
+    private readonly int _markersPerPublisher;
+    private readonly HashSet<string>? _publishers;
     private readonly TimeSpan _lifetime;
     private readonly long _radioBytes;
     private readonly long _musicBytes;
@@ -42,25 +48,35 @@ public sealed class SessionStore
         _key = Convert.FromBase64String(key);
         if (_key.Length < 32) { throw new InvalidOperationException("LiveTiming signing key needs at least 32 bytes."); }
         _capacity = Math.Clamp(config.GetValue("LiveTiming:MaxSessions", 100), 1, 10000);
+        // One publisher key holds at most this many live sessions, so no single key can take the whole server.
+        _perPublisher = Math.Clamp(config.GetValue("LiveTiming:MaxSessionsPerPublisher", 25), 1, _capacity);
+        _markersPerPublisher = _perPublisher * 4;
+        // Tokens of a key removed from the configuration stop working; without configured keys (tests) every name is accepted.
+        _publishers = config["LiveTiming:PublisherKeys"] is { } keys
+            ? PublisherKeys.Parse(keys).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase) : null;
         _lifetime = TimeSpan.FromDays(Math.Clamp(config.GetValue("LiveTiming:TokenDays", 14), 1, 14));
         _radioBytes = Math.Clamp(config.GetValue("LiveTiming:RadioMaxMegabytes", 64), 1, 1024) * 1024L * 1024L;
         _musicBytes = Math.Clamp(config.GetValue("LiveTiming:RadioMusicMaxMegabytes", 256), 0, 4096) * 1024L * 1024L;
     }
-    public LiveSession Create(string publicBase)
+    public LiveSession Create(string publicBase, string publisher)
     {
-        ArgumentNullException.ThrowIfNull(publicBase);
+        ArgumentNullException.ThrowIfNull(publicBase); ArgumentException.ThrowIfNullOrEmpty(publisher);
         lock (_gate)
         {
             Prune();
-            if (_sessions.Count + _deleted.Count >= _capacity) { throw new LiveCapacityException(); }
+            if (_sessions.Count >= _capacity || Owned(publisher) >= _perPublisher) { throw new LiveCapacityException(); }
             var id = Guid.NewGuid(); var expires = _time.GetUtcNow().Add(_lifetime);
-            _sessions.Add(id, new(expires, null));
-            var payload = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new Claims(id, expires.ToUnixTimeSeconds())));
+            _sessions.Add(id, new(expires, null, Publisher: publisher));
+            var payload = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new Claims(id, expires.ToUnixTimeSeconds(), publisher)));
             var signature = Convert.ToBase64String(HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes(payload)));
             return new(id, payload + "." + signature, expires, publicBase.TrimEnd('/') + "/r/" + id);
         }
     }
-    public DateTimeOffset? Authorize(Guid id, string token)
+    /// <summary>
+    /// The token's expiry and publisher when it is signed by this server, names this session, has not expired, belongs to a
+    /// configured publisher key (a legacy token without a publisher is accepted until it expires) and the session was not deleted.
+    /// </summary>
+    public LiveGrant? Authorize(Guid id, string token)
     {
         ArgumentNullException.ThrowIfNull(token);
         try
@@ -71,7 +87,8 @@ public sealed class SessionStore
             if (!CryptographicOperations.FixedTimeEquals(signature, HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes(parts[0])))) { return null; }
             var claims = JsonSerializer.Deserialize<Claims>(Convert.FromBase64String(parts[0]));
             if (claims is null || claims.SessionId != id || claims.Expires <= _time.GetUtcNow().ToUnixTimeSeconds()) { return null; }
-            lock (_gate) { return _deleted.ContainsKey(id) ? null : DateTimeOffset.FromUnixTimeSeconds(claims.Expires); }
+            if (claims.Publisher is { } publisher && _publishers is not null && !_publishers.Contains(publisher)) { return null; }
+            lock (_gate) { return _deleted.ContainsKey(id) ? null : new LiveGrant(DateTimeOffset.FromUnixTimeSeconds(claims.Expires), claims.Publisher); }
         }
         catch (Exception ex) when (ex is FormatException or JsonException or ArgumentOutOfRangeException) { return null; }
     }
@@ -105,22 +122,26 @@ public sealed class SessionStore
                     x.State.Competition.Codex, x.State.UpdatedAt, x.State.Paused)).ToArray();
         }
     }
-    public LiveChange Replace(Guid id, DateTimeOffset expires, LiveSnapshot state)
+    public LiveChange Replace(Guid id, LiveGrant grant, LiveSnapshot state)
     {
-        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(grant); ArgumentNullException.ThrowIfNull(state);
         state.Validate(); // Complete validation precedes mutation.
         lock (_gate)
         {
             Prune();
             if (_deleted.ContainsKey(id)) { throw new LiveValidationException("Session was deleted."); }
-            if (!_sessions.ContainsKey(id) && _sessions.Count + _deleted.Count >= _capacity) { throw new LiveCapacityException(); }
+            // A session restored after a restart takes a slot again, within the same global and per-publisher limits as creation.
+            if (!_sessions.ContainsKey(id) && (_sessions.Count >= _capacity || grant.Publisher is { } publisher && Owned(publisher) >= _perPublisher))
+            { throw new LiveCapacityException(); }
+            var expires = grant.Expires;
             var existing = _sessions.GetValueOrDefault(id);
             // State created from nothing (first publish, or a restore after a server restart) starts a new generation.
             var change = existing is { State: { } before, Generation: { } generation }
                 ? new LiveChange(generation, existing.Revision + 1, before, state)
                 : new LiveChange(Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8)), 1, null, state);
             // A full replacement keeps the session's radio, so a publisher resync never silences it.
-            _sessions[id] = (existing ?? new(expires, null)) with { Expires = expires, State = state, Generation = change.Generation, Revision = change.Revision };
+            _sessions[id] = (existing ?? new(expires, null, Publisher: grant.Publisher))
+                with { Expires = expires, State = state, Generation = change.Generation, Revision = change.Revision };
             return change;
         }
     }
@@ -168,13 +189,23 @@ public sealed class SessionStore
             return new(entry.Generation!, entry.Revision + 1, state, next);
         }
     }
-    public void Delete(Guid id, DateTimeOffset expires)
+    /// <summary>
+    /// Removes the session and keeps a deletion marker until its token expires. Deleting frees the session's slot. When a
+    /// publisher already holds its maximum of markers, its marker that expires first is dropped, so deletion never fails.
+    /// </summary>
+    public void Delete(Guid id, LiveGrant grant)
     {
+        ArgumentNullException.ThrowIfNull(grant);
         lock (_gate)
         {
             Prune();
-            if (!_sessions.ContainsKey(id) && _deleted.Count + _sessions.Count >= _capacity) { throw new LiveCapacityException(); }
-            _sessions.Remove(id); _deleted[id] = expires;
+            _sessions.Remove(id);
+            if (!_deleted.ContainsKey(id))
+            {
+                var markers = _deleted.Where(x => x.Value.Publisher == grant.Publisher).ToArray();
+                if (markers.Length >= _markersPerPublisher) { _deleted.Remove(markers.MinBy(x => x.Value.Expires).Key); }
+            }
+            _deleted[id] = (grant.Expires, grant.Publisher);
         }
     }
     /// <summary>Worker heartbeat with the server's receive time. Disabling removes every clip at once.</summary>
@@ -192,7 +223,8 @@ public sealed class SessionStore
     }
     /// <summary>
     /// Replaces the session's music playlist after validating it completely. Tracks of the new playlist already received
-    /// are kept; others are dropped. The server-wide music limit refuses a playlist that would exceed it (503).
+    /// are kept; others are dropped. A playlist reserves nothing server-wide: the server-wide music limit counts received
+    /// tracks (AddMusic), so declared tracks that never arrive cannot block other sessions.
     /// </summary>
     public RadioStatusReply SetMusic(Guid id, RadioMusicPlaylist playlist)
     {
@@ -202,17 +234,18 @@ public sealed class SessionStore
         {
             Prune();
             var room = Room(id);
-            // Limits count declared sizes, so a kept track must be declared with its real size.
+            // Per-session limits count declared sizes, so a kept track must be declared with its real size.
             if (playlist.Tracks.Any(x => room.Music.TryGetValue(x.Id, out var kept) && kept.Length != x.Bytes))
             { throw new LiveValidationException("Invalid radio music playlist."); }
-            var others = _sessions.Values.Where(x => x.Radio is not null && x.Radio != room).Sum(x => x.Radio!.Playlist.Sum(t => (long)t.Bytes));
-            if (others + playlist.Tracks.Sum(x => (long)x.Bytes) > _musicBytes) { throw new LiveCapacityException(); }
             room.Playlist = playlist.Tracks;
             foreach (var stale in room.Music.Keys.Where(x => playlist.Tracks.All(t => t.Id != x)).ToArray()) { room.Music.Remove(stale); }
             return room.Reply();
         }
     }
-    /// <summary>Stores one track of the current playlist; the bytes must be the MP3 the playlist declares.</summary>
+    /// <summary>
+    /// Stores one track of the current playlist; the bytes must be the MP3 the playlist declares. The server-wide music limit
+    /// counts the tracks stored by every session and refuses a track that would exceed it (503).
+    /// </summary>
     public RadioStatusReply AddMusic(Guid id, string trackId, byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -222,6 +255,8 @@ public sealed class SessionStore
             var room = Room(id);
             if (room.Playlist.FirstOrDefault(x => x.Id == trackId) is not { } track) { throw new LiveConflictException(); }
             if (!RadioMusic.Matches(track, data)) { throw new LiveValidationException("Invalid radio music track."); }
+            var stored = _sessions.Values.Sum(x => x.Radio?.Music.Where(m => x.Radio != room || m.Key != track.Id).Sum(m => (long)m.Value.Length) ?? 0);
+            if (stored + data.Length > _musicBytes) { throw new LiveCapacityException(); }
             room.Music[track.Id] = data;
             return room.Reply();
         }
@@ -232,7 +267,9 @@ public sealed class SessionStore
     }
     /// <summary>
     /// Validates the complete clip before mutation, then appends it to the session ring. The oldest clips are evicted per
-    /// session (count and bytes) and across sessions (server-wide bytes). Repeated uploads of one clip are ignored.
+    /// session (count and bytes). Over the server-wide byte limit, the oldest clip of the session holding the most clip
+    /// bytes goes first, so uploads cannot evict a session that holds less than the uploader. Repeated uploads of one clip
+    /// are ignored.
     /// </summary>
     public void AddClip(Guid id, RadioClipUpload clip)
     {
@@ -254,9 +291,10 @@ public sealed class SessionStore
             { room.Clips.RemoveAt(0); }
             while (_sessions.Values.Sum(x => x.Radio?.Clips.Sum(c => (long)c.Audio.Length) ?? 0) > _radioBytes)
             {
-                // The clip received first goes first; lifetimes differ, so expiry would not identify it.
-                var oldest = _sessions.Values.Where(x => x.Radio?.Clips.Count > 0).Select(x => x.Radio!).MinBy(x => x.Clips[0].Info.ReceivedAt)!;
-                oldest.Clips.RemoveAt(0);
+                // Within that session the clip received first goes first; lifetimes differ, so expiry would not identify it.
+                var largest = _sessions.Values.Where(x => x.Radio?.Clips.Count > 0).Select(x => x.Radio!)
+                    .MaxBy(x => x.Clips.Sum(c => (long)c.Audio.Length))!;
+                largest.Clips.RemoveAt(0);
             }
         }
     }
@@ -305,13 +343,16 @@ public sealed class SessionStore
         _sessions[id] = entry with { Radio = room };
         return room;
     }
+    private int Owned(string publisher) => _sessions.Values.Count(x => x.Publisher == publisher);
     private void Prune()
     {
         var now = _time.GetUtcNow();
         foreach (var id in _sessions.Where(x => x.Value.Expires <= now).Select(x => x.Key).ToArray()) { _sessions.Remove(id); }
-        foreach (var id in _deleted.Where(x => x.Value <= now).Select(x => x.Key).ToArray()) { _deleted.Remove(id); }
+        foreach (var id in _deleted.Where(x => x.Value.Expires <= now).Select(x => x.Key).ToArray()) { _deleted.Remove(id); }
     }
 }
+/// <summary>What a valid session token grants: its expiry and the publisher key that created the session (null for a legacy token).</summary>
+public sealed record LiveGrant(DateTimeOffset Expires, string? Publisher);
 /// <summary>One accepted mutation: the new state, its generation and revision, and the state it replaced (null when new).</summary>
 public sealed record LiveChange(string Generation, long Revision, LiveSnapshot? Before, LiveSnapshot State);
 public sealed class LiveCapacityException : Exception;
