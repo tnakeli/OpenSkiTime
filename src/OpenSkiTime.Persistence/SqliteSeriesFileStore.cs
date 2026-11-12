@@ -117,7 +117,11 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = @"SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite\_%' ESCAPE '\' ORDER BY type, name";
+        // Only SQLite's planner statistics are skipped. Internal tables and automatic indexes are compared too (a fresh file has
+        // the same ones), so an object hidden under the reserved "sqlite_" prefix, such as a trigger written with
+        // writable_schema, cannot escape the check.
+        command.CommandText = @"SELECT type, name, tbl_name, sql FROM sqlite_master
+            WHERE NOT (type = 'table' AND name IN ('sqlite_stat1', 'sqlite_stat2', 'sqlite_stat3', 'sqlite_stat4')) ORDER BY type, name";
         await using var reader = await command.ExecuteReaderAsync(ct);
         var objects = new List<string>();
         while (await reader.ReadAsync(ct))

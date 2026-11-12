@@ -133,6 +133,8 @@ public class SeriesFileTests
     [InlineData("CREATE TRIGGER Tamper AFTER INSERT ON RawTimingPackets BEGIN SELECT 1; END")]
     [InlineData("CREATE VIEW Extra AS SELECT 1")]
     [InlineData("CREATE INDEX Extra_Index ON Competitions(Name)")]
+    // A trigger hidden under SQLite's reserved prefix, written directly into the schema table.
+    [InlineData("PRAGMA writable_schema=ON; INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES ('trigger', 'sqlite_attack', 'RawTimingPackets', 0, 'CREATE TRIGGER sqlite_attack AFTER INSERT ON RawTimingPackets BEGIN UPDATE Competitions SET Name = ''x''; END'); PRAGMA writable_schema=OFF;")]
     public async Task TransferredFileWithChangedSchemaIsRejectedWithoutChangingIt(string tamper)
     {
         using var folder = new TestFolder();
