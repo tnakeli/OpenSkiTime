@@ -10,6 +10,17 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # The project targets .NET 10 LTS: packages of a newer .NET major version are not used.
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]
+      # Avalonia.Headless.XUnit 12 is built against xunit.v3 3.2.2 and fails test discovery on xunit.v3 4.x.
+      - dependency-name: "xunit.v3*"
+        update-types: ["version-update:semver-major"]
     groups:
       avalonia:
         patterns: ["Avalonia*"]
