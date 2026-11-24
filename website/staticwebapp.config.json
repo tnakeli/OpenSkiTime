@@ -8,5 +8,5 @@
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Strict-Transport-Security": "max-age=31536000"
   },
-  "mimeTypes": { ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ico": "image/x-icon", ".mjs": "text/plain; charset=utf-8" }
+  "mimeTypes": { ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ico": "image/x-icon" }
 }

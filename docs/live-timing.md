@@ -114,7 +114,7 @@ The publisher protocol above is unchanged; the server derives what viewers recei
 The public documentation for readers outside the project is the website page `/live-api/`. It promises compatibility: `GET /api/sessions`, `GET /api/sessions/{id}/state`, `WatchSync(sessionId, 1)`, `Resync`, and the messages `Sync`, `Delta` and `Beacon` may only get compatible additions (new properties, status values and messages). An incompatible change needs a new `LiveSync.Version`, a server that serves both versions for a transition period, and an announcement in `CHANGELOG-LIVE.md` beforehand. Everything else on this page is internal.
 
 - `website/live-api/live-api.schema.json` is the single source of the message schemas; the website build copies it into the components of `openapi.json` and into `live-api.txt`. When the server sends a new property, describe it there.
-- `website/live-api/live-reader.mjs`, `live-reader.cs` and `LiveReader.java` are the example readers, shown on the page and published as they are.
+- `website/live-api/live-reader.mjs`, `live-reader.cs` and `LiveReader.java` are the example readers, shown on the page and linked to GitHub (Azure Static Web Apps does not serve `.cs` and `.java` files).
 - `scripts/tests/live-api.test.mjs` (no dependencies) compares the schema with the server's contracts, the page's JSON samples with the schema, and the JavaScript reader with `wwwroot/live-sync.js`.
 - `tests/live-api/verify.mjs` starts a real server, publishes a synthetic race and requires the same output from all three readers through a lost message, a server restart and a deletion; every message the server sent must be fully documented by the schema. CI runs it as **Live API** on every change.
 

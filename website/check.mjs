@@ -87,11 +87,14 @@ const apiPage = await readFile(path.join(root, 'live-api', 'index.html'), 'utf8'
 const apiText = await readFile(path.join(root, 'live-api', 'live-api.txt'), 'utf8');
 for (const heading of ['## Synchronization rules', '## From changes to events', '### Java']) assert(apiText.includes(heading), `live-api.txt is missing ${heading}`);
 // Azure Static Web Apps answers 404 for source files such as .cs and .java.
-for (const file of await readdir(path.join(root, 'live-api'))) assert.match(file, /\.(html|json|mjs|txt)$/, `${file} would not be served.`);
-for (const file of ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs.txt', 'LiveReader.java.txt']) {
-  const source = await readFile(path.join(root, 'live-api', file), 'utf8');
+for (const file of await readdir(path.join(root, 'live-api'))) assert.match(file, /\.(html|json|txt)$/, `${file} would not be served.`);
+for (const file of ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs', 'LiveReader.java']) {
+  const source = (await readFile(new URL(`./live-api/${file}`, import.meta.url), 'utf8')).replaceAll('
+', '
+');
   assert(apiText.includes(source.trimEnd()), `live-api.txt is missing ${file}`);
-  assert(apiPage.includes(`href="/live-api/${file}"`), `The Live API page does not link to ${file}`);
+  const link = file.endsWith('.json') ? `/live-api/${file}` : `https://github.com/tnakeli/OpenSkiTime/blob/master/website/live-api/${file}`;
+  assert(apiPage.includes(`href="${link}"`), `The Live API page does not link to ${file}`);
 }
 assert(!/<\/?[a-z]+>/.test(apiText.slice(0, apiText.indexOf('## File: '))), 'The text of live-api.txt must not contain HTML.');
 const config = JSON.parse(await readFile(path.join(root, 'staticwebapp.config.json'), 'utf8'));
