@@ -12,7 +12,7 @@ public enum FissiRaceStatus
 /// <summary>The registration page found for a competition; the page is present only when its athletes may be used.</summary>
 public sealed record FissiCompetition(Guid CompetitionId, string? Codex, FissiRaceStatus Status, FissiRacePage? Page = null, string Gender = "");
 
-/// <summary>Reads the registrations of a series' competitions from the public pages of regs.fissi.fi.</summary>
+/// <summary>Reads the registrations of a series' competitions from the public pages of regs.fissi.fi (deprecated; see <see cref="FissiApiClient"/>).</summary>
 public sealed class FissiRegistrationClient(HttpClient client)
 {
     private const string Host = "regs.fissi.fi";
@@ -83,11 +83,11 @@ public sealed class FissiRegistrationClient(HttpClient client)
         }
     }
 
-    private static string? Codex(string? value) => value?.Trim() is { Length: > 0 and <= 4 } text && text.All(char.IsAsciiDigit)
+    internal static string? Codex(string? value) => value?.Trim() is { Length: > 0 and <= 4 } text && text.All(char.IsAsciiDigit)
         ? text.PadLeft(4, '0') : null;
 
     // Compared only when both sides tell it.
-    private static bool SameRace(CompetitionValues competition, FissiRace race)
+    internal static bool SameRace(CompetitionValues competition, FissiRace race)
     {
         var gender = CompetitionGenderRule.Required(competition.Calendar?.Gender);
         var raceGender = CompetitionGenderRule.Required(race.Gender);

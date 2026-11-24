@@ -17,7 +17,7 @@ Before/after sets for this branch were written to `artifacts/ux-e2e/screenshots/
 | 02 | Competitions grid + competition editor (course, homologation, TD) | `MainWindow.axaml` | ✓ | ✓ | conventions test, `CompetitionColumnControlsTests` |
 | 03 | Competitors grid (paste import, filters, entries, points) | `MainWindow.axaml` | ✓ | ✓ | conventions test, `CompetitorGridLayoutTests` |
 | 04 | Competitors → Update from FIS expander | `MainWindow.axaml` | ✓ | ✓ | `DesktopWorkflowTests` |
-| — | Competitors → Update from regs.fissi.fi expander | `MainWindow.axaml` | ✓ (1366×1000) | — | `FissiRegistrationWorkflowTests` |
+| — | Competitors → Update from regs.fissi.fi and its deprecated Web Crawl expanders | `MainWindow.axaml` | ✓ (1366×1000) | — | `FissiRegistrationWorkflowTests` |
 | — | Competitors → Category rules expander, review-changes panel, context menu | `MainWindow.axaml` | code review | code review | existing desktop tests |
 | 05 | Start list Run 1 (draw settings, export, print) | `DrawView.axaml` | ✓ | ✓ | conventions test, draw workflow tests |
 | 06 | Start list Run 2 (reversal) | `DrawView.axaml` | ✓ | ✓ | conventions test |
@@ -30,7 +30,7 @@ Before/after sets for this branch were written to `artifacts/ux-e2e/screenshots/
 | 12 | Timing report → Overview | `TimingReportView.axaml` | ✓ | ✓ | conventions test, `TimingReportWorkflowTests` |
 | 13 | Timing report → Times | `TimingReportView.axaml` | ✓ | ✓ | `TimingReportOverviewTests` |
 | 14 | PDF Factory | `PdfFactoryView.axaml` | ✓ | ✓ | conventions test, `PdfFactoryWorkflowTests` |
-| 15 | Settings: FIS, Timing devices, Timing report (persons), Live timing, About | `SettingsView.axaml`, `TimingSettingsView.axaml`, `TimingReportPersonView.axaml` | ✓ (5 tabs) | ✓ (5 tabs) | conventions test, `SettingsLayoutTests`, `TimingRoleSettingsTests` |
+| 15 | Settings: API keys, Timing devices, Timing report (persons), Live timing, About | `SettingsView.axaml`, `TimingSettingsView.axaml`, `TimingReportPersonView.axaml` | ✓ (5 tabs) | ✓ (5 tabs) | conventions test, `SettingsLayoutTests`, `TimingRoleSettingsTests` |
 | 16 | Receipt / device read dialog | `TimingReceiptDialog.axaml` | ✓ | ✓ | `TimingReceiptLayoutTests` |
 | — | Confirm dialogs (discard changes, remove competition) | `AvaloniaFileDialogs.cs` | code review | code review | buttons already use `dangerAction` / `secondaryAction` |
 | — | Live Timing control panel (separate process) | `LiveTiming.ControlPanel/PanelWindow.axaml` | real window | real window | `LiveControlPanelConnectionTests` |

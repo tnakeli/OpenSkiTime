@@ -25,21 +25,45 @@ public sealed record FissiRaceRow(FissiRaceOutcome Outcome)
 
 public sealed partial class MainViewModel
 {
+    // The API key is sent in a header, so the API client never follows a redirect to another site.
+    private readonly HttpClient _fissiApiHttp = informationHttp ?? new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+        { Timeout = TimeSpan.FromSeconds(20) };
+    [ObservableProperty] private bool _isFissiApiPanelOpen;
     [ObservableProperty] private bool _isFissiPanelOpen;
     [ObservableProperty] private bool _isFissiBusy;
+    public ObservableCollection<FissiRaceRow> FissiApiRaces { get; } = [];
     public ObservableCollection<FissiRaceRow> FissiRaces { get; } = [];
+    public bool HasFissiApiRaces => FissiApiRaces.Count > 0;
     public bool HasFissiRaces => FissiRaces.Count > 0;
 
     private void ClearFissiRaces()
     {
+        FissiApiRaces.Clear();
         FissiRaces.Clear();
+        OnPropertyChanged(nameof(HasFissiApiRaces));
         OnPropertyChanged(nameof(HasFissiRaces));
     }
 
+    [RelayCommand]
+    private Task UpdateFromFissiApiAsync() => UpdateFromFissiAsync(FissiApiRaces, (competitions, locked)
+        => new FissiApiClient(_fissiApiHttp, ReadFissiApiKey()).GetAsync(competitions, locked));
+
+    private string ReadFissiApiKey()
+    {
+        // Not a connection problem: the key could not be read on this computer.
+        try { return _fisStore.ReadFissiApiKey() ?? string.Empty; }
+        catch (IOException ex) { throw new DomainValidationException(ex.Message); }
+    }
+
+    // The former way, for as long as the API may be unavailable: reads the public pages of the site.
+    [RelayCommand]
+    private Task UpdateFromFissiAsync() => UpdateFromFissiAsync(FissiRaces, (competitions, locked)
+        => new FissiRegistrationClient(_informationHttp).GetAsync(competitions, locked));
+
     // Reads the registrations of every competition and stages the differences; Save keeps them. The registrations are
     // compared with the saved competitors, so pending edits are saved or discarded first.
-    [RelayCommand]
-    private async Task UpdateFromFissiAsync()
+    private async Task UpdateFromFissiAsync(ObservableCollection<FissiRaceRow> rows,
+        Func<IReadOnlyList<CompetitionDetails>, IReadOnlySet<Guid>, Task<IReadOnlyList<FissiCompetition>>> read)
     {
         if (IsFissiBusy) { return; }
         IsFissiBusy = true;
@@ -53,7 +77,7 @@ public sealed partial class MainViewModel
             ClearFissiRaces();
             SetStatus("Reading registrations from regs.fissi.fi…");
             var (locked, _, _) = await ReadStartListLocksAsync(series.Competitions);
-            var registrations = await new FissiRegistrationClient(_informationHttp).GetAsync(series.Competitions, locked);
+            var registrations = await read(series.Competitions, locked);
             if (workspace.FilePath != path || _current?.Id != series.Id) { return; }
             // Start lists, competitors and competitions may have changed while the pages were read.
             var (lockedCompetitions, lockedCompetitors, revisions) = await ReadStartListLocksAsync(series.Competitions);
@@ -71,10 +95,10 @@ public sealed partial class MainViewModel
             var plan = FissiRegistrationPlan.Build(saved, desk, registrations, lockedCompetitions, lockedCompetitors, _fisList?.Athletes);
             // Save is checked against the revision the plan was made for.
             _current = saved;
-            StageFissiPlan(plan);
+            StageFissiPlan(plan, rows);
         }
         catch (Exception ex) when (ex is DomainValidationException or SeriesFileException or SeriesConflictException
-            or HttpRequestException or IOException or OperationCanceledException or InvalidOperationException)
+            or HttpRequestException or IOException or OperationCanceledException or InvalidOperationException or PlatformNotSupportedException)
         {
             SetStatus(ex is HttpRequestException or IOException or OperationCanceledException
                 ? "regs.fissi.fi cannot be reached or timed out. Nothing was changed; check the connection and try again." : ex.Message, error: true);
@@ -82,13 +106,14 @@ public sealed partial class MainViewModel
         finally { IsFissiBusy = false; }
     }
 
-    private void StageFissiPlan(FissiRegistrationPlan plan)
+    private void StageFissiPlan(FissiRegistrationPlan plan, ObservableCollection<FissiRaceRow> rows)
     {
         foreach (var warning in plan.Warnings) { ImportWarnings.Add(warning); }
         _suspendDeskChangeLog = true;
         try { foreach (var item in plan.Rows) { StagePastedRow(item); } }
         finally { _suspendDeskChangeLog = false; }
-        foreach (var race in plan.Races) { FissiRaces.Add(new FissiRaceRow(race)); }
+        foreach (var race in plan.Races) { rows.Add(new FissiRaceRow(race)); }
+        OnPropertyChanged(nameof(HasFissiApiRaces));
         OnPropertyChanged(nameof(HasFissiRaces));
         RefreshVisibleCompetitors();
         RebuildChangeLog();

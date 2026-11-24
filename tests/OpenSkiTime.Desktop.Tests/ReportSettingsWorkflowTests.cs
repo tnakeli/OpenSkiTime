@@ -16,7 +16,7 @@ namespace OpenSkiTime.Tests;
 
 public partial class DesktopWorkflowTests
 {
-    private static readonly string[] s_reportSettingsTabs = ["FIS", "Timing devices", "Timing report", "Live timing", "About"];
+    private static readonly string[] s_reportSettingsTabs = ["API keys", "Timing devices", "Timing report", "Live timing", "About"];
     private static readonly string[] s_reportSettingsCalls = ["equipment", "upload", "upload"];
     [Fact]
     public void CloudDeviceCannotBeReusedAsAnIndependentTimingSystem()

@@ -535,6 +535,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             _drawLoad++;
             _settingDraw = false;
             IsFisPanelOpen = false;
+            IsFissiApiPanelOpen = false;
             IsFissiPanelOpen = false;
             ClearFissiRaces();
             FisEffectiveDateText = string.Empty;

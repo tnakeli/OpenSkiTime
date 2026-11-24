@@ -61,7 +61,7 @@ Press **Connect / Read**, let the device send its timestamps (request memory out
 
 ## Export and FIS test transmission
 
-Results and Timing report use the single key at **Settings > FIS**. The API uses endpoint-specific authentication headers internally. Equipment lookup and submission do not require a second secret. XML uploads require the appropriate FIS account permissions.
+Results and Timing report use the single key at **Settings > API keys**. The API uses endpoint-specific authentication headers internally. Equipment lookup and submission do not require a second secret. XML uploads require the appropriate FIS account permissions.
 
 **Save to XML** writes the exact stored XML revision (creating it first when needed) and suggests a `-timing-report.xml` suffix to avoid overwriting an exported result file. Approved XML uses line feeds on every operating system, like the result XML, so its bytes do not depend on where it was approved. Exports (approved XML, start list TSV and print HTML) are written to a temporary file beside the destination and then moved over it: a failed write leaves the previous file or none, never a truncated file. API submission uses the prescribed NSA/codex filename from the immutable revision. **Send XML - test mode** submits only that saved revision; it cannot publish official results. **Check FIS status** resumes using the persisted submission UUID after reopening the file. **Stop FIS check** cancels waiting without issuing another upload. Transport acceptance and completed FIS processing are separate states. An uncertain network result is not automatically retried as a new upload.
 
