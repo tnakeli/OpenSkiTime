@@ -1132,9 +1132,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         _readCancellation!.Cancel();
         if (Fault is not null) { throw new SeriesFileException(Fault); }
         var drain = Task.WhenAll(_producer, _writer!);
-        using var timeout = new CancellationTokenSource();
-        var completed = await Task.WhenAny(drain, _failed.Task, Task.Delay(TimeSpan.FromSeconds(15), timeout.Token));
-        timeout.Cancel();
+        var completed = await Task.WhenAny(drain, _failed.Task, Task.Delay(TimeSpan.FromSeconds(15)));
         if (completed != drain) { throw new SeriesFileException(Fault ?? "Capture is still draining. Keep the file open and retry disconnect."); }
         await drain;
         var closeErrors = new List<string>();

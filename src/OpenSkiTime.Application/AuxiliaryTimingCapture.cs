@@ -369,10 +369,7 @@ public sealed class AuxiliaryTimingWorkspace(IAuxiliaryTimingStore store, ITimin
             RequestStop();
             if (_fault is not null) { throw new SeriesFileException(_fault); }
             var drain = Task.WhenAll(_producer, _writer!);
-            using var timeout = new CancellationTokenSource();
-            var completed = await Task.WhenAny(drain, _failed.Task, Task.Delay(TimeSpan.FromSeconds(15), timeout.Token));
-            timeout.Cancel();
-            if (completed != drain)
+            if (await Task.WhenAny(drain, _failed.Task, Task.Delay(TimeSpan.FromSeconds(15))) != drain)
             { throw new SeriesFileException(_fault ?? "Auxiliary capture is still draining. Keep the file open and retry disconnect."); }
             await drain;
             foreach (var source in sources)
