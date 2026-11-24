@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
@@ -86,7 +86,9 @@ for (const [, ref] of JSON.stringify(openApi).matchAll(/"\$ref":"([^"]+)"/g)) {
 const apiPage = await readFile(path.join(root, 'live-api', 'index.html'), 'utf8');
 const apiText = await readFile(path.join(root, 'live-api', 'live-api.txt'), 'utf8');
 for (const heading of ['## Synchronization rules', '## From changes to events', '### Java']) assert(apiText.includes(heading), `live-api.txt is missing ${heading}`);
-for (const file of ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs', 'LiveReader.java']) {
+// Azure Static Web Apps answers 404 for source files such as .cs and .java.
+for (const file of await readdir(path.join(root, 'live-api'))) assert.match(file, /\.(html|json|mjs|txt)$/, `${file} would not be served.`);
+for (const file of ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs.txt', 'LiveReader.java.txt']) {
   const source = await readFile(path.join(root, 'live-api', file), 'utf8');
   assert(apiText.includes(source.trimEnd()), `live-api.txt is missing ${file}`);
   assert(apiPage.includes(`href="/live-api/${file}"`), `The Live API page does not link to ${file}`);

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile, copyFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -163,13 +163,16 @@ for (const name of [video.poster, liveVideo.poster, editingVideo.poster, 'og-ima
 // the example readers are shown on the page exactly as they are published (and tested by tests/live-api).
 const api = path.join(root, 'live-api'), apiOutput = path.join(output, 'live-api');
 const apiFiles = ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs', 'LiveReader.java'];
+await rm(apiOutput, { recursive: true, force: true });
 await mkdir(apiOutput, { recursive: true });
 const apiSource = Object.fromEntries(await Promise.all(apiFiles.map(async file => [file, (await readFile(path.join(api, file), 'utf8')).replaceAll('\r\n', '\n')])));
-for (const file of apiFiles) await writeFile(path.join(apiOutput, file), apiSource[file]);
+// Azure Static Web Apps does not serve .cs and .java files; they are published as text and downloaded under their own names.
+const published = file => /\.(cs|java)$/.test(file) ? `${file}.txt` : file;
+for (const file of apiFiles) await writeFile(path.join(apiOutput, published(file)), apiSource[file]);
 const openApi = JSON.parse(await readFile(path.join(api, 'openapi.json'), 'utf8'));
 openApi.components.schemas = JSON.parse(JSON.stringify(JSON.parse(apiSource['live-api.schema.json']).$defs).replaceAll('"#/$defs/', '"#/components/schemas/'));
 await writeFile(path.join(apiOutput, 'openapi.json'), `${JSON.stringify(openApi, null, 2)}\n`);
-const example = file => `<details class="example"><summary>Show ${file}</summary><pre><code>${escape(apiSource[file].trimEnd())}</code></pre></details><p><a href="/live-api/${file}">Download ${file} ↓</a></p>`;
+const example = file => `<details class="example"><summary>Show ${file}</summary><pre><code>${escape(apiSource[file].trimEnd())}</code></pre></details><p><a href="/live-api/${published(file)}" download="${file}">Download ${file} ↓</a></p>`;
 for (const [name, route, lang, title, description] of pages) {
   const t = text[lang];
   const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang)).replace('{{liveVideo}}', liveVideoHtml(lang)).replace('{{editingVideo}}', editingVideoHtml)
