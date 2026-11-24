@@ -19,6 +19,7 @@
     <Compile Include="../OpenSkiTime.Tests/FullRace/ExpectedResults.cs" Link="FullRace/ExpectedResults.cs" />
     <Compile Include="../OpenSkiTime.Tests/FullRace/FullRaceScenario.cs" Link="FullRace/FullRaceScenario.cs" />
     <Compile Include="../OpenSkiTime.Tests/FisResultXmlSpec.cs" Link="FisResultXmlSpec.cs" />
+    <Compile Include="../OpenSkiTime.Tests/SkiAlpProTestFiles.cs" Link="SkiAlpProTestFiles.cs" />
   </ItemGroup>
   <Import Project="../../LiveTimingArtifacts.targets" />
 </Project>
