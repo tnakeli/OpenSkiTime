@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- .NET 10 SDK
+- .NET 10 SDK. `global.json` selects the newest installed 10.0 SDK, so a newer major version on the machine (or on a CI runner) is not used.
 - For local testing on Linux: libtesseract and libleptonica development libraries
 
 ## Building and Testing
