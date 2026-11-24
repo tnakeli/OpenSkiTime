@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- Reading published races is now a documented public API, version 1: [Live API](https://openskiti.me/live-api/) with OpenAPI, JSON Schema and JavaScript, .NET and Java example readers. The server itself did not change for this; live 0.10.0 already works. An incompatible change to the API will be announced here beforehand.
+
 ### Security
 
 - One publisher key holds at most 25 live sessions (`LiveTiming__MaxSessionsPerPublisher`), so one key cannot fill the server. Deleting a session frees its slot, and removing a key revokes the tokens it issued. Tokens issued by earlier versions stay valid until they expire.

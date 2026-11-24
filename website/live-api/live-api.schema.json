@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openskiti.me/live-api/live-api.schema.json",
+  "title": "OpenSkiTime Live API",
+  "description": "Messages of the OpenSkiTime Live API, version 1. New properties, new status values and new messages can be added at any time: readers ignore what they do not know. A property is listed as required when the server always sends it.",
+  "$defs": {
+    "Race": {
+      "title": "Race",
+      "description": "One published race in the list of races.",
+      "type": "object",
+      "required": ["sessionId", "name", "place", "discipline", "date", "gender", "category", "isFis", "codex", "updatedAt", "paused"],
+      "properties": {
+        "sessionId": { "type": "string", "format": "uuid", "description": "The race on this server. A race published again can get a new ID." },
+        "name": { "type": "string" },
+        "place": { "type": "string" },
+        "discipline": { "type": "string", "description": "Discipline code as the organizer entered it, for example SL or GS." },
+        "date": { "type": "string", "format": "date" },
+        "gender": { "type": "string" },
+        "category": { "type": "string" },
+        "isFis": { "type": "boolean" },
+        "codex": { "type": "string", "description": "Race codex; empty when the race has none." },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "paused": { "type": "boolean", "description": "The organizer has stopped publishing for now." }
+      }
+    },
+    "State": {
+      "title": "State",
+      "description": "The complete published state of one race.",
+      "type": "object",
+      "required": ["version", "competition", "competitors", "currentRun", "runs", "updatedAt", "paused"],
+      "properties": {
+        "version": { "type": "integer", "description": "The publisher's own counter. Do not use it to detect or order changes: pausing does not increment it." },
+        "competition": { "$ref": "#/$defs/Competition" },
+        "competitors": { "type": "array", "items": { "$ref": "#/$defs/Competitor" } },
+        "currentRun": { "type": "integer", "description": "Number of the run being timed." },
+        "runs": { "type": "array", "items": { "$ref": "#/$defs/Run" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "paused": { "type": "boolean", "description": "The organizer has stopped publishing for now." }
+      }
+    },
+    "Competition": {
+      "title": "Competition",
+      "type": "object",
+      "required": ["name", "place", "discipline", "date", "isFis", "codex", "gender", "category", "intermediateCount", "slope", "runCount"],
+      "properties": {
+        "name": { "type": "string" },
+        "place": { "type": "string" },
+        "discipline": { "type": "string", "description": "Discipline code as the organizer entered it, for example SL or GS." },
+        "date": { "type": "string", "format": "date" },
+        "isFis": { "type": "boolean" },
+        "codex": { "type": "string", "description": "Race codex; empty when the race has none." },
+        "gender": { "type": "string" },
+        "category": { "type": "string" },
+        "intermediateCount": { "type": "integer", "minimum": 0, "description": "Number of intermediate timing points on the course." },
+        "slope": { "type": "string" },
+        "runCount": { "type": "integer", "minimum": 0, "description": "Number of runs in the race, or 0 when the publisher does not tell." }
+      }
+    },
+    "Competitor": {
+      "title": "Competitor",
+      "type": "object",
+      "required": ["bib", "lastName", "firstName", "nation", "club", "fisCode", "category"],
+      "properties": {
+        "bib": { "type": "integer", "minimum": 1, "description": "Unique in the race. Result rows and start orders refer to it." },
+        "lastName": { "type": "string" },
+        "firstName": { "type": "string" },
+        "nation": { "type": "string", "description": "Nation code; can be empty." },
+        "club": { "type": "string", "description": "Can be empty." },
+        "fisCode": { "type": "string", "description": "FIS or national federation code of the competitor; can be empty." },
+        "category": { "type": "string", "description": "Class of the competitor, for example N10. Empty in a race without classes." }
+      }
+    },
+    "Run": {
+      "title": "Run",
+      "type": "object",
+      "required": ["number", "listCreatedAt", "startOrder", "results", "forerunners"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "listCreatedAt": { "type": "string", "format": "date-time", "description": "When the start list of the run was created." },
+        "startOrder": { "type": "array", "items": { "type": "integer" }, "description": "Bibs in start order." },
+        "results": { "type": "array", "items": { "$ref": "#/$defs/Result" }, "description": "One row per bib. The order of the rows is not the ranking; use rank." },
+        "forerunners": { "type": ["array", "null"], "items": { "$ref": "#/$defs/Forerunner" }, "description": "Null when the run has no forerunners." }
+      }
+    },
+    "Result": {
+      "title": "Result",
+      "description": "The result row of one competitor in one run. Times are integers in hundredths of a second: 5012 is 50.12 seconds. In a race with classes, rank and difference (and their totals) are those within the class.",
+      "type": "object",
+      "required": ["bib", "status", "hundredths", "rank", "difference", "at", "startedAt", "startSourceTicks", "finishSourceTicks", "intermediates", "totalHundredths", "totalRank", "totalDifference"],
+      "properties": {
+        "bib": { "type": "integer", "minimum": 1 },
+        "status": { "$ref": "#/$defs/Status" },
+        "hundredths": { "type": ["integer", "null"], "minimum": 0, "description": "Run time. Use it only when the status is Finished." },
+        "rank": { "type": ["integer", "null"], "minimum": 1, "description": "Rank in the run. Equal times share a rank." },
+        "difference": { "type": ["integer", "null"], "minimum": 0, "description": "Gap to the best time of the run." },
+        "at": { "type": "string", "format": "date-time", "description": "Time of the latest impulse or correction of the row." },
+        "startedAt": { "type": ["string", "null"], "format": "date-time", "description": "Start time, for a running clock." },
+        "startSourceTicks": { "type": ["string", "null"], "pattern": "^[0-9]+$", "description": "Diagnostic source timestamp of the timing device in 100 ns units, as a decimal string. Do not calculate results from it." },
+        "finishSourceTicks": { "type": ["string", "null"], "pattern": "^[0-9]+$", "description": "Like startSourceTicks, for the finish." },
+        "intermediates": { "type": ["array", "null"], "items": { "$ref": "#/$defs/Intermediate" }, "description": "Intermediate times so far; null or empty when there are none." },
+        "splits": { "type": "array", "items": { "$ref": "#/$defs/Intermediate" }, "deprecated": true, "description": "Copy of intermediates; use intermediates." },
+        "totalHundredths": { "type": ["integer", "null"], "minimum": 0, "description": "Combined time of all runs so far, from Run 2 on. Null without a finished time in every run so far." },
+        "totalRank": { "type": ["integer", "null"], "minimum": 1 },
+        "totalDifference": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "Intermediate": {
+      "title": "Intermediate",
+      "type": "object",
+      "required": ["number", "hundredths", "at", "sourceTicks"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1, "description": "Timing point, 1 is the first one after the start." },
+        "hundredths": { "type": "integer", "minimum": 0, "description": "Time from the start in hundredths of a second." },
+        "at": { "type": "string", "format": "date-time" },
+        "sourceTicks": { "type": ["string", "null"], "pattern": "^[0-9]+$", "description": "Diagnostic source timestamp, as in Result." }
+      }
+    },
+    "Forerunner": {
+      "title": "Forerunner",
+      "description": "Progress of a forerunner. A forerunner never has a time.",
+      "type": "object",
+      "required": ["letter", "lastName", "firstName", "nation", "status"],
+      "properties": {
+        "letter": { "type": "string" },
+        "lastName": { "type": "string" },
+        "firstName": { "type": "string" },
+        "nation": { "type": "string" },
+        "status": { "$ref": "#/$defs/Status" }
+      }
+    },
+    "Status": {
+      "title": "Status",
+      "type": "string",
+      "enum": ["Ready", "OnCourse", "Finished", "DNS", "DNF", "DSQ", "NPS", "Review"],
+      "description": "Ready: has not started. OnCourse: started. Finished: has a valid time. DNS: did not start. DNF: did not finish. DSQ: disqualified. NPS: not permitted to start. Review: the timing crew is checking the times; not a result yet."
+    },
+    "SyncMessage": {
+      "title": "Sync",
+      "description": "SignalR message Sync: the complete state of the race, or why there is none.",
+      "type": "object",
+      "required": ["status", "generation", "revision", "state"],
+      "properties": {
+        "status": { "$ref": "#/$defs/SessionStatus" },
+        "generation": { "type": ["string", "null"], "description": "Identifier of this history of the race on the server; null unless Live. Compare only for equality." },
+        "revision": { "type": "integer", "description": "Increases by one with every change of the same generation; 0 unless Live." },
+        "state": { "oneOf": [{ "$ref": "#/$defs/State" }, { "type": "null" }] }
+      }
+    },
+    "DeltaMessage": {
+      "title": "Delta",
+      "description": "SignalR message Delta: one change. It applies only to revision baseRevision of the same generation, and only as a whole.",
+      "type": "object",
+      "required": ["generation", "baseRevision", "revision", "version", "updatedAt", "paused", "runs"],
+      "properties": {
+        "generation": { "type": "string" },
+        "baseRevision": { "type": "integer" },
+        "revision": { "type": "integer" },
+        "version": { "type": "integer", "description": "Replaces version of the state." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Replaces updatedAt of the state." },
+        "paused": { "type": "boolean", "description": "Replaces paused of the state." },
+        "runs": { "type": "array", "items": { "$ref": "#/$defs/RunDelta" }, "description": "The runs that changed." }
+      }
+    },
+    "RunDelta": {
+      "title": "RunDelta",
+      "type": "object",
+      "required": ["number", "results"],
+      "properties": {
+        "number": { "type": "integer" },
+        "results": { "type": "array", "items": { "$ref": "#/$defs/Result" }, "description": "Complete rows. Each one replaces the row with the same bib, or is new." },
+        "order": { "type": "array", "items": { "type": "integer" }, "description": "Bibs of all rows in their new order. When absent, rows keep their places and new rows follow in the order of results." },
+        "forerunners": { "type": "array", "items": { "$ref": "#/$defs/Forerunner" }, "description": "The complete new list. When absent, the forerunners did not change." }
+      }
+    },
+    "BeaconMessage": {
+      "title": "Beacon",
+      "description": "SignalR message Beacon, about every 30 seconds: what a reader that missed nothing has now.",
+      "type": "object",
+      "required": ["status", "generation", "revision"],
+      "properties": {
+        "status": { "$ref": "#/$defs/SessionStatus" },
+        "generation": { "type": ["string", "null"] },
+        "revision": { "type": "integer" }
+      }
+    },
+    "SessionStatus": {
+      "title": "SessionStatus",
+      "type": "string",
+      "enum": ["Live", "Deleted", "Awaiting"],
+      "description": "Live: the server has the state. Deleted: the organizer deleted the race. Awaiting: the server has no state now (not published yet, not restored after a server restart, or an unknown ID)."
+    }
+  }
+}
