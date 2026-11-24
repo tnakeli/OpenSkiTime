@@ -1,0 +1,179 @@
+<section class="shell page-heading"><h1><span class="eyebrow">Live API / Version 1</span>Live results<br>for your service.</h1><p>Read published races in real time: start lists, starts, intermediate times, finishes, DNS, DNF and DSQ. No key or registration.</p></section>
+<section class="shell guide-layout section"><nav class="guide-nav" aria-label="Live API sections"><a href="#overview">Overview</a><a href="#quick-start">Quick start</a><a href="#http">HTTP requests</a><a href="#data">Race data</a><a href="#signalr">Changes in real time</a><a href="#synchronization">Synchronization rules</a><a href="#events">From changes to events</a><a href="#polling">Polling</a><a href="#examples">JavaScript, .NET, Java</a><a href="#limits">Limits and fair use</a><a href="#stability">Versions and stability</a><a href="#personal-data">Personal data</a></nav><div class="prose">
+<article id="overview"><h2>Overview</h2>
+<p>When an organizer publishes a race with OpenSkiTime, anyone can read it: in the browser, or with this API. The hosted service is <code>https://live.openskiti.me</code>. The local live timing of a race computer offers the same API, by default at <code>http://localhost:5078</code> and only on that computer. Anyone can also run a server of their own.</p>
+<p>There are two ways to read a race:</p>
+<ul><li><b>HTTP</b> lists the published races and returns the complete state of one race.</li><li><b>SignalR</b> sends every change as it happens, over one WebSocket connection.</li></ul>
+<p>The API is read-only. It tells what the organizer publishes now; it is not a results archive. <b>All results are unofficial.</b></p>
+<p>Machine-readable descriptions: <a href="/live-api/openapi.json">OpenAPI 3.1 of the HTTP part</a> and <a href="/live-api/live-api.schema.json">JSON Schema of every message</a>. For AI coding tools, <a href="/live-api/live-api.txt">one text file</a> has this page, the schema and the example readers.</p></article>
+<article id="quick-start"><h2>Quick start</h2>
+<p>List the races published now:</p>
+<pre><code>curl https://live.openskiti.me/api/sessions</code></pre>
+<p>Follow one race with the <a href="/live-api/live-reader.mjs">JavaScript reader</a>, using a <code>sessionId</code> from the list:</p>
+<pre><code>npm install @microsoft/signalr@10
+node live-reader.mjs https://live.openskiti.me SESSION_ID</code></pre>
+<p>It prints what happens in the race:</p>
+<pre><code>Race | Synthetic slalom | 40 competitors
+Run 1 | 1 TEST Anna | OnCourse
+Run 1 | 1 TEST Anna | Intermediate 1 25.01
+Run 1 | 1 TEST Anna | Finished 50.12, rank 1
+Run 1 | 3 EXAMPLE Maria | DNS</code></pre>
+<p>The same reader is available for <a href="#examples">.NET and Java</a>. All examples on this page are synthetic.</p></article>
+<article id="http"><h2>HTTP requests</h2>
+<div class="table"><table><thead><tr><th>Request</th><th>Answer</th></tr></thead><tbody>
+<tr><td><code>GET /api/sessions</code></td><td>The races published now, newest race date first. An empty list when there are none.</td></tr>
+<tr><td><code>GET /api/sessions/{sessionId}/state</code></td><td>The complete <a href="#data">state</a> of one race. 404 when the server has no state for the ID.</td></tr>
+</tbody></table></div>
+<p>One race in the list:</p>
+<pre><code data-schema="Race">{
+  "sessionId": "3f2b8c1e-5d47-4a90-9b1c-7e6f0a2d4c58",
+  "name": "Synthetic slalom",
+  "place": "Testville",
+  "discipline": "SL",
+  "date": "2026-11-24",
+  "gender": "L",
+  "category": "Club",
+  "isFis": false,
+  "codex": "",
+  "updatedAt": "2026-11-24T10:04:12+02:00",
+  "paused": false
+}</code></pre>
+<p>Recognize a race by its <code>codex</code>, or by date, name and discipline: a race that is published again can get a new <code>sessionId</code>.</p>
+<p>The hosted service sleeps when nobody uses it, and the first request can take a couple of minutes. Use a timeout of two minutes for the first request. Do not send the <code>X-OpenSkiTime-Live-Protocol</code> header; it belongs to publishers.</p></article>
+<article id="data"><h2>Race data</h2>
+<p>The state of a race:</p>
+<div class="table"><table><thead><tr><th>Property</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>competition</code></td><td>Name, place, discipline, date, codex, gender, category, <code>intermediateCount</code> and <code>runCount</code>.</td></tr>
+<tr><td><code>competitors</code></td><td><code>bib</code>, <code>lastName</code>, <code>firstName</code>, <code>nation</code>, <code>club</code>, <code>fisCode</code> and, in a race with classes, <code>category</code>.</td></tr>
+<tr><td><code>currentRun</code></td><td>Number of the run being timed.</td></tr>
+<tr><td><code>runs</code></td><td>Each run has a <code>number</code>, the <code>startOrder</code> (bibs), the <code>results</code> and possibly <code>forerunners</code>.</td></tr>
+<tr><td><code>updatedAt</code></td><td>Time of the latest update from the publisher.</td></tr>
+<tr><td><code>paused</code></td><td>The organizer has stopped publishing for now.</td></tr>
+</tbody></table></div>
+<p>A result row:</p>
+<pre><code data-schema="Result">{
+  "bib": 1,
+  "status": "Finished",
+  "hundredths": 5012,
+  "rank": 1,
+  "difference": 0,
+  "at": "2026-11-24T10:04:12+02:00",
+  "startedAt": "2026-11-24T10:03:22+02:00",
+  "startSourceTicks": "639000000000000000",
+  "finishSourceTicks": "639000000501200000",
+  "intermediates": [
+    {
+      "number": 1,
+      "hundredths": 2501,
+      "at": "2026-11-24T10:03:47+02:00",
+      "sourceTicks": "639000000250100000"
+    }
+  ],
+  "totalHundredths": null,
+  "totalRank": null,
+  "totalDifference": null
+}</code></pre>
+<ul><li><b>Times are integers in hundredths of a second:</b> 5012 is 50.12. Do not convert them to floating point for calculations, and do not calculate times from the source ticks, which are diagnostic.</li><li><b>Ranks, differences and totals are ready-made.</b> Equal times share a rank. In a race with classes they are those within the class.</li><li><b>Totals</b> (<code>totalHundredths</code>, <code>totalRank</code>, <code>totalDifference</code>) are given from Run 2 on, for a competitor with a finished time in every run so far.</li><li><b>The order of the rows is not the ranking.</b> Use <code>rank</code>, and <code>startOrder</code> for the start list.</li><li><code>intermediates</code> can be null. Rows also contain <code>splits</code>, an older copy of it; do not use it.</li></ul>
+<div class="table"><table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>Ready</code></td><td>Has not started.</td></tr>
+<tr><td><code>OnCourse</code></td><td>Started, not yet at the finish.</td></tr>
+<tr><td><code>Finished</code></td><td>Has a valid time in <code>hundredths</code>.</td></tr>
+<tr><td><code>DNS</code></td><td>Did not start.</td></tr>
+<tr><td><code>DNF</code></td><td>Did not finish.</td></tr>
+<tr><td><code>DSQ</code></td><td>Disqualified.</td></tr>
+<tr><td><code>NPS</code></td><td>Not permitted to start.</td></tr>
+<tr><td><code>Review</code></td><td>The timing crew is checking the times. Not a result yet.</td></tr>
+</tbody></table></div>
+<p>Forerunners have a letter, a name and a status, never a time.</p></article>
+<article id="signalr"><h2>Changes in real time</h2>
+<p>Connect a SignalR client with the JSON protocol to <code>/live</code> and invoke <code>WatchSync(sessionId, 1)</code>. The number is the version of this protocol. One connection follows one race. The server then sends three messages:</p>
+<div class="table"><table><thead><tr><th>Message</th><th>When and what</th></tr></thead><tbody>
+<tr><td><code>Sync</code></td><td>The answer to <code>WatchSync</code> and <code>Resync</code>, and whenever a change does not fit in a delta. The complete state when <code>status</code> is <code>Live</code>.</td></tr>
+<tr><td><code>Delta</code></td><td>One change: the complete new result rows of the competitors it concerns.</td></tr>
+<tr><td><code>Beacon</code></td><td>About every 30 seconds: what a reader that missed nothing has now.</td></tr>
+</tbody></table></div>
+<p>The <code>status</code> of a <code>Sync</code> or <code>Beacon</code> is <code>Live</code>, <code>Deleted</code> (the organizer deleted the race) or <code>Awaiting</code> (the server has no state: the race is not published yet, the server has restarted and waits for the publisher, or the ID is unknown).</p>
+<p>A delta: bib 1 started in Run 1.</p>
+<pre><code data-schema="DeltaMessage">{
+  "generation": "d1e8773d12ba6801",
+  "baseRevision": 1,
+  "revision": 2,
+  "version": 2,
+  "updatedAt": "2026-11-24T10:03:22+02:00",
+  "paused": false,
+  "runs": [
+    {
+      "number": 1,
+      "results": [
+        {
+          "bib": 1,
+          "status": "OnCourse",
+          "hundredths": null,
+          "rank": null,
+          "difference": null,
+          "at": "2026-11-24T10:03:22+02:00",
+          "startedAt": "2026-11-24T10:03:22+02:00",
+          "startSourceTicks": "639000000000000000",
+          "finishSourceTicks": null,
+          "intermediates": null,
+          "totalHundredths": null,
+          "totalRank": null,
+          "totalDifference": null
+        }
+      ]
+    }
+  ]
+}</code></pre>
+<p>A beacon:</p>
+<pre><code data-schema="BeaconMessage">{
+  "status": "Live",
+  "generation": "d1e8773d12ba6801",
+  "revision": 2
+}</code></pre>
+<p>The server also sends <code>Radio</code> and <code>Viewers</code> to its own race page. They are not part of this API; ignore them and any other message you do not know.</p></article>
+<article id="synchronization"><h2>Synchronization rules</h2>
+<p>The server sends the messages of a race in order. A reader keeps the state with its <code>generation</code> and <code>revision</code>, and follows these rules:</p>
+<ol><li><b>Sync</b> is always the newest. <code>Live</code>: replace the state, generation and revision, whatever they were. <code>Awaiting</code>: forget the generation and revision but keep the state, as the publisher normally restores it. <code>Deleted</code>: drop the state and disconnect.</li>
+<li><b>Delta</b> applies only when its <code>generation</code> is yours and its <code>baseRevision</code> equals your <code>revision</code>. Ignore a delta of your generation whose <code>revision</code> is not newer than yours. Anything else is a gap.</li>
+<li><b>Applying a delta:</b> in each listed run, every row in <code>results</code> replaces the row with the same bib, or is added at the end. If <code>order</code> is given, put all rows in that order; it must list every row once. If <code>forerunners</code> is given, it replaces the list. Then take <code>version</code>, <code>updatedAt</code>, <code>paused</code> and <code>revision</code> from the delta. If a run is unknown or the order does not fit, change nothing and treat it as a gap.</li>
+<li><b>Beacon</b> should agree with what you have. If the status, generation or revision differs, treat it as a gap.</li>
+<li><b>After a gap</b> wait a random 0.5–5 seconds and send <code>Resync()</code>, at least 3 seconds after the previous one. Ignore deltas until the <code>Sync</code> arrives. If it has not arrived in 30 seconds, ask again at the next beacon.</li>
+<li><b>After a lost connection</b> connect again and invoke <code>WatchSync</code>, waiting 1 second at first and doubling the wait up to 15 seconds, with a random part. Keep showing the previous state until the new <code>Sync</code>, and ignore deltas and beacons before it.</li></ol>
+<p>Generations have no order; compare them only for equality. Do not use <code>version</code> for synchronization.</p></article>
+<article id="events"><h2>From changes to events</h2>
+<p>The API sends results, not events. Compare the rows before and after each <code>Delta</code> <b>and each <code>Sync</code></b>; a row or run you did not have counts as <code>Ready</code>:</p>
+<div class="table"><table><thead><tr><th>Change of a row</th><th>Event</th></tr></thead><tbody>
+<tr><td><code>status</code> becomes <code>OnCourse</code></td><td>Started</td></tr>
+<tr><td>New number in <code>intermediates</code></td><td>Intermediate time</td></tr>
+<tr><td><code>status</code> becomes <code>Finished</code></td><td>Arrived at the finish; time and rank are in the same row</td></tr>
+<tr><td><code>status</code> becomes <code>DNS</code>, <code>DNF</code>, <code>DSQ</code> or <code>NPS</code></td><td>Classified</td></tr>
+<tr><td><code>hundredths</code> of a finished row, or an intermediate time, changes or disappears</td><td>Corrected</td></tr>
+<tr><td>Only <code>rank</code>, <code>difference</code> or totals change</td><td>Someone else’s result moved this row</td></tr>
+</tbody></table></div>
+<ul><li>The first <code>Sync</code> is the starting point, not a set of events.</li><li><b>A result can change afterwards,</b> in any direction: a finisher can be disqualified, a DSQ can be cancelled, a time can be corrected, and a competitor with a re-run goes back to <code>OnCourse</code>.</li><li><b>The latest state is reliable, every step on the way is not.</b> After a break in a connection, several changes can arrive as one: a competitor can go straight from <code>Ready</code> to <code>Finished</code>.</li></ul></article>
+<article id="polling"><h2>Polling</h2>
+<p>Without a SignalR client, for example in PHP, read <code>GET /api/sessions/{sessionId}/state</code> every 10 seconds while the race is on, never more often than every 5 seconds, and compare the rows as above. One background job should poll for all your users. The answer is always the complete state, some tens of kilobytes for a hundred competitors; there are no conditional requests.</p>
+<ul><li><b>404:</b> the race is not available now. Keep the last results and try again less often, for example every 30 seconds; give up after a while.</li><li><b>429 or a network error:</b> wait longer before the next request, up to a minute.</li></ul></article>
+<article id="examples"><h2>JavaScript, .NET, Java</h2>
+<p>The three readers do the same: without a session they list the races, with one they follow it until it is deleted. They recover from lost messages, broken connections and server restarts, and the project tests them together against the real server. They are free to use under the MIT license.</p>
+<p>SignalR clients for other languages work too, if they support the JSON protocol.</p>
+<h3>JavaScript</h3><p>Node.js 22 or later, package <a href="https://www.npmjs.com/package/@microsoft/signalr">@microsoft/signalr</a>.</p>
+<pre><code>npm install @microsoft/signalr@10
+node live-reader.mjs https://live.openskiti.me SESSION_ID</code></pre>
+{{example:live-reader.mjs}}
+<h3>.NET</h3><p>.NET 10 or later, package <a href="https://www.nuget.org/packages/Microsoft.AspNetCore.SignalR.Client">Microsoft.AspNetCore.SignalR.Client</a>. The file runs as it is, in a folder of its own:</p>
+<pre><code>dotnet run live-reader.cs -- https://live.openskiti.me SESSION_ID</code></pre>
+{{example:live-reader.cs}}
+<h3>Java</h3><p>Java 17 or later, dependency <a href="https://central.sonatype.com/artifact/com.microsoft.signalr/signalr">com.microsoft.signalr:signalr</a> 10.0.15. With <a href="https://www.jbang.dev">JBang</a> the file runs as it is:</p>
+<pre><code>jbang LiveReader.java https://live.openskiti.me SESSION_ID</code></pre>
+{{example:LiveReader.java}}
+</article>
+<article id="limits"><h2>Limits and fair use</h2>
+<ul><li><b>Connect from a server or an application, once per race,</b> and pass the results on to your own users yourself. The connections of the hosted service are shared with the spectators of every race.</li><li><b>Connect for the race, not around the clock.</b> A connection or a poll keeps the service awake. Disconnect when the race is over or deleted, and if it stays <code>Awaiting</code> or <code>paused</code> for long. To find a race, read the list every few minutes around its start time.</li><li><b>Web pages of other sites cannot call the API directly.</b> The server sends no CORS headers.</li><li><b>Limits of the hosted service now:</b> 1000 simultaneous connections in all, 200 from one address, and 3000 requests per minute from one address. They can change. A request over a limit is refused with 429.</li><li>The state is in the memory of the server only. It disappears when the organizer deletes the race, when the publisher does not restore it after a restart, and in any case within 14 days of publishing. Store what you need.</li><li>The service is free and comes without an availability guarantee.</li></ul></article>
+<article id="stability"><h2>Versions and stability</h2>
+<p>This is version 1 of the Live API: the two HTTP requests, <code>WatchSync</code> with version 1, <code>Resync</code>, and the messages <code>Sync</code>, <code>Delta</code> and <code>Beacon</code>. It works with live timing server 0.10.0 and later, and with the local live timing of OpenSkiTime 0.3.0 and later.</p>
+<ul><li><b>Compatible additions can come at any time:</b> new properties, new status values and new messages. Ignore what you do not know, and show an unknown status as no result.</li><li><b>An incompatible change gets a new version.</b> It is announced in the <a href="https://github.com/tnakeli/OpenSkiTime/blob/master/CHANGELOG-LIVE.md">changelog of the live timing server</a> beforehand, and the previous version keeps working for a transition period.</li><li>Publishing, race radio, server statistics and everything else not described here can change without notice.</li></ul>
+<p>Questions and ideas: <a href="https://github.com/tnakeli/OpenSkiTime/issues">GitHub issues</a>.</p></article>
+<article id="personal-data"><h2>Personal data</h2>
+<p>Races contain names, clubs, nations and results of competitors, who are often children. The organizer decides what is published here and for how long. You are responsible for what your service does with the data: agree on it with the organizer, show the results as unofficial, and follow corrections and deletions.</p></article>
+</div></section>

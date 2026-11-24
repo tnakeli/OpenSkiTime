@@ -96,7 +96,7 @@ def main():
                 context.route('**/*', lambda route: route.continue_() if route.request.url.startswith('http://127.0.0.1:4173/') else route.abort())
                 page = context.new_page()
                 page.on('pageerror', lambda error: errors.append(str(error)))
-                for path, name in [('/', 'website-home'), ('/guide/', 'website-guide')]:
+                for path, name in [('/', 'website-home'), ('/guide/', 'website-guide'), ('/live-api/', 'website-live-api')]:
                     page.goto('http://127.0.0.1:4173' + path)
                     # Trigger lazy images before the full-page capture and verify every image has decoded.
                     for image in page.locator('img').all():

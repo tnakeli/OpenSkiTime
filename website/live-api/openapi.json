@@ -1,0 +1,45 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSkiTime Live API",
+    "version": "1.0.0",
+    "summary": "Read published alpine ski races: start lists, race progress and unofficial results.",
+    "description": "The HTTP part of the OpenSkiTime Live API. Changes in real time come from the SignalR hub /live, which OpenAPI cannot describe; see https://openskiti.me/live-api/. Its messages are the schemas SyncMessage, DeltaMessage and BeaconMessage.",
+    "license": { "name": "MIT", "identifier": "MIT" }
+  },
+  "externalDocs": { "url": "https://openskiti.me/live-api/" },
+  "servers": [
+    { "url": "https://live.openskiti.me", "description": "Hosted service" },
+    { "url": "http://localhost:5078", "description": "Local live timing on the race computer (default address)" }
+  ],
+  "security": [],
+  "paths": {
+    "/api/sessions": {
+      "get": {
+        "operationId": "listRaces",
+        "summary": "Races published now",
+        "description": "Every race with published state, newest race date first. An empty list means that no race is published.",
+        "responses": {
+          "200": { "description": "The published races.", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Race" } } } } },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/api/sessions/{sessionId}/state": {
+      "get": {
+        "operationId": "readState",
+        "summary": "Complete state of one race",
+        "parameters": [{ "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "The state.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/State" } } } },
+          "404": { "description": "The server has no state for this ID: unknown, not published yet, not restored after a server restart, expired or deleted." },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": { "TooManyRequests": { "description": "Too many requests from this address. Wait before trying again." } },
+    "schemas": {}
+  }
+}

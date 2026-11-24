@@ -61,6 +61,23 @@ jobs:
       - run: node website/build.mjs
       - run: node website/check.mjs
       - run: node --test scripts/tests/*.test.mjs
+  live-api:
+    name: Live API
+    # This image has Java and Maven for the Java example reader.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - run: dotnet build src/OpenSkiTime.LiveTiming.Server -c Release
+      - run: npm ci --ignore-scripts --prefix tests/live-api
+      # Runs on every change, also of the website only: the published schema and example readers must fit the server.
+      - run: node tests/live-api/verify.mjs --readers=js,dotnet,java
   application:
     name: Windows tests
     needs: scope

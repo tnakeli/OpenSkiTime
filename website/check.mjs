@@ -3,7 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
-for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide/index.html', 'privacy/index.html', 'code-signing/index.html', '404.html']) {
+for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide/index.html', 'live-api/index.html', 'privacy/index.html', 'code-signing/index.html', '404.html']) {
   const html = await readFile(path.join(root, page), 'utf8');
   assert.match(html, page.startsWith('fi/') ? /<html lang="fi">/ : /<html lang="en">/);
   assert.match(html, /<main id="main">/);
@@ -77,6 +77,21 @@ for (const [, url] of llms.matchAll(/\]\((https:\/\/openskiti\.me\/[^)]*)\)/g)) 
 const sitemap = await readFile(path.join(root, 'sitemap.xml'), 'utf8');
 assert(sitemap.includes('<loc>https://openskiti.me/fi/</loc>'));
 for (const [, date] of sitemap.matchAll(/<lastmod>([^<]*)<\/lastmod>/g)) assert.match(date, /^\d{4}-\d{2}-\d{2}$/);
+// The Live API: the OpenAPI document is complete, the page shows the published examples, and the text file has everything.
+const openApi = JSON.parse(await readFile(path.join(root, 'live-api', 'openapi.json'), 'utf8'));
+assert.equal(openApi.openapi, '3.1.0');
+for (const [, ref] of JSON.stringify(openApi).matchAll(/"\$ref":"([^"]+)"/g)) {
+  assert(ref.startsWith('#/') && ref.slice(2).split('/').reduce((node, key) => node?.[key], openApi), `Unresolved ${ref} in openapi.json`);
+}
+const apiPage = await readFile(path.join(root, 'live-api', 'index.html'), 'utf8');
+const apiText = await readFile(path.join(root, 'live-api', 'live-api.txt'), 'utf8');
+for (const heading of ['## Synchronization rules', '## From changes to events', '### Java']) assert(apiText.includes(heading), `live-api.txt is missing ${heading}`);
+for (const file of ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs', 'LiveReader.java']) {
+  const source = await readFile(path.join(root, 'live-api', file), 'utf8');
+  assert(apiText.includes(source.trimEnd()), `live-api.txt is missing ${file}`);
+  assert(apiPage.includes(`href="/live-api/${file}"`), `The Live API page does not link to ${file}`);
+}
+assert(!/<\/?[a-z]+>/.test(apiText.slice(0, apiText.indexOf('## File: '))), 'The text of live-api.txt must not contain HTML.');
 const config = JSON.parse(await readFile(path.join(root, 'staticwebapp.config.json'), 'utf8'));
 assert(config.globalHeaders['Content-Security-Policy'].includes("frame-ancestors 'none'"));
 console.log('Website checked: pages, assets, anchors, metadata and security headers.');
