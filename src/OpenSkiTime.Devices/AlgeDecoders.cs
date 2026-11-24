@@ -18,6 +18,7 @@ public sealed class AlgeDecoderFactory : ITimingDecoderFactory
             "alge-ascii/v1" => new AlgeAsciiDecoder(session, source, stream),
             "alge-timy-sdk/v1" => new AlgeTimySdkDecoder(session, source, stream),
             "alge-results/v1" => new AlgeResultsDecoder(session),
+            SkiAlpProPacket.Protocol => new SkiAlpProDecoder(session),
             _ => new DiagnosticDecoder(session)
         };
     }

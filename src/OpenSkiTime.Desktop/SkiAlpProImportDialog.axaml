@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:OpenSkiTime.Desktop" x:Class="OpenSkiTime.Desktop.SkiAlpProImportDialog" x:CompileBindings="False"
+        Title="Update from Ski-Alp-Pro · test use only" Width="{DynamicResource ImportDialogWidth}" Height="{DynamicResource ImportDialogHeight}"
+        MinWidth="{DynamicResource SupportDialogWidth}" MinHeight="{DynamicResource SupportDialogHeight}"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner" Background="{DynamicResource CanvasBrush}">
+ <Grid Margin="{DynamicResource PageInset}" RowDefinitions="*,Auto,Auto" RowSpacing="{DynamicResource FormGap}">
+  <ScrollViewer><StackPanel Spacing="{DynamicResource FormGap}">
+   <Border Name="TestUseNote" Classes="warningNote"><TextBlock TextWrapping="Wrap" Text="TEST USE ONLY. Imported times are marked as simulation: they cannot be mixed with device timing or sent to FIS as official results."/></Border>
+   <Border Classes="card"><StackPanel Spacing="{DynamicResource FormGap}">
+    <Grid Classes="cardHeader"><TextBlock Text="Event" Classes="cardTitle"/></Grid>
+    <local:FormRow>
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="FILE" Classes="fieldLabel"/><TextBlock Name="SkiAlpProFileText" Text="{Binding FileText}" TextWrapping="Wrap"/></StackPanel>
+     <StackPanel Grid.Column="4" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="CODEX" Classes="fieldLabel"/><TextBlock Name="SkiAlpProCodexText" Text="{Binding CodexText}"/></StackPanel>
+     <StackPanel Grid.Column="8" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="RACE" Classes="fieldLabel"/><TextBlock Text="{Binding RaceText}" TextWrapping="Wrap"/></StackPanel>
+    </local:FormRow>
+    <local:FormRow>
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="DATE" Classes="fieldLabel"/><TextBlock Text="{Binding DateText}"/></StackPanel>
+     <StackPanel Grid.Column="4" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="DISCIPLINE" Classes="fieldLabel"/><TextBlock Text="{Binding DisciplineText}"/></StackPanel>
+     <StackPanel Grid.Column="8" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="LOCATION" Classes="fieldLabel"/><TextBlock Text="{Binding LocationText}" TextWrapping="Wrap"/></StackPanel>
+    </local:FormRow>
+    <local:FormRow>
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="8" Classes="field"><TextBlock Text="COMPETITORS" Classes="fieldLabel"/><TextBlock Name="SkiAlpProCompetitorsText" Text="{Binding CompetitorsText}" TextWrapping="Wrap"/></StackPanel>
+     <StackPanel Grid.Column="8" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="POINTS LIST" Classes="fieldLabel"/><TextBlock Text="{Binding PointsListText}"/></StackPanel>
+    </local:FormRow>
+    <DataGrid Name="SkiAlpProStatisticsGrid" Classes="raceGrid" ItemsSource="{Binding Statistics}" IsReadOnly="True" AutoGenerateColumns="False" CanUserSortColumns="False">
+     <DataGrid.Columns>
+      <DataGridTextColumn Header="RUN" Binding="{Binding Label}" Width="Auto"/>
+      <DataGridTextColumn Header="STARTERS" Binding="{Binding Starters}" Width="Auto"/>
+      <DataGridTextColumn Header="FINISHED" Binding="{Binding Finished}" Width="Auto"/>
+      <DataGridTextColumn Header="DNS" Binding="{Binding Dns}" Width="Auto"/>
+      <DataGridTextColumn Header="DNF" Binding="{Binding Dnf}" Width="Auto"/>
+      <DataGridTextColumn Header="DSQ" Binding="{Binding Dsq}" Width="Auto"/>
+      <DataGridTextColumn Header="OTHER" Binding="{Binding Other}" Width="Auto"/>
+      <DataGridTextColumn Header="NO RESULT" Binding="{Binding NoResult}" Width="Auto"/>
+      <DataGridTextColumn Header="IMPULSES" Binding="{Binding Impulses}" Width="Auto"/>
+     </DataGrid.Columns>
+    </DataGrid>
+    <TextBlock Name="SkiAlpProNoticesText" Text="{Binding Notices}" IsVisible="{Binding HasNotices}" Classes="supportingText attention" TextWrapping="Wrap"/>
+   </StackPanel></Border>
+   <Border Classes="card"><StackPanel Spacing="{DynamicResource FormGap}" IsEnabled="{Binding !IsBusy}">
+    <Grid Classes="cardHeader"><TextBlock Text="Import" Classes="cardTitle"/></Grid>
+    <TextBlock Name="SkiAlpProTargetNotice" Text="{Binding TargetNotice}" IsVisible="{Binding HasTargetNotice}" Classes="supportingText attention" TextWrapping="Wrap"/>
+    <local:FormRow>
+     <StackPanel Grid.Column="0" Grid.ColumnSpan="5" Classes="field"><TextBlock Text="DATA" Classes="fieldLabel"/><ComboBox Name="SkiAlpProScopeBox" ItemsSource="{Binding Scopes}" SelectedItem="{Binding Scope}"/></StackPanel>
+     <StackPanel Grid.Column="5" Grid.ColumnSpan="5" Classes="field"><TextBlock Text="TO COMPETITION" Classes="fieldLabel"/><ComboBox Name="SkiAlpProTargetBox" ItemsSource="{Binding Targets}" SelectedItem="{Binding Target}"/></StackPanel>
+     <StackPanel Grid.Column="10" Grid.ColumnSpan="2" Classes="field" IsVisible="{Binding IsNewTarget}"><TextBlock Text="CODEX" Classes="fieldLabel"/><TextBox Name="SkiAlpProCodexBox" Text="{Binding NewCodex}" MaxLength="50"/></StackPanel>
+    </local:FormRow>
+    <TextBlock Name="SkiAlpProReplacementText" Text="{Binding ReplacementText}" IsVisible="{Binding NeedsConfirmation}" Classes="supportingText" TextWrapping="Wrap"/>
+    <CheckBox Name="SkiAlpProConfirmCheckBox" Content="{Binding ConfirmText}" IsChecked="{Binding IsConfirmed}" IsVisible="{Binding NeedsConfirmation}"/>
+   </StackPanel></Border>
+  </StackPanel></ScrollViewer>
+  <TextBlock Grid.Row="1" Name="SkiAlpProStatusText" Text="{Binding Status}" Classes="statusText" Classes.error="{Binding IsError}" TextWrapping="Wrap"/>
+  <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto">
+   <Button Content="Cancel" Click="Close_Click" IsEnabled="{Binding !IsBusy}" Classes="secondaryAction"/>
+   <Button Grid.Column="2" Name="SkiAlpProImportButton" Content="Import" Command="{Binding ImportCommand}" Classes="primaryAction"/>
+  </Grid>
+ </Grid>
+</Window>

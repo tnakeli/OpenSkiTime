@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace OpenSkiTime.Domain;
 
@@ -19,15 +20,20 @@ public sealed record PointsListSource(string Code, DateOnly ValidFrom, DateOnly 
 }
 // SkippedBibs: bib numbers that are not handed out (missing or reserved bibs); assignment continues with the next number.
 public sealed record DrawOptions(int FirstGroup = 15, int ReverseCount = 30, int FirstBib = 1, IReadOnlyList<int>? SkippedBibs = null);
-public enum StartListChangeKind { Move, AssignBibs }
+// ImportOrder is appended so the numeric values stored in existing start lists keep their meaning.
+public enum StartListChangeKind { Move, AssignBibs, ImportOrder }
+/// <summary>One starter of an imported order: the competitor and the bib the source gives them.</summary>
+public sealed record ImportedStart(Guid CompetitorId, int Bib);
 /// <summary>
 /// A recorded change on top of the drawn order (Run 1) or the result order (Run 2): a competitor moved to another
-/// position, for example as a penalty (the competitor keeps the bib), or bibs assigned again in the current order. The
-/// saved list is the draw (or Run 2 order) with these changes applied in sequence, so it stays verifiable and every
-/// change keeps its reason.
+/// position, for example as a penalty (the competitor keeps the bib), bibs assigned again in the current order, or the
+/// complete order (and Run 1 bibs) taken from another timing program. The saved list is the draw (or Run 2 order) with
+/// these changes applied in sequence, so it stays verifiable and every change keeps its reason.
 /// </summary>
 public sealed record StartListChange(StartListChangeKind Kind, string Reason, Guid? CompetitorId = null, int? ToPosition = null,
-    int? FirstBib = null, IReadOnlyList<int>? SkippedBibs = null);
+    int? FirstBib = null, IReadOnlyList<int>? SkippedBibs = null,
+    // Omitted when null, so saved plans and approved-result fingerprints without an imported order are unchanged.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ImportedStart>? Order = null);
 public enum FinishStatus { Finished, DNS, DNF, DSQ, NPS }
 public sealed record RunFinish(Guid CompetitorId, FinishStatus Status, long? Hundredths);
 // Gender: the field of the list; null is a list for all genders (non-FIS races). Setup: the flexible start order of a
@@ -165,6 +171,8 @@ public static class FisStartOrder
         if (string.IsNullOrWhiteSpace(change.Reason) || change.Reason.Length > 200)
         { throw new DomainValidationException("Enter a reason (at most 200 characters) for the start list change."); }
         var entries = plan.Entries.OrderBy(x => x.Position).ToList();
+        if (change.Order is not null && change.Kind != StartListChangeKind.ImportOrder)
+        { throw new DomainValidationException("Only an imported order lists every starter."); }
         switch (change.Kind)
         {
             case StartListChangeKind.Move:
@@ -182,6 +190,20 @@ public static class FisStartOrder
                 { throw new DomainValidationException("Assigning bibs needs only the first bib and any skipped bibs."); }
                 var bibs = Bibs(first, change.SkippedBibs, entries.Count);
                 entries = entries.Select((x, i) => x with { Bib = bibs[i] }).ToList();
+                break;
+            case StartListChangeKind.ImportOrder:
+                if (change.CompetitorId is not null || change.ToPosition is not null || change.FirstBib is not null || change.SkippedBibs is not null)
+                { throw new DomainValidationException("An imported order only lists the starters and their bibs."); }
+                var order = change.Order ?? [];
+                var byId = entries.ToDictionary(x => x.Entrant.CompetitorId);
+                if (order.Count != entries.Count || order.Any(x => x is null) || order.Select(x => x.CompetitorId).Distinct().Count() != order.Count
+                    || order.Any(x => !byId.ContainsKey(x.CompetitorId)))
+                { throw new DomainValidationException("The imported order must list every starter exactly once."); }
+                if (order.Any(x => x.Bib is < 1 or > 99999) || order.Select(x => x.Bib).Distinct().Count() != order.Count)
+                { throw new DomainValidationException("Imported bibs must be unique and 1–99999."); }
+                if (plan.RunNumber != 1 && order.Any(x => byId[x.CompetitorId].Bib != x.Bib))
+                { throw new DomainValidationException("Bibs are assigned on the Run 1 start list; later runs keep them."); }
+                entries = order.Select(x => byId[x.CompetitorId] with { Bib = x.Bib }).ToList();
                 break;
             default:
                 throw new DomainValidationException("Unknown start list change.");

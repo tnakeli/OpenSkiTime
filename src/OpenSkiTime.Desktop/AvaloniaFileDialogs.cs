@@ -14,6 +14,7 @@ public interface IFileDialogs
     Task<string?> ChooseResultXmlExportAsync(string suggestedName);
     Task<string?> ChoosePdfExportAsync(string title, string suggestedName);
     Task<string?> ChooseDebugBundleAsync() => Task.FromResult<string?>(null);
+    Task<string?> ChooseSkiAlpProFileAsync() => Task.FromResult<string?>(null);
 }
 
 public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
@@ -27,6 +28,17 @@ public sealed class AvaloniaFileDialogs(Window owner) : IFileDialogs
         });
         return file is null ? null : file.TryGetLocalPath()
             ?? throw new IOException("The selected destination is not a local file. Choose a local folder.");
+    }
+
+    public async Task<string?> ChooseSkiAlpProFileAsync()
+    {
+        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Ski-Alp-Pro event (test use only)", AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Ski-Alp-Pro event") { Patterns = ["*.scdb"] }],
+        });
+        return files.Count == 0 ? null : files[0].TryGetLocalPath()
+            ?? throw new IOException("The selected file is not a local file. Copy it to a local folder first.");
     }
 
     private static readonly FilePickerFileType s_seriesType = new("OpenSkiTime event series")

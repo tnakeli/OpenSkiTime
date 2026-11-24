@@ -35,7 +35,7 @@ public sealed partial class MainViewModel
     private string? _auditFile;
     private bool _loadingUiPreferences;
     public bool IsAuditTrailSection => ActiveSection == WorkspaceSection.AuditTrail;
-    [ObservableProperty] private bool _advancedMode;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanUpdateFromSkiAlpPro))] private bool _advancedMode;
     [ObservableProperty] private int _selectedAuditTab;
     [ObservableProperty] private bool _isAuditBusy;
     [ObservableProperty] private string _auditStatus = "Refresh to inspect saved history.";

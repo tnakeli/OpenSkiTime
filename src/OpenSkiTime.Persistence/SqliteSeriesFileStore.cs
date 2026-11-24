@@ -113,7 +113,7 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
     // Every schema object except SQLite's internal ones, with its SQL text (whitespace normalized), in a stable order.
     internal static Task<string[]> SchemaAsync(SqliteConnection connection, CancellationToken ct) => SchemaAsync(connection, null, ct);
 
-    private static async Task<string[]> SchemaAsync(SqliteConnection connection, SqliteTransaction? transaction, CancellationToken ct)
+    internal static async Task<string[]> SchemaAsync(SqliteConnection connection, SqliteTransaction? transaction, CancellationToken ct)
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -292,10 +292,13 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         }
     }
 
-    private static string MigrationBackupPath(string path, int from)
+    private static string MigrationBackupPath(string path, int from) => SiblingBackupPath(path, $"v{from}-backup", DateTime.Now);
+
+    // A free file name next to the series file: "name.label-yyyyMMdd-HHmmss.ost".
+    internal static string SiblingBackupPath(string path, string label, DateTime at)
     {
-        var folder = Path.GetDirectoryName(path)!;
-        var name = $"{Path.GetFileNameWithoutExtension(path)}.v{from}-backup-{DateTime.Now:yyyyMMdd-HHmmss}";
+        var folder = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        var name = $"{Path.GetFileNameWithoutExtension(path)}.{label}-{at:yyyyMMdd-HHmmss}";
         var candidate = Path.Combine(folder, name + ".ost");
         for (var i = 2; File.Exists(candidate); i++) { candidate = Path.Combine(folder, $"{name}-{i}.ost"); }
         return candidate;

@@ -105,6 +105,8 @@ public sealed partial class MainViewModel
     private void ClearCompetitorDesk()
     {
         IsFisPanelOpen = false;
+        IsFissiPanelOpen = false;
+        ClearFissiRaces();
         FisEffectiveDateText = string.Empty;
         _desk = null;
         _selectedExportRows.Clear();
@@ -138,7 +140,7 @@ public sealed partial class MainViewModel
                     VisibleCompetitors.Add(_allCompetitorRows[^1]);
                 }
                 UpdateCategory(row);
-                RebuildChangeLog();
+                if (!_suspendDeskChangeLog) { RebuildChangeLog(); }
             };
         }
     }

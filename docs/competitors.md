@@ -26,6 +26,37 @@ The **POINTS** column holds one points value for every discipline. Type it in th
 
 FIS points are saved with the event series together with the list they came from (code, validity and penalty rules), so the series does not depend on the computer's downloaded list. Downloading a newer list changes nothing until **Update from FIS list** and **Save**. Changing a competitor's Code takes that athlete's points from the loaded list as a staged change; without a loaded list (or when the Code is cleared) the previous points are cleared instead. The event file enforces the same rule on every save path, imports included: a Code change saved without new points clears the saved points, so they never stay with another athlete. Adding competitors from the FIS search saves their points with them. The Run 1 draw uses the saved points; it needs one saved list for all entered competitors and states which list it uses, with a warning when it is not valid on the competition date.
 
+## Update from regs.fissi.fi
+
+**Update from regs.fissi.fi** (the section below **Update from FIS**) reads the registered athletes of every competition of the open series from the public registration pages of [regs.fissi.fi](https://regs.fissi.fi) and stages the differences in the grid. Nothing is saved before **Save**; **Undo** lists every staged change and can undo each one. Pending edits are saved or discarded first, because the registrations are compared with the saved competitors.
+
+A competition is found by its codex. The season of the registration page must be the season of the competition (FIS uses the same codexes every season), and gender and discipline must agree where both sides tell them. Upcoming races are searched first, past races only for a codex that is not among them. The section lists each competition with the date on the site, the registered athletes, the new competitors, the entries added and removed and a status:
+
+| Status | Meaning |
+|---|---|
+| Review and save / Up to date | The registrations were read; with or without entry changes. Changed details are highlighted in the grid |
+| Date differs from the competition, check the race | Read, but the date on the site is another day of the same season |
+| None registered | The race has no registrations (for example not open yet). No entry is removed |
+| No codex / Not found | The competition has no numeric codex, or the site has no such race in this season |
+| Gender or discipline differs | The codex belongs to another kind of race; correct the competition |
+| Several matches | More than one race, or more than one competition, has the codex |
+| Start list saved, not updated | A start list exists; see below |
+
+Athletes are matched by FIS code, otherwise by name and birth year.
+
+- A new athlete is added with the code, name, birth year, nation and club of the site, the gender of the race and the entries of all read competitions.
+- An existing competitor's name, birth year, nation and club are replaced by the site's values; values the site does not have stay. The same name in other capitals or order is kept. The gender is filled in only when it is missing.
+- An entry of a competitor who is not registered any more is removed. This includes competitors added by hand, so review the removals before **Save**. Nobody whose code or name is on the registration list of the race is removed; an unclear one is named in a warning.
+- A match by name whose Code differs, and a new or changed name written entirely in capitals (the surname cannot be told apart, unless the loaded FIS list has the athlete), need **Match checked** before **Save**.
+- An uncertain match (several competitors, registered twice, men's and women's races, the same name with a birth year missing, neither a code nor a birth year) and invalid values are left out with a warning, and nobody involved loses an entry. An entry of the other gender is not added.
+- The site's points are not used. New competitors get their points from the loaded FIS list; use **Update from FIS list** and **Save** for the others.
+
+A competition with a saved start list is not updated and competitors on any saved start list keep their details, because a later run requires the entries and details of Run 1.
+
+The site has no API, so the pages are read as they are. All pages are read and checked before anything is staged: a page that is not understood completely (an unknown table, a row that cannot be read, another number of rows than the page states) stops the update without changes, because a missing athlete would otherwise be proposed for removal. If the competitors or competitions change or another view is opened during the download, nothing is staged. No credentials or race data are sent. Reading registrations is optional and does not affect timing.
+
+Reviewed against the public pages on 2026-11-24. The past race list had no races then, so its row layout is assumed to be that of the upcoming list.
+
 ## Gender of competitors and competitions
 
 Gender appears as **Men** and **Women** for competitors and as **Men**, **Women** or **Mixed** for competitions everywhere in the application. The series file and FIS messages keep the FIS calendar codes M, W and A.

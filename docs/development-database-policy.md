@@ -1,6 +1,6 @@
 # Series database and migration policy
 
-Each event series is one portable SQLite `.ost` file. `SqliteSeriesFileStore.CreateAsync` creates the current EF model with `EnsureCreated`, installs the immutable-history triggers and the FIS points tables, records the current schema version and saves the series in a temporary file before publishing the new `.ost` file. Raw timing packets, timing audit, approved results and race-information revisions remain protected against SQL updates and deletes. The application uses no EF migrations, migration history table or model snapshot; upgrades are explicit SQL steps described below.
+Each event series is one portable SQLite `.ost` file. `SqliteSeriesFileStore.CreateAsync` creates the current EF model with `EnsureCreated`, installs the immutable-history triggers and the FIS points tables, records the current schema version and saves the series in a temporary file before publishing the new `.ost` file. Raw timing packets, timing audit, approved results and race-information revisions remain protected against SQL updates and deletes. The one exception is the [Ski-Alp-Pro test import](ski-alp-pro-import.md), which replaces a competition after saving a verified copy of the complete series: it drops the delete triggers and recreates them from their stored SQL inside its transaction, and commits only when the schema is unchanged. The application uses no EF migrations, migration history table or model snapshot; upgrades are explicit SQL steps described below.
 
 ## Schema versions
 
