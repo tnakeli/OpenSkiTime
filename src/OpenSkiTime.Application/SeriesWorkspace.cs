@@ -65,6 +65,10 @@ public sealed partial class SeriesWorkspace(ISeriesFileStore store, ITimingDecod
         => WithSessionAsync(s => (s as IResultStore ?? throw new SeriesFileException("Result storage is unavailable.")).ReadApprovedResultsAsync(competitionId, ct), ct);
     public Task<ApprovedResult> ApproveResultAsync(ApproveResultRequest request, CancellationToken ct = default)
         => WithSessionAsync(s => (s as IResultStore ?? throw new SeriesFileException("Result storage is unavailable.")).ApproveResultAsync(request, ct), ct);
+    public Task<SkiAlpProReplacement> ReadSkiAlpProReplacementAsync(Guid competitionId, CancellationToken ct = default)
+        => WithSessionAsync(s => (s as ISkiAlpProImportStore ?? throw new SeriesFileException("Test import is unavailable.")).ReadSkiAlpProReplacementAsync(competitionId, ct), ct);
+    public Task<SkiAlpProImportResult> ApplySkiAlpProImportAsync(SkiAlpProCommit commit, CancellationToken ct = default)
+        => WithSessionAsync(s => (s as ISkiAlpProImportStore ?? throw new SeriesFileException("Test import is unavailable.")).ApplySkiAlpProImportAsync(commit, ct), ct);
     public string? FilePath => _session?.FilePath;
     public bool IsOpen => _session is not null;
     public Task<SavedRaceInformation?> ReadRaceInformationAsync(Guid competitionId, CancellationToken ct = default)

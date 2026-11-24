@@ -60,3 +60,5 @@ Shows the software version (Semantic Versioning `MAJOR.MINOR.PATCH`) and the FIS
 ## Advanced mode
 
 **About > Advanced > Enable advanced mode** shows **Audit trail** immediately after **PDF Factory**. The preference is local to this user, outside event files. Audit trail inspects existing saved history and worker logs and creates local support ZIP files; it adds no logging or database schema changes. See [Audit trail and support bundles](audit-trail.md) for coverage, limits and complete-series export.
+
+Advanced mode also shows **Update from Ski-Alp-Pro**, a test tool that replaces a competition of the open event series with the starters and times of a Vola Ski-Alp-Pro file. See [Update from Ski-Alp-Pro](ski-alp-pro-import.md).

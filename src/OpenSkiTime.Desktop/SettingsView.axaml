@@ -234,6 +234,10 @@
       <StackPanel Spacing="{DynamicResource FormGap}">
        <Grid Classes="cardHeader"><TextBlock Text="Advanced" Classes="cardTitle"/></Grid>
        <CheckBox Name="AdvancedModeCheckBox" Content="Enable advanced mode" IsChecked="{Binding AdvancedMode}"/>
+       <WrapPanel IsVisible="{Binding AdvancedMode}" ItemSpacing="{DynamicResource FormGap}" LineSpacing="{DynamicResource FormGap}">
+        <Button Name="UpdateFromSkiAlpProButton" Content="Update from Ski-Alp-Pro" Click="UpdateFromSkiAlpPro_Click" IsEnabled="{Binding CanUpdateFromSkiAlpPro}" Classes="secondaryAction"/>
+        <TextBlock Name="UpdateFromSkiAlpProNote" Text="Test use only. Replaces a competition of the open event series with the starters and times of a Ski-Alp-Pro file." Classes="supportingText attention" VerticalAlignment="Center" TextWrapping="Wrap"/>
+       </WrapPanel>
       </StackPanel>
      </Border>
     </StackPanel>

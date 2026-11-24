@@ -40,11 +40,13 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEditingSeries))]
     [NotifyPropertyChangedFor(nameof(CanEditCompetitions))]
+    [NotifyPropertyChangedFor(nameof(CanUpdateFromSkiAlpPro))]
     private bool _isOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEditingSeries))]
     [NotifyPropertyChangedFor(nameof(CanEditCompetitions))]
+    [NotifyPropertyChangedFor(nameof(CanUpdateFromSkiAlpPro))]
     private bool _isCreatingNew = true;
 
     public bool IsEditingSeries => IsOpen && !IsCreatingNew;
