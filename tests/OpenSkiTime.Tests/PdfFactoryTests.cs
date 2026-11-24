@@ -663,16 +663,106 @@ public sealed class PdfFactoryTests
         var words = pdf.GetPages().SelectMany(x => x.GetWords()).ToArray();
         // Nobody has a bib or a category in this series, so both columns are omitted.
         Assert.DoesNotContain(words, x => x.Text is "Bib" or "Category");
-        var sl = words.Single(x => x.Text == "SL-A"); var gs = words.Single(x => x.Text == "GS-B");
-        Assert.True(sl.BoundingBox.Left < gs.BoundingBox.Left);
+        // Competition columns are headed upwards, so the header is read letter by letter.
+        var sl = UpwardsHeader(pdf.GetPage(1), "SL-A"); var gs = UpwardsHeader(pdf.GetPage(1), "GS-B");
+        Assert.True(sl < gs);
         string Marks(int racer)
         {
             var row = words.Single(x => x.Text == "RACER" + racer.ToString("D4", CultureInfo.InvariantCulture)).BoundingBox.Bottom;
             var marks = words.Where(x => x.Text == "X" && Math.Abs(x.BoundingBox.Bottom - row) < 2).ToArray();
-            return (marks.Any(x => Math.Abs(x.BoundingBox.Left - sl.BoundingBox.Left) < 30) ? "S" : "") + (marks.Any(x => Math.Abs(x.BoundingBox.Left - gs.BoundingBox.Left) < 30) ? "G" : "");
+            return (marks.Any(x => Math.Abs(x.BoundingBox.Centroid.X - sl) < 6) ? "S" : "") + (marks.Any(x => Math.Abs(x.BoundingBox.Centroid.X - gs) < 6) ? "G" : "");
         }
         Assert.Equal(["S", "S", "S", "", "", "G"], Enumerable.Range(1, 6).Select(Marks));
         Assert.Contains("OpenSkiTime" + ProductInfo.Version, string.Concat(pdf.GetPages().SelectMany(x => x.Text).Where(c => !char.IsWhiteSpace(c))), StringComparison.Ordinal);
+    }
+    [Theory]
+    [InlineData(PdfReportType.EventSeriesEntries, 8, 12)]
+    [InlineData(PdfReportType.EventSeriesEntriesByNation, 8, 12)]
+    [InlineData(PdfReportType.EventSeriesEntriesByCategory, 8, 12)]
+    [InlineData(PdfReportType.EventSeriesEntries, 8, 50)]
+    [InlineData(PdfReportType.EventSeriesEntries, 40, 12)]
+    public void SeriesEntriesOfManyCompetitionsKeepEveryValueWhole(PdfReportType type, int competitionCount, int marginMm)
+    {
+        using var folder = new TestFolder();
+        var source = ManyCompetitions(folder.PathFor("test.ost"), competitionCount, 90);
+        source = source with { Settings = new(new(LeftMm: marginMm, RightMm: marginMm), []) };
+        var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == type);
+        var path = folder.PathFor(descriptor.FileName);
+        new QuestPdfRenderer().Render(new(descriptor, source, EntryReportBuilder.Build(source, descriptor), s_at), path);
+        CopyQa(path, $"many-competitions-{type}-{competitionCount}-{marginMm}.pdf");
+        using var pdf = PdfDocument.Open(path);
+        var pages = pdf.GetPages().ToArray();
+        var words = pages.SelectMany(x => x.GetWords()).ToArray();
+        var text = words.Select(x => x.Text).ToHashSet(StringComparer.Ordinal);
+        foreach (var racer in source.Desk.Competitors)
+        {
+            Assert.Contains(racer.Values.FederationCode!, text);
+            Assert.All(racer.Values.Club!.Split(' '), x => Assert.Contains(x, text));
+            // "AAA-BBB" may continue on the next line after its hyphen.
+            Assert.True(text.Contains(racer.Values.Surname) || racer.Values.Surname.Split('-') is [var a, var b] && text.Contains(a + "-") && text.Contains(b), racer.Values.Surname);
+            Assert.Contains(source.Desk.FisPoints![racer.Id].Sl!.Value.ToString("0.00", CultureInfo.InvariantCulture), text);
+        }
+        Assert.Superset(new HashSet<string>(["2009", "NOR", "FIN", "M18", "Nation", "Category"]), text);
+        Assert.Equal(source.Desk.Participations.Count, words.Count(x => x.Text == "X"));
+        Assert.All(pages, page =>
+        {
+            // The whole table, its one header included, is within the margins on every page.
+            Assert.InRange(page.Letters.Min(x => x.BoundingBox.Left), marginMm * 72 / 25.4 - 1, page.Width);
+            Assert.InRange(page.Letters.Max(x => x.BoundingBox.Right), 0, page.Width - marginMm * 72 / 25.4 + 1);
+            Assert.Single(page.GetWords(), x => x.Text == "Club");
+        });
+        foreach (var page in pages)
+        {
+            // A group heading is never the last line of a page, and a row of several lines is not split between pages.
+            var lines = page.GetWords().Where(x => x.BoundingBox.Bottom > 15 * 72 / 25.4 + 15).OrderBy(x => x.BoundingBox.Bottom).ToArray();
+            Assert.DoesNotMatch(@"^\(\d+\)$", lines[0].Text);
+            var codes = source.Desk.Competitors.Where(x => lines.Any(y => y.Text == x.Values.FederationCode)).ToArray();
+            Assert.Equal(codes.Count(x => x.Values.Club!.EndsWith("Association", StringComparison.Ordinal)), lines.Count(x => x.Text == "Association"));
+            Assert.Equal(codes.Count(x => x.Values.FirstName!.EndsWith("Taylor", StringComparison.Ordinal)), lines.Count(x => x.Text == "Taylor"));
+        }
+    }
+    [Fact]
+    public void SeriesEntriesOfEightCompetitionsKeepAShortRowOnOneLine()
+    {
+        using var folder = new TestFolder();
+        var source = ManyCompetitions(folder.PathFor("test.ost"), 8, 90);
+        var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.EventSeriesEntries);
+        var path = folder.PathFor(descriptor.FileName);
+        new QuestPdfRenderer().Render(new(descriptor, source, EntryReportBuilder.Build(source, descriptor), s_at), path);
+        using var pdf = PdfDocument.Open(path);
+        // Broken values used to leave fifteen rows on a page.
+        Assert.InRange(pdf.NumberOfPages, 1, 3);
+        var page = pdf.GetPage(1);
+        var code = page.GetWords().First(x => x.Text == "6530001").BoundingBox;
+        var line = page.GetWords().Where(x => Math.Abs(x.BoundingBox.Bottom - code.Bottom) < 2.5).Select(x => x.Text).ToArray();
+        Assert.Superset(new HashSet<string>(["6530001", "2008", "NOR", "M18", "103.50"]), line.ToHashSet(StringComparer.Ordinal));
+        Assert.Equal(4, line.Count(x => x == "X"));
+    }
+    [Theory]
+    [InlineData(PdfReportType.EventSeriesEntries)]
+    [InlineData(PdfReportType.EventSeriesEntriesByNation)]
+    public void SeriesEntriesOfNobodyAreGenerated(PdfReportType type)
+    {
+        using var folder = new TestFolder();
+        var source = ManyCompetitions(folder.PathFor("test.ost"), 8, 0);
+        var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == type);
+        var path = folder.PathFor(descriptor.FileName);
+        new QuestPdfRenderer().Render(new(descriptor, source, EntryReportBuilder.Build(source, descriptor), s_at), path);
+        using var pdf = PdfDocument.Open(path);
+        Assert.Contains("No entries.", pdf.GetPage(1).Text, StringComparison.Ordinal);
+    }
+    [Fact]
+    public void OneExceptionallyLongWordDoesNotShrinkTheWholeList()
+    {
+        using var folder = new TestFolder();
+        var source = ManyCompetitions(folder.PathFor("test.ost"), 8, 10);
+        source = source with { Desk = source.Desk with { Competitors = [.. source.Desk.Competitors.Select((x, i) => i == 0 ? x with { Values = x.Values with { Club = new string('Q', 100) } } : x)] } };
+        var descriptor = ReportCatalog.GetAvailableReports(source).Single(x => x.Type == PdfReportType.EventSeriesEntries);
+        var path = folder.PathFor(descriptor.FileName);
+        new QuestPdfRenderer().Render(new(descriptor, source, EntryReportBuilder.Build(source, descriptor), s_at), path);
+        using var pdf = PdfDocument.Open(path);
+        Assert.Equal(100, pdf.GetPage(1).Letters.Count(x => x.Value == "Q" && x.TextOrientation == UglyToad.PdfPig.Content.TextOrientation.Horizontal));
+        Assert.InRange(pdf.GetPage(1).Letters.Where(x => x.TextOrientation == UglyToad.PdfPig.Content.TextOrientation.Horizontal).Min(x => x.PointSize), 6.5, 8);
     }
     [Fact]
     public async Task CompetitionEntriesKeepBibAndCategoryWhenAnyEntrantHasOne()
@@ -764,6 +854,39 @@ public sealed class PdfFactoryTests
         if (string.IsNullOrWhiteSpace(qa)) { return; }
         Directory.CreateDirectory(qa);
         File.Copy(path, Path.Combine(qa, filename), overwrite: true);
+    }
+    // The horizontal centre of a column header printed upwards.
+    private static double UpwardsHeader(UglyToad.PdfPig.Content.Page page, string label)
+    {
+        var column = page.Letters.Where(x => x.TextOrientation == UglyToad.PdfPig.Content.TextOrientation.Rotate270).GroupBy(x => Math.Round(x.StartBaseLine.X))
+            .Single(x => string.Concat(x.OrderBy(y => y.StartBaseLine.Y).Select(y => y.Value)) == label);
+        return column.Average(x => x.BoundingBox.Centroid.X);
+    }
+    private static PdfReportSource ManyCompetitions(string path, int competitionCount, int count)
+    {
+        var source = MemorySource(path, count);
+        var competitions = Enumerable.Range(0, competitionCount).Select(i => new CompetitionDetails(Guid.NewGuid(), Competition with
+        {
+            ShortLabel = FormattableString.Invariant($"{(i / 4 % 2 == 0 ? "SL" : "GS")}{i / 2 + 1} {(i % 2 == 0 ? "M" : "W")} {28 - i / 2}.11"),
+            Date = s_date.AddDays(i / 2), Discipline = i / 4 % 2 == 0 ? Discipline.Slalom : Discipline.GiantSlalom
+        })).ToArray();
+        string[] surnames = ["EXAMPLE", "SAMPLE-PLACEHOLDER", "SYNTHETICSURNAME"]; string[] first = ["Alex", "Casey Robin Taylor", "Jo"];
+        string[] clubs = ["Synthetic SK", "Imaginary Alpine Racing Association", "Placeholderklubben"]; string[] nations = ["NOR", "FIN", "SWE", "USA"];
+        var racers = source.Desk.Competitors.Select((x, i) => x with
+        {
+            Values = x.Values with { Surname = surnames[i % 3], FirstName = first[i % 3], BirthYear = 2008 + i % 3, Club = clubs[i % 3], Nation = nations[i % 4],
+                FederationCode = (6530001 + i).ToString(CultureInfo.InvariantCulture), Gender = i % 2 == 0 ? Gender.Male : Gender.Female }
+        }).ToArray();
+        return source with
+        {
+            Series = source.Series with { Competitions = competitions }, Competition = competitions[0],
+            Desk = source.Desk with
+            {
+                Competitors = racers, Categories = [new(Guid.NewGuid(), new("M18", 1900, 2026, Gender.Male, 0)), new(Guid.NewGuid(), new("N18", 1900, 2026, Gender.Female, 1))],
+                FisPoints = racers.Select((x, i) => (x.Id, i)).ToDictionary(x => x.Id, x => new CompetitorFisPoints("1327", null, null, 103.5m + x.i, 54.25m, null)),
+                Participations = racers.SelectMany((x, i) => competitions.Where((_, c) => c % 2 == i % 2).Select(c => new ParticipationDetails(x.Id, c.Id, true, null, null))).ToArray()
+            }
+        };
     }
     private static PdfReportSource MemorySource(string path, int count)
     {

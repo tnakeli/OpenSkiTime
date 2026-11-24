@@ -10,6 +10,7 @@ namespace OpenSkiTime.Reporting;
 
 public sealed class QuestPdfRenderer : IReportPdfRenderer
 {
+    internal const float FontSize = 8;
     static QuestPdfRenderer() { QuestPDF.Settings.License = LicenseType.Community; }
     public void Render(PdfReportData data, string destination)
     {
@@ -34,7 +35,7 @@ public sealed class QuestPdfRenderer : IReportPdfRenderer
             // Transparent page lets a PDF underlay remain visible.
             page.PageColor(Colors.Transparent);
             ApplyMargins(page, profile);
-            page.DefaultTextStyle(x => x.FontSize(8).FontColor("#142F3A"));
+            page.DefaultTextStyle(x => x.FontSize(FontSize).FontColor("#142F3A"));
             page.Header().Element(c => ReportComponents.Header(c, data));
             page.Content().PaddingTop(8).Column(column =>
             {
@@ -159,14 +160,16 @@ internal static class ReportComponents
             }
         });
     }
+    public const float NationFlagWidth = 12;
+    public const float NationSpacing = 3;
     /// <summary>A nation as in the live view: the flag, then the three-letter code. A code without a flag keeps the flag's space.</summary>
     public static void Nation(IContainer container, NationCell nation)
     {
         var code = NationFlags.Normalize(nation.Code);
         container.Row(row =>
         {
-            row.Spacing(3);
-            var flag = row.ConstantItem(12).AlignTop().PaddingTop(2);
+            row.Spacing(NationSpacing);
+            var flag = row.ConstantItem(NationFlagWidth).AlignTop().PaddingTop(2);
             if (NationFlags.Png(code) is { } png) { flag.Image(png).FitWidth(); }
             row.RelativeItem().Text(code);
         });
@@ -189,57 +192,54 @@ internal static class EntriesDocument
         var start = data.Descriptor.Type == PdfReportType.StartList;
         if (data.Groups.Count == 0 || data.Groups.All(x => x.Entries.Count == 0)) { column.Item().Text("No entries."); }
         var columns = start ? StartColumns(data) : EntryColumns(data);
-        foreach (var group in data.Groups)
-        {
-            if (group.Label.Length > 0) { ReportComponents.Heading(column, group.Label + " (" + group.Entries.Count + ")"); }
-            ReportComponents.Table(column.Item(), columns.Select(x => x.Header).ToArray(),
-                group.Entries.Select(row => columns.Select(x => x.Value(row)).ToArray()), columns.Select(x => x.Width).ToArray());
-        }
+        var profile = data.Source.Settings.Profile;
+        var width = PageSizes.A4.Width - (float)(profile.LeftMm + profile.RightMm) * 72 / 25.4f;
+        ReportTable.Compose(column.Item(), columns, data.Groups.Select(group => new ReportSection<EntryReportRow>(
+            group.Label.Length > 0 ? group.Label + " (" + group.Entries.Count + ")" : "", group.Entries)).ToArray(), width, QuestPdfRenderer.FontSize);
         column.Item().PaddingTop(6).Text("Entries: " + data.Groups.Sum(x => x.Entries.Count));
     }
-    private sealed record EntryColumn(string Header, float Width, Func<EntryReportRow, object> Value);
     private static PersonName Name(EntryReportRow x) => new(x.Athlete.Surname, x.Athlete.FirstName);
     private static string Points(decimal? value) => value?.ToString("0.00", CultureInfo.InvariantCulture) ?? "";
-    private static EntryColumn[] StartColumns(PdfReportData data)
+    private static ReportColumn<EntryReportRow>[] StartColumns(PdfReportData data)
     {
         // Run 2 shows the gap to the leader of Run 1 instead of points.
         var later = data.Descriptor.RunNumber > 1;
         // The points column is headed by the competition's discipline ("SL pts") and omitted when nobody has points.
         var code = EntryReportBuilder.FisPointsDisciplines(data.Source, data.Descriptor) is [var only] ? only + " pts" : "Points";
-        var columns = new List<EntryColumn>
+        var columns = new List<ReportColumn<EntryReportRow>>
         {
-            new("Pos", 0.5f, x => ReportComponents.Number(x.Position)), new("Bib", 0.5f, x => ReportComponents.Number(x.Bib)),
-            new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name), new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)),
-            new("Nation", 0.9f, x => new NationCell(x.Athlete.Nation)), new("Club", 1.5f, x => x.Athlete.Club ?? "")
+            new("Pos", x => ReportComponents.Number(x.Position)), new("Bib", x => ReportComponents.Number(x.Bib)),
+            new("Code", x => x.Athlete.FederationCode ?? ""), new("Name", Name, Grow: true), new("Year", x => ReportComponents.Number(x.Athlete.BirthYear)),
+            new("Nation", x => new NationCell(x.Athlete.Nation)), new("Club", x => x.Athlete.Club ?? "", Grow: true)
         };
         // A list of classes names the class of every starter; a merged block holds several classes.
-        if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Class.Length > 0)) { columns.Insert(4, new("Class", 0.8f, x => x.Class)); }
-        if (later) { columns.Add(new("Gap", 0.8f, x => TimingTime.FormatGap(x.GapHundredths))); }
-        else if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Points is not null)) { columns.Add(new(code, 0.8f, x => Points(x.Points))); }
+        if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Class.Length > 0)) { columns.Insert(4, new("Class", x => x.Class)); }
+        if (later) { columns.Add(new("Gap", x => TimingTime.FormatGap(x.GapHundredths), Numeric: true)); }
+        else if (data.Groups.SelectMany(x => x.Entries).Any(x => x.Points is not null)) { columns.Add(new(code, x => Points(x.Points), Numeric: true)); }
         return columns.ToArray();
     }
-    private static EntryColumn[] EntryColumns(PdfReportData data)
+    private static ReportColumn<EntryReportRow>[] EntryColumns(PdfReportData data)
     {
         var rows = data.Groups.SelectMany(x => x.Entries).ToArray();
-        var columns = new List<EntryColumn>();
+        var columns = new List<ReportColumn<EntryReportRow>>();
         // A column that no entrant has a value for carries no information and is omitted.
-        if (rows.Any(x => x.Bib is not null)) { columns.Add(new("Bib", 0.5f, x => ReportComponents.Number(x.Bib))); }
-        columns.AddRange([new("Code", 0.9f, x => x.Athlete.FederationCode ?? ""), new("Name", 2.8f, Name),
-            new("Year", 0.7f, x => ReportComponents.Number(x.Athlete.BirthYear)), new("Nation", 0.9f, x => new NationCell(x.Athlete.Nation)),
-            new("Club", 1.5f, x => x.Athlete.Club ?? "")]);
-        if (rows.Any(x => x.Category is not ("" or CategoryResolver.Unclassified))) { columns.Add(new("Category", 1.3f, x => x.Category)); }
+        if (rows.Any(x => x.Bib is not null)) { columns.Add(new("Bib", x => ReportComponents.Number(x.Bib))); }
+        columns.AddRange([new("Code", x => x.Athlete.FederationCode ?? ""), new("Name", Name, Grow: true),
+            new("Year", x => ReportComponents.Number(x.Athlete.BirthYear)), new("Nation", x => new NationCell(x.Athlete.Nation)),
+            new("Club", x => x.Athlete.Club ?? "", Grow: true)]);
+        if (rows.Any(x => x.Category is not ("" or CategoryResolver.Unclassified))) { columns.Add(new("Category", x => x.Category)); }
         // FIS points of the disciplines in the report's scope, one column each; a discipline nobody has points in is omitted.
         foreach (var code in EntryReportBuilder.FisPointsDisciplines(data.Source, data.Descriptor))
         {
             if (rows.Any(x => x.FisPoints?.For(code) is not null))
-            { columns.Add(new(code + " pts", 0.8f, x => Points(x.FisPoints?.For(code)))); }
+            { columns.Add(new(code + " pts", x => Points(x.FisPoints?.For(code)), Numeric: true)); }
         }
         if (data.Descriptor.CompetitionId is null)
         {
             // Series entries mark each competition the entrant participates in, in race order.
             var participations = data.Source.Desk.Participations.Where(p => p.Participates).Select(p => (p.CompetitorId, p.CompetitionId)).ToHashSet();
             foreach (var race in data.Source.Series.Competitions.OrderBy(x => x.Values.Date).ThenBy(x => x.Values.ShortLabel, StringComparer.Ordinal).ThenBy(x => x.Id))
-            { columns.Add(new(race.Values.ShortLabel, 0.8f, x => participations.Contains((x.Id, race.Id)) ? "X" : "")); }
+            { columns.Add(new(race.Values.ShortLabel, x => participations.Contains((x.Id, race.Id)) ? "X" : "", Mark: true)); }
         }
         return columns.ToArray();
     }

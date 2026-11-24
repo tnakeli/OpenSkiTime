@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Changed
 
+- **Entry lists and start lists (PDF):** column widths follow the content, so codes, years, nations and points are no longer broken onto several lines when a series has many competitions. Event Series Entries print the competition headings upwards, and lists by nation or category print the column headings once per page. PDFs generated earlier show as Outdated.
 - Series files are now upgraded by later versions. From this version on, a series file created by an earlier supported version is upgraded when opened, after a backup copy is saved next to it (`<name>.v1-backup-<time>.ost`). If an upgrade cannot be completed, the file is left unchanged. A file saved by a newer version is refused with a request to update OpenSkiTime. Series files of 0.4.0 open unchanged.
 
 ### Security
