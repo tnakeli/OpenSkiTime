@@ -17,6 +17,7 @@ Before/after sets for this branch were written to `artifacts/ux-e2e/screenshots/
 | 02 | Competitions grid + competition editor (course, homologation, TD) | `MainWindow.axaml` | ✓ | ✓ | conventions test, `CompetitionColumnControlsTests` |
 | 03 | Competitors grid (paste import, filters, entries, points) | `MainWindow.axaml` | ✓ | ✓ | conventions test, `CompetitorGridLayoutTests` |
 | 04 | Competitors → Update from FIS expander | `MainWindow.axaml` | ✓ | ✓ | `DesktopWorkflowTests` |
+| — | Competitors → Update from regs.fissi.fi expander | `MainWindow.axaml` | ✓ (1366×1000) | — | `FissiRegistrationWorkflowTests` |
 | — | Competitors → Category rules expander, review-changes panel, context menu | `MainWindow.axaml` | code review | code review | existing desktop tests |
 | 05 | Start list Run 1 (draw settings, export, print) | `DrawView.axaml` | ✓ | ✓ | conventions test, draw workflow tests |
 | 06 | Start list Run 2 (reversal) | `DrawView.axaml` | ✓ | ✓ | conventions test |

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- **Update from regs.fissi.fi** in Competitors reads the registered athletes of every competition in the series from the Finnish registration site by codex. New competitors, changed details, entries and removed entries are highlighted for review and kept with **Save**. Competitions with a saved start list are left as they are.
+
 ### Changed
 
 - Series files are now upgraded by later versions. From this version on, a series file created by an earlier supported version is upgraded when opened, after a backup copy is saved next to it (`<name>.v1-backup-<time>.ost`). If an upgrade cannot be completed, the file is left unchanged. A file saved by a newer version is refused with a request to update OpenSkiTime. Series files of 0.4.0 open unchanged.

@@ -533,6 +533,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
             _drawLoad++;
             _settingDraw = false;
             IsFisPanelOpen = false;
+            IsFissiPanelOpen = false;
+            ClearFissiRaces();
             FisEffectiveDateText = string.Empty;
         }
         var deskCompetitionId = DeskCompetition?.Id;
