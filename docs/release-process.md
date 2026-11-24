@@ -20,6 +20,7 @@ Both products use [Semantic Versioning](https://semver.org/) `MAJOR.MINOR.PATCH`
 - **Application:** `VersionPrefix` in `Directory.Build.props` is the single source and must equal the tag version without its pre-release suffix (`Assert-ReleaseSource.ps1` enforces this). Before 1.0: MINOR for features or `.ost` format changes, PATCH for fixes. From 1.0: MAJOR for incompatible changes. Use `-preview.N` for releases intended for rehearsal before the stable version.
 - **Live server:** MINOR for new server behavior, PATCH for fixes and deployment changes.
 - **Live protocol:** `LiveProtocol.Version` in `OpenSkiTime.LiveTiming.Contracts` is the compatibility contract between a published application and a server. Publishers send it in the `X-OpenSkiTime-Live-Protocol` header; the server returns its own version in that header and in `/health`, and refuses a different declared version with HTTP 426. Increment it only for an incompatible change to the publishing API or payloads. A compatible additive change keeps the version.
+- **Live API:** the reading side of the server is a public contract of its own, versioned by `LiveSync.Version`; see [Live API](live-timing.md#live-api).
 
 Every application changelog section states the live protocol it uses ("live protocol N"). Every live changelog section starts with `Live protocol: N`. The generated application notes list the compatible server releases from those lines.
 

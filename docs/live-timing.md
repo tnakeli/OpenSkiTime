@@ -1,6 +1,6 @@
 # Live timing
 
-OpenSkiTime supplies three independent downstream channels: FIS Live Timing, Standalone Local and Standalone Cloud. Local and Cloud run exactly the same .NET 10 ASP.NET Core server. Cloud is tested locally in this development phase; Azure resources and DNS have not been deployed.
+OpenSkiTime supplies three independent downstream channels: FIS Live Timing, Standalone Local and Standalone Cloud. Local and Cloud run exactly the same .NET 10 ASP.NET Core server. The hosted Cloud service is `https://live.openskiti.me`; see [website and releases](website-and-releases.md).
 
 ## Operator workflow
 
@@ -10,7 +10,7 @@ The control panel uses the OpenSkiTime navy and blue palette with separate publi
 
 Closing the panel stops its publishers and local server. Ending only `OpenSkiTime.LiveTiming.ControlPanel.exe` in Windows Task Manager also stops the whole live timing process tree. Authoritative timing capture continues in OpenSkiTime. Reopen the panel and press Start to resume. Cloud can reuse its retained valid session; a new panel has a new Local server and creates a new Local URL. A forced exit does not send a public pause message. Use Stop when the public session should explicitly show Paused. The executable can also be opened directly, but it needs the timing application's button to establish a race connection.
 
-Set the race's time zone (Windows or IANA ID, e.g. `Europe/Helsinki`), endpoints and FIS transport/password. Defaults are local `http://localhost:5078`, FIS TCP `live.fis-ski.com:1550` and HTTPS `https://livedata.fis-ski.com/al/`. The cloud default `https://live.openskiti.me` is a future deployment address; replace it with a local cloud simulation URL now.
+Set the race's time zone (Windows or IANA ID, e.g. `Europe/Helsinki`), endpoints and FIS transport/password. Defaults are local `http://localhost:5078`, FIS TCP `live.fis-ski.com:1550` and HTTPS `https://livedata.fis-ski.com/al/`. The cloud default `https://live.openskiti.me` is the hosted service and needs a publisher key; use a local cloud simulation URL for development.
 
 | Control | Behavior |
 |---|---|
@@ -85,6 +85,8 @@ In a Club race with classes every competitor carries its class (`Category`, for 
 
 ## Viewer synchronization
 
+Reading the list of races, the state and viewer synchronization version 1 are also the public [Live API](https://openskiti.me/live-api/) for other services. Its page, schema and example readers are in `website/live-api` and `website/pages/live-api.html`; see [Live API](#live-api).
+
 The publisher protocol above is unchanged; the server derives what viewers receive. Every viewer subscription gets the complete state once, and then only what changed, in a fixed order, so that every page converges to the server's state with far less traffic than a complete snapshot per change (see the [viewer load test](perf-test/live-timing-load-test.md)).
 
 **Revisions.** The server gives each session's state a `generation` (a random identifier, new whenever the state is created from nothing: the first publish, or the publisher's restore after a server restart) and a contiguous `revision`, incremented by every accepted change (full replacement, event, pause). Generations are identifiers only and are never ordered. The publisher's `version` stays in the state as published and is not used for synchronization.
@@ -106,6 +108,17 @@ The publisher protocol above is unchanged; the server derives what viewers recei
 **Reconnects, restarts and deletions.** A reconnecting page gets the complete state or a status in its subscription reply. After a server restart, the session is `Awaiting` until the publisher restores it; the restored state is broadcast to the waiting viewers as a complete state of a new generation. A session deleted while a page was disconnected is reported as `Deleted` when the page reconnects, as long as this server process holds the deletion marker. **Deletion markers are RAM only:** a page that was open before a deletion and reconnects only after a server restart is told `Awaiting` and keeps its last results as waiting for the publisher.
 
 **Older pages.** A browser tab keeps its loaded script across a server update; the socket reconnects without reloading the page. A page from before viewer synchronization subscribes with `Watch` and stays in a separate group that receives the complete `State` after every change, exactly as before, and no `Sync`, `Delta` or `Beacon`. A new page that meets an older server (for example after a rollback) gets an error for `WatchSync`, subscribes with `Watch` and uses its complete states. The `Watch` path will be removed in a later server release, once pages from before viewer synchronization are no longer open; that release will say so in its changelog.
+
+## Live API
+
+The public documentation for readers outside the project is the website page `/live-api/`. It promises compatibility: `GET /api/sessions`, `GET /api/sessions/{id}/state`, `WatchSync(sessionId, 1)`, `Resync`, and the messages `Sync`, `Delta` and `Beacon` may only get compatible additions (new properties, status values and messages). An incompatible change needs a new `LiveSync.Version`, a server that serves both versions for a transition period, and an announcement in `CHANGELOG-LIVE.md` beforehand. Everything else on this page is internal.
+
+- `website/live-api/live-api.schema.json` is the single source of the message schemas; the website build copies it into the components of `openapi.json` and into `live-api.txt`. When the server sends a new property, describe it there.
+- `website/live-api/live-reader.mjs`, `live-reader.cs` and `LiveReader.java` are the example readers, shown on the page and published as they are.
+- `scripts/tests/live-api.test.mjs` (no dependencies) compares the schema with the server's contracts, the page's JSON samples with the schema, and the JavaScript reader with `wwwroot/live-sync.js`.
+- `tests/live-api/verify.mjs` starts a real server, publishes a synthetic race and requires the same output from all three readers through a lost message, a server restart and a deletion; every message the server sent must be fully documented by the schema. CI runs it as **Live API** on every change.
+
+The website is published from `master`, the hosted server from `live-v*` tags: document a server change on the page only once it is released.
 
 ## Credentials, expiry and deletion
 

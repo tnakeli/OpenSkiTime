@@ -25,20 +25,21 @@ const pages = [
   ['fi', '/fi/', 'fi', 'OpenSkiTime – Ilmainen alppihiihdon ajanotto-ohjelma', 'Ilmainen avoimen lähdekoodin ajanotto-ohjelma alppihiihtokilpailuihin: lähtölistat, ALGE-ajanotto, FIS-pisteet ja XML-tulokset, PDF-raportit ja live-tulokset.'],
   ['download', '/download/', 'en', 'Download OpenSkiTime ski race timing software for Windows', 'Windows downloads, release notes and installation requirements for OpenSkiTime, the free open-source alpine ski race timing software.'],
   ['guide', '/guide/', 'en', 'Your first ski race with OpenSkiTime · Getting started', 'Get started with alpine ski race timing: event series, competitors, start lists, timing, results and optional live publishing.'],
+  ['live-api', '/live-api/', 'en', 'Live API: ski race results in real time · OpenSkiTime', 'Read live ski race results in real time: HTTP and SignalR API with OpenAPI, JSON Schema and JavaScript, .NET and Java examples. No key needed.'],
   ['privacy', '/privacy/', 'en', 'Privacy & your race data · OpenSkiTime', 'How local race data and optional online integrations work in OpenSkiTime.'],
   ['code-signing', '/code-signing/', 'en', 'Code signing policy · OpenSkiTime', 'How OpenSkiTime Windows releases are built, approved and signed.'],
   ['404', '/404.html', 'en', 'Page not found · OpenSkiTime', 'Find your way back to OpenSkiTime.']
 ];
 const alternates = { en: '/', fi: '/fi/' };
 // Breadcrumb names for the pages below the English home page.
-const crumbs = { download: 'Download', guide: 'Getting started', privacy: 'Privacy', 'code-signing': 'Code signing policy' };
+const crumbs = { download: 'Download', guide: 'Getting started', 'live-api': 'Live API', privacy: 'Privacy', 'code-signing': 'Code signing policy' };
 const text = {
-  en: { skip: 'Skip to content', home: 'OpenSkiTime home', nav: 'Main navigation', features: ['/#workflow', 'Features'], guide: 'Get started', download: 'Download', other: ['/fi/', 'fi', 'FI', 'Suomeksi'], tagline: 'Made for the people behind the race.', license: 'Open source · MIT license', maintainedBy: 'Maintained by', privacy: 'Privacy', signing: 'Code signing', licenseLink: 'License', issue: 'Report an issue', vulnerability: 'Report a vulnerability', source: 'Source code' },
-  fi: { skip: 'Siirry sisältöön', home: 'OpenSkiTime etusivu', nav: 'Päävalikko', features: ['/fi/#ominaisuudet', 'Ominaisuudet'], guide: 'Opas', download: 'Lataa', other: ['/', 'en', 'EN', 'In English'], tagline: 'Tehty kilpailujen tekijöille.', license: 'Avoin lähdekoodi · MIT-lisenssi', maintainedBy: 'Ylläpitäjä', privacy: 'Tietosuoja (en)', signing: 'Koodin allekirjoitus (en)', licenseLink: 'Lisenssi', issue: 'Ilmoita ongelmasta', vulnerability: 'Ilmoita haavoittuvuudesta', source: 'Lähdekoodi' }
+  en: { skip: 'Skip to content', home: 'OpenSkiTime home', nav: 'Main navigation', features: ['/#workflow', 'Features'], guide: 'Get started', download: 'Download', other: ['/fi/', 'fi', 'FI', 'Suomeksi'], tagline: 'Made for the people behind the race.', license: 'Open source · MIT license', maintainedBy: 'Maintained by', liveApi: 'Live API', privacy: 'Privacy', signing: 'Code signing', licenseLink: 'License', issue: 'Report an issue', vulnerability: 'Report a vulnerability', source: 'Source code' },
+  fi: { skip: 'Siirry sisältöön', home: 'OpenSkiTime etusivu', nav: 'Päävalikko', features: ['/fi/#ominaisuudet', 'Ominaisuudet'], guide: 'Opas', download: 'Lataa', other: ['/', 'en', 'EN', 'In English'], tagline: 'Tehty kilpailujen tekijöille.', license: 'Avoin lähdekoodi · MIT-lisenssi', maintainedBy: 'Ylläpitäjä', liveApi: 'Live API (en)', privacy: 'Tietosuoja (en)', signing: 'Koodin allekirjoitus (en)', licenseLink: 'Lisenssi', issue: 'Ilmoita ongelmasta', vulnerability: 'Ilmoita haavoittuvuudesta', source: 'Lähdekoodi' }
 };
 const header = t => `<a class="skip" href="#main">${t.skip}</a>
 <header class="site-header"><div class="shell header-inner"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}" aria-label="${t.home}"><img src="/favicon.svg" width="34" height="34" alt="">OpenSkiTime<span class="brand-dot">.</span></a><nav aria-label="${t.nav}"><a href="${t.features[0]}">${t.features[1]}</a><a href="/guide/">${t.guide}</a><a href="${repo}">GitHub <span aria-hidden="true">↗</span></a><a href="${t.other[0]}" hreflang="${t.other[1]}" lang="${t.other[1]}" title="${t.other[3]}" aria-label="${t.other[3]}">${t.other[2]}</a><a class="nav-download" href="/download/">${t.download} <span aria-hidden="true">↓</span></a></nav></div></header>`;
-const footer = t => `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}">OpenSkiTime<span class="brand-dot">.</span></a><p>${t.tagline}</p></div><div class="shell footer-bottom"><span>${t.license} · ${t.maintainedBy} ${maintainer.name}, <a href="mailto:${maintainer.email}">${maintainer.email}</a></span><nav aria-label="Footer"><a href="/privacy/">${t.privacy}</a><a href="/code-signing/">${t.signing}</a><a href="${repo}/blob/master/LICENSE">${t.licenseLink}</a><a href="${repo}/issues">${t.issue} ↗</a><a href="${repo}/security/advisories/new">${t.vulnerability} ↗</a><a href="${repo}">${t.source} ↗</a>${social.map(s => `<a href="${s.url}">${s.name} ↗</a>`).join('')}</nav></div></footer>`;
+const footer = t => `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}">OpenSkiTime<span class="brand-dot">.</span></a><p>${t.tagline}</p></div><div class="shell footer-bottom"><span>${t.license} · ${t.maintainedBy} ${maintainer.name}, <a href="mailto:${maintainer.email}">${maintainer.email}</a></span><nav aria-label="Footer"><a href="/live-api/">${t.liveApi}</a><a href="/privacy/">${t.privacy}</a><a href="/code-signing/">${t.signing}</a><a href="${repo}/blob/master/LICENSE">${t.licenseLink}</a><a href="${repo}/issues">${t.issue} ↗</a><a href="${repo}/security/advisories/new">${t.vulnerability} ↗</a><a href="${repo}">${t.source} ↗</a>${social.map(s => `<a href="${s.url}">${s.name} ↗</a>`).join('')}</nav></div></footer>`;
 
 // One source for the visible FAQ and its FAQPage structured data, so search and answer engines read the same text visitors do.
 const faq = {
@@ -158,10 +159,22 @@ for (const name of ['site.css', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.
 for (const name of [video.poster, liveVideo.poster, editingVideo.poster, 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png', '13-club-start-order.png']) {
   await copyFile(path.join(root, '..', 'docs', 'screenshots', name), path.join(output, 'assets', name));
 }
+// The Live API: the schema is one source for the published JSON Schema and for the components of the OpenAPI document, and
+// the example readers are shown on the page exactly as they are published (and tested by tests/live-api).
+const api = path.join(root, 'live-api'), apiOutput = path.join(output, 'live-api');
+const apiFiles = ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs', 'LiveReader.java'];
+await mkdir(apiOutput, { recursive: true });
+const apiSource = Object.fromEntries(await Promise.all(apiFiles.map(async file => [file, (await readFile(path.join(api, file), 'utf8')).replaceAll('\r\n', '\n')])));
+for (const file of apiFiles) await writeFile(path.join(apiOutput, file), apiSource[file]);
+const openApi = JSON.parse(await readFile(path.join(api, 'openapi.json'), 'utf8'));
+openApi.components.schemas = JSON.parse(JSON.stringify(JSON.parse(apiSource['live-api.schema.json']).$defs).replaceAll('"#/$defs/', '"#/components/schemas/'));
+await writeFile(path.join(apiOutput, 'openapi.json'), `${JSON.stringify(openApi, null, 2)}\n`);
+const example = file => `<details class="example"><summary>Show ${file}</summary><pre><code>${escape(apiSource[file].trimEnd())}</code></pre></details><p><a href="/live-api/${file}">Download ${file} ↓</a></p>`;
 for (const [name, route, lang, title, description] of pages) {
   const t = text[lang];
   const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang)).replace('{{liveVideo}}', liveVideoHtml(lang)).replace('{{editingVideo}}', editingVideoHtml)
-    .replaceAll('{{version}}', version ? ' ' + escape(version) : '');
+    .replaceAll('{{version}}', version ? ' ' + escape(version) : '')
+    .replace(/\{\{example:([\w.-]+)\}\}/g, (_, file) => example(file));
   const translated = Object.values(alternates).includes(route);
   const head = [
     `<title>${escape(title)}</title>`,
@@ -206,4 +219,19 @@ const guideText = [...guideSource.matchAll(/<article id="[^"]+">[\s\S]*?<h2>([\s
   .map(([, heading, body]) => `### ${plain(heading)}\n\n${[...body.matchAll(/<p>([\s\S]*?)<\/p>|<pre>[\s\S]*?<\/pre>/g)].map(m => plain(m[1] ?? m[0])).join('\n\n')}`).join('\n\n');
 const faqText = lang => faq[lang].map(([q, a]) => `### ${q}\n\n${a}`).join('\n\n');
 await writeFile(path.join(output, 'llms-full.txt'), `${llms.trimEnd()}\n\n## Frequently asked questions\n\n${faqText('en')}\n\n## Usein kysytyt kysymykset (suomeksi)\n\n${faqText('fi')}\n\n## Getting started guide\n\nSource: https://openskiti.me/guide/\n\n${guideText}\n`);
+// The Live API in one Markdown text: the page, the schema and the example readers.
+const inline = html => html.replace(/<a href="([^"]+)">([\s\S]*?)<\/a>/g, (_, href, label) => `[${label}](${href.startsWith('#') ? `${site}/live-api/${href}` : href.startsWith('/') ? site + href : href})`)
+  .replace(/<code>([\s\S]*?)<\/code>/g, '`$1`').replace(/<\/?b>/g, '**').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+const apiPage = await readFile(path.join(root, 'pages', 'live-api.html'), 'utf8');
+const apiText = [...apiPage.matchAll(/<(h[123]|p|pre|li|tr)>([\s\S]*?)<\/\1>/g)].map(([, tag, body]) => {
+  if (tag === 'pre') return `\n\`\`\`\n${body.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')}\n\`\`\`\n`;
+  if (tag === 'tr') {
+    const cells = [...body.matchAll(/<t[hd]>([\s\S]*?)<\/t[hd]>/g)].map(m => inline(m[1]));
+    return `${body.includes('<th>') ? '\n' : ''}| ${cells.join(' | ')} |${body.includes('<th>') ? `\n|${cells.map(() => ' --- |').join('')}` : ''}`;
+  }
+  if (tag === 'li') return `- ${inline(body)}`;
+  return tag === 'h1' ? null : `\n${tag === 'h2' ? '## ' : tag === 'h3' ? '### ' : ''}${inline(body)}\n`;
+}).filter(x => x !== null).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+const languages = { 'live-api.schema.json': 'json', 'live-reader.mjs': 'js', 'live-reader.cs': 'csharp', 'LiveReader.java': 'java' };
+await writeFile(path.join(apiOutput, 'live-api.txt'), `# OpenSkiTime Live API\n\nSource: ${site}/live-api/\n\n${apiText}\n\n${apiFiles.map(file => `## File: ${file}\n\n\`\`\`${languages[file]}\n${apiSource[file].trimEnd()}\n\`\`\``).join('\n\n')}\n`);
 console.log(`Built ${pages.length} pages in ${output}; download: ${asset ? release.tag_name : 'pre-release'}.`);
