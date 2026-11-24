@@ -3,7 +3,7 @@ using System.Text;
 using OpenSkiTime.Application;
 using OpenSkiTime.Domain;
 using Xunit;
-using static OpenSkiTime.Tests.FissiPages;
+using static OpenSkiTime.Tests.FissiTestApi;
 
 namespace OpenSkiTime.Tests;
 
@@ -18,17 +18,16 @@ public sealed class FissiApiTests
         => new(Guid.NewGuid(), new CompetitionValues("Synthetic " + label, label, date ?? s_date, discipline, RaceType.Fis, 2, 0, codex,
             Calendar: new(2027, "Test place", "FIN", "FIS", gender)));
 
-    private static FissiApiRace Read(string json) => FissiApiJson.ReadRace(Encoding.UTF8.GetBytes(json));
+    private static FissiRegistrations Read(string json) => FissiApiJson.ReadRace(Encoding.UTF8.GetBytes(json));
 
     // ---- Responses
 
     [Fact]
     public void ResponseGivesTheRaceAndItsAthletes()
     {
-        var result = Read(ApiRace("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"), new Athlete("Åke O'SYNTHETIC", "6530001", "2010", "SWE")));
-        Assert.Equal(new FissiRace(0, "0507", "SL", "M"), result.Race);
-        Assert.Equal((s_date, "0507"), (result.Page.Date, result.Page.Codex));
-        Assert.Equal([new("100001", "Testi ESIMERKKI", 2008, "FIN", null), new("6530001", "Åke O'SYNTHETIC", 2010, "SWE", null)], result.Page.Athletes);
+        var result = Read(Race("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"), new Athlete("Åke O'SYNTHETIC", "6530001", 2010, "SWE")));
+        Assert.Equal(new FissiRace("0507", s_date, "SL", "M"), result.Race);
+        Assert.Equal([new("100001", "Testi ESIMERKKI", 2008, "FIN", null), new("6530001", "Åke O'SYNTHETIC", 2010, "SWE", null)], result.Athletes);
     }
 
     [Theory]
@@ -37,7 +36,7 @@ public sealed class FissiApiTests
     [InlineData("L", "W")]
     [InlineData("Mixed", "")]
     public void GenderIsReadInItsCommonForms(string value, string expected)
-        => Assert.Equal(expected, Read(ApiRace("0507", "2026-11-28", "Slalom", value)).Race.Gender);
+        => Assert.Equal(expected, Read(Race("0507", "2026-11-28", "Slalom", value)).Race.Gender);
 
     [Fact]
     public void NumbersAndMissingValuesAreAccepted()
@@ -47,16 +46,16 @@ public sealed class FissiApiTests
              "athletes":[{"fis_code":100001,"name":"Testi  ESIMERKKI","birth_year":2008,"nation":"fin","points":12.34},
                          {"fis_code":null,"name":"Nobody NOCODE","birth_year":null,"nation":"","points":null}]}
             """);
-        Assert.Equal(new FissiRace(0, "0507", "GS", ""), result.Race);
-        Assert.Equal([new("100001", "Testi ESIMERKKI", 2008, "FIN", null), new(null, "Nobody NOCODE", null, null, null)], result.Page.Athletes);
+        Assert.Equal(new FissiRace("0507", s_date, "GS", ""), result.Race);
+        Assert.Equal([new("100001", "Testi ESIMERKKI", 2008, "FIN", null), new(null, "Nobody NOCODE", null, null, null)], result.Athletes);
     }
 
     // A response that is not completely understood must never look like a shorter registration list.
     [Fact]
     public void IncompleteResponsesAreRefused()
     {
-        var valid = ApiRace("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"), new Athlete("Toinen ESIMERKKI", "100002"));
-        Assert.Equal(2, Read(valid).Page.Athletes.Count);
+        var valid = Race("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"), new Athlete("Toinen ESIMERKKI", "100002"));
+        Assert.Equal(2, Read(valid).Athletes.Count);
         var broken = new Dictionary<string, string>
         {
             ["no json"] = "<html>Maintenance</html>",
@@ -90,12 +89,12 @@ public sealed class FissiApiTests
     [Fact]
     public async Task EveryCompetitionIsReadByCodexAndDateWithTheKeyInAHeaderOnly()
     {
-        using var site = new ApiSite(Key);
-        site.Races["0507", s_date] = ApiRace("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"));
-        site.Races["5489", new(2026, 11, 29)] = ApiRace("5489", "2026-11-29", "SL", "Women", new Athlete("Tiina ESIMERKKI", "100002"));
-        site.Races["2075", s_date] = ApiRace("2075", "2026-11-28", "SL", "Men");
-        site.Races["0600", s_date] = ApiRace("0600", "2026-11-28", "GS", "Men", new Athlete("Testi ESIMERKKI", "100001"));
-        site.Races["0900", new(2025, 11, 28)] = ApiRace("0900", "2025-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"));
+        using var site = new Site(Key);
+        site.Races["0507", s_date] = Race("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"));
+        site.Races["5489", new(2026, 11, 29)] = Race("5489", "2026-11-29", "SL", "Women", new Athlete("Tiina ESIMERKKI", "100002"));
+        site.Races["2075", s_date] = Race("2075", "2026-11-28", "SL", "Men");
+        site.Races["0600", s_date] = Race("0600", "2026-11-28", "GS", "Men", new Athlete("Testi ESIMERKKI", "100001"));
+        site.Races["0900", new(2025, 11, 28)] = Race("0900", "2025-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"));
         using var http = new HttpClient(site);
         var locked = Competition("LOCKED", "0507");
         var competitions = new[]
@@ -115,21 +114,21 @@ public sealed class FissiApiTests
     [Fact]
     public async Task OneRaceIsNotUsedForTwoCompetitions()
     {
-        using var site = new ApiSite(Key);
-        site.Races["0507", s_date] = ApiRace("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"));
+        using var site = new Site(Key);
+        site.Races["0507", s_date] = Race("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"));
         using var http = new HttpClient(site);
         var found = await new FissiApiClient(http, Key).GetAsync([Competition("SL1", "0507"), Competition("SL2", "0507")], s_none);
-        Assert.All(found, x => { Assert.Equal(FissiRaceStatus.SeveralMatches, x.Status); Assert.Null(x.Page); });
+        Assert.All(found, x => { Assert.Equal(FissiRaceStatus.SeveralMatches, x.Status); Assert.Null(x.Registrations); });
     }
 
     [Fact]
     public async Task FailuresStopTheWholeUpdateAndNeverShowTheKey()
     {
-        using var site = new ApiSite(Key);
+        using var site = new Site(Key);
         using var http = new HttpClient(site);
         async Task<string> FailAsync(string key, HttpResponseMessage? response = null)
         {
-            site.Answer = response;
+            site.Intercept = () => Task.FromResult(response);
             var error = await Assert.ThrowsAsync<DomainValidationException>(() => new FissiApiClient(http, key).GetAsync([Competition("SL", "0507")], s_none));
             Assert.DoesNotContain("fissi_", error.Message, StringComparison.Ordinal);
             return error.Message;
@@ -148,17 +147,17 @@ public sealed class FissiApiTests
         // A missing endpoint is a failure, not an unknown race.
         Assert.Contains("HTTP 404", await FailAsync(Key, Error(HttpStatusCode.NotFound, "<html>404</html>")), StringComparison.Ordinal);
         Assert.Contains("HTTP 404", await FailAsync(Key, Error(HttpStatusCode.NotFound)), StringComparison.Ordinal);
-        Assert.Contains("another codex", await FailAsync(Key, Error(HttpStatusCode.OK, ApiRace("0508", "2026-11-28", "SL", "Men"))), StringComparison.Ordinal);
+        Assert.Contains("another codex", await FailAsync(Key, Error(HttpStatusCode.OK, Race("0508", "2026-11-28", "SL", "Men"))), StringComparison.Ordinal);
         Assert.Contains("large", await FailAsync(Key, new(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[5_000_001]) }), StringComparison.Ordinal);
         Assert.Contains("cannot be read completely", await FailAsync(Key, Error(HttpStatusCode.OK, "{}")), StringComparison.Ordinal);
     }
 
-    // The API has no club: the saved one stays, and the plan is otherwise the same as for the web pages.
+    // The API has no club: the saved one stays.
     [Fact]
     public async Task TheSavedClubStaysWhenTheAthleteComesFromTheApi()
     {
-        using var site = new ApiSite(Key);
-        site.Races["0507", s_date] = ApiRace("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"), new Athlete("Uusi TULOKAS", "100002"));
+        using var site = new Site(Key);
+        site.Races["0507", s_date] = Race("0507", "2026-11-28", "SL", "Men", new Athlete("Testi ESIMERKKI", "100001"), new Athlete("Uusi TULOKAS", "100002"));
         using var http = new HttpClient(site);
         var race = Competition("SL", "0507");
         var series = new SeriesDetails(Guid.NewGuid(), new("Synthetic", "Test place", "Club", s_date, s_date, "FIN", "2026/27"), 1, [race]);

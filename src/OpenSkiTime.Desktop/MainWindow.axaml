@@ -550,25 +550,6 @@
               </DataGrid>
             </StackPanel>
           </Expander>
-          <Expander Name="FissiSection" Header="Update from regs.fissi.fi (deprecated Web Crawl)" IsExpanded="{Binding IsFissiPanelOpen}" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="{DynamicResource FormGap}">
-              <Button Name="UpdateFromFissiButton" Content="Update from regs.fissi.fi (deprecated Web Crawl)" Command="{Binding UpdateFromFissiCommand}" IsEnabled="{Binding !IsFissiBusy}" HorizontalAlignment="Right"
-                      ToolTip.Tip="Read the registered athletes of every competition from the public pages of the site, without an API key. New competitors, changed details and entries are highlighted; Save keeps them." Classes="secondaryAction" />
-              <DataGrid Name="FissiRacesGrid" Classes="raceGrid" ItemsSource="{Binding FissiRaces}" IsVisible="{Binding HasFissiRaces}"
-                        AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="300" RowHeight="28" ColumnHeaderHeight="28" HeadersVisibility="Column">
-                <DataGrid.Columns>
-                  <DataGridTextColumn Header="RACE" Binding="{Binding Race}" Width="Auto" />
-                  <DataGridTextColumn Header="CODEX" Binding="{Binding Codex}" Width="Auto" />
-                  <DataGridTextColumn Header="DATE" Binding="{Binding Date}" Width="Auto" />
-                  <DataGridTextColumn Header="REGISTERED" Binding="{Binding Registered}" Width="Auto" />
-                  <DataGridTextColumn Header="NEW" Binding="{Binding New}" Width="Auto" />
-                  <DataGridTextColumn Header="ADDED" Binding="{Binding Added}" Width="Auto" />
-                  <DataGridTextColumn Header="REMOVED" Binding="{Binding Removed}" Width="Auto" />
-                  <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="Auto" />
-                </DataGrid.Columns>
-              </DataGrid>
-            </StackPanel>
-          </Expander>
           <Expander Header="Category rules · birth-year range and gender" HorizontalAlignment="Stretch">
             <StackPanel Spacing="{DynamicResource FormGap}">
             <DataGrid Classes="raceGrid" ItemsSource="{Binding CategoryRules}" SelectedItem="{Binding SelectedCategoryRule}"

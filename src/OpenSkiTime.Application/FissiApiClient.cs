@@ -5,9 +5,6 @@ using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Application;
 
-/// <summary>One race of the regs.fissi.fi public API with its registered athletes.</summary>
-public sealed record FissiApiRace(FissiRace Race, FissiRacePage Page);
-
 /// <summary>
 /// Reads the JSON of the public API. A response that is not completely understood is refused: a missing athlete would be
 /// proposed for removal from the race.
@@ -17,7 +14,7 @@ public static class FissiApiJson
     private const int MaximumAthletes = 1000;
     private const string Unreadable = "The regs.fissi.fi API returned a response that cannot be read completely. Nothing was changed.";
 
-    public static FissiApiRace ReadRace(ReadOnlyMemory<byte> json)
+    public static FissiRegistrations ReadRace(ReadOnlyMemory<byte> json)
     {
         try
         {
@@ -32,9 +29,8 @@ public static class FissiApiJson
                 // The stated count protects against a shortened list.
                 || !Member(root, "count", JsonValueKind.Number).TryGetInt32(out var count) || count != athletes.GetArrayLength())
             { throw new DomainValidationException(Unreadable); }
-            codex = codex.PadLeft(4, '0');
-            return new(new FissiRace(0, codex, Discipline(Text(race, "discipline")), Gender(Text(race, "gender"))),
-                new FissiRacePage(codex, date, athletes.EnumerateArray().Select(ReadAthlete).ToArray()));
+            return new(new FissiRace(codex.PadLeft(4, '0'), date, Discipline(Text(race, "discipline")), Gender(Text(race, "gender"))),
+                athletes.EnumerateArray().Select(ReadAthlete).ToArray());
         }
         catch (JsonException) { throw new DomainValidationException(Unreadable); }
     }
@@ -134,15 +130,15 @@ public sealed class FissiApiClient(HttpClient client, string apiKey)
         var found = new List<FissiCompetition>();
         foreach (var competition in competitions)
         {
-            var codex = FissiRegistrationClient.Codex(competition.Values.FisCode);
+            var codex = Codex(competition.Values.FisCode);
             found.Add(codex is null ? new(competition.Id, competition.Values.FisCode, FissiRaceStatus.NoCodex)
                 : locked.Contains(competition.Id) ? new(competition.Id, codex, FissiRaceStatus.StartListSaved)
                 : await FindAsync(competition, codex, ct));
         }
         // One registration list cannot belong to two competitions.
-        var shared = found.Where(x => x.Page is not null).GroupBy(x => (x.Page!.Codex, x.Page.Date)).Where(x => x.Count() > 1)
+        var shared = found.Where(x => x.Registrations is not null).GroupBy(x => (x.Registrations!.Race.Codex, x.Registrations.Race.Date)).Where(x => x.Count() > 1)
             .SelectMany(x => x).Select(x => x.CompetitionId).ToHashSet();
-        return found.Select(x => shared.Contains(x.CompetitionId) ? x with { Status = FissiRaceStatus.SeveralMatches, Page = null } : x).ToArray();
+        return found.Select(x => shared.Contains(x.CompetitionId) ? x with { Status = FissiRaceStatus.SeveralMatches, Registrations = null } : x).ToArray();
     }
 
     private async Task<FissiCompetition> FindAsync(CompetitionDetails competition, string codex, CancellationToken ct)
@@ -151,15 +147,32 @@ public sealed class FissiApiClient(HttpClient client, string apiKey)
         // Without a date the API gives the newest race of the codex: a race moved to another day is found too.
         var found = await GetRaceAsync(codex, values.Date, ct) ?? await GetRaceAsync(codex, null, ct);
         // FIS uses the same codexes again every season.
-        if (found is null || FisSeason.FromDate(found.Page.Date) != FisSeason.FromDate(values.Date))
+        if (found is null || FisSeason.FromDate(found.Race.Date) != FisSeason.FromDate(values.Date))
         { return new(competition.Id, codex, FissiRaceStatus.NotFound); }
-        if (!FissiRegistrationClient.SameRace(values, found.Race)) { return new(competition.Id, codex, FissiRaceStatus.RaceDiffers); }
-        return new(competition.Id, codex, found.Page.Athletes.Count == 0 ? FissiRaceStatus.NoneRegistered
-            : found.Page.Date == values.Date ? FissiRaceStatus.Ready : FissiRaceStatus.DateDiffers, found.Page, found.Race.Gender);
+        if (!SameRace(values, found.Race)) { return new(competition.Id, codex, FissiRaceStatus.RaceDiffers); }
+        return new(competition.Id, codex, found.Athletes.Count == 0 ? FissiRaceStatus.NoneRegistered
+            : found.Race.Date == values.Date ? FissiRaceStatus.Ready : FissiRaceStatus.DateDiffers, found);
+    }
+
+    private static string? Codex(string? value) => value?.Trim() is { Length: > 0 and <= 4 } text && text.All(char.IsAsciiDigit)
+        ? text.PadLeft(4, '0') : null;
+
+    // Compared only when both sides tell it.
+    private static bool SameRace(CompetitionValues competition, FissiRace race)
+    {
+        var gender = CompetitionGenderRule.Required(competition.Calendar?.Gender);
+        var raceGender = CompetitionGenderRule.Required(race.Gender);
+        var discipline = competition.Discipline switch
+        {
+            Discipline.Slalom => "SL", Discipline.GiantSlalom => "GS", Discipline.SuperG => "SG",
+            Discipline.Downhill => "DH", Discipline.AlpineCombined => "AC", _ => string.Empty,
+        };
+        return (gender is null || raceGender is null || gender == raceGender)
+            && (discipline.Length == 0 || race.Discipline.Length == 0 || race.Discipline == discipline);
     }
 
     // Null: the API knows no such race.
-    private async Task<FissiApiRace?> GetRaceAsync(string codex, DateOnly? date, CancellationToken ct)
+    private async Task<FissiRegistrations?> GetRaceAsync(string codex, DateOnly? date, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(s_requestTimeout);
@@ -194,8 +207,8 @@ public sealed class FissiApiClient(HttpClient client, string apiKey)
             return FissiApiJson.ReadErrorCode(json) == "race_not_found" ? null
                 : throw new DomainValidationException("The regs.fissi.fi API was not found (HTTP 404). Nothing was changed.");
         }
-        var race = FissiApiJson.ReadRace(json);
-        return race.Page.Codex == codex ? race
+        var found = FissiApiJson.ReadRace(json);
+        return found.Race.Codex == codex ? found
             : throw new DomainValidationException($"regs.fissi.fi returned another codex than {codex}. Nothing was changed.");
     }
 }
