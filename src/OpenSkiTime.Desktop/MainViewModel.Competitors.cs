@@ -106,8 +106,7 @@ public sealed partial class MainViewModel
     {
         IsFisPanelOpen = false;
         IsFissiApiPanelOpen = false;
-        IsFissiPanelOpen = false;
-        ClearFissiRaces();
+        ClearFissiApiRaces();
         FisEffectiveDateText = string.Empty;
         _desk = null;
         _selectedExportRows.Clear();

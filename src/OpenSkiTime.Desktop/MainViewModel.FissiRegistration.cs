@@ -29,24 +29,15 @@ public sealed partial class MainViewModel
     private readonly HttpClient _fissiApiHttp = informationHttp ?? new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
         { Timeout = TimeSpan.FromSeconds(20) };
     [ObservableProperty] private bool _isFissiApiPanelOpen;
-    [ObservableProperty] private bool _isFissiPanelOpen;
     [ObservableProperty] private bool _isFissiBusy;
     public ObservableCollection<FissiRaceRow> FissiApiRaces { get; } = [];
-    public ObservableCollection<FissiRaceRow> FissiRaces { get; } = [];
     public bool HasFissiApiRaces => FissiApiRaces.Count > 0;
-    public bool HasFissiRaces => FissiRaces.Count > 0;
 
-    private void ClearFissiRaces()
+    private void ClearFissiApiRaces()
     {
         FissiApiRaces.Clear();
-        FissiRaces.Clear();
         OnPropertyChanged(nameof(HasFissiApiRaces));
-        OnPropertyChanged(nameof(HasFissiRaces));
     }
-
-    [RelayCommand]
-    private Task UpdateFromFissiApiAsync() => UpdateFromFissiAsync(FissiApiRaces, (competitions, locked)
-        => new FissiApiClient(_fissiApiHttp, ReadFissiApiKey()).GetAsync(competitions, locked));
 
     private string ReadFissiApiKey()
     {
@@ -55,15 +46,10 @@ public sealed partial class MainViewModel
         catch (IOException ex) { throw new DomainValidationException(ex.Message); }
     }
 
-    // The former way, for as long as the API may be unavailable: reads the public pages of the site.
-    [RelayCommand]
-    private Task UpdateFromFissiAsync() => UpdateFromFissiAsync(FissiRaces, (competitions, locked)
-        => new FissiRegistrationClient(_informationHttp).GetAsync(competitions, locked));
-
     // Reads the registrations of every competition and stages the differences; Save keeps them. The registrations are
     // compared with the saved competitors, so pending edits are saved or discarded first.
-    private async Task UpdateFromFissiAsync(ObservableCollection<FissiRaceRow> rows,
-        Func<IReadOnlyList<CompetitionDetails>, IReadOnlySet<Guid>, Task<IReadOnlyList<FissiCompetition>>> read)
+    [RelayCommand]
+    private async Task UpdateFromFissiApiAsync()
     {
         if (IsFissiBusy) { return; }
         IsFissiBusy = true;
@@ -74,12 +60,12 @@ public sealed partial class MainViewModel
             EnsureDeskClean();
             if (series.Competitions.Count == 0) { throw new DomainValidationException("Add the competitions of the event series first."); }
             ImportWarnings.Clear();
-            ClearFissiRaces();
+            ClearFissiApiRaces();
             SetStatus("Reading registrations from regs.fissi.fi…");
             var (locked, _, _) = await ReadStartListLocksAsync(series.Competitions);
-            var registrations = await read(series.Competitions, locked);
+            var registrations = await new FissiApiClient(_fissiApiHttp, ReadFissiApiKey()).GetAsync(series.Competitions, locked);
             if (workspace.FilePath != path || _current?.Id != series.Id) { return; }
-            // Start lists, competitors and competitions may have changed while the pages were read.
+            // Start lists, competitors and competitions may have changed while the registrations were read.
             var (lockedCompetitions, lockedCompetitors, revisions) = await ReadStartListLocksAsync(series.Competitions);
             var desk = await workspace.ReadCompetitorDeskAsync();
             var saved = await workspace.ReadAsync();
@@ -95,7 +81,7 @@ public sealed partial class MainViewModel
             var plan = FissiRegistrationPlan.Build(saved, desk, registrations, lockedCompetitions, lockedCompetitors, _fisList?.Athletes);
             // Save is checked against the revision the plan was made for.
             _current = saved;
-            StageFissiPlan(plan, rows);
+            StageFissiPlan(plan);
         }
         catch (Exception ex) when (ex is DomainValidationException or SeriesFileException or SeriesConflictException
             or HttpRequestException or IOException or OperationCanceledException or InvalidOperationException or PlatformNotSupportedException)
@@ -106,15 +92,14 @@ public sealed partial class MainViewModel
         finally { IsFissiBusy = false; }
     }
 
-    private void StageFissiPlan(FissiRegistrationPlan plan, ObservableCollection<FissiRaceRow> rows)
+    private void StageFissiPlan(FissiRegistrationPlan plan)
     {
         foreach (var warning in plan.Warnings) { ImportWarnings.Add(warning); }
         _suspendDeskChangeLog = true;
         try { foreach (var item in plan.Rows) { StagePastedRow(item); } }
         finally { _suspendDeskChangeLog = false; }
-        foreach (var race in plan.Races) { rows.Add(new FissiRaceRow(race)); }
+        foreach (var race in plan.Races) { FissiApiRaces.Add(new FissiRaceRow(race)); }
         OnPropertyChanged(nameof(HasFissiApiRaces));
-        OnPropertyChanged(nameof(HasFissiRaces));
         RefreshVisibleCompetitors();
         RebuildChangeLog();
         var read = plan.Races.Count(x => x.Registered is not null);

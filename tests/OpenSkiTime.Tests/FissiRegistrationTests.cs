@@ -1,8 +1,6 @@
-using System.Net;
 using OpenSkiTime.Application;
 using OpenSkiTime.Domain;
 using Xunit;
-using static OpenSkiTime.Tests.FissiPages;
 
 namespace OpenSkiTime.Tests;
 
@@ -29,162 +27,13 @@ public sealed class FissiRegistrationTests
 
     private static FissiCompetition Registered(CompetitionDetails competition, params FissiAthlete[] athletes)
         => new(competition.Id, competition.Values.FisCode, athletes.Length == 0 ? FissiRaceStatus.NoneRegistered : FissiRaceStatus.Ready,
-            new(competition.Values.FisCode!, competition.Values.Date, athletes), competition.Values.Calendar!.Gender);
+            new(new(competition.Values.FisCode!, competition.Values.Date, "SL", competition.Values.Calendar!.Gender), athletes));
 
     private static FissiAthlete Person(string name, string? code = null, int? year = 2008, string? club = "Synthetic Club")
         => new(code, name, year, "FIN", club);
 
     private static FissiRegistrationPlan Plan(SeriesDetails series, CompetitorDeskDetails desk, params FissiCompetition[] registrations)
         => FissiRegistrationPlan.Build(series, desk, registrations, s_none, s_none);
-
-    // ---- Pages
-
-    [Fact]
-    public void RaceListGivesIdCodexDisciplineAndGender()
-    {
-        var races = FissiRegistrationHtml.ReadRaces(Races(new Race(51, "0507"), new Race(52, "5489", "GS", "Women"), new Race(53, "0600", "SG", "Mixed")));
-        Assert.Equal([new(51, "0507", "SL", "M"), new(52, "5489", "GS", "W"), new(53, "0600", "SG", "")], races);
-        Assert.Empty(FissiRegistrationHtml.ReadRaces(Races()));
-    }
-
-    [Theory]
-    [InlineData("<html><body>Maintenance</body></html>")]
-    [InlineData("<html><div class=\"v3-segments\"></div><a class=\"new-row\" href=\"registered_athletes.php?race_id=5\">#0507</a></html>")]
-    public void AnUnknownRaceListIsRefused(string html)
-        => Assert.Throws<DomainValidationException>(() => FissiRegistrationHtml.ReadRaces(html));
-
-    [Fact]
-    public void RegistrationPageGivesAthletesAndDecodesText()
-    {
-        var page = FissiRegistrationHtml.ReadRace(RacePage("0507", "28.11.2026",
-            new Athlete("Testi ESIMERKKI", "40810"), new Athlete("Åke O'SYNTHETIC & SON", "6530001", "2010", "SWE", "Club \"A\" & B"),
-            new Athlete("Nobody NOCODE", "—", "—", "", "—")));
-        Assert.Equal("0507", page.Codex);
-        Assert.Equal(s_date, page.Date);
-        Assert.Equal([new("40810", "Testi ESIMERKKI", 2008, "FIN", "Synthetic Club"),
-            new("6530001", "Åke O'SYNTHETIC & SON", 2010, "SWE", "Club \"A\" & B"), new(null, "Nobody NOCODE", null, null, null)], page.Athletes);
-    }
-
-    [Fact]
-    public void RaceWithoutRegistrationsIsEmpty()
-    {
-        var page = FissiRegistrationHtml.ReadRace(RacePage("2075", "1.4.2027"));
-        Assert.Empty(page.Athletes);
-        Assert.Equal(new DateOnly(2027, 4, 1), page.Date);
-    }
-
-    // A page that is not completely understood must never look like a shorter registration list.
-    [Fact]
-    public void IncompletePagesAreRefused()
-    {
-        var athletes = new[] { new Athlete("Testi ESIMERKKI", "100001"), new Athlete("Toinen ESIMERKKI", "100002") };
-        var valid = RacePage("0507", "28.11.2026", athletes);
-        Assert.Equal(2, FissiRegistrationHtml.ReadRace(valid).Athletes.Count);
-        var broken = new Dictionary<string, string>
-        {
-            ["not found"] = "Race not found",
-            ["count differs"] = RacePage("0507", "28.11.2026", 3, athletes),
-            ["count without table"] = RacePage("0507", "28.11.2026", 3, []),
-            ["table with count 0"] = RacePage("0507", "28.11.2026", 0, athletes),
-            ["no count"] = valid.Replace("fa-users", "fa-people", StringComparison.Ordinal),
-            ["empty without count"] = RacePage("0507", "28.11.2026").Replace("fa-users", "fa-people", StringComparison.Ordinal),
-            ["other table"] = valid.Replace("id=\"reg-ath-table\"", "id=\"new-table\"", StringComparison.Ordinal),
-            ["column order"] = valid.Replace("class=\"col-club\">Club", "class=\"col-team\">Club", StringComparison.Ordinal),
-            ["missing cell"] = valid.Replace("<td class=\"mono col-fis\">100002</td>", "", StringComparison.Ordinal),
-            ["bad code"] = valid.Replace("100002</td>", "1000 02!</td>", StringComparison.Ordinal),
-            ["bad year"] = valid.Replace("<td class=\"mono col-year\">2008", "<td class=\"mono col-year\">08", StringComparison.Ordinal),
-            ["bad nation"] = valid.Replace("title=\"FIN\"", "title=\"Finland\"", StringComparison.Ordinal),
-            ["rank and name swapped"] = valid.Replace("class=\"mono row-num\"", "class=\"x\"", StringComparison.Ordinal)
-                .Replace("class=\"name\"", "class=\"mono row-num\"", StringComparison.Ordinal).Replace("class=\"x\"", "class=\"name\"", StringComparison.Ordinal),
-            ["name without letters"] = valid.Replace("Toinen ESIMERKKI", "2", StringComparison.Ordinal),
-            ["no name"] = valid.Replace("Toinen ESIMERKKI", "", StringComparison.Ordinal),
-            ["no date"] = valid.Replace("28.11.2026", "soon", StringComparison.Ordinal),
-            ["impossible date"] = valid.Replace("28.11.2026", "31.11.2026", StringComparison.Ordinal),
-            ["no codex"] = valid.Replace("#0507", "", StringComparison.Ordinal),
-            ["truncated"] = valid[..valid.IndexOf("</tbody>", StringComparison.Ordinal)],
-            ["unclosed row"] = valid.Replace("999.00</td>          </tr>\n</tbody>", "999.00</td></tbody>", StringComparison.Ordinal)
-                .Replace("</tr></tbody>", "</tbody>", StringComparison.Ordinal),
-        };
-        foreach (var (name, html) in broken)
-        {
-            Assert.NotEqual(valid, html);
-            Assert.True(Record.Exception(() => FissiRegistrationHtml.ReadRace(html)) is DomainValidationException, name);
-        }
-    }
-
-    // ---- Finding the races
-
-    [Fact]
-    public async Task EveryCompetitionIsFoundByCodexSeasonGenderAndDiscipline()
-    {
-        using var site = new Site
-        {
-            Upcoming = Races(new Race(51, "0507"), new Race(52, "5489", "SL", "Women"), new Race(53, "2075"), new Race(54, "0600", "GS"), new Race(55, "0700"), new Race(56, "0700")),
-            Past = Races(new Race(40, "0800"), new Race(41, "0900")),
-        };
-        site.Pages[51] = RacePage("0507", "28.11.2026", new Athlete("Testi ESIMERKKI", "100001"));
-        site.Pages[52] = RacePage("5489", "29.11.2026", new Athlete("Tiina ESIMERKKI", "100002"));
-        site.Pages[53] = RacePage("2075", "28.11.2026");
-        site.Pages[55] = site.Pages[56] = RacePage("0700", "28.11.2026", new Athlete("Testi ESIMERKKI", "100001"));
-        site.Pages[40] = RacePage("0800", "28.11.2026", new Athlete("Testi ESIMERKKI", "100001"));
-        site.Pages[41] = RacePage("0900", "28.11.2025", new Athlete("Testi ESIMERKKI", "100001"));
-        using var http = new HttpClient(site);
-        var locked = Competition("LOCKED", "0507");
-        var competitions = new[]
-        {
-            Competition("SL1 M", "507"), Competition("SL1 W", "5489", "W"), Competition("NC", "2075"), Competition("NO CODEX", null),
-            Competition("UNKNOWN", "9999"), Competition("GENDER", "5489"), Competition("DISCIPLINE", "0600"), Competition("TWICE", "0700"),
-            Competition("PAST", "0800"), Competition("OTHER SEASON", "0900"), locked, Competition("TEXT", "SL-1"),
-        };
-        var found = await new FissiRegistrationClient(http).GetAsync(competitions, new HashSet<Guid> { locked.Id });
-        Assert.Equal([FissiRaceStatus.Ready, FissiRaceStatus.DateDiffers, FissiRaceStatus.NoneRegistered, FissiRaceStatus.NoCodex,
-            FissiRaceStatus.NotFound, FissiRaceStatus.RaceDiffers, FissiRaceStatus.RaceDiffers, FissiRaceStatus.SeveralMatches,
-            FissiRaceStatus.Ready, FissiRaceStatus.NotFound, FissiRaceStatus.StartListSaved, FissiRaceStatus.NoCodex], found.Select(x => x.Status));
-        Assert.Equal(competitions.Select(x => x.Id), found.Select(x => x.CompetitionId));
-        Assert.Equal("0507", found[0].Codex);
-        // Each page is read once and the past list only because some codexes are not upcoming.
-        Assert.Equal(site.Requests.Count, site.Requests.Distinct().Count());
-        Assert.Contains("/public/index.php?lang=en&showPast=1", site.Requests);
-    }
-
-    [Fact]
-    public async Task UpcomingRacesNeedOneListAndOneListIsNotUsedForTwoCompetitions()
-    {
-        using var site = new Site { Upcoming = Races(new Race(51, "0507")) };
-        site.Pages[51] = RacePage("0507", "28.11.2026", new Athlete("Testi ESIMERKKI", "100001"));
-        using var http = new HttpClient(site);
-        var client = new FissiRegistrationClient(http);
-        Assert.Equal(FissiRaceStatus.Ready, Assert.Single(await client.GetAsync([Competition("SL1", "0507")], s_none)).Status);
-        Assert.Equal(["/public/index.php?lang=en&showPast=0", "/public/registered_athletes.php?race_id=51&lang=en"], site.Requests);
-        var twice = await client.GetAsync([Competition("SL1", "0507"), Competition("SL2", "0507")], s_none);
-        Assert.All(twice, x => { Assert.Equal(FissiRaceStatus.SeveralMatches, x.Status); Assert.Null(x.Page); });
-    }
-
-    [Fact]
-    public async Task FailedAndForeignResponsesFailTheWholeUpdate()
-    {
-        using var site = new Site { Upcoming = Races(new Race(51, "0507"), new Race(52, "0508")) };
-        site.Pages[51] = RacePage("0507", "28.11.2026", new Athlete("Testi ESIMERKKI", "100001"));
-        site.Pages[52] = RacePage("0509", "28.11.2026", new Athlete("Testi ESIMERKKI", "100001"));
-        using var http = new HttpClient(site);
-        var client = new FissiRegistrationClient(http);
-        Task Read(params string[] codexes) => client.GetAsync(codexes.Select(x => Competition("SL" + x, x)).ToArray(), s_none);
-        Assert.Contains("another codex", (await Assert.ThrowsAsync<DomainValidationException>(() => Read("0507", "0508"))).Message, StringComparison.Ordinal);
-        site.Intercept = _ => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.ServiceUnavailable));
-        Assert.Contains("503", (await Assert.ThrowsAsync<DomainValidationException>(() => Read("0507"))).Message, StringComparison.Ordinal);
-        site.Intercept = _ => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.OK)
-        { Content = new StringContent(site.Upcoming), RequestMessage = new(HttpMethod.Get, "https://example.invalid/public/index.php") });
-        Assert.Contains("redirected", (await Assert.ThrowsAsync<DomainValidationException>(() => Read("0507"))).Message, StringComparison.Ordinal);
-        site.Intercept = request => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[5_000_001]), RequestMessage = request });
-        Assert.Contains("large", (await Assert.ThrowsAsync<DomainValidationException>(() => Read("0507"))).Message, StringComparison.Ordinal);
-        site.Intercept = request => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.OK) { Content = new ByteArrayContent([0xC3, 0x28]), RequestMessage = request });
-        await Assert.ThrowsAsync<DomainValidationException>(() => Read("0507"));
-        using var cancelled = new CancellationTokenSource(); await cancelled.CancelAsync();
-        site.Intercept = null;
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetAsync([Competition("SL", "0507")], s_none, cancelled.Token));
-    }
-
-    // ---- Proposed changes
 
     [Fact]
     public void NewAthletesAreMergedOverTheCompetitionsTheyAreRegisteredIn()

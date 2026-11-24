@@ -43,11 +43,11 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
         ArgumentNullException.ThrowIfNull(lockedCompetitions); ArgumentNullException.ThrowIfNull(lockedCompetitors);
         var competitions = series.Competitions.ToDictionary(x => x.Id);
         if (series.Id != desk.SeriesId || registrations.Any(x => !competitions.ContainsKey(x.CompetitionId))) { throw new SeriesConflictException(); }
-        // A start list may have been saved while the pages were read.
+        // A start list may have been saved while the registrations were read.
         var current = registrations.Select(x => x.Status != FissiRaceStatus.NoCodex && lockedCompetitions.Contains(x.CompetitionId)
-            ? x with { Status = FissiRaceStatus.StartListSaved, Page = null } : x).ToArray();
+            ? x with { Status = FissiRaceStatus.StartListSaved, Registrations = null } : x).ToArray();
         // A competition without registrations removes nobody: its registration may not be open yet.
-        var active = current.Where(x => x.Status is FissiRaceStatus.Ready or FissiRaceStatus.DateDiffers && x.Page is { Athletes.Count: > 0 }).ToArray();
+        var active = current.Where(x => x.Status is FissiRaceStatus.Ready or FissiRaceStatus.DateDiffers && x.Registrations is { Athletes.Count: > 0 }).ToArray();
         var warnings = new List<string>();
         var keepEntries = new HashSet<Guid>();
         var people = Resolve(Collect(active, competitions), desk, warnings, keepEntries);
@@ -112,7 +112,7 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
             {
                 var id = registration.CompetitionId;
                 if (!entered.Contains((competitor.Id, id)) || registered.Contains((competitor.Id, id))) { continue; }
-                if (registration.Page!.Athletes.Any(x => IsListed(x, competitor.Values)))
+                if (registration.Registrations!.Athletes.Any(x => IsListed(x, competitor.Values)))
                 {
                     warnings.Add($"{competitor.Values.Surname} {competitor.Values.FirstName}".Trim()
                         + $": an athlete with the same name or code is registered in {competitions[id].Values.ShortLabel}. The entry was kept; check it.");
@@ -130,7 +130,7 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
                 update.Entries.Count > 0 ? [.. update.Changed, "Entry"] : update.Changed, update.Notes, false));
         }
         return new FissiRegistrationPlan(rows, current.Select(x => new FissiRaceOutcome(x.CompetitionId, competitions[x.CompetitionId].Values.ShortLabel,
-            x.Codex, x.Page?.Date, x.Page?.Athletes.Count, counts[x.CompetitionId].New, counts[x.CompetitionId].Added,
+            x.Codex, x.Registrations?.Race.Date, x.Registrations?.Athletes.Count, counts[x.CompetitionId].New, counts[x.CompetitionId].Added,
             counts[x.CompetitionId].Removed, x.Status)).ToArray(), warnings);
     }
 
@@ -147,9 +147,9 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
         var ordered = new List<Person>();
         foreach (var registration in active)
         {
-            var gender = CompetitionGenderRule.Required(registration.Gender)
+            var gender = CompetitionGenderRule.Required(registration.Registrations!.Race.Gender)
                 ?? CompetitionGenderRule.Required(competitions[registration.CompetitionId].Values.Calendar?.Gender);
-            foreach (var athlete in registration.Page!.Athletes)
+            foreach (var athlete in registration.Registrations!.Athletes)
             {
                 var key = athlete.Code is { } code ? "code:" + code : "name:" + NameKey(athlete.FullName, athlete.BirthYear);
                 if (!people.TryGetValue(key, out var person))

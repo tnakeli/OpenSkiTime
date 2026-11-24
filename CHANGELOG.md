@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
-- **Update from regs.fissi.fi** in Competitors reads the registered athletes of every competition in the series from the public API of the Finnish registration site by codex. The API key is saved in **Settings → API keys** (formerly **FIS**). **Update from regs.fissi.fi (deprecated Web Crawl)** reads the public pages instead, without a key. New competitors, changed details, entries and removed entries are highlighted for review and kept with **Save**. Competitions with a saved start list are left as they are.
+- **Update from regs.fissi.fi** in Competitors reads the registered athletes of every competition in the series from the public API of the Finnish registration site by codex. The API key is saved in **Settings → API keys** (formerly **FIS**). New competitors, changed details, entries and removed entries are highlighted for review and kept with **Save**. Competitions with a saved start list are left as they are.
 - **Update from Ski-Alp-Pro** (Settings → About → Advanced, advanced mode only, **test use only**): opens a Vola Ski-Alp-Pro event, shows its statistics per run and imports competitors, start lists with bibs, and times into the open event series. Importing into an existing competition replaces all its data after a confirmation; a complete copy of the series is saved first. Imported times are simulation timing and cannot be sent to FIS as official results. Do not open a series with an imported start list or imported times with 0.4.0.
 
 ### Changed
