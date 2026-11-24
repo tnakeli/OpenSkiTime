@@ -89,9 +89,7 @@ for (const heading of ['## Synchronization rules', '## From changes to events', 
 // Azure Static Web Apps answers 404 for source files such as .cs and .java.
 for (const file of await readdir(path.join(root, 'live-api'))) assert.match(file, /\.(html|json|txt)$/, `${file} would not be served.`);
 for (const file of ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs', 'LiveReader.java']) {
-  const source = (await readFile(new URL(`./live-api/${file}`, import.meta.url), 'utf8')).replaceAll('
-', '
-');
+  const source = (await readFile(new URL(`./live-api/${file}`, import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
   assert(apiText.includes(source.trimEnd()), `live-api.txt is missing ${file}`);
   const link = file.endsWith('.json') ? `/live-api/${file}` : `https://github.com/tnakeli/OpenSkiTime/blob/master/website/live-api/${file}`;
   assert(apiPage.includes(`href="${link}"`), `The Live API page does not link to ${file}`);
