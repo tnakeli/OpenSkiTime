@@ -7,16 +7,19 @@ public sealed class FisLocalStore
 {
     private readonly ICredentialStore _credential;
     private readonly ICredentialStore _memberCredential;
+    private readonly ICredentialStore _fissiCredential;
     private readonly string _archivePath;
 
     // Two different FIS credentials: the public API key (api.fis-ski.com, X-Api-Key) and the FIS Member Section personal
     // access token (profile.fis-ski.com/api, bearer) that submits competition files. One does not work for the other.
-    // An injected API credential without an injected member credential gets an in-memory token store, so a test never
-    // reads the real Windows credential.
-    public FisLocalStore(string? localDataDirectory = null, ICredentialStore? apiCredential = null, ICredentialStore? memberCredential = null)
+    // The regs.fissi.fi public API has its own key. An injected API credential without the other injected credentials gets
+    // in-memory stores for them, so a test never reads the real Windows credentials.
+    public FisLocalStore(string? localDataDirectory = null, ICredentialStore? apiCredential = null, ICredentialStore? memberCredential = null,
+        ICredentialStore? fissiCredential = null)
     {
         _credential = apiCredential ?? new WindowsCredentialStore("OpenSkiTime.FIS.ApiKey");
         _memberCredential = memberCredential ?? (apiCredential is null ? new WindowsCredentialStore("OpenSkiTime.FIS.MemberToken", compactBlob: true) : new MemoryCredentialStore());
+        _fissiCredential = fissiCredential ?? (apiCredential is null ? new WindowsCredentialStore("OpenSkiTime.Fissi.ApiKey") : new MemoryCredentialStore());
         var directory = localDataDirectory ?? LocalDataDirectory.Path;
         _archivePath = Path.Combine(directory, "fis-points-list.zip");
     }
@@ -53,6 +56,15 @@ public sealed class FisLocalStore
         _memberCredential.Save(token.Trim());
     }
     public void RemoveMemberToken() => _memberCredential.Remove();
+
+    public bool HasFissiApiKey() => _fissiCredential.Exists();
+    public string? ReadFissiApiKey() => _fissiCredential.Read();
+    public void SaveFissiApiKey(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        _fissiCredential.Save(key.Trim());
+    }
+    public void RemoveFissiApiKey() => _fissiCredential.Remove();
 
     private sealed class MemoryCredentialStore : ICredentialStore
     {

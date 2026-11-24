@@ -70,7 +70,7 @@ public partial class MainWindow : Window
     private void OnRecentFilesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         => RebuildRecentMenu();
 
-    private static readonly string[] s_settingsTabs = ["FIS", "Timing devices", "Timing report", "Live timing", "About"];
+    private static readonly string[] s_settingsTabs = ["API keys", "Timing devices", "Timing report", "Live timing", "About"];
 
     // File and Settings menus of the title bar. Recent files are a submenu of File.
     private void BuildTitleMenus()

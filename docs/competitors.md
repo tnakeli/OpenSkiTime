@@ -28,9 +28,9 @@ FIS points are saved with the event series together with the list they came from
 
 ## Update from regs.fissi.fi
 
-**Update from regs.fissi.fi** (the section below **Update from FIS**) reads the registered athletes of every competition of the open series from the public registration pages of [regs.fissi.fi](https://regs.fissi.fi) and stages the differences in the grid. Nothing is saved before **Save**; **Undo** lists every staged change and can undo each one. Pending edits are saved or discarded first, because the registrations are compared with the saved competitors.
+**Update from regs.fissi.fi** (the section below **Update from FIS**) reads the registered athletes of every competition of the open series from the public API of [regs.fissi.fi](https://regs.fissi.fi) and stages the differences in the grid. It needs the API key saved in **Settings → API keys**. **Update from regs.fissi.fi (deprecated Web Crawl)** below it does the same from the public registration pages without a key; see [Web pages](#web-pages-deprecated). Nothing is saved before **Save**; **Undo** lists every staged change and can undo each one. Pending edits are saved or discarded first, because the registrations are compared with the saved competitors.
 
-A competition is found by its codex. The season of the registration page must be the season of the competition (FIS uses the same codexes every season), and gender and discipline must agree where both sides tell them. Upcoming races are searched first, past races only for a codex that is not among them. The section lists each competition with the date on the site, the registered athletes, the new competitors, the entries added and removed and a status:
+A competition is found by its codex. The season of the registrations must be the season of the competition (FIS uses the same codexes every season), and gender and discipline must agree where both sides tell them. The API is asked for the race of the competition date first and, when it knows none, for the newest race of the codex, so a race moved to another day is found too. The section lists each competition with the date on the site, the registered athletes, the new competitors, the entries added and removed and a status:
 
 | Status | Meaning |
 |---|---|
@@ -44,8 +44,8 @@ A competition is found by its codex. The season of the registration page must be
 
 Athletes are matched by FIS code, otherwise by name and birth year.
 
-- A new athlete is added with the code, name, birth year, nation and club of the site, the gender of the race and the entries of all read competitions.
-- An existing competitor's name, birth year, nation and club are replaced by the site's values; values the site does not have stay. The same name in other capitals or order is kept. The gender is filled in only when it is missing.
+- A new athlete is added with the code, name, birth year and nation of the site, the gender of the race and the entries of all read competitions.
+- An existing competitor's name, birth year and nation are replaced by the site's values; values the site does not have stay. The API has no club: saved clubs stay, and new competitors get theirs with **Update from FIS list** after **Save**. The web pages have the club, which is added and replaced like the other values. The same name in other capitals or order is kept. The gender is filled in only when it is missing.
 - An entry of a competitor who is not registered any more is removed. This includes competitors added by hand, so review the removals before **Save**. Nobody whose code or name is on the registration list of the race is removed; an unclear one is named in a warning.
 - A match by name whose Code differs, and a new or changed name written entirely in capitals (the surname cannot be told apart, unless the loaded FIS list has the athlete), need **Match checked** before **Save**.
 - An uncertain match (several competitors, registered twice, men's and women's races, the same name with a birth year missing, neither a code nor a birth year) and invalid values are left out with a warning, and nobody involved loses an entry. An entry of the other gender is not added.
@@ -53,7 +53,17 @@ Athletes are matched by FIS code, otherwise by name and birth year.
 
 A competition with a saved start list is not updated and competitors on any saved start list keep their details, because a later run requires the entries and details of Run 1.
 
-The site has no API, so the pages are read as they are. All pages are read and checked before anything is staged: a page that is not understood completely (an unknown table, a row that cannot be read, another number of rows than the page states) stops the update without changes, because a missing athlete would otherwise be proposed for removal. If the competitors or competitions change or another view is opened during the download, nothing is staged. No credentials or race data are sent. Reading registrations is optional and does not affect timing.
+All races are read and checked before anything is staged: a response that is not understood completely stops the update without changes, because a missing athlete would otherwise be proposed for removal. If the competitors or competitions change or another view is opened during the download, nothing is staged. Reading registrations is optional and does not affect timing.
+
+### API
+
+`GET https://regs.fissi.fi/public/api/race_athletes.php?codex=0507&date=2026-11-28` with the key in the `X-API-Key` header, never in the address. Redirects are not followed, so the key is sent to regs.fissi.fi only. The response has `race` (codex, name, date, location, discipline, category, gender), `points_list`, `count` and `athletes` (`fis_code`, `name`, `birth_year`, `nation`, `points`); codex, date, discipline and gender of the race and the athletes' fields except points are used. Every used field must be present and `count` must be the number of athletes; a null or blank value means not known. 401 and 403 (key missing or rejected), 429 (request limit, with the time of `Retry-After`) and other errors stop the update; a 404 with the API's error code `race_not_found` is an unknown race. Nothing is retried automatically. Hidden races are not returned by the API.
+
+Contract: the operator's instructions of 2026-11-24. Checked with a key on that day: five races (264 registrations in all; one race empty, one with another date) gave exactly the athletes of the web pages (code, name, birth year and nation), and a race of the other gender, an unknown codex and a wrong date were recognized. The service states a limit of 600 requests (`X-RateLimit-Limit`).
+
+### Web pages (deprecated)
+
+The pages are read as they are. Upcoming races are searched first, past races only for a codex that is not among them. A page with an unknown table, a row that cannot be read or another number of rows than the page states stops the update. No credentials or race data are sent. Use it only when the API is not available.
 
 Reviewed against the public pages on 2026-11-24. The past race list had no races then, so its row layout is assumed to be that of the upcoming list.
 

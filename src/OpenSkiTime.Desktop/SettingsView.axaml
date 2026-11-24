@@ -6,7 +6,7 @@
  <StackPanel Spacing="8">
   <TextBlock Text="Settings" Classes="sectionTitle"/>
   <TabControl Name="SettingsTabs" Classes="pageTabs" SelectedIndex="{Binding SelectedSettingsTab}">
-   <TabItem Header="FIS">
+   <TabItem Header="API keys">
     <StackPanel Classes="tabPage">
      <Border Classes="card">
       <StackPanel Spacing="{DynamicResource FormGap}">
@@ -43,6 +43,24 @@
         </StackPanel>
        </local:FormRow>
        <TextBlock Text="{Binding FisMemberTokenStatus}" TextWrapping="Wrap" Classes="supportingText"/>
+      </StackPanel>
+     </Border>
+     <Border Classes="card">
+      <StackPanel Spacing="{DynamicResource FormGap}">
+       <Grid Classes="cardHeader"><TextBlock Text="regs.fissi.fi Public API key" Classes="cardTitle"/></Grid>
+       <TextBlock Text="Used by Update from regs.fissi.fi in Competitors. The key is issued by the operator of regs.fissi.fi."
+                  TextWrapping="Wrap" Classes="supportingText"/>
+       <local:FormRow>
+        <StackPanel Grid.Column="0" Grid.ColumnSpan="6" Classes="field">
+         <TextBlock Text="API KEY" Classes="fieldLabel"/>
+         <TextBox Name="FissiApiKeyInputBox" PasswordChar="•" Text="{Binding FissiApiKeyInput}" PlaceholderText="{Binding FissiApiKeyWatermark}" MaxLength="1024"/>
+        </StackPanel>
+        <StackPanel Grid.Column="6" Grid.ColumnSpan="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+         <Button Content="Save regs.fissi.fi key" Command="{Binding SaveFissiApiKeyCommand}" Classes="primaryAction"/>
+         <Button Content="Remove regs.fissi.fi key" Command="{Binding RemoveFissiApiKeyCommand}" Classes="dangerAction"/>
+        </StackPanel>
+       </local:FormRow>
+       <TextBlock Text="{Binding FissiApiKeyStatus}" TextWrapping="Wrap" Classes="supportingText"/>
       </StackPanel>
      </Border>
     </StackPanel>

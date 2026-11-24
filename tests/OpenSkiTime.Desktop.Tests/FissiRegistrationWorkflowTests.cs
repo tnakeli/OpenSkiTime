@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -243,6 +244,89 @@ public partial class DesktopWorkflowTests
     });
 
     [AvaloniaFact]
+    public Task TheApiUpdateUsesTheSavedKeyAndIsStagedReviewedAndSaved() => InFissiFolderAsync(async (folder, path) =>
+    {
+        using var site = new FissiPages.ApiSite("fissi_synthetic"); using var http = new HttpClient(site);
+        site.Races["0507", s_fissiDate] = FissiPages.ApiRace("0507", "2026-11-28", "SL", "Men", new FissiPages.Athlete("Testi ESIMERKKI", "100001"), new FissiPages.Athlete("Uusi TULOKAS", "100002"));
+        site.Races["5489", s_fissiDate] = FissiPages.ApiRace("5489", "2026-11-28", "SL", "Women", new FissiPages.Athlete("Tiina ESIMERKKI", "200001"));
+        await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+        var series = await CreateFissiSeriesAsync(workspace, path);
+        var men = series.Competitions.Single(x => x.Values.ShortLabel == "SL M").Id;
+        var fisKey = new ReportSettingsCredential(); var fissiKey = new ReportSettingsCredential();
+        using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = path, OpenPath = path, BackupPath = path + ".bak" },
+            fisStore: new FisLocalStore(folder, fisKey, fissiCredential: fissiKey), recentSeriesStore: new RecentSeriesStore(folder), informationHttp: http);
+        var window = new MainWindow { DataContext = vm, WindowState = WindowState.Normal, Width = 1366, Height = 1000 };
+        window.Show();
+        await vm.OpenSeriesCommand.ExecuteAsync(null);
+        vm.ShowCompetitorsCommand.Execute(null);
+        // Without a key nothing is sent.
+        await vm.UpdateFromFissiApiCommand.ExecuteAsync(null);
+        Assert.True(vm.IsError); Assert.Contains("Settings → API keys", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Empty(site.Requests);
+
+        // The key has its own field, last in Settings > API keys, and its own credential.
+        vm.SelectedSettingsTab = 0; vm.ShowSettingsCommand.Execute(null);
+        window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+        var settings = window.GetVisualDescendants().OfType<SettingsView>().Single();
+        Assert.Equal("API keys", ((TabItem)settings.FindControl<TabControl>("SettingsTabs")!.SelectedItem!).Header);
+        TextBox Box(string name) => settings.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == name);
+        double Y(string name) => Box(name).TranslatePoint(default, window)!.Value.Y;
+        Assert.True(Y("FisApiKeyInputBox") < Y("FisMemberTokenInputBox") && Y("FisMemberTokenInputBox") < Y("FissiApiKeyInputBox"));
+        Assert.Equal('•', Box("FissiApiKeyInputBox").PasswordChar);
+        Box("FissiApiKeyInputBox").Text = " fissi_synthetic ";
+        Click(window, "Save regs.fissi.fi key");
+        Assert.Equal("fissi_synthetic", fissiKey.Read()); Assert.Null(fisKey.Read());
+        Assert.Empty(vm.FissiApiKeyInput); Assert.Equal("Saved for this Windows user", vm.FissiApiKeyStatus);
+
+        vm.ShowCompetitorsCommand.Execute(null);
+        vm.IsFissiApiPanelOpen = true;
+        window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+        var button = window.FindControl<Button>("UpdateFromFissiApiButton")!;
+        Assert.True(button.IsEffectivelyVisible && button.IsEffectivelyEnabled);
+        button.Command!.Execute(null);
+        await vm.UpdateFromFissiApiCommand.ExecutionTask!;
+        window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+        Assert.False(vm.IsError, vm.StatusMessage);
+        Assert.Equal(["SL M", "SL W", "SL X"], vm.FissiApiRaces.Select(x => x.Race));
+        Assert.Equal(("2", "1", "1", "1", "Review and save"), (vm.FissiApiRaces[0].Registered, vm.FissiApiRaces[0].New, vm.FissiApiRaces[0].Added, vm.FissiApiRaces[0].Removed, vm.FissiApiRaces[0].Status));
+        Assert.Empty(vm.FissiRaces);
+        Assert.True(window.FindControl<DataGrid>("FissiApiRacesGrid")!.IsVisible);
+        Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
+        var output = Environment.GetEnvironmentVariable("OPENSKITIME_M7_VISUAL_DIR");
+        if (!string.IsNullOrWhiteSpace(output))
+        {
+            Directory.CreateDirectory(output);
+            window.FindControl<Expander>("FissiApiSection")!.BringIntoView(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            CaptureFissi(window, Path.Combine(output, "fissi-api.png"));
+        }
+        await vm.CommitDeskChangesCommand.ExecuteAsync(null);
+        Assert.False(vm.IsError, vm.StatusMessage);
+        var saved = await workspace.ReadCompetitorDeskAsync();
+        Assert.Equal(["100001", "100002", "100009", "200001"], saved.Competitors.Select(x => x.Values.FederationCode!).Order());
+        // The API has no club: the saved one stays.
+        Assert.Equal("Old Club", saved.Competitors.Single(x => x.Values.FederationCode == "100001").Values.Club);
+        Assert.True(IsEntered(saved, "100002", men)); Assert.False(IsEntered(saved, "100009", men));
+        await vm.UpdateFromFissiApiCommand.ExecuteAsync(null);
+        Assert.False(vm.IsError, vm.StatusMessage); Assert.Empty(vm.DeskChangeLog);
+
+        // A rejected key stages nothing and is never shown.
+        fissiKey.Save("fissi_wrong");
+        await vm.UpdateFromFissiApiCommand.ExecuteAsync(null);
+        Assert.True(vm.IsError); Assert.Contains("rejected the API key", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("fissi_wrong", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Empty(vm.DeskChangeLog); Assert.Empty(vm.FissiApiRaces);
+        vm.RemoveFissiApiKeyCommand.Execute(null);
+        Assert.Null(fissiKey.Read()); Assert.Equal("Not configured", vm.FissiApiKeyStatus);
+        window.Close();
+    });
+
+    private static void CaptureFissi(MainWindow window, string file)
+    {
+        using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new Avalonia.PixelSize(1366, 1000), new Avalonia.Vector(96, 96));
+        bitmap.Render(window); bitmap.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+    }
+
+    [AvaloniaFact]
     public Task TheUpdateSectionSharesThePageEdges() => InFissiFolderAsync(async (folder, path) =>
     {
         using var site = FissiSite(); using var http = new HttpClient(site);
@@ -259,14 +343,17 @@ public partial class DesktopWorkflowTests
         var section = window.FindControl<Expander>("FissiSection")!;
         var fis = window.GetVisualDescendants().OfType<Expander>().Single(x => Equals(x.Header, "Update from FIS"));
         Assert.Equal(fis.Bounds.X, section.Bounds.X); Assert.Equal(fis.Bounds.Width, section.Bounds.Width);
-        Assert.True(section.Bounds.Y > fis.Bounds.Y);
+        // The API update is above the deprecated one.
+        var api = window.FindControl<Expander>("FissiApiSection")!;
+        Assert.Equal(("Update from regs.fissi.fi", "Update from regs.fissi.fi (deprecated Web Crawl)"), (api.Header, section.Header));
+        Assert.Equal(fis.Bounds.X, api.Bounds.X); Assert.Equal(fis.Bounds.Width, api.Bounds.Width);
+        Assert.True(fis.Bounds.Y < api.Bounds.Y && api.Bounds.Y < section.Bounds.Y);
         var output = Environment.GetEnvironmentVariable("OPENSKITIME_M7_VISUAL_DIR");
         if (!string.IsNullOrWhiteSpace(output))
         {
             Directory.CreateDirectory(output);
             section.BringIntoView(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-            using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new Avalonia.PixelSize(1366, 1000), new Avalonia.Vector(96, 96));
-            bitmap.Render(window); bitmap.Save(Path.Combine(output, "fissi-update.png"), Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+            CaptureFissi(window, Path.Combine(output, "fissi-update.png"));
         }
         window.Close();
     });

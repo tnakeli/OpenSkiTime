@@ -32,6 +32,9 @@ public sealed partial class MainViewModel
     [ObservableProperty] private string _fisMemberTokenInput = string.Empty;
     [ObservableProperty] private string _fisMemberTokenStatus = "Not configured";
     [ObservableProperty] private string _fisMemberTokenWatermark = "Personal access token";
+    [ObservableProperty] private string _fissiApiKeyInput = string.Empty;
+    [ObservableProperty] private string _fissiApiKeyStatus = "Not configured";
+    [ObservableProperty] private string _fissiApiKeyWatermark = "regs.fissi.fi API key";
     [ObservableProperty] private string _fisListDisplay = "No FIS points list downloaded";
     [ObservableProperty] private string _fisListValidityText = string.Empty;
     [ObservableProperty] private string _fisEffectiveDateText = string.Empty;
@@ -58,6 +61,9 @@ public sealed partial class MainViewModel
             var tokenConfigured = _fisStore.HasMemberToken();
             FisMemberTokenStatus = tokenConfigured ? "Saved for this Windows user" : "Not configured";
             FisMemberTokenWatermark = tokenConfigured ? "••••••••••••" : "Personal access token";
+            var fissiConfigured = _fisStore.HasFissiApiKey();
+            FissiApiKeyStatus = fissiConfigured ? "Saved for this Windows user" : "Not configured";
+            FissiApiKeyWatermark = fissiConfigured ? "••••••••••••" : "regs.fissi.fi API key";
         }
         catch (Exception ex) when (ex is IOException or PlatformNotSupportedException)
         {
@@ -65,6 +71,8 @@ public sealed partial class MainViewModel
             FisApiKeyWatermark = "FIS API key";
             FisMemberTokenStatus = "Credential store unavailable";
             FisMemberTokenWatermark = "Personal access token";
+            FissiApiKeyStatus = "Credential store unavailable";
+            FissiApiKeyWatermark = "regs.fissi.fi API key";
             SetStatus(ex.Message, error: true);
         }
     }
@@ -126,6 +134,38 @@ public sealed partial class MainViewModel
             FisApiKeyInput = string.Empty;
             RefreshFisSettingsStatus();
             SetStatus("FIS API key removed from Windows Credential Manager.");
+        }
+        catch (Exception ex) when (ex is IOException or PlatformNotSupportedException)
+        {
+            SetStatus(ex.Message, error: true);
+        }
+    }
+
+    [RelayCommand]
+    private void SaveFissiApiKey()
+    {
+        try
+        {
+            _fisStore.SaveFissiApiKey(FissiApiKeyInput);
+            FissiApiKeyInput = string.Empty;
+            RefreshFisSettingsStatus();
+            SetStatus("regs.fissi.fi API key saved in Windows Credential Manager.");
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or PlatformNotSupportedException)
+        {
+            SetStatus(ex.Message, error: true);
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveFissiApiKey()
+    {
+        try
+        {
+            _fisStore.RemoveFissiApiKey();
+            FissiApiKeyInput = string.Empty;
+            RefreshFisSettingsStatus();
+            SetStatus("regs.fissi.fi API key removed from Windows Credential Manager.");
         }
         catch (Exception ex) when (ex is IOException or PlatformNotSupportedException)
         {
