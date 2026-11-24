@@ -272,7 +272,9 @@ public sealed partial class MainViewModel
         var shown = -1;
         while (true)
         {
-            var completed = await Task.WhenAny(read.Completion, Task.Delay(ReportDevicePollInterval)) == read.Completion;
+            using var poll = new CancellationTokenSource();
+            var completed = await Task.WhenAny(read.Completion, Task.Delay(ReportDevicePollInterval, poll.Token)) == read.Completion;
+            poll.Cancel();
             if (!ReferenceEquals(_reportDeviceRead, read)) { return; }
             ReportDeviceStatus = read.Status + $" · {read.PacketCount} packet(s) received in memory";
             if (!completed && read.PacketCount != shown)
