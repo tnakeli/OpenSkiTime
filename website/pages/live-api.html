@@ -9,7 +9,7 @@
 <article id="quick-start"><h2>Quick start</h2>
 <p>List the races published now:</p>
 <pre><code>curl https://live.openskiti.me/api/sessions</code></pre>
-<p>Follow one race with the <a href="/live-api/live-reader.mjs">JavaScript reader</a>, using a <code>sessionId</code> from the list:</p>
+<p>Follow one race with the <a href="https://github.com/tnakeli/OpenSkiTime/blob/master/website/live-api/live-reader.mjs">JavaScript reader</a>, using a <code>sessionId</code> from the list:</p>
 <pre><code>npm install @microsoft/signalr@10
 node live-reader.mjs https://live.openskiti.me SESSION_ID</code></pre>
 <p>It prints what happens in the race:</p>
@@ -155,7 +155,7 @@ Run 1 | 3 EXAMPLE Maria | DNS</code></pre>
 <p>Without a SignalR client, for example in PHP, read <code>GET /api/sessions/{sessionId}/state</code> every 10 seconds while the race is on, never more often than every 5 seconds, and compare the rows as above. One background job should poll for all your users. The answer is always the complete state, some tens of kilobytes for a hundred competitors; there are no conditional requests.</p>
 <ul><li><b>404:</b> the race is not available now. Keep the last results and try again less often, for example every 30 seconds; give up after a while.</li><li><b>429 or a network error:</b> wait longer before the next request, up to a minute.</li></ul></article>
 <article id="examples"><h2>JavaScript, .NET, Java</h2>
-<p>The three readers do the same: without a session they list the races, with one they follow it until it is deleted. They recover from lost messages, broken connections and server restarts, and the project tests them together against the real server. They are free to use under the MIT license.</p>
+<p>The three readers do the same: without a session they list the races, with one they follow it until it is deleted. They recover from lost messages, broken connections and server restarts, and the project tests them together against the real server. They are <a href="https://github.com/tnakeli/OpenSkiTime/tree/master/website/live-api">on GitHub</a>, free to use under the MIT license.</p>
 <p>SignalR clients for other languages work too, if they support the JSON protocol.</p>
 <h3>JavaScript</h3><p>Node.js 22 or later, package <a href="https://www.npmjs.com/package/@microsoft/signalr">@microsoft/signalr</a>.</p>
 <pre><code>npm install @microsoft/signalr@10

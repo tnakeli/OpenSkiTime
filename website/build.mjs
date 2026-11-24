@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile, copyFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -160,16 +160,18 @@ for (const name of [video.poster, liveVideo.poster, editingVideo.poster, 'og-ima
   await copyFile(path.join(root, '..', 'docs', 'screenshots', name), path.join(output, 'assets', name));
 }
 // The Live API: the schema is one source for the published JSON Schema and for the components of the OpenAPI document, and
-// the example readers are shown on the page exactly as they are published (and tested by tests/live-api).
+// the example readers are shown on the page exactly as they are in the repository (and tested by tests/live-api).
 const api = path.join(root, 'live-api'), apiOutput = path.join(output, 'live-api');
 const apiFiles = ['live-api.schema.json', 'live-reader.mjs', 'live-reader.cs', 'LiveReader.java'];
+await rm(apiOutput, { recursive: true, force: true });
 await mkdir(apiOutput, { recursive: true });
 const apiSource = Object.fromEntries(await Promise.all(apiFiles.map(async file => [file, (await readFile(path.join(api, file), 'utf8')).replaceAll('\r\n', '\n')])));
-for (const file of apiFiles) await writeFile(path.join(apiOutput, file), apiSource[file]);
+// The readers themselves are on GitHub: Azure Static Web Apps does not serve .cs and .java files.
+await writeFile(path.join(apiOutput, 'live-api.schema.json'), apiSource['live-api.schema.json']);
 const openApi = JSON.parse(await readFile(path.join(api, 'openapi.json'), 'utf8'));
 openApi.components.schemas = JSON.parse(JSON.stringify(JSON.parse(apiSource['live-api.schema.json']).$defs).replaceAll('"#/$defs/', '"#/components/schemas/'));
 await writeFile(path.join(apiOutput, 'openapi.json'), `${JSON.stringify(openApi, null, 2)}\n`);
-const example = file => `<details class="example"><summary>Show ${file}</summary><pre><code>${escape(apiSource[file].trimEnd())}</code></pre></details><p><a href="/live-api/${file}">Download ${file} ↓</a></p>`;
+const example = file => `<details class="example"><summary>Show ${file}</summary><pre><code>${escape(apiSource[file].trimEnd())}</code></pre></details><p><a href="${repo}/blob/master/website/live-api/${file}">${file} on GitHub ↗</a></p>`;
 for (const [name, route, lang, title, description] of pages) {
   const t = text[lang];
   const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang)).replace('{{liveVideo}}', liveVideoHtml(lang)).replace('{{editingVideo}}', editingVideoHtml)
