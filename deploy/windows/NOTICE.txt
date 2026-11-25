@@ -18,8 +18,10 @@ TimyUsbHost transport helper requires Windows .NET Framework 4.8, included in
 supported Windows 11 installations. The .NET 10 runtime is bundled for the
 main application and live timing processes.
 
-Back up event series before changing versions. Incompatible development files
-are rejected without modification. Automatic schema upgrades are not available.
+Back up event series before changing versions. Files of earlier supported
+versions are upgraded when needed, after a backup copy is saved next to the
+file. Files of a newer version or an unsupported earlier format are rejected
+without modification.
 Uninstalling the application does not delete event files or user preferences.
 
 OpenSkiTime is distributed under the MIT license. Included dependencies retain

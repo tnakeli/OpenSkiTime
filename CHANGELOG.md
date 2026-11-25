@@ -6,15 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-25
+
+This version uses live protocol 2 and keeps the `.ost` series format of 0.4.0: series files from 0.3.0 and 0.4.0 open unchanged.
+
 ### Added
 
 - **Update from regs.fissi.fi** in Competitors reads the registered athletes of every competition in the series from the public API of the Finnish registration site by codex. The API key is saved in **Settings → API keys** (formerly **FIS**). New competitors, changed details, entries and removed entries are highlighted for review and kept with **Save**. Competitions with a saved start list are left as they are.
-- **Update from Ski-Alp-Pro** (Settings → About → Advanced, advanced mode only, **test use only**): opens a Vola Ski-Alp-Pro event, shows its statistics per run and imports competitors, start lists with bibs, and times into the open event series. Importing into an existing competition replaces all its data after a confirmation; a complete copy of the series is saved first. Imported times are simulation timing and cannot be sent to FIS as official results. Do not open a series with an imported start list or imported times with 0.4.0.
+- **Audit trail** (Settings → About → Advanced, advanced mode only): browse and filter saved timing decisions and corrections, start list revisions, raw timing input, diagnostics and the current series state. Viewing changes nothing in the series. **Create debug bundle…** saves a ZIP for support after you review its contents; the complete series, with personal race data, is included only if you choose it. Nothing is sent.
 
 ### Changed
 
 - **Entry lists and start lists (PDF):** column widths follow the content, so codes, years, nations and points are no longer broken onto several lines when a series has many competitions. Event Series Entries print the competition headings upwards, and lists by nation or category print the column headings once per page. PDFs generated earlier show as Outdated.
-- Series files are now upgraded by later versions. From this version on, a series file created by an earlier supported version is upgraded when opened, after a backup copy is saved next to it (`<name>.v1-backup-<time>.ost`). If an upgrade cannot be completed, the file is left unchanged. A file saved by a newer version is refused with a request to update OpenSkiTime. Series files of 0.4.0 open unchanged.
+- Later versions will upgrade series files when they are opened, after saving a backup copy next to the file (`<name>.v1-backup-<time>.ost`). If an upgrade cannot be completed, the file is left unchanged. A file saved in a newer format is refused with a request to update OpenSkiTime. 0.5.0 itself needs no upgrade.
 
 ### Security
 
@@ -156,7 +160,8 @@ First public preview of the Windows application, for rehearsals and evaluation. 
 - Local category draws, special Cup, youth, snow-seed and three-run formats are not supported. Automatic backup-time substitution and production FIS submission are pending.
 - ALGE native USB needs the vendor driver and SDK, installed separately.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.2...v0.3.0
 [0.2.0-preview.2]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.1...v0.2.0-preview.2
