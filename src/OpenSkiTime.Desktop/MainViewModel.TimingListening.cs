@@ -36,7 +36,7 @@ public sealed partial class MainViewModel
     private bool _timingSettingsChanged;
     private bool _openingTimingRun;
     private bool _timingListeningEnded;
-    private bool _timingWasShown;
+    private int _knownRunStarts;
     private long _timingRetryAt = long.MaxValue;
 
     // Why nothing is received in the open Timing view; empty while timing works.
@@ -71,14 +71,7 @@ public sealed partial class MainViewModel
                 await StopSignalMonitorAsync();
             }
             if (!IsTimingSection && workspace.Timing?.IsActive == true) { await StopTimingAsync(leaving: true); }
-            if (IsTimingSection) { _timingWasShown = true; }
-            else if (_timingWasShown)
-            {
-                // The first start of a run, in capture or by a decision, changes the series. What the other views save next
-                // is based on that.
-                _timingWasShown = false;
-                if (_current is not null) { _current = await workspace.ReadAsync(); }
-            }
+            await FollowRunStartsAsync();
             if (IsTimingSection && !_openingTimingRun) { await StartTimingAsync(); }
             if (IsTimingDevicesOpen)
             {
@@ -159,7 +152,6 @@ public sealed partial class MainViewModel
                 throw;
             }
             ConfigureTimingCheckpoints();
-            if (_current is not null) { _current = await workspace.ReadAsync(); }
             SetTimingProblem("");
             RefreshTiming();
             SetStatus("Timing is on HOLD. Check the race, then resume each timing position before assigning impulses.");
@@ -200,6 +192,18 @@ public sealed partial class MainViewModel
         _backupDevices.AddRange(devices);
     }
 
+    // The first start of a run, in capture or by a decision, changes the series. What the other views save next is based on
+    // it, but only when nothing else changed: a change by another window must still be found as a conflict.
+    private async Task FollowRunStartsAsync()
+    {
+        if (_current is not { } current || workspace.Timing is not { } timing || timing.RunStarts == _knownRunStarts) { return; }
+        var starts = timing.RunStarts;
+        var saved = await workspace.ReadAsync();
+        if (!ReferenceEquals(workspace.Timing, timing) || _current is null) { return; }
+        if (saved.Revision - _current.Revision <= starts - _knownRunStarts) { _current = saved; }
+        _knownRunStarts = starts;
+    }
+
     private void RetryTimingLater(TimeSpan? delay = null) => _timingRetryAt = Environment.TickCount64 + (long)(delay ?? s_retryDelay).TotalMilliseconds;
 
     internal void RetryTimingStart()
@@ -225,8 +229,11 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
-            await workspace.SetTrainingAsideAsync(list.Id, (await workspace.ReadAsync()).Revision, TimingOperator, DateTimeOffset.UtcNow);
-            if (_current is not null) { _current = await workspace.ReadAsync(); }
+            await TimingListeningTask;
+            await FollowRunStartsAsync();
+            if (_current is not { } current) { return; }
+            await workspace.SetTrainingAsideAsync(list.Id, current.Revision, TimingOperator, DateTimeOffset.UtcNow);
+            _current = current with { Revision = current.Revision + 1 };
             saved = true;
         });
         if (saved) { await OpenTimingRunAsync(new(competition, run)); }

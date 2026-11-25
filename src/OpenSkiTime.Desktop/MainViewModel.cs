@@ -301,6 +301,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     private async Task OpenPathAsync(string path)
     {
         if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
+        await TimingListeningTask; // the view just left has released its devices
         var details = await workspace.OpenAsync(path);
         ClearActiveRace();
         ResetTimingUi();
@@ -340,6 +341,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             EnsureDeskClean();
             if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
+            await TimingListeningTask; // the view just left has released its devices
             await workspace.CloseAsync();
             StopInformationTracking(); _informationKey = null;
             ClearActiveRace();
@@ -376,6 +378,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             EnsureDeskClean();
             if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
+            await TimingListeningTask; // what timing changed is known before this saves
             var revision = _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
             var details = await workspace.SaveSeriesAsync(DraftSeries(), revision);
             Apply(details);
@@ -429,6 +432,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             EnsureDeskClean();
             if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
+            await TimingListeningTask; // what timing changed is known before this saves
             var revision = workspace.Timing?.IsActive == true
                 ? (await workspace.ReadAsync()).Revision
                 : _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
@@ -460,6 +464,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
+            await TimingListeningTask; // what timing changed is known before this saves
             if (_current is null || _editingCompetitionId is not { } id)
             {
                 throw new SeriesFileException("Select a saved competition first.");

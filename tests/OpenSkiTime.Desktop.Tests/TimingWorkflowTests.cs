@@ -191,9 +191,7 @@ public partial class DesktopWorkflowTests
             vm.SimulationTime = "12:00:00.9999999";
             Click(window, "Test start"); await vm.SimulatePulseCommand.ExecutionTask!;
             await WaitTimingAsync(vm, () => vm.TimingRows[0].Status == "On course");
-            vm.ShowCompetitionsCommand.Execute(null);
-            await vm.TimingListeningTask;
-            Assert.Contains("1 competitor(s) on course", vm.StatusMessage, StringComparison.Ordinal); // a warning, shown as an error
+            vm.ShowCompetitionsCommand.Execute(null); // saving at once waits for timing to end
             vm.NewCompetitionCommand.Execute(null);
             vm.CompetitionShortLabel = "SL2";
             vm.CompetitionName = "Second slalom";

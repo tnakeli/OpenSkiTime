@@ -455,6 +455,7 @@ public sealed partial class MainViewModel
         {
             await GuardAsync(async () =>
             {
+                await TimingListeningTask; // what timing changed is known before this saves
                 var series = _current ?? throw new SeriesFileException("Open an event series first.");
                 var unapproved = _allCompetitorRows.FirstOrDefault(x => x.NeedsApproval && !x.WarningApproved);
                 if (unapproved is not null)
@@ -501,6 +502,7 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
+            await TimingListeningTask; // what timing changed is known before this saves
             var series = _current ?? throw new SeriesFileException("Open an event series first.");
             if (!int.TryParse(CategoryMinYearText, NumberStyles.None, CultureInfo.InvariantCulture, out var min)
                 || !int.TryParse(CategoryMaxYearText, NumberStyles.None, CultureInfo.InvariantCulture, out var max)
@@ -548,6 +550,7 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
+            await TimingListeningTask; // what timing changed is known before this saves
             var series = _current ?? throw new SeriesFileException("Open an event series first.");
             var rules = await _categoryRulePresetStore.LoadAsync();
             var revision = await workspace.ReplaceCategoryRulesAsync(rules, series.Revision);
@@ -564,6 +567,7 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
+            await TimingListeningTask; // what timing changed is known before this saves
             var series = _current ?? throw new SeriesFileException("Open an event series first.");
             var rules = DefaultCategories.ForSeason(FisSeason.FromSeries(series.Values.Season, series.Values.StartDate));
             var revision = await workspace.ReplaceCategoryRulesAsync(rules, series.Revision);

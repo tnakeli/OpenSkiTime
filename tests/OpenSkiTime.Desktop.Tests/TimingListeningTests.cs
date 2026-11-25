@@ -249,6 +249,44 @@ public partial class DesktopWorkflowTests
     });
 
     [AvaloniaFact]
+    public async Task SavingRightAfterTheFirstStartWorksInEveryView() => await InTimingListeningRunAsync(async (_, vm, device) =>
+    {
+        vm.TimingStartRole.UsbId = "1";
+        await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1));
+        await BenchUntilAsync(vm, () => device.Open == 1);
+        await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
+        var bib = vm.TimingRows[0].Bib;
+        await device.SendAsync($" {bib:0000}* C0 12:00:20.0000\r");
+        await BenchUntilAsync(vm, () => vm.TimingRows.Single(x => x.Bib == bib).Status == "On course");
+        vm.ShowSeriesCommand.Execute(null);
+        vm.Location = "Changed";
+        await vm.SaveSeriesCommand.ExecuteAsync(null);
+        Assert.False(vm.IsError, vm.StatusMessage);
+        vm.ShowCompetitionsCommand.Execute(null);
+        vm.SelectedCompetition = vm.Competitions[0];
+        vm.CompetitionName = "Changed race";
+        await vm.SaveCompetitionCommand.ExecuteAsync(null);
+        Assert.False(vm.IsError, vm.StatusMessage);
+    });
+
+    [AvaloniaFact]
+    public async Task AChangeByAnotherWindowWhileTimingWasOpenIsStillAConflict() => await InTimingListeningRunAsync(async (workspace, vm, device) =>
+    {
+        Assert.True(vm.IsTimingSection);
+        await using (var other = new SeriesWorkspace(new OpenSkiTime.Persistence.SqliteSeriesFileStore(), new OpenSkiTime.Devices.AlgeDecoderFactory()))
+        {
+            var series = await other.OpenAsync(workspace.FilePath!);
+            await other.SaveSeriesAsync(series.Values with { Organizer = "Another window" }, series.Revision);
+        }
+        vm.ShowSeriesCommand.Execute(null);
+        vm.Location = "Changed";
+        await vm.SaveSeriesCommand.ExecuteAsync(null);
+        Assert.True(vm.IsError);
+        Assert.Contains("changed since", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal(0, device.Opened);
+    });
+
+    [AvaloniaFact]
     public async Task TheStartListIsOpenAgainWhenAnUnusedTimingViewWasLeftForIt() => await InTimingListeningRunAsync(async (_, vm, device) =>
     {
         vm.TimingStartRole.UsbId = "1";
