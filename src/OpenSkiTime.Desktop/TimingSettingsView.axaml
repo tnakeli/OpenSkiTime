@@ -86,7 +86,7 @@
        <DataTemplate>
         <local:FormRow Margin="0,0,0,6">
          <TextBlock Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding Username}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-         <TextBox Grid.Column="2" Grid.ColumnSpan="3" Text="{Binding Password}" PasswordChar="•" PlaceholderText="{Binding PasswordWatermark}" />
+         <TextBox Grid.Column="2" Grid.ColumnSpan="3" Text="{Binding Password, UpdateSourceTrigger=LostFocus}" PasswordChar="•" PlaceholderText="{Binding PasswordWatermark}" />
          <CheckBox Grid.Column="5" Grid.ColumnSpan="2" Content="Remember password" IsChecked="{Binding RememberPassword}" />
          <Button Grid.Column="7" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Fetch devices" Command="{Binding DataContext.FetchAlgeDevicesCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" IsEnabled="{Binding !IsFetching}" Classes="secondaryAction" />
          <TextBlock Grid.Column="9" Grid.ColumnSpan="3" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Classes="supportingText" />

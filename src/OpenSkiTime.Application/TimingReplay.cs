@@ -95,8 +95,21 @@ public static class TimingReplay
     {
         var training = sessions.Where(x => x.Options.Simulation).ToArray();
         return training.Any(delivered) || (audit.Count > 0 && training.Length > 0 && (training.Length == sessions.Count
-            || audit.Any(a => training.Any(s => a.At >= s.StartedAt && (s.StoppedAt is null || a.At <= s.StoppedAt)))));
+            || audit.Any(a => InUse(training, a))));
     }
+
+    // Real timing of a run: an impulse from a real device, or a decision that does not belong to training use.
+    public static bool HasRealInput(TimingReplayData data, ITimingDecoderFactory? factory)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        var training = data.Sessions.Where(x => x.Options.Simulation).ToArray();
+        return data.Sessions.Any(s => !s.Options.Simulation && HasImpulses(s, data.Packets.Where(p => p.SessionId == s.Id), factory))
+            || data.Audit.Any(a => !InUse(training, a) && !(training.Length > 0 && training.Length == data.Sessions.Count
+                && a.At >= training.Min(s => s.StartedAt)));
+    }
+
+    private static bool InUse(CaptureSession[] sessions, TimingAudit audit)
+        => sessions.Any(s => audit.At >= s.StartedAt && (s.StoppedAt is null || audit.At <= s.StoppedAt));
 
     // Timing input that a run's starting order depends on: a recorded decision, or an impulse from any channel.
     // Opening the Timing view, device heartbeats and connection notices are not.
@@ -123,7 +136,7 @@ public static class TimingReplay
         return device.Any(x => Decode(decoders.For(factory, session, x, superseded), x).Any(o => o.PhysicalChannel is not null));
     }
 
-    private const string TransportStatus = "transport-status";
+    internal const string TransportStatus = "transport-status";
 
     public static string InputVersion(TimingReplayData data)
     {

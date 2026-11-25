@@ -182,6 +182,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private string[] _connections = [];
     private CaptureOptions[] _activeOptions = [];
     private bool _hasTrainingInput;
+    // Sessions that delivered device input, whatever it decodes to.
+    private readonly HashSet<Guid> _delivered = [];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), TimingSignal> _signals = new();
     private CancellationTokenSource? _readCancellation;
     private Channel<CaptureInput>? _queue;
@@ -277,7 +279,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         try
         {
             _list = data.List; _forerunners = data.Forerunners ?? [];
-            _observations.Clear(); _audit.Clear(); _decoders.Clear(); _continuity.Clear(); _sessions.Clear();
+            _observations.Clear(); _audit.Clear(); _decoders.Clear(); _continuity.Clear(); _delivered.Clear(); _sessions.Clear();
             _audit.AddRange(data.Audit); _sessions.AddRange(data.Sessions);
             foreach (var unit in TimingReplay.Units(data.Sessions, data.Packets))
             {
@@ -458,8 +460,9 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                 try
                 {
                     var before = _observations.Count;
+                    var first = session.Options.Simulation && !_delivered.Contains(session.Id);
                     Decode(session, raw, live: true);
-                    if (_observations.Count != before)
+                    if (_observations.Count != before || first)
                     {
                         Rebuild();
                         // A recovered history page lists triggers newest first; a queue must receive them in device-time order.
@@ -493,6 +496,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     { _previousRunInput[o.ClockId] = Math.Max(_previousRunInput.GetValueOrDefault(o.ClockId, long.MinValue), o.DeviceTicks!.Value); }
                     _list = data.List; _forerunners = data.Forerunners ?? []; _observations.Clear(); _audit.Clear(); _sessions.Clear(); _decoders.Clear();
                     _continuity = continuity;
+                    _delivered.Clear(); _delivered.UnionWith(data.Packets.Where(x => x.Protocol != TimingReplay.TransportStatus).Select(x => x.SessionId));
                     _observations.AddRange(restored.Observations.Select(x => x.Observation)); _audit.AddRange(data.Audit);
                     _sessions.AddRange(data.Sessions); _sessions.AddRange(next);
                     // A run change puts every position back on HOLD, before any further input is processed.
@@ -511,7 +515,20 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         await _state.WaitAsync();
         try { FinishDecoders(); Rebuild(); }
         finally { _state.Release(); }
-        foreach (var session in sessions) { await RetryDurableAsync(() => store.EndCaptureAsync(session.Id, DateTimeOffset.UtcNow)); }
+        foreach (var session in sessions)
+        {
+            var at = DateTimeOffset.UtcNow;
+            await RetryDurableAsync(() => store.EndCaptureAsync(session.Id, at));
+            // Later decisions of the run do not belong to this session any more.
+            await _state.WaitAsync();
+            try
+            {
+                var index = _sessions.FindIndex(x => x.Id == session.Id);
+                if (index >= 0) { _sessions[index] = session with { StoppedAt = at, CleanStop = true }; }
+                Rebuild();
+            }
+            finally { _state.Release(); }
+        }
     }
 
     private async Task RetryDurableAsync(Func<Task> write)
@@ -538,6 +555,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void Decode(CaptureSession session, RawTimingPacket packet, bool live = false)
     {
+        if (packet.Protocol != TimingReplay.TransportStatus) { _delivered.Add(session.Id); }
         var superseded = new List<TimingObservation>();
         var decoder = _decoders.For(decoders, session, packet, superseded);
         _observations.AddRange(superseded);
@@ -561,9 +579,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void Rebuild()
     {
-        // Everything delivered becomes an observation; connection notices and the interruption notice are not input.
-        Volatile.Write(ref _hasTrainingInput, TimingReplay.UsesTraining(_sessions, _audit, s => _observations.Any(x => x.SessionId == s.Id
-            && x.PacketSequence > 0 && !x.Key.EndsWith(":notice", StringComparison.Ordinal))));
+        Volatile.Write(ref _hasTrainingInput, TimingReplay.UsesTraining(_sessions, _audit, s => _delivered.Contains(s.Id)));
         if (_list is not null) { Volatile.Write(ref _snapshot, TimingEngine.Replay(_list, _observations, _audit, 0, 1, _forerunners)); }
     }
 

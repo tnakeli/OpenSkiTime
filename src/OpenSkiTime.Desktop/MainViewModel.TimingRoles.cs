@@ -86,8 +86,14 @@ public sealed partial class MainViewModel
         if (!AlgeAccounts.Select(x => x.Username).SequenceEqual(usernames))
         {
             var existing = AlgeAccounts.ToDictionary(x => x.Username, StringComparer.Ordinal);
+            foreach (var account in AlgeAccounts) { account.PropertyChanged -= OnAlgePasswordChanged; }
             AlgeAccounts.Clear();
-            foreach (var username in usernames) { AlgeAccounts.Add(existing.GetValueOrDefault(username) ?? new AlgeAccountEditor(username)); }
+            foreach (var username in usernames)
+            {
+                var account = existing.GetValueOrDefault(username) ?? new AlgeAccountEditor(username);
+                account.PropertyChanged += OnAlgePasswordChanged;
+                AlgeAccounts.Add(account);
+            }
             OnPropertyChanged(nameof(UsesAlgeResultsAccount));
         }
         ShareAlgeDevices();
@@ -108,6 +114,7 @@ public sealed partial class MainViewModel
     {
         if (account is null || account.IsFetching) { return; }
         var password = account.PeekPassword();
+        if (password.Length == 0) { password = _algeSessionPasswords.GetValueOrDefault(account.Username, ""); }
         if (password.Length == 0) { account.Status = "Enter the password first."; return; }
         account.IsFetching = true; account.Status = "Fetching devices…";
         try

@@ -134,6 +134,54 @@ public partial class DesktopWorkflowTests
     });
 
     [AvaloniaFact]
+    public async Task TimingStartsAgainAfterStorageTroubleWhileLeavingTheView() => await InTimingListeningRunAsync(async (workspace, vm, device) =>
+    {
+        vm.TimingStartRole.Source = TimingSourceTypes.Mt1SerialLabel; vm.TimingStartRole.Source = TimingSourceTypes.TimyUsbLabel; // chosen by the operator
+        await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1));
+        Assert.True(vm.IsTimingConnected, vm.TimingProblem);
+        await BenchUntilAsync(vm, () => device.Open == 1);
+        var saved = workspace.Timing!.SavedPackets;
+        await using (var blocker = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={workspace.FilePath};Pooling=False"))
+        {
+            await blocker.OpenAsync();
+            await using (var block = blocker.CreateCommand()) { block.CommandText = "BEGIN EXCLUSIVE"; await block.ExecuteNonQueryAsync(); }
+            await device.SendAsync(" 0001 C0 12:00:10.0000\r");
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            while (workspace.Timing.Fault is null) { await Task.Delay(50, timeout.Token); }
+            vm.ShowCompetitionsCommand.Execute(null);
+            await vm.TimingListeningTask;
+            Assert.True(workspace.Timing.IsStopping); // the impulse is still waiting for storage
+            await using var release = blocker.CreateCommand(); release.CommandText = "ROLLBACK"; await release.ExecuteNonQueryAsync();
+        }
+        vm.RetryTimingStorageCommand.Execute(null);
+        await vm.ReturnToTimingCommand.ExecuteAsync(null);
+        using var restart = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (!vm.IsTimingConnected) { await Task.Delay(50, restart.Token); Dispatcher.UIThread.RunJobs(); vm.RefreshTiming(); vm.RetryTimingStart(); await vm.TimingListeningTask; }
+        Assert.Equal("", vm.TimingProblem);
+        await BenchUntilAsync(vm, () => device.Open == 1);
+        await device.SendAsync(" 0002 C0 12:00:20.0000\r");
+        await BenchUntilAsync(vm, () => vm.TimestampRows.Count == 2); // nothing was lost
+    });
+
+    [AvaloniaFact]
+    public async Task TimingDevicesShowsSignalsAfterTheBClockHasReleasedItsDevice() => await InTimingListeningRunAsync(async (workspace, vm, device) =>
+    {
+        vm.TimingStartRole.UsbId = "1";
+        await vm.AddBackupClockCommand.ExecuteAsync(null);
+        vm.BackupTimingRoles[0].Source = TimingSourceTypes.Mt1SerialLabel;
+        vm.BackupTimingRoles[0].Port = "COM9";
+        await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1));
+        Assert.True(vm.IsTimingConnected, vm.TimingProblem);
+        await vm.BackupClockTask;
+        Assert.True(workspace.Auxiliary!.State(AuxiliaryTimingRole.B).IsActive);
+        vm.ShowTimingDevicesCommand.Execute(null);
+        await vm.TimingListeningTask;
+        Assert.False(workspace.Auxiliary.State(AuxiliaryTimingRole.B).IsActive);
+        await BenchUntilAsync(vm, () => device.Open == 1);
+        Assert.Contains("not recorded", vm.TimingConnection, StringComparison.Ordinal);
+    });
+
+    [AvaloniaFact]
     public async Task ARunWithTrainingTimesOffersToSetThemAsideForRealTiming() => await InTimingListeningRunAsync(async (workspace, vm, device) =>
     {
         UseSimulatorTiming(vm);

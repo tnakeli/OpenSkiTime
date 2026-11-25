@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -88,6 +89,12 @@ public sealed partial class MainViewModel
         _timingRetryAt = long.MaxValue;
         // A previous stop that could not finish (for example storage trouble) completes first.
         if (timing.IsStopping) { await StopTimingAsync(); }
+        if (timing.IsStopping)
+        {
+            SetTimingProblem("Earlier times are still being saved. Timing starts again when they are.");
+            RetryTimingLater();
+            return;
+        }
         if (timing.IsActive) { SetTimingProblem(""); return; }
         if (!_timingConfigured) { SetTimingProblem("No timing devices are chosen yet. Choose them in Timing devices."); return; }
         IsTimingBusy = true;
@@ -137,7 +144,7 @@ public sealed partial class MainViewModel
         catch (Exception ex) when (ex is SeriesFileException or SeriesConflictException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             SetTimingProblem(ex is SeriesFileException or SeriesConflictException ? ex.Message : "Timing could not start. Check the device settings.");
-            _timingRetryAt = Environment.TickCount64 + (long)s_retryDelay.TotalMilliseconds;
+            RetryTimingLater();
         }
         finally { IsTimingBusy = false; }
     }
@@ -159,7 +166,9 @@ public sealed partial class MainViewModel
         IsTimingBusy = false;
     }
 
-    private void RetryTimingStart()
+    private void RetryTimingLater() => _timingRetryAt = Environment.TickCount64 + (long)s_retryDelay.TotalMilliseconds;
+
+    internal void RetryTimingStart()
     {
         if (!IsTimingSection || Environment.TickCount64 < _timingRetryAt) { return; }
         _timingRetryAt = long.MaxValue;
@@ -202,6 +211,19 @@ public sealed partial class MainViewModel
         if (_loadingTimingSettings) { return; }
         _timingConfigured = true;
         _timingSettingsChanged = true;
+        StartTimingSettingsTimer();
+    }
+
+    // A corrected password opens the account again. Passwords are never part of the monitor key.
+    private void OnAlgePasswordChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(AlgeAccountEditor.Password) || sender is not AlgeAccountEditor { Password.Length: > 0 }) { return; }
+        _signalMonitorKey = "";
+        StartTimingSettingsTimer();
+    }
+
+    private void StartTimingSettingsTimer()
+    {
         _timingSettingsTimer ??= new DispatcherTimer(s_settingsDelay, DispatcherPriority.Background, (_, _) =>
         {
             CommitTimingSettings();
@@ -244,8 +266,9 @@ public sealed partial class MainViewModel
 
     private async Task RefreshSignalMonitorAsync()
     {
-        // A capture that is still saving its last input keeps the devices.
-        if (workspace.Timing?.IsActive == true || workspace.Auxiliary?.IsActive == true) { await StopSignalMonitorAsync(); return; }
+        // The B Clock releases its devices on its own; a capture that is still saving its last input keeps them.
+        await _backupClockTask;
+        if (workspace.Timing?.IsActive == true || workspace.Auxiliary?.IsActive == true) { await StopSignalMonitorAsync(); StartTimingSettingsTimer(); return; }
         var problem = "";
         var sources = new List<TimingCaptureSource>();
         try

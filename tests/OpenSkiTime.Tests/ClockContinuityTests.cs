@@ -84,9 +84,20 @@ public sealed class ClockContinuityTests : IDisposable
     public async Task ALateImpulseBeforeTheFirstHeartbeatDoesNotSplitTheRestOfTheSession()
     {
         // The device delivers an impulse it stored while timing was off, then its heartbeat and the real finish.
-        var (live, _) = await RunAsync(s_start, new([new(30.0, " 0009 C1 12:00:20.0000\r"), new(30.5, "12:00:30.0  \r"), new(46.5, " 0001* C1 12:00:46.4567\r")]));
+        var (live, _) = await RunAsync(s_start, new([new(30.0, " 0009 C1 12:00:20.0000\r"), new(30.1, "12:00:30.0  \r"), new(46.5, " 0001* C1 12:00:46.4567\r")]));
         Assert.Equal((TimingStatus.Finished, 4545L), (live.Results.Single(x => x.Bib == 1).Status, live.Results.Single(x => x.Bib == 1).Hundredths));
         Assert.Equal("Unassigned", live.Observations.Single(x => x.Bib is null).State);
+    }
+
+    [Theory]
+    [InlineData(43, TimingStatus.Finished)] // the same device: its records run on
+    [InlineData(3, TimingStatus.Review)] // another device, or a cleared memory, showing almost the same time
+    [InlineData(5043, TimingStatus.Review)]
+    public async Task AnotherDeviceWithNearlyTheSameTimeIsNotTakenForTheFirstOne(int record, TimingStatus expected)
+    {
+        var (live, _) = await RunAsync(new Part([new(0, "12:00:00.0  \r"), new(0.5, " 0042 C2 12:00:00.5000\r"), new(1.02, " 0001* C0 12:00:01.0000\r")]),
+            new([new(30.05, "12:00:30.0  \r"), new(40.0, $" {record:0000} C2 12:00:40.0000\r"), new(46.5, " 0001* C1 12:00:46.4567\r")]));
+        Assert.Equal(expected, live.Results.Single(x => x.Bib == 1).Status);
     }
 
     [Fact]

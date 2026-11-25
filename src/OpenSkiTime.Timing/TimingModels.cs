@@ -16,6 +16,8 @@ public sealed record TimingObservation(string Key, Guid SessionId, long PacketSe
 {
     // The device channel the impulse arrived on (C0–C8), before routing to a timing position. Diagnostics only.
     public int? PhysicalChannel { get; init; }
+    // The device's running record number, when the line carries one (not a bib). Only tells whether the same device went on.
+    public int? RecordNumber { get; init; }
     // The device's calendar date when the source reports one (ALGE Results). Timing never uses it; reading a race day's
     // device memory for the timing report does.
     public DateOnly? CalendarDate { get; init; }

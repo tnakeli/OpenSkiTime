@@ -137,6 +137,51 @@ public sealed class TimingInputLockTests : IDisposable
     }
 
     [Fact]
+    public async Task DecisionsOfRealTimingCountAsRealTimes()
+    {
+        await using var workspace = Workspace();
+        var list = await TimingStorageTests.SeedAsync(workspace, PathFor("real-decisions"), 2);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        await ReceiveAsync(timing, simulation: false, "12:00:00.0  \r");
+        await timing.CorrectStatusesAsync([2], TimingStatus.DNS, "Operator", "Did not start");
+        var refused = await Assert.ThrowsAsync<DomainValidationException>(() => timing.StartAsync(new LineSource([]), Options(true), "Operator"));
+        Assert.Contains("real times", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnEmptySimulatorSessionEndsBeforeLaterRealDecisions()
+    {
+        await using var workspace = Workspace();
+        var list = await TimingStorageTests.SeedAsync(workspace, PathFor("closed-simulator"), 2);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        await ReceiveAsync(timing, simulation: true);
+        await ReceiveAsync(timing, simulation: false, " 0001* C0 12:00:00.0000\r");
+        Assert.NotEmpty(timing.Snapshot!.Audit);
+        Assert.False(timing.HasTrainingInput);
+        await ReceiveAsync(timing, simulation: false, " 0001* C1 12:01:00.0000\r"); // real timing goes on
+        Assert.False(TimingReplay.UsesTraining(await workspace.ReadTimingAsync(list.Id)));
+    }
+
+    [Fact]
+    public async Task TrainingInputWithoutAnyImpulseIsReportedLikeItIsRefused()
+    {
+        await using var workspace = Workspace();
+        var list = await TimingStorageTests.SeedAsync(workspace, PathFor("training-heartbeats"), 1);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        await ReceiveAsync(timing, simulation: true, "12:00:00.0  \r");
+        Assert.True(timing.HasTrainingInput);
+        await Assert.ThrowsAsync<DomainValidationException>(() => timing.StartAsync(new LineSource([]), Options(false), "Operator"));
+        await timing.SelectRunAsync(list.Id);
+        Assert.True(timing.HasTrainingInput);
+        await workspace.SetTrainingAsideAsync(list.Id, (await workspace.ReadAsync()).Revision, "Operator", TimingRulesTests.At);
+        await timing.SelectRunAsync((await LatestAsync(workspace, list)).Id);
+        await ReceiveAsync(timing, simulation: false, " 0001* C0 12:00:00.0000\r");
+    }
+
+    [Fact]
     public async Task TrainingTimesBehindALaterRunCannotBeSetAside()
     {
         await using var workspace = Workspace();

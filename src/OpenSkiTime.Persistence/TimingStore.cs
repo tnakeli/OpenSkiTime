@@ -161,11 +161,8 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 // Only received input decides the kind of a run; a session opened with the wrong source leaves no trace in it.
                 if (!options[0].Simulation && old.Any(x => ToCapture(x).Options.Simulation) && TimingReplay.UsesTraining(await ReadTimingAsync(listId, ct)))
                 { throw new DomainValidationException("This run has training times (simulator, replay or test import). Set them aside to use real timing."); }
-                foreach (var other in old.Select(ToCapture).Where(x => options[0].Simulation && !x.Options.Simulation))
-                {
-                    if (await HasImpulsesAsync(db, other, ct))
-                    { throw new DomainValidationException("This run has real times. Simulator and replay are off for this run."); }
-                }
+                if (options[0].Simulation && TimingReplay.HasRealInput(await ReadTimingAsync(listId, ct), inputDecoders))
+                { throw new DomainValidationException("This run has real times. Simulator and replay are off for this run."); }
                 // Validate a list before its first capture only. Once capture has begun the list can no longer be redrawn,
                 // so refusing a reconnect (for example after a later Run 1 correction) would strand the run; the start
                 // list view still reports a changed source.
@@ -236,12 +233,9 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
             { throw new DomainValidationException($"Run {run.Number + 1} was prepared from these training times. Use a separate event file for real timing."); }
             var sessions = (await db.Captures.AsNoTracking().Where(x => x.ListId == listId).ToArrayAsync(ct)).Select(ToCapture).ToArray();
             if (!sessions.Any(x => x.Options.Simulation)) { throw new DomainValidationException("This run has no training times."); }
-            foreach (var session in sessions)
-            {
-                if (_activeCaptureIds.Contains(session.Id)) { throw new DomainValidationException("Leave the Timing view before setting training times aside."); }
-                if (!session.Options.Simulation && await HasImpulsesAsync(db, session, ct))
-                { throw new DomainValidationException("This run has real times. They cannot be set aside."); }
-            }
+            if (sessions.Any(x => _activeCaptureIds.Contains(x.Id))) { throw new DomainValidationException("Leave the Timing view before setting training times aside."); }
+            if (TimingReplay.HasRealInput(await ReadTimingAsync(listId, ct), inputDecoders))
+            { throw new DomainValidationException("This run has real times or decisions. They cannot be set aside."); }
             var next = new StartListRow { Id = Guid.NewGuid(), RunId = row.RunId, Revision = row.Revision + 1, CreatedAt = at, ApprovedAt = row.ApprovedAt,
                 Operator = operatorName.Trim(), Reason = $"Real timing: training times set aside with revision {row.Revision}",
                 PlanJson = row.PlanJson, SourceTimingVersion = row.SourceTimingVersion };
