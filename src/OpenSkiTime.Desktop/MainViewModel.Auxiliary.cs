@@ -53,6 +53,8 @@ public sealed partial class MainViewModel
         if (configuration is null) { RefreshBackupClockStatus(); return; }
         _backupClockConnecting = true;
         RefreshBackupClockStatus();
+        try { AddBackupDevices(configuration.BackupCapture(date, since).Select(x => x.Options)); }
+        catch (DomainValidationException) { /* reported when B connects */ }
         var previous = _backupClockTask;
         _backupClockTask = ConnectBackupClockAsync(previous, generation, configuration, date, since);
     }
@@ -109,7 +111,7 @@ public sealed partial class MainViewModel
         _backupClockGeneration++;
         _backupClockExpected = false; _backupClockConnecting = false; _backupClockError = "";
         _backupRunSwitchMessage = ""; _backupRunSwitchFailed = false;
-        _backupReleasing = [.. workspace.Auxiliary?.State(AuxiliaryTimingRole.B).AllOptions ?? []];
+        AddBackupDevices(workspace.Auxiliary?.State(AuxiliaryTimingRole.B).AllOptions ?? []);
         var previous = _backupClockTask;
         _backupClockTask = StopBackupClockAsync(previous, _backupClockGeneration);
         RefreshBackupClockStatus();

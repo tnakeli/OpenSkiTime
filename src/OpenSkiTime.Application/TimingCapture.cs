@@ -579,7 +579,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void Rebuild()
     {
-        Volatile.Write(ref _hasTrainingInput, TimingReplay.HasTrainingInput(_sessions, _audit, s => _delivered.Contains(s.Id)));
+        Volatile.Write(ref _hasTrainingInput, TimingReplay.HasTrainingInput(_sessions, s => _delivered.Contains(s.Id)));
         if (_list is not null) { Volatile.Write(ref _snapshot, TimingEngine.Replay(_list, _observations, _audit, 0, 1, _forerunners)); }
     }
 

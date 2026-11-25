@@ -172,6 +172,41 @@ public sealed class TimingInputLockTests : IDisposable
     }
 
     [Fact]
+    public async Task DecisionsDuringAndAfterAnUnusedSimulatorNeverStrandTheRun()
+    {
+        await using var workspace = Workspace();
+        var list = await TimingStorageTests.SeedAsync(workspace, PathFor("decisions-around-unused"), 2);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        await timing.StartAsync(new LineSource([]), Options(true), "Operator");
+        await timing.CorrectStatusesAsync([2], TimingStatus.DNS, "Operator", "While the simulator is open");
+        await timing.StopAsync();
+        await timing.CorrectStatusesAsync([2], null, "Operator", "After it was closed");
+        Assert.False(timing.HasTrainingInput);
+        await ReceiveAsync(timing, simulation: false, " 0001* C0 12:00:00.0000\r");
+        Assert.Equal(TimingStatus.OnCourse, timing.Snapshot!.Results.Single(x => x.Bib == 1).Status);
+    }
+
+    [Fact]
+    public async Task DecisionsWhileTheSimulatorIsUsedBecomeTrainingWithItsFirstImpulse()
+    {
+        await using var workspace = Workspace();
+        var list = await TimingStorageTests.SeedAsync(workspace, PathFor("decision-then-impulse"), 2);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, Options(true), "Operator");
+        await timing.CorrectStatusesAsync([2], TimingStatus.DNS, "Operator", "Rehearsal");
+        await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks, 1);
+        await TimingStorageTests.UntilAsync(() => timing.HasTrainingInput && timing.Pending == 0);
+        await timing.StopAsync();
+        await ReceiveAsync(timing, simulation: true); // training goes on
+        await workspace.SetTrainingAsideAsync(list.Id, (await workspace.ReadAsync()).Revision, "Operator", TimingRulesTests.At);
+        await timing.SelectRunAsync((await LatestAsync(workspace, list)).Id);
+        Assert.All(timing.Snapshot!.Results, x => Assert.Equal(TimingStatus.Ready, x.Status));
+    }
+
+    [Fact]
     public async Task DecisionsOfRealTimingCountAsRealTimes()
     {
         await using var workspace = Workspace();

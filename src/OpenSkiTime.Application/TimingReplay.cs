@@ -91,16 +91,16 @@ public static class TimingReplay
         return HasTrainingInput(data) || (data.Audit.Count > 0 && data.Sessions.Count > 0 && data.Sessions.All(x => x.Options.Simulation));
     }
 
-    // Training input of a run: anything a simulator, replay file or test import delivered, and the decisions of that use.
-    // A session that was only opened is not input.
+    // Training input of a run: anything a simulator, replay file or test import delivered. A session that was only opened
+    // is not input.
     public static bool HasTrainingInput(TimingReplayData data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        return HasTrainingInput(data.Sessions, data.Audit, Delivered(data));
+        return HasTrainingInput(data.Sessions, Delivered(data));
     }
 
-    internal static bool HasTrainingInput(IReadOnlyList<CaptureSession> sessions, IReadOnlyList<TimingAudit> audit, Func<CaptureSession, bool> delivered)
-        => sessions.Any(x => x.Options.Simulation && delivered(x)) || audit.Any(a => InTraining(sessions, a, delivered));
+    internal static bool HasTrainingInput(IReadOnlyList<CaptureSession> sessions, Func<CaptureSession, bool> delivered)
+        => sessions.Any(x => x.Options.Simulation && delivered(x));
 
     // Real timing of a run: an impulse from a real device, or a decision that does not belong to training use.
     public static bool HasRealInput(TimingReplayData data, ITimingDecoderFactory? factory)
@@ -113,10 +113,10 @@ public static class TimingReplay
     private static Func<CaptureSession, bool> Delivered(TimingReplayData data)
         => s => data.Packets.Any(p => p.SessionId == s.Id && p.Protocol != TransportStatus);
 
-    // A decision belongs to the source that was last in use when it was saved, also after that source was closed. A
-    // simulator that was closed without delivering anything was never in use. Every decision is either training or real.
+    // A decision belongs to the source that was last in use when it was saved, also after that source was closed or
+    // interrupted. A simulator that delivered nothing was never in use. Every decision is either training or real.
     private static bool InTraining(IReadOnlyList<CaptureSession> sessions, TimingAudit audit, Func<CaptureSession, bool> delivered)
-        => sessions.Where(s => s.StartedAt <= audit.At && !(s.Options.Simulation && s.StoppedAt < audit.At && !delivered(s)))
+        => sessions.Where(s => s.StartedAt <= audit.At && (!s.Options.Simulation || delivered(s)))
             .MaxBy(s => s.StartedAt)?.Options.Simulation == true;
 
     // Timing input that a run's starting order depends on: a recorded decision, or an impulse from any channel.

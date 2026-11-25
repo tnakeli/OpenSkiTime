@@ -120,6 +120,20 @@ public sealed class ClockContinuityTests : IDisposable
     }
 
     [Fact]
+    public async Task AVisitWithoutImpulsesBeforeTheRaceDoesNotEndContinuity()
+    {
+        var (live, _) = await RunAsync(new Part([new(-60, "11:59:00.0  \r")]), s_start, new([new(30.05, "12:00:30.0  \r"), new(35.02, " 0044 C2 12:00:35.0000\r"), new(46.5, " 0001* C1 12:00:46.4567\r")]));
+        Assert.Equal((TimingStatus.Finished, 4545L), (live.Results.Single(x => x.Bib == 1).Status, live.Results.Single(x => x.Bib == 1).Hundredths));
+    }
+
+    [Fact]
+    public async Task ACompetitorOfOneVisitIsNeverSplitBetweenTwoClocks()
+    {
+        var (live, _) = await RunAsync(s_start, new([new(30.05, "12:00:30.0  \r"), new(31.0, " 0002* C0 12:00:31.0000\r"), new(40.0, " 0044 C2 12:00:40.0000\r"), new(61.0, " 0002* C1 12:01:01.0000\r")]));
+        Assert.Equal((TimingStatus.Finished, 3000L), (live.Results.Single(x => x.Bib == 2).Status, live.Results.Single(x => x.Bib == 2).Hundredths));
+    }
+
+    [Fact]
     public async Task ACaptureOfSeveralDevicesNeverContinuesTheClock()
     {
         var (live, _) = await RunAsync(s_start with { Group = "g1" }, new([new(30.05, "12:00:30.0  \r"), new(35.02, " 0044 C2 12:00:35.0000\r"), new(46.5, " 0001* C1 12:00:46.4567\r")], Group: "g2"));

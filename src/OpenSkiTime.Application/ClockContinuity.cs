@@ -64,9 +64,10 @@ internal sealed class ClockContinuity
             // An impulse delivered late says nothing about the clock. Wait for the next reading.
             if (Math.Abs(difference) > Tolerance.Ticks) { return (own, observation.Kind != ObservationKind.Impulse || difference > 0); }
             if (observation.Kind != ObservationKind.Impulse) { return (last.ClockId, false); }
-            // Only a record number on both sides is evidence. An impulse without one keeps its own clock and decides nothing.
-            if (last.RecordNumber is not { } before || observation.RecordNumber is not { } number) { return (own, false); }
-            if (number <= before || number - before > MaxSkippedRecords) { return (own, true); }
+            // Only a record number on both sides is evidence. The first impulse on time decides for the whole session, so
+            // a competitor who starts and finishes in it is never split between two clocks.
+            if (last.RecordNumber is not { } before || observation.RecordNumber is not { } number
+                || number <= before || number - before > MaxSkippedRecords) { return (own, true); }
         }
         return (last.ClockId, true);
     }

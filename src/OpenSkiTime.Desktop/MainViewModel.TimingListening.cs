@@ -25,8 +25,8 @@ public sealed partial class MainViewModel
     private TimingSignalMonitor? _signalMonitor;
     // B Clock devices are monitored and released on their own, so a slow B never delays A.
     private TimingSignalMonitor? _backupSignalMonitor;
-    // The devices _backupClockTask is releasing. A waits for its own device only.
-    private CaptureOptions[] _backupReleasing = [];
+    // The devices that the running chain of B work (_backupClockTask) may still hold. A waits only for its own device.
+    private readonly List<CaptureOptions> _backupDevices = [];
     private string _signalMonitorKey = "";
     private string _signalMonitorProblem = "";
     private DispatcherTimer? _signalMonitorTimer;
@@ -118,13 +118,19 @@ public sealed partial class MainViewModel
                 SetTimingProblem("This run has training times. Real timing is not received until they are set aside.", canSetAside: true);
                 return;
             }
-            if (!_backupClockTask.IsCompleted && capture.Any(a => _backupReleasing.Any(b => SameLocalTimingEndpoint(a.Options, b))))
+            if (!_backupClockTask.IsCompleted && capture.Any(a => _backupDevices.Any(b => SameLocalTimingEndpoint(a.Options, b))))
             {
                 SetTimingProblem("The device was used by the B Clock and is being released. Timing starts in a moment.");
                 RetryTimingLater(s_releaseDelay);
                 return;
             }
-            foreach (var device in capture) { ValidateAuthoritativeTimingEndpoint(device.Options); }
+            try { foreach (var device in capture) { ValidateAuthoritativeTimingEndpoint(device.Options); } }
+            catch (DomainValidationException ex)
+            {
+                SetTimingProblem(ex.Message);
+                RetryTimingLater(); // another capture may release the device
+                return;
+            }
             var inputs = new List<TimingSourceInput>();
             try
             {
@@ -176,6 +182,13 @@ public sealed partial class MainViewModel
         if (!timing.IsActive) { StopBackupClock(); }
         else { RetryTimingLater(); } // the stop waits for storage; an open Timing view starts again afterwards
         IsTimingBusy = false;
+    }
+
+    // Called before B work is added to the chain. Devices of finished work are forgotten.
+    private void AddBackupDevices(IEnumerable<CaptureOptions> devices)
+    {
+        if (_backupClockTask.IsCompleted) { _backupDevices.Clear(); }
+        _backupDevices.AddRange(devices);
     }
 
     private void RetryTimingLater(TimeSpan? delay = null) => _timingRetryAt = Environment.TickCount64 + (long)(delay ?? s_retryDelay).TotalMilliseconds;
@@ -342,7 +355,7 @@ public sealed partial class MainViewModel
         if (_backupSignalMonitor is { } backup)
         {
             _backupSignalMonitor = null;
-            _backupReleasing = backup.Options.ToArray();
+            AddBackupDevices(backup.Options);
             // The B Clock opens its devices only after this task.
             _backupClockTask = ReleaseAsync(_backupClockTask, backup);
         }
