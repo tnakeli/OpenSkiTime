@@ -37,7 +37,7 @@
 
   <PropertyGroup>
     <!-- Semantic Versioning (MAJOR.MINOR.PATCH). Bump before tagging a release; release builds pass the tag version. -->
-    <VersionPrefix>0.5.0</VersionPrefix>
+    <VersionPrefix>0.5.1</VersionPrefix>
   </PropertyGroup>
 
   <PropertyGroup>

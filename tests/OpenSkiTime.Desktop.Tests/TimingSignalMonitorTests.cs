@@ -1,8 +1,4 @@
-using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using Avalonia.Threading;
-using Avalonia.VisualTree;
-using OpenSkiTime.Desktop;
 using Xunit;
 
 namespace OpenSkiTime.Tests;
@@ -10,7 +6,7 @@ namespace OpenSkiTime.Tests;
 public partial class DesktopWorkflowTests
 {
     [AvaloniaFact]
-    public async Task SettingsRowsShowTheLatestSignalPerChannelOfTheirDeviceWhileConnected()
+    public async Task RoleRowsTrackTheLatestSignalPerChannelOfTheirDeviceWhileTimingIsReceived()
     {
         var root = Path.Combine(Path.GetTempPath(), "openskitime-signal-monitor", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -21,7 +17,7 @@ public partial class DesktopWorkflowTests
             using var ownedVm = vm;
             UseSimulatorTiming(vm);
             Assert.All(vm.PrimaryTimingRoles, x => Assert.Equal("", x.SignalText));
-            await vm.ConnectTimingCommand.ExecuteAsync(null);
+            await vm.StartTimingAsync();
             Assert.True(vm.IsTimingConnected, vm.StatusMessage);
             await Task.Delay(250); vm.RefreshTiming();
             Assert.All(vm.PrimaryTimingRoles, x => Assert.Equal("No signals yet", x.SignalText));
@@ -35,19 +31,7 @@ public partial class DesktopWorkflowTests
             Assert.Equal("●C0 12:00:01.23 · C1 12:00:07.50", vm.TimingStartRole.SignalText);
             Assert.Equal("C0 12:00:01.23 · ●C1 12:00:07.50", vm.TimingFinishRole.SignalText);
 
-            vm.ShowSettingsCommand.Execute(null);
-            var window = new Window { Content = new ScrollViewer { Content = new SettingsView { DataContext = vm } }, Width = 1280, Height = 800 };
-            window.Show();
-            try
-            {
-                SelectTimingSettingsTab(window);
-                window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Name == "RoleSignalText" && x.IsEffectivelyVisible && x.Text == "●C0 12:00:01.23 · C1 12:00:07.50");
-                CaptureSettingsWindow(window, 1280, 800, "timing-roles-signals");
-            }
-            finally { window.Close(); }
-
-            await vm.DisconnectTimingCommand.ExecuteAsync(null);
+            await vm.StopTimingAsync();
             await Task.Delay(250); vm.RefreshTiming();
             Assert.All(vm.PrimaryTimingRoles, x => Assert.Equal("", x.SignalText));
         }

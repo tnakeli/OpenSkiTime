@@ -18,8 +18,8 @@ internal sealed partial class SqliteSeriesFileSession
             var runIds = await db.Runs.Where(x => x.CompetitionId == competitionId).Select(x => x.Id).ToArrayAsync(ct);
             var lists = await db.StartLists.AsNoTracking().Where(x => runIds.Contains(x.RunId)).ToListAsync(ct);
             var listIds = lists.Select(x => x.Id).ToArray();
-            var capturedIds = (await db.Captures.AsNoTracking().Where(x => listIds.Contains(x.ListId))
-                .Select(x => x.ListId).Distinct().ToArrayAsync(ct)).ToHashSet();
+            var capturedIds = new HashSet<Guid>();
+            foreach (var id in listIds) { if (await HasTimingInputAsync(db, id, ct)) { capturedIds.Add(id); } }
             var revisions = new List<StartListRevision>();
             foreach (var list in lists)
             { revisions.Add((await ReadListAsync(db, list, ct)) with { HasCapture = capturedIds.Contains(list.Id) }); }
@@ -39,14 +39,19 @@ internal sealed partial class SqliteSeriesFileSession
             { throw new DomainValidationException("Enter the operator and reason for this start-list revision."); }
             await ValidateStartPlanAsync(db, plan, ct);
             // A flexible later-run list ordered without results (reverse or same order) does not depend on the timing of the run before.
-            if (plan.SourceListId is { } timingSourceId && !ResultsIndependent(plan) && await db.Captures.AnyAsync(x => x.ListId == timingSourceId, ct))
+            if (plan.SourceListId is { } timingSourceId && !ResultsIndependent(plan) && await HasCapturedSourceAsync(db, timingSourceId, ct))
             {
                 var timing = await ReadTimingAsync(timingSourceId, ct);
                 if (!TimingReplay.InputVersionMatches(request.ExpectedTimingVersion, TimingReplay.InputVersion(timing)))
                 { throw new DomainValidationException("Run 1 timing changed. Reload its results before creating the next start list."); }
             }
-            if (await db.StartLists.AnyAsync(x => (x.StartedAt != null || db.Captures.Any(c => c.ListId == x.Id)) && db.Runs.Any(r => r.Id == x.RunId
-                && r.CompetitionId == plan.CompetitionId && r.Number == plan.RunNumber), ct))
+            // Only the current revision counts: an earlier one is superseded, with any training times set aside on it.
+            var current = await db.StartLists.AsNoTracking().Where(x => db.Runs.Any(r => r.Id == x.RunId
+                && r.CompetitionId == plan.CompetitionId && r.Number == plan.RunNumber)).ToArrayAsync(ct);
+            var locked = false;
+            foreach (var row in current.GroupBy(x => x.RunId).Select(x => x.MaxBy(y => y.Revision)!))
+            { locked |= await HasTimingInputAsync(db, row.Id, ct); }
+            if (locked)
             { throw new DomainValidationException("Timing capture has begun for this run. Its start list can no longer be redrawn."); }
             var field = RunField(plan.Gender);
             var run = await db.Runs.SingleOrDefaultAsync(x => x.CompetitionId == plan.CompetitionId
@@ -100,9 +105,15 @@ internal sealed partial class SqliteSeriesFileSession
             { StartedAt = row.StartedAt, StartedBy = row.StartedBy, SourceTimingVersion = row.SourceTimingVersion };
     }
 
+    // The run before was timed here, so its results are the input of the next start list. A view that was only opened
+    // leaves external (pasted) results in charge.
+    private async Task<bool> HasCapturedSourceAsync(SeriesDbContext db, Guid listId, CancellationToken ct)
+        => await db.Captures.AnyAsync(x => x.ListId == listId, ct)
+            && TimingReplay.HasInput(await ReadTimingAsync(listId, ct), inputDecoders);
+
     private async Task ValidateTimingSourceAsync(SeriesDbContext db, StartListRow row, StartListPlan plan, CancellationToken ct)
     {
-        if (plan.SourceListId is { } id && !ResultsIndependent(plan) && await db.Captures.AnyAsync(x => x.ListId == id, ct))
+        if (plan.SourceListId is { } id && !ResultsIndependent(plan) && await HasCapturedSourceAsync(db, id, ct))
         {
             if (!TimingReplay.InputVersionMatches(row.SourceTimingVersion, TimingReplay.InputVersion(await ReadTimingAsync(id, ct))))
             { throw new DomainValidationException("Run 1 timing changed. Recreate the next start list before starting this run."); }

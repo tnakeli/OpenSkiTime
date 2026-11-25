@@ -43,7 +43,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
 
     private FileStream AcquireIdleWriteLease()
     {
-        if (_captureLease is not null) { throw new SeriesFileException("Disconnect and drain timing capture before changing registration or competition data."); }
+        if (_captureLease is not null) { throw new SeriesFileException("Timing is receiving. Leave the Timing view before changing registration or competition data."); }
         try
         {
             return new FileStream(FilePath + ".capture.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
@@ -122,7 +122,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
         try
         {
             if (previousSessionIds.Count == 0 && _activeCaptureIds.Count != 0)
-            { throw new SeriesFileException("Disconnect the active A source before connecting another."); }
+            { throw new SeriesFileException("Timing is already receiving in this event file."); }
             CaptureSwitch? attempt = null;
             if (previousSessionIds.Count > 0 && !_captureSwitches.TryGetValue(switchKey, out attempt))
             {
@@ -158,12 +158,18 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                     }
                 }
                 var old = await db.Captures.Where(x => x.ListId == listId).ToArrayAsync(ct);
-                if (old.Any(x => ToCapture(x).Options.Simulation != options[0].Simulation))
-                { throw new DomainValidationException("Simulation/replay and real timing cannot be mixed in one run. Use a separate test event file."); }
-                // Validate a list before its first capture only. Once capture has begun the list can no longer be redrawn,
-                // so refusing a reconnect (for example after a later Run 1 correction) would strand the run; the start
-                // list view still reports a changed source.
-                if (listRow.StartedAt is null && old.Length == 0)
+                // Only received input decides the kind of a run; a session opened with the wrong source leaves no trace in it.
+                var recorded = old.Length == 0 && !options[0].Simulation ? null : await ReadTimingAsync(listId, ct);
+                var training = recorded is not null && TimingReplay.HasTrainingInput(recorded);
+                if (!options[0].Simulation && training)
+                { throw new DomainValidationException("This run has training times (simulator, replay or test import). Set them aside to use real timing."); }
+                // A run that is training already goes on as training, whatever was decided in it before.
+                if (options[0].Simulation && !training && TimingReplay.HasRealInput(recorded!, inputDecoders))
+                { throw new DomainValidationException("This run has real times or decisions. Simulator and replay are off for this run."); }
+                // Validate a list until it holds timing input. From then on it can no longer be redrawn, so refusing to
+                // continue (for example after a later Run 1 correction) would strand the run; the start list view still
+                // reports a changed source.
+                if (!await HasTimingInputAsync(db, listId, ct))
                 {
                     await ValidateStartPlanAsync(db, list.Plan, ct);
                     await ValidateTimingSourceAsync(db, listRow, list.Plan, ct);
@@ -195,6 +201,55 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
             throw;
         }
         finally { _captureOwnership.Release(); }
+    }
+
+    private async Task<bool> HasImpulsesAsync(SeriesDbContext db, CaptureSession session, CancellationToken ct)
+    {
+        var packets = await db.RawPackets.AsNoTracking().Where(x => x.SessionId == session.Id).OrderBy(x => x.Sequence).ToArrayAsync(ct);
+        return TimingReplay.HasImpulses(session, packets.Select(x => new RawTimingPacket(x.SessionId, x.Sequence, x.ReceivedAt,
+            x.Protocol, x.Source, x.Stream, x.Bytes)), inputDecoders);
+    }
+
+    // A run whose starting order can no longer change: started, being captured now, or holding timing input.
+    private async Task<bool> HasTimingInputAsync(SeriesDbContext db, Guid listId, CancellationToken ct)
+    {
+        if (await db.StartLists.AnyAsync(x => x.Id == listId && x.StartedAt != null, ct)
+            || await db.TimingAudit.AnyAsync(x => x.ListId == listId, ct)) { return true; }
+        foreach (var row in await db.Captures.AsNoTracking().Where(x => x.ListId == listId).ToArrayAsync(ct))
+        {
+            if (_activeCaptureIds.Contains(row.Id) || await HasImpulsesAsync(db, ToCapture(row), ct)) { return true; }
+        }
+        return false;
+    }
+
+    public async Task SetTrainingAsideAsync(Guid listId, long expectedRevision, string operatorName, DateTimeOffset at, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(operatorName)) { throw new DomainValidationException("An operator identity is required."); }
+        await WriteDeskAsync(async (db, _) =>
+        {
+            var row = await db.StartLists.AsNoTracking().SingleOrDefaultAsync(x => x.Id == listId, ct)
+                ?? throw new DomainValidationException("Select a saved start list.");
+            if (await db.StartLists.AnyAsync(x => x.RunId == row.RunId && x.Revision > row.Revision, ct))
+            { throw new DomainValidationException("A newer starting order exists. Select the latest start list."); }
+            var run = await db.Runs.AsNoTracking().SingleAsync(x => x.Id == row.RunId, ct);
+            if (await db.Runs.AnyAsync(x => x.CompetitionId == run.CompetitionId && x.Gender == run.Gender && x.Number > run.Number, ct))
+            { throw new DomainValidationException($"Run {run.Number + 1} was prepared from these training times. Use a separate event file for real timing."); }
+            var sessions = (await db.Captures.AsNoTracking().Where(x => x.ListId == listId).ToArrayAsync(ct)).Select(ToCapture).ToArray();
+            if (!sessions.Any(x => x.Options.Simulation)) { throw new DomainValidationException("This run has no training times."); }
+            if (sessions.Any(x => _activeCaptureIds.Contains(x.Id))) { throw new DomainValidationException("Leave the Timing view before setting training times aside."); }
+            if (TimingReplay.HasRealInput(await ReadTimingAsync(listId, ct), inputDecoders))
+            { throw new DomainValidationException("This run has real times or decisions. They cannot be set aside."); }
+            var next = new StartListRow { Id = Guid.NewGuid(), RunId = row.RunId, Revision = row.Revision + 1, CreatedAt = at, ApprovedAt = row.ApprovedAt,
+                Operator = operatorName.Trim(), Reason = $"Real timing: training times set aside with revision {row.Revision}",
+                PlanJson = row.PlanJson, SourceTimingVersion = row.SourceTimingVersion };
+            db.StartLists.Add(next);
+            foreach (var entry in await db.StartListEntries.AsNoTracking().Where(x => x.ListId == listId).ToArrayAsync(ct))
+            {
+                db.StartListEntries.Add(new StartListEntryRow { ListId = next.Id, Position = entry.Position, Bib = entry.Bib,
+                    CompetitorId = entry.CompetitorId, EntryJson = entry.EntryJson });
+            }
+            return true;
+        }, expectedRevision, ct);
     }
 
     public Task AppendRawAsync(RawTimingPacket packet, CancellationToken ct = default)

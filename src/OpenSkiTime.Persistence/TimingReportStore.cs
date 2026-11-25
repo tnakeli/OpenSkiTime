@@ -188,7 +188,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingReportStore
                 if ((data.List.Plan.Gender == Gender.Male ? "M" : "W") != draft.Header.Gender) { continue; }
                 if (data.Sessions.Count == 0 || data.Sessions.Any(x => (!x.CleanStop || x.StoppedAt is null) && !_activeCaptureIds.Contains(x.Id)))
                 { throw new DomainValidationException("Resolve interrupted timing capture before approving the timing report."); }
-                if (data.Sessions.Any(x => x.Options.Simulation))
+                if (TimingReplay.UsesTraining(data))
                 { throw new DomainValidationException("Simulation timing cannot be certified as an official timing report."); }
                 sources.Add(data);
             }

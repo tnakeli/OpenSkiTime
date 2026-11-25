@@ -53,6 +53,8 @@ public sealed partial class MainViewModel
         if (configuration is null) { RefreshBackupClockStatus(); return; }
         _backupClockConnecting = true;
         RefreshBackupClockStatus();
+        try { AddBackupDevices(configuration.BackupCapture(date, since).Select(x => x.Options)); }
+        catch (DomainValidationException) { /* reported when B connects */ }
         var previous = _backupClockTask;
         _backupClockTask = ConnectBackupClockAsync(previous, generation, configuration, date, since);
     }
@@ -76,7 +78,7 @@ public sealed partial class MainViewModel
             var inputs = new List<TimingSourceInput>();
             foreach (var device in devices)
             {
-                var created = TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, () => _backupSimulator = new(), followReplay: true);
+                var created = TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, () => _backupSimulator = new(), live: true);
                 sources.Add(created); inputs.Add(new(created, device.Options));
             }
             if (generation != _backupClockGeneration) { return; }
@@ -109,6 +111,7 @@ public sealed partial class MainViewModel
         _backupClockGeneration++;
         _backupClockExpected = false; _backupClockConnecting = false; _backupClockError = "";
         _backupRunSwitchMessage = ""; _backupRunSwitchFailed = false;
+        AddBackupDevices(workspace.Auxiliary?.State(AuxiliaryTimingRole.B).AllOptions ?? []);
         var previous = _backupClockTask;
         _backupClockTask = StopBackupClockAsync(previous, _backupClockGeneration);
         RefreshBackupClockStatus();
@@ -149,19 +152,6 @@ public sealed partial class MainViewModel
         SetStatus("Reconnecting B Clock. A timing continues unchanged.");
     }
 
-    [RelayCommand]
-    private void DisconnectBackupClock()
-    {
-        if (!_backupClockExpected) { return; }
-        var generation = ++_backupClockGeneration;
-        _backupClockConnecting = false;
-        _backupClockError = "disconnected by operator";
-        var previous = _backupClockTask;
-        _backupClockTask = StopBackupClockAsync(previous, generation);
-        RefreshBackupClockStatus();
-        SetStatus("B Clock disconnected. A timing continues unchanged.");
-    }
-
     private void ResetBackupClock()
     {
         _backupClockGeneration++;
@@ -179,7 +169,7 @@ public sealed partial class MainViewModel
         {
             status = IsTimingConnected || BackupTimingRoles.Count == 0
                 ? BackupClockStatus.Evaluate(false, false, null, null)
-                : new(BackupClockHealth.NotConfigured, "B Clock · connects with timing");
+                : new(BackupClockHealth.NotConfigured, "B Clock · starts with timing");
         }
         else if (_backupClockConnecting && !IsBackupClockActive) { status = new(BackupClockHealth.WaitingForB, "B Clock · connecting…"); }
         else

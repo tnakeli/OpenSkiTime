@@ -146,7 +146,7 @@ public sealed partial class AlgeAsciiDecoder(CaptureSession session, string sour
         {
             Fingerprint = $"{source}:{session.Options.DeviceDate:yyyyMMdd}:{_currentClock}:{flag}:{number}:{channel}:{_clockEpoch}",
             Channel = normalizedChannel, PhysicalChannel = channel, DeviceTicks = ticks, Precision = precision,
-            SuggestedBib = explicitBib, Manual = match.Groups["manual"].Success,
+            SuggestedBib = explicitBib, RecordNumber = explicitBib is null && kind == ObservationKind.Impulse ? number : null, Manual = match.Groups["manual"].Success,
             ClockId = ClockId()
         };
     }

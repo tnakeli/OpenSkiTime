@@ -54,7 +54,7 @@ public partial class DesktopWorkflowTests
                 var view = window.FindControl<TimingView>("TimingWorkspace")!;
                 var ranking = view.FindControl<DataGrid>("RankingGrid")!;
                 UseSimulatorTiming(vm, 2);
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 1));
                 Assert.False(vm.IsError, vm.StatusMessage);
                 async Task Resume()
@@ -140,7 +140,7 @@ public partial class DesktopWorkflowTests
             }
             finally
             {
-                if (workspace.Timing?.IsActive == true) { await vm.DisconnectTimingCommand.ExecuteAsync(null); }
+                if (workspace.Timing?.IsActive == true) { await vm.StopTimingAsync(); }
                 window.Close();
             }
         }

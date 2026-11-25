@@ -26,6 +26,8 @@ public sealed record TimingTimestampCell(Guid ListId, ObservationReview Review, 
 public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IReadOnlyList<TimingTimestampCell?> Cells)
 {
     public string? ForerunnerLetter { get; init; }
+    // The impulse of a row without timestamp cells, for its place in arrival order.
+    public string? ArrivalKey { get; init; }
     // Name parts for the person name rule: a regular prefix, the bold surname and the regular rest.
     public string Prefix { get; init; } = "";
     public string Surname { get; init; } = "";
@@ -40,6 +42,10 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
         var input = snapshot.Observations.Where(x => x.Observation.Kind == ObservationKind.Impulse
             && x.Observation.DeviceTicks is not null && x.DuplicateOf is null
             && x.Observation.Channel is { } channel && channels.Contains(channel)).ToArray();
+        // An impulse on a channel without a role has no column; it is listed with its time, so a wrong channel is not
+        // mistaken for a device that sends nothing.
+        var noRole = snapshot.Observations.Where(x => x.Observation is { Kind: ObservationKind.Impulse, DeviceTicks: not null, Channel: >= 100 }
+            && x.DuplicateOf is null).ToArray();
         TimingTimestampCell Cell(ObservationReview review) => new(snapshot.ListId, review,
             TimingEngine.CurrentDecision(new(DecisionKind.Assignment, review.Observation.Key), snapshot.Audit));
         IEnumerable<TimingTimestampCell?> Cells(Func<int, TimingTimestampCell?> get) => Enumerable.Range(0, 22)
@@ -51,6 +57,11 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
             var label = pulse.Ignored ? "Ignored " + kind : "Unassigned " + kind;
             rows.Add(new(pulse.Observation.Key, null, label,
                 Cells(c => c == pulse.Observation.Channel ? Cell(pulse) : null).ToArray()) { Prefix = label });
+        }
+        foreach (var pulse in noRole)
+        {
+            var label = $"C{pulse.Observation.PhysicalChannel} · no role · {TimingTime.FormatTimeOfDay(pulse.Observation.DeviceTicks)}";
+            rows.Add(new(pulse.Observation.Key, null, label, Cells(_ => null).ToArray()) { Prefix = label, ArrivalKey = pulse.Observation.Key });
         }
         var byBib = input.Where(x => x.Bib is not null).GroupBy(x => x.Bib!.Value).ToDictionary(x => x.Key, x => x.ToArray());
         // Forerunners' impulses stay visible and correctable like a competitor's.
@@ -82,7 +93,7 @@ public sealed record TimingTimestampRow(string Key, int? Bib, string Name, IRead
         var arrival = snapshot.Observations.Select((review, index) => (review.Observation.Key, index))
             .ToDictionary(x => x.Key, x => x.index);
         return rows.OrderByDescending(row => row.Cells.OfType<TimingTimestampCell>()
-            .Select(cell => arrival[cell.Key]).DefaultIfEmpty(-1).Max()).ToArray();
+            .Select(cell => arrival[cell.Key]).DefaultIfEmpty(row.ArrivalKey is { } key ? arrival[key] : -1).Max()).ToArray();
     }
 }
 

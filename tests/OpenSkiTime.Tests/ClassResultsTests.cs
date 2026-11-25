@@ -131,7 +131,7 @@ public sealed class ClassResultsTests
             var second = desk.Revisions.Single(x => x.Plan.RunNumber == 2);
             // Run 1 timing changes afterwards; starting Run 2 is still allowed.
             await workspace.Timing!.SelectRunAsync(first.Id);
-            await workspace.Timing.StartAsync(new SimulatorTimingSource(), new("Test", "Synthetic", s_date, Simulation: true), "Test");
+            await workspace.Timing.StartAsync(new SimulatorTimingSource(), new("Test", "Synthetic", s_date), "Test");
             await workspace.Timing.StopAsync();
             await workspace.Timing.CorrectAsync(new(DecisionKind.Time, CompetitorId: first.Plan.Entries[1].Entrant.CompetitorId, Hundredths: 5100), "Test", "Late time");
             desk = await workspace.MarkRunStartedAsync(second.Id, desk.SeriesRevision, "Test", s_at);

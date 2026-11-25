@@ -103,6 +103,7 @@ public sealed partial class MainViewModel
     {
         SwitchSection(WorkspaceSection.TimingReport);
         if (!IsTimingReportSection) { return; }
+        await TimingListeningTask; // capture of the view just left has ended
         var race = Competitions.FirstOrDefault(x => x.Id == _activeRaceId) ?? Competitions.FirstOrDefault();
         if (race is null) { ReportStatus = "Add a competition in Competitions first."; return; }
         if (!await FlushTimingReportAsync()) { return; }

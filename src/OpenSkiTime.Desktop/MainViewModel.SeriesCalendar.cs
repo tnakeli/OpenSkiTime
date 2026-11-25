@@ -114,7 +114,7 @@ public sealed partial class MainViewModel
             {
                 EnsureDeskClean();
                 if (IsDrawBusy || workspace.Timing?.IsActive == true)
-                { throw new DomainValidationException("Finish drawing and disconnect timing before importing the calendar."); }
+                { throw new DomainValidationException("Finish drawing and leave the Timing view before importing the calendar."); }
                 if (!await FlushRaceInformationAsync()) { return; }
                 var revision = _current?.Revision;
                 SeriesCalendarStatus = "Checking selected competition codices…";

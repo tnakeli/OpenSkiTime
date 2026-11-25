@@ -31,7 +31,7 @@ public sealed partial class MainViewModel
     private async Task EnsureSkiAlpProReadyAsync()
     {
         if (workspace.Timing?.IsActive == true || workspace.Auxiliary?.IsActive == true)
-        { throw new DomainValidationException("Disconnect timing before updating from Ski-Alp-Pro."); }
+        { throw new DomainValidationException("Leave the Timing view before updating from Ski-Alp-Pro."); }
         EnsureDeskClean();
         if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync())
         { throw new DomainValidationException("Unsaved race information or timing report could not be saved. Correct it before updating from Ski-Alp-Pro."); }

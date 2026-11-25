@@ -115,6 +115,8 @@ public sealed record TimingConnection(TimingSourceType Source)
     public void Validate(string role)
     {
         if (!Enum.IsDefined(Source)) { throw new DomainValidationException($"{role}: choose a timing source."); }
+        if (Source == TimingSourceType.Mt1Serial && Port.Trim().Length == 0)
+        { throw new DomainValidationException($"{role}: choose the MT1 COM port."); }
         if (Source == TimingSourceType.Mt1Serial && (BaudRate is < 1200 or > 115200))
         { throw new DomainValidationException($"{role}: unsupported serial baud rate."); }
         if (Source == TimingSourceType.AlgeResults && AlgeDeviceId.Trim().Length != 0 && !AlgeDeviceId.Trim().All(char.IsAsciiDigit))

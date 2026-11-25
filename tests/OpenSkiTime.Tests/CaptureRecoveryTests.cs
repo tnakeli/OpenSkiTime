@@ -246,18 +246,35 @@ public sealed class CaptureRecoveryTests : IDisposable
         await timing.SelectRunAsync(second.Id);
         await timing.StartAsync(new SimulatorTimingSource(), SimulatorOptions(), "Operator");
         await timing.StopAsync();
-        // A jury decision changes Run 1 afterwards; any audited Run 1 change used to strand Run 2.
+        // A jury decision changes Run 1 afterwards. Nothing was received on Run 2, so its outdated order is refused and can
+        // be redrawn; once Run 2 holds input, a later Run 1 change no longer strands it.
         await timing.SelectRunAsync(first.Id);
         await timing.CorrectStatusesAsync([first.Plan.Entries[0].Bib], TimingStatus.DSQ, "Operator", "Jury decision");
         await timing.SelectRunAsync(second.Id);
+        var refused = await Assert.ThrowsAsync<DomainValidationException>(() => timing.StartAsync(new SimulatorTimingSource(), SimulatorOptions(), "Operator"));
+        Assert.Contains("Run 1 timing changed", refused.Message, StringComparison.Ordinal);
+        Assert.False(timing.IsActive);
+        async Task<StartListRevision> RedrawAsync()
+        {
+            var run1 = TimingReplay.Restore(await workspace.ReadTimingAsync(first.Id), new AlgeDecoderFactory());
+            return (await workspace.SaveStartListAsync(new(FisStartOrder.SecondRun(started, run1.ToRunFinishes()), (await workspace.ReadAsync()).Revision, "Operator", "Redraw",
+                TimingRulesTests.At, TimingReplay.InputVersion(await workspace.ReadTimingAsync(first.Id))))).Revisions.Where(x => x.Plan.RunNumber == 2).MaxBy(x => x.Revision)!;
+        }
+        var redrawn = await RedrawAsync();
+        Assert.Equal(second.Revision + 1, redrawn.Revision);
+        await timing.SelectRunAsync(redrawn.Id);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, SimulatorOptions(), "Operator");
+        await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks);
+        await TimingStorageTests.UntilAsync(() => timing.SavedPackets == 1 && timing.Pending == 0);
+        await timing.StopAsync();
+        await Assert.ThrowsAsync<DomainValidationException>(RedrawAsync);
+        await timing.SelectRunAsync(first.Id);
+        await timing.CorrectStatusesAsync([first.Plan.Entries[1].Bib], TimingStatus.DSQ, "Operator", "Later jury decision");
+        await timing.SelectRunAsync(redrawn.Id);
         await timing.StartAsync(new SimulatorTimingSource(), SimulatorOptions(), "Operator");
         Assert.True(timing.IsActive);
         await timing.StopAsync();
-        // The list on which capture began is still never redrawn.
-        var run1 = TimingReplay.Restore(await workspace.ReadTimingAsync(first.Id), new AlgeDecoderFactory());
-        await Assert.ThrowsAsync<DomainValidationException>(async () => await workspace.SaveStartListAsync(new(
-            FisStartOrder.SecondRun(started, run1.ToRunFinishes()), (await workspace.ReadAsync()).Revision, "Operator", "Redraw",
-            TimingRulesTests.At, TimingReplay.InputVersion(await workspace.ReadTimingAsync(first.Id)))));
     }
 
     private static CaptureOptions SimulatorOptions() => new("Test", "Synthetic", TimingRulesTests.Date, Simulation: true);

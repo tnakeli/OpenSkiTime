@@ -250,7 +250,7 @@ public sealed partial class MainViewModel
     {
         var listIds = approval.SecondListId is { } second ? new[] { approval.FirstListId, second } : [approval.FirstListId];
         foreach (var id in listIds)
-        { if ((await workspace.ReadTimingAsync(id)).Sessions.Any(x => x.Options.Simulation)) { return true; } }
+        { if (TimingReplay.UsesTraining(await workspace.ReadTimingAsync(id))) { return true; } }
         return false;
     }
 

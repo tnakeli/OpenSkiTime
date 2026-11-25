@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-25
+
+This version uses live protocol 2 and keeps the `.ost` series format of 0.5.0. Results of a run timed across several visits to the Timing view can show Review in 0.5.0, which does not verify the device clock between them.
+
+### Changed
+
+- **No more Connect.** Timing is received while the Timing view is open and stops when the view is left; a message warns when competitors are on course. Device settings can always be edited, are saved as you type and take effect at once. **Settings → Timing devices** shows device signals while it is open, also without a run; they are not recorded. The **Connect**, **Disconnect** and **Save timing settings** buttons are gone.
+- **Timy USB library:** OpenSkiTime no longer downloads anything from ALGE, and **Set up USB library** is gone (ALGE had removed the file, so the button failed with 404). Install ALGE's driver and copy ALGE's library to the folder given in the guide, once per race computer. ALGE's current library `AlgeTimyUsb.dll` (2026.10.1) is supported; a library installed earlier keeps working.
+- **Training and real times:** a run with training times offers **Set training times aside** when a real device is used. The training stays in the file unchanged with the earlier start list revision.
+
+### Fixed
+
+- Opening Timing with the wrong device no longer locks the run. Only received impulses and saved timing decisions decide whether a run is real or training and whether its start list can be redrawn.
+- A competitor who starts before and finishes after a visit to another view is timed normally when a single timing device is used and its clock ran on unchanged. With several devices such a result needs review.
+- An impulse on a channel without a timing role is listed in **Timestamps** with its channel.
+- A Timy USB connection that cannot be opened is retried until it works.
+
 ## [0.5.0] - 2026-11-25
 
 This version uses live protocol 2 and keeps the `.ost` series format of 0.4.0: series files from 0.3.0 and 0.4.0 open unchanged.
@@ -160,7 +177,8 @@ First public preview of the Windows application, for rehearsals and evaluation. 
 - Local category draws, special Cup, youth, snow-seed and three-run formats are not supported. Automatic backup-time substitution and production FIS submission are pending.
 - ALGE native USB needs the vendor driver and SDK, installed separately.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/tnakeli/OpenSkiTime/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.2...v0.3.0

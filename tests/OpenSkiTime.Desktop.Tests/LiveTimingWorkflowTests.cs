@@ -54,7 +54,7 @@ public partial class DesktopWorkflowTests
                 using var http=new HttpClient();
                 var localId=new Uri(local.PublicUrl).Segments[^1]; var cloudId=new Uri(cloud.PublicUrl).Segments[^1];
                 UseSimulatorTiming(vm, 2);
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 vm.ShowCompetitionsCommand.Execute(null); vm.SelectedCompetition=vm.Competitions.Single(); vm.CompetitionIntermediateCount=1;
                 await vm.SaveCompetitionCommand.ExecuteAsync(null); Assert.False(vm.IsError,vm.StatusMessage);
                 await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition,1)); Assert.False(vm.IsError,vm.StatusMessage);
@@ -118,9 +118,9 @@ public partial class DesktopWorkflowTests
                     await panel.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
                 }
                 await LiveUiUntil(()=>local.Status=="Stopped"&&cloud.Status=="Stopped");
-                Assert.True(vm.IsTimingConnected); await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                Assert.True(vm.IsTimingConnected); await vm.StopTimingAsync();
             }
-            finally { if(workspace.Timing?.IsActive==true) { await vm.DisconnectTimingCommand.ExecuteAsync(null); } window.Close(); }
+            finally { if(workspace.Timing?.IsActive==true) { await vm.StopTimingAsync(); } window.Close(); }
         }
         finally
         {

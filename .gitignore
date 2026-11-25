@@ -71,7 +71,7 @@ Thumbs.db
 # Device traces and optional vendor SDK/driver downloads belong outside the repository.
 timing-captures/
 AlgeTimyUsb*.dll
-AlgeTimyUsbDLLExample.zip
+AlgeTimyUsb*.zip
 TimyUSB_Driver_Setup*.exe
 
 # --- Secrets & local-only configuration ---

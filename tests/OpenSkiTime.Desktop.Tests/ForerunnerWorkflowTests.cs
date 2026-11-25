@@ -110,7 +110,7 @@ public partial class DesktopWorkflowTests
 
             // Run 1: both forerunners and one competitor run, the rest do not start; then Run 2 reuses Run 1's forerunners.
             UseSimulatorTiming(vm, 2);
-            await vm.ConnectTimingCommand.ExecuteAsync(null);
+            await vm.StartTimingAsync();
             Assert.True(vm.IsTimingConnected, vm.StatusMessage);
             foreach (var channel in new[] { "start", "finish" }) { await vm.ToggleTimingChannelCommand.ExecuteAsync(channel); }
             // The first start impulse goes to forerunner A, who runs without a time or a rank.
@@ -199,7 +199,7 @@ public partial class DesktopWorkflowTests
             saved = (await workspace.ReadRaceInformationAsync(competition.Id))!.Values;
             Assert.Equal("Bo", saved.Runs.Single(x => x.Number == 1).Forerunners!.Single(x => x.Letter == "B").Person.FirstName);
             Assert.Equal("Changed", saved.Runs.Single(x => x.Number == 2).Forerunners!.Single(x => x.Letter == "B").Person.FirstName);
-            if (workspace.Timing?.IsActive == true) { await vm.DisconnectTimingCommand.ExecuteAsync(null); }
+            if (workspace.Timing?.IsActive == true) { await vm.StopTimingAsync(); }
         }
         finally { Directory.Delete(root, true); }
     }

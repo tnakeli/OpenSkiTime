@@ -31,7 +31,7 @@ public sealed partial class MainViewModel
     public bool IsTimingSimulator => PrimaryTimingRoles.FirstOrDefault()?.SourceType == TimingSourceType.Simulator;
     public string TimingDeviceHelp => PrimaryTimingRoles.FirstOrDefault()?.SourceType switch
     {
-        TimingSourceType.TimyUsb => "Timy PC Timer mode · install the ALGE USB driver once. Native USB uses the vendor library.",
+        TimingSourceType.TimyUsb => "Timy PC Timer mode · needs ALGE's USB driver and library, installed once (see the installation guide).",
         TimingSourceType.Mt1Serial => "Choose the MT1 virtual COM port. Each role uses its own channel on this device.",
         TimingSourceType.AlgeResults => "Each ALGE Results role has its own account and device ID; different clubs may use different accounts. Timekeeper role required.",
         TimingSourceType.ReplayFile => "Replays a raw ALGE ASCII file as training data.",
@@ -60,9 +60,14 @@ public sealed partial class MainViewModel
         foreach (var editor in e.OldItems?.OfType<TimingRoleEditor>() ?? []) { editor.PropertyChanged -= OnTimingRoleEditorChanged; editor.Detach(); }
         foreach (var editor in e.NewItems?.OfType<TimingRoleEditor>() ?? []) { editor.PropertyChanged += OnTimingRoleEditorChanged; }
         NotifyTimingRoles();
+        OnTimingSettingChanged();
     }
 
-    private void OnTimingRoleEditorChanged(object? sender, PropertyChangedEventArgs e) => NotifyTimingRoles();
+    private void OnTimingRoleEditorChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        NotifyTimingRoles();
+        if (IsTimingSetting(e.PropertyName)) { OnTimingSettingChanged(); }
+    }
 
     private void NotifyTimingRoles()
     {
@@ -81,8 +86,14 @@ public sealed partial class MainViewModel
         if (!AlgeAccounts.Select(x => x.Username).SequenceEqual(usernames))
         {
             var existing = AlgeAccounts.ToDictionary(x => x.Username, StringComparer.Ordinal);
+            foreach (var account in AlgeAccounts) { account.PropertyChanged -= OnAlgePasswordChanged; }
             AlgeAccounts.Clear();
-            foreach (var username in usernames) { AlgeAccounts.Add(existing.GetValueOrDefault(username) ?? new AlgeAccountEditor(username)); }
+            foreach (var username in usernames)
+            {
+                var account = existing.GetValueOrDefault(username) ?? new AlgeAccountEditor(username);
+                account.PropertyChanged += OnAlgePasswordChanged;
+                AlgeAccounts.Add(account);
+            }
             OnPropertyChanged(nameof(UsesAlgeResultsAccount));
         }
         ShareAlgeDevices();
@@ -103,6 +114,7 @@ public sealed partial class MainViewModel
     {
         if (account is null || account.IsFetching) { return; }
         var password = account.PeekPassword();
+        if (password.Length == 0) { password = _algeSessionPasswords.GetValueOrDefault(account.Username, ""); }
         if (password.Length == 0) { account.Status = "Enter the password first."; return; }
         account.IsFetching = true; account.Status = "Fetching devices…";
         try
@@ -117,11 +129,16 @@ public sealed partial class MainViewModel
         finally { account.IsFetching = false; }
     }
 
-    // Passwords are taken once per connection and kept in memory only while timing is connected, so B Clock retries work.
+    // Passwords are taken once and kept in memory only while the event file is open, so returning to Timing needs no retyping.
     private string AlgePassword(string username)
     {
-        if (_algeSessionPasswords.TryGetValue(username, out var known) && known.Length != 0) { return known; }
         var account = AlgeAccounts.FirstOrDefault(x => x.Username == username) ?? new AlgeAccountEditor(username);
+        // A newly typed password replaces the one in use.
+        if (account.Password.Length == 0 && _algeSessionPasswords.TryGetValue(username, out var known) && known.Length != 0)
+        {
+            account.Remember(known);
+            return known;
+        }
         var password = account.TakePassword();
         _algeSessionPasswords[username] = password;
         return password;
@@ -138,8 +155,9 @@ public sealed partial class MainViewModel
         var now = Environment.TickCount64;
         if (now - _lastSignalRefresh < 200) { return; }
         _lastSignalRefresh = now;
-        var connected = IsTimingConnected;
-        var signals = connected ? (workspace.Timing?.RecentSignals ?? []).Concat(workspace.Auxiliary?.State(AuxiliaryTimingRole.B).Signals ?? []).ToArray() : [];
+        var monitoring = IsTimingDevicesOpen && !IsTimingConnected && (_signalMonitor is not null || _backupSignalMonitor is not null);
+        var connected = IsTimingConnected || monitoring;
+        var signals = monitoring ? (_signalMonitor?.Signals ?? []).Concat(_backupSignalMonitor?.Signals ?? []).ToArray() : connected ? (workspace.Timing?.RecentSignals ?? []).Concat(workspace.Auxiliary?.State(AuxiliaryTimingRole.B).Signals ?? []).ToArray() : [];
         foreach (var editor in PrimaryTimingRoles.Concat(BackupTimingRoles))
         {
             if (!connected) { editor.SignalText = ""; continue; }
@@ -157,11 +175,19 @@ public sealed partial class MainViewModel
     {
         if (timingPreferencesStore?.LoadWithNotes() is not { } loaded) { return; }
         ApplyTimingConfiguration(loaded.Configuration, primary: true, backup: true);
+        _timingConfigured = true;
         TimingMigrationNotes = string.Join(Environment.NewLine, loaded.MigrationNotes);
     }
 
     // Replaces the Settings editors with a configuration. Primary and B groups can be applied independently.
     private void ApplyTimingConfiguration(TimingRoleConfiguration configuration, bool primary, bool backup)
+    {
+        _loadingTimingSettings = true;
+        try { LoadTimingConfiguration(configuration, primary, backup); }
+        finally { _loadingTimingSettings = false; }
+    }
+
+    private void LoadTimingConfiguration(TimingRoleConfiguration configuration, bool primary, bool backup)
     {
         if (primary && configuration.Start is { } start)
         {
@@ -202,7 +228,7 @@ public sealed partial class MainViewModel
         foreach (var editor in editors) { target.Add(editor); }
     }
 
-    // The configuration currently shown in Settings. It is validated before saving or connecting.
+    // The configuration currently shown in Settings. It is validated before saving and before timing starts.
     public TimingRoleConfiguration CurrentTimingConfiguration()
     {
         return new(PrimaryTimingRoles.Concat(BackupTimingRoles).Select(x => x.ToAssignment()).ToArray())
@@ -211,14 +237,8 @@ public sealed partial class MainViewModel
         };
     }
 
-    private void EnsureTimingSettingsEditable()
-    {
-        if (!CanChangeTimingDevice) { throw new DomainValidationException("Disconnect capture before changing settings."); }
-    }
-
     [RelayCommand] private async Task AddTimingIntermediateAsync() => await GuardAsync(() =>
     {
-        EnsureTimingSettingsEditable();
         var used = PrimaryTimingRoles.Select(x => x.Channel).ToHashSet();
         var channel = Enumerable.Range(0, 9).Where(x => !used.Contains(x)).Select(x => (int?)x).FirstOrDefault()
             ?? throw new DomainValidationException("All channels C0–C8 are already assigned on this device.");
@@ -228,14 +248,12 @@ public sealed partial class MainViewModel
 
     [RelayCommand] private async Task RemoveTimingIntermediateAsync() => await GuardAsync(() =>
     {
-        EnsureTimingSettingsEditable();
         if (HasTimingIntermediateRoles) { PrimaryTimingRoles.RemoveAt(PrimaryTimingRoles.Count - 1); }
         return Task.CompletedTask;
     });
 
     [RelayCommand] private async Task AddBackupClockAsync() => await GuardAsync(() =>
     {
-        EnsureTimingSettingsEditable();
         if (HasBackupClockRoles) { return Task.CompletedTask; }
         var leader = new TimingRoleEditor(TimingRole.BackupStart) { Channel = 0 };
         ReplaceRoles(BackupTimingRoles, [leader, new TimingRoleEditor(TimingRole.BackupFinish, leader) { Channel = 1 }]);
@@ -244,20 +262,7 @@ public sealed partial class MainViewModel
 
     [RelayCommand] private async Task ClearBackupClockAsync() => await GuardAsync(() =>
     {
-        EnsureTimingSettingsEditable();
         ReplaceRoles(BackupTimingRoles, []);
-        return Task.CompletedTask;
-    });
-
-    [RelayCommand] private async Task SaveTimingPreferencesAsync() => await GuardAsync(() =>
-    {
-        EnsureTimingSettingsEditable();
-        var configuration = CurrentTimingConfiguration();
-        configuration.Validate();
-        timingPreferencesStore?.Save(configuration);
-        TimingMigrationNotes = "";
-        RefreshBackupClockStatus();
-        SetStatus("Timing settings saved on this computer.");
         return Task.CompletedTask;
     });
 }

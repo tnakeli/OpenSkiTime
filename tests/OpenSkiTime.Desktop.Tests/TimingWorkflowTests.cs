@@ -74,7 +74,7 @@ public partial class DesktopWorkflowTests
             {
                 var view = window.FindControl<TimingView>("TimingWorkspace")!;
                 UseSimulatorTiming(vm, 2);
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 Assert.True(vm.IsTimingConnected);
                 Assert.Empty(vm.TimingCheckpoints);
 
@@ -105,7 +105,7 @@ public partial class DesktopWorkflowTests
                 Assert.Empty(vm.TimingRows[0].Result.Splits);
                 Assert.DoesNotContain(view.FindControl<DataGrid>("RunningGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
                 Assert.DoesNotContain(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
-                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                await vm.StopTimingAsync();
             }
             finally { window.Close(); }
         }
@@ -168,8 +168,8 @@ public partial class DesktopWorkflowTests
             vm.FollowTimingOrder = false; // This reference scenario deliberately operates with manual bib selection.
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);
-            Click(window, "Connect");
-            await vm.ConnectTimingCommand.ExecutionTask!;
+            await vm.TimingListeningTask;
+            Assert.False(vm.IsTimingConnected); // Settings only shows signals
             await vm.ReturnToTimingCommand.ExecuteAsync(null);
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.False(vm.StartInputOn);
@@ -199,12 +199,13 @@ public partial class DesktopWorkflowTests
             await vm.SaveCompetitionCommand.ExecuteAsync(null);
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(2, vm.Competitions.Count);
-            Assert.True(vm.IsTimingConnected);
+            await vm.TimingListeningTask;
+            Assert.False(vm.IsTimingConnected); // another view is open
             timingButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await vm.OpenTimingRunCommand.ExecutionTask!;
             Assert.True(vm.IsTimingSection);
             Assert.True(vm.IsTimingConnected);
-            Assert.False(vm.StartInputOn); // returning to Timing holds an already connected source
+            Assert.False(vm.StartInputOn); // returning to Timing starts on HOLD
             Assert.False(vm.FinishInputOn);
             await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
             await vm.ToggleTimingChannelCommand.ExecuteAsync("finish");
@@ -257,7 +258,7 @@ public partial class DesktopWorkflowTests
             }
             Assert.True(vm.IsTimingConnected);
             Assert.True(vm.CanPrepareNextTimedRun);
-            // Capture intentionally remains connected through Run 2 preparation.
+            // Preparing Run 2 leaves Timing; opening Run 2 starts it again.
             Click(window, "Prepare Run 2"); await vm.PrepareNextTimedRunCommand.ExecutionTask!;
             Assert.True(vm.HasCapturedRunInput);
             Assert.True(vm.CanPrepareDraw);
@@ -292,7 +293,7 @@ public partial class DesktopWorkflowTests
             Assert.True(view.FindControl<DataGrid>("RankingGrid")!.Columns.Single(x => Equals(x.Header, "TOTAL")).IsVisible);
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);
-            Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
+            await vm.TimingListeningTask; Assert.False(vm.IsTimingConnected);
             await vm.OpenSeriesCommand.ExecuteAsync(null);
             Assert.False(vm.HasTimingRun);
             await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(competition, 2));

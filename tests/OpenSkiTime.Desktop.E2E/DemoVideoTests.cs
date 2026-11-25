@@ -106,7 +106,7 @@ public sealed class DemoVideoTests
             office.TimeRun(2, order2, FullRaceWindowTests.WindowPlan(race.Run2));
             var dsq2 = order2.Single(x => x.Code == race.Athletes[SyntheticRace.Run2Dsq].Code).Bib;
             office.Disqualify(dsq2, race.Run2[race.Athletes[SyntheticRace.Run2Dsq].Code]);
-            office.DisconnectTiming();
+            office.LeaveTiming();
             Begin("Live Timing", "Spectators follow intermediates, run times, totals and ties live in any browser.", 2);
             ShowLiveTiming();
             Begin("Results and FIS XML", "The FIS penalty is calculated for the TD; approval stores the exact FIS XML in the series file.", 4);

@@ -74,8 +74,8 @@ public partial class DesktopWorkflowTests
                 window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
                 var rows = window.GetVisualDescendants().OfType<ItemsControl>().Single(x => x.Name == "PrimaryTimingRolesList");
                 Assert.Equal(4, rows.GetVisualDescendants().OfType<NumericUpDown>().Count(x => x.IsEffectivelyVisible && x.Maximum == 8));
-                PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
-                Assert.False(vm.IsError, vm.StatusMessage);
+                Assert.True(vm.SaveTimingSettings(), vm.TimingSettingsStatus);
+                Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => x.Content is "Save timing settings" or "Connect" or "Set up USB library");
                 CaptureSettingsWindow(window, 1100, 900, "timing-roles-b-clock");
 
                 var saved = preferences.Load()!;
@@ -94,24 +94,24 @@ public partial class DesktopWorkflowTests
 
                 // Two roles on the same device cannot share one channel; the saved file stays unchanged.
                 vm.TimingIntermediateRoles[1].Channel = 2;
-                PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
-                Assert.True(vm.IsError);
+                Assert.False(vm.SaveTimingSettings());
+                Assert.StartsWith("Not saved · ", vm.TimingSettingsStatus, StringComparison.Ordinal);
                 Assert.Equal([2, 4], preferences.Load()!.Intermediates.Select(x => x.Channel));
                 vm.TimingIntermediateRoles[1].Channel = 4;
                 // Any device can serve any role: Intermediate 1 on its own Timy alongside the serial MT1.
                 vm.TimingIntermediateRoles[0].UsesLeaderConnection = false;
                 vm.TimingIntermediateRoles[0].Source = TimingSourceTypes.TimyUsbLabel;
-                PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
-                Assert.True(vm.IsError); // A Timy without an explicit ID is ambiguous next to the B Clock Timy.
+                Assert.False(vm.SaveTimingSettings());
+                Assert.StartsWith("Not saved · ", vm.TimingSettingsStatus, StringComparison.Ordinal); // A Timy without an explicit ID is ambiguous next to the B Clock Timy.
                 vm.TimingIntermediateRoles[0].UsbId = "SPLIT-1";
-                PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
-                Assert.False(vm.IsError, vm.StatusMessage);
+                Assert.True(vm.SaveTimingSettings(), vm.TimingSettingsStatus);
+                Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => x.Content is "Save timing settings" or "Connect" or "Set up USB library");
                 var split = preferences.Load()!;
                 Assert.Equal("SPLIT-1", split.Intermediates[0].Connection.UsbId);
                 Assert.Equal(2, split.PrimaryCapture(new DateOnly(2026, 10, 4)).Count);
                 vm.TimingIntermediateRoles[0].UsesLeaderConnection = true;
-                PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
-                Assert.False(vm.IsError, vm.StatusMessage);
+                Assert.True(vm.SaveTimingSettings(), vm.TimingSettingsStatus);
+                Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => x.Content is "Save timing settings" or "Connect" or "Set up USB library");
             }
             finally { window.Close(); }
 
@@ -131,7 +131,7 @@ public partial class DesktopWorkflowTests
             // B Clock is optional and can be cleared.
             await reloaded.ClearBackupClockCommand.ExecuteAsync(null);
             await reloaded.RemoveTimingIntermediateCommand.ExecuteAsync(null);
-            await reloaded.SaveTimingPreferencesCommand.ExecuteAsync(null);
+            Assert.True(reloaded.SaveTimingSettings(), reloaded.TimingSettingsStatus);
             Assert.False(reloaded.IsError, reloaded.StatusMessage);
             var cleared = preferences.Load()!;
             Assert.False(cleared.HasBackupClock);
@@ -170,8 +170,9 @@ public partial class DesktopWorkflowTests
                 SelectTimingSettingsTab(window);
                 var notes = window.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Name == "TimingMigrationNotesText");
                 Assert.True(notes.IsEffectivelyVisible);
-                PressSettingsControl(window, VisibleButton(window, "Save timing settings"));
-                Assert.False(vm.IsError, vm.StatusMessage);
+                // Reviewing the tab is enough: leaving it stores the migrated settings.
+                vm.ShowSeriesCommand.Execute(null);
+                await vm.TimingListeningTask;
                 Assert.False(vm.HasTimingMigrationNotes);
                 window.UpdateLayout();
                 Assert.False(notes.IsEffectivelyVisible);
@@ -200,7 +201,7 @@ public partial class DesktopWorkflowTests
                 var view = window.FindControl<TimingView>("TimingWorkspace")!;
                 // No B Clock: neutral status, no warnings, A connects and captures.
                 UseSimulatorTiming(vm);
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 Assert.True(vm.IsTimingConnected, vm.StatusMessage);
                 await vm.BackupClockTask;
                 Assert.Equal(BackupClockHealth.NotConfigured, vm.BackupClockHealth);
@@ -212,13 +213,13 @@ public partial class DesktopWorkflowTests
                 Assert.Equal("B Clock · not configured", view.FindControl<TextBlock>("BackupClockStatusText")!.Text);
                 Assert.DoesNotContain("backupClockProblem", badge.Classes);
                 await PulseStartAsync(vm, workspace, vm.TimingRows[0].Bib, "12:00:00.0000");
-                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                await vm.StopTimingAsync();
 
                 // B configured as a replay file that does not exist: A still connects and captures; B reports the failure only.
                 await vm.AddBackupClockCommand.ExecuteAsync(null);
                 vm.BackupTimingRoles[0].Source = TimingSourceTypes.ReplayFileLabel;
                 vm.BackupTimingRoles[0].ReplayPath = Path.Combine(root, "missing-b.txt");
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 Assert.True(vm.IsTimingConnected, vm.StatusMessage);
                 Assert.False(vm.IsError, vm.StatusMessage);
                 await vm.BackupClockTask;
@@ -231,23 +232,23 @@ public partial class DesktopWorkflowTests
                 Assert.Contains("backupClockProblem", badge.Classes);
                 CaptureDraw(window, Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR"), "race-b-clock-problem.png");
                 await PulseStartAsync(vm, workspace, vm.TimingRows[1].Bib, "12:00:30.0000");
-                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                await vm.StopTimingAsync();
                 await vm.BackupClockTask;
 
                 // An invalid B configuration (same channel twice) is also isolated from A.
                 vm.BackupTimingRoles[0].ReplayPath = Path.Combine(root, "b.txt");
                 await File.WriteAllTextAsync(vm.BackupTimingRoles[0].ReplayPath, " 0001 C0 12:00:00.0002\r");
                 vm.BackupTimingRoles[1].Channel = 0;
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 Assert.True(vm.IsTimingConnected, vm.StatusMessage);
                 await vm.BackupClockTask;
                 Assert.Equal(BackupClockHealth.DeviceUnavailable, vm.BackupClockHealth);
-                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                await vm.StopTimingAsync();
                 await vm.BackupClockTask;
 
                 // A working B replay connects live alongside A, follows the active run and stops with A.
                 vm.BackupTimingRoles[1].Channel = 1;
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 Assert.True(vm.IsTimingConnected, vm.StatusMessage);
                 var aObservations = workspace.Timing!.Snapshot!.Observations.Count;
                 await vm.BackupClockTask;
@@ -261,10 +262,10 @@ public partial class DesktopWorkflowTests
                 Assert.NotEqual(BackupClockHealth.DeviceUnavailable, vm.BackupClockHealth);
                 Assert.False(vm.HasBackupClockProblem, vm.BackupClockStatusText);
                 Assert.Equal(aObservations, workspace.Timing.Snapshot!.Observations.Count); // B input never enters A timing
-                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                await vm.StopTimingAsync();
                 await vm.BackupClockTask;
                 Assert.False(workspace.Auxiliary.State(AuxiliaryTimingRole.B).IsActive);
-                Assert.Equal("B Clock · connects with timing", vm.BackupClockStatusText);
+                Assert.Equal("B Clock · starts with timing", vm.BackupClockStatusText);
                 Assert.False(vm.HasBackupClockProblem);
             }
             finally { window.Close(); }
@@ -286,7 +287,7 @@ public partial class DesktopWorkflowTests
             await File.WriteAllTextAsync(replay, " 0001 C0 12:00:00.0000\r 0002 C1 12:01:00.5000\r");
             vm.TimingStartRole.Source = TimingSourceTypes.ReplayFileLabel;
             vm.TimingStartRole.ReplayPath = replay;
-            await vm.ConnectTimingCommand.ExecuteAsync(null);
+            await vm.StartTimingAsync();
             Assert.True(vm.IsTimingConnected, vm.StatusMessage);
             Assert.Equal(TimingSourceTypes.ReplayFileLabel, workspace.Timing!.LastCaptureOptions!.Device);
             Assert.True(workspace.Timing.IsSimulation);
@@ -297,7 +298,7 @@ public partial class DesktopWorkflowTests
             { await writer.WriteAsync(System.Text.Encoding.ASCII.GetBytes(" 0003 C0 12:02:00.0000\r")); }
             await WaitTimingAsync(vm, () => workspace.Timing.Snapshot!.Observations.Count == 3);
             Assert.Equal([0, 1, 0], workspace.Timing.Snapshot!.Observations.Select(x => x.Observation.Channel ?? -1));
-            await vm.DisconnectTimingCommand.ExecuteAsync(null);
+            await vm.StopTimingAsync();
         }
         finally { Directory.Delete(root, recursive: true); }
     }
@@ -320,7 +321,7 @@ public partial class DesktopWorkflowTests
         var file = Path.Combine(root, "Synthetic-BClock.ost");
         var cache = new FisLocalStore(root);
         await cache.SaveListAsync(SyntheticFisArchive());
-        var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(new AlgeDecoderFactory()), new AlgeDecoderFactory());
         var date = new DateOnly(2026, 9, 27);
         var series = await workspace.CreateAsync(file, new("Synthetic B race", "Test slope", "Test club", date, date, "FIN", "2026/27"));
         series = await workspace.SaveCompetitionAsync(null, new("Slalom", "SL", date, Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);

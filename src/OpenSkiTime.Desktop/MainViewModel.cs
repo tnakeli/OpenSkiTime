@@ -114,6 +114,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     {
         SwitchSection(WorkspaceSection.Results);
         if (!IsResultsSection) { return; }
+        await TimingListeningTask; // capture of the view just left has ended
         var selected = FisCompetitions.FirstOrDefault(x => x.Id == _activeRaceId)
             ?? FisCompetitions.FirstOrDefault();
         await SelectResultsCompetitionAsync(selected);
@@ -215,7 +216,6 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [RelayCommand]
     private void NewSeries()
     {
-        if (workspace.Timing?.IsActive == true) { SetStatus("Disconnect timing before starting a new event file.", true); return; }
         if (!CanLeaveDrawInput()) { return; }
         if (HasDeskDrafts)
         {

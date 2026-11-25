@@ -142,7 +142,7 @@ public sealed partial class MainViewModel
             var data = await workspace.ReadTimingAsync(list.Id);
             var forerunners = (information.Runs.FirstOrDefault(x => x.Number == list.Plan.RunNumber)?.Forerunners ?? []).Select(ToTiming).ToArray();
             var snapshot = list.Id == current.ListId ? current : TimingReplay.Restore(data, new AlgeDecoderFactory(), forerunners: forerunners);
-            if (data.Sessions.Count == 0 && activeList.Plan.SourceListId == list.Id && activeList.Plan.SourceResults.Count > 0)
+            if (!TimingReplay.HasInput(data, snapshot) && activeList.Plan.SourceListId == list.Id && activeList.Plan.SourceResults.Count > 0)
             {
                 snapshot = snapshot with { Results = snapshot.Results.Select(r =>
                 {

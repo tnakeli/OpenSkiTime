@@ -472,7 +472,7 @@ public sealed class PdfFactoryTests
         // A fresh raw packet does not advance Series.Revision, yet makes timing-dependent PDFs stale.
         await using var session = await new SqliteSeriesFileStore().OpenAsync(path);
         var store = (ITimingStore)session;
-        var capture = await store.BeginCaptureAsync(first.Id, new("Synthetic", "Test", s_date, Simulation: true), "Operator", s_at);
+        var capture = await store.BeginCaptureAsync(first.Id, new("Synthetic", "Test", s_date), "Operator", s_at);
         await store.AppendRawAsync(new(capture.Id, 1, s_at, "alge", "Synthetic", "A", Encoding.ASCII.GetBytes("malformed synthetic input")));
         await store.EndCaptureAsync(capture.Id, s_at.AddMinutes(1));
         var changed = await new PdfReportSourceBuilder(new AlgeDecoderFactory()).BuildAsync(workspace, competition.Id);
