@@ -123,7 +123,7 @@ Details: [ALGE timing devices](docs/timing.md#alge-timy-2--timy-3-native-usb--wi
 
 OpenSkiTime is in pre-release development. FIS races use the standard FIS draw for two-run SL/GS and single-run DH/SG. Club races use a flexible start order (see [Start orders for Club races](docs/non-fis-start-orders.md)); special FIS Cup, snow-seed and parallel formats are not supported. Operation with physical timing devices at real races is verified during the 2026/27 season, with OpenSkiTime as the B system.
 
-New series files use the current development format. Incompatible older development files are rejected without modification; automatic schema upgrades are not available. Create a new series for the current version and retain older files and backups.
+Series files from 0.3.0 and later are supported. When a later version changes the file format, it upgrades a file on opening after saving a backup copy next to it. Files of a newer version and earlier development formats are rejected without modification. Keep backups.
 
 ## Run from source
 
