@@ -36,6 +36,7 @@ public static class TimingReplay
                     "Capture ended unexpectedly. Recover missing impulses from device memory/backup and review before continuing."));
             }
         }
+        continuity.Resolve(observations);
         return TimingEngine.Replay(data.List, observations, data.Audit, 0, 1, forerunners ?? data.Forerunners);
     }
 
