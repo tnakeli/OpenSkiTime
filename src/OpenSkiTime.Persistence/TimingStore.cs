@@ -162,7 +162,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 if (!options[0].Simulation && old.Any(x => ToCapture(x).Options.Simulation) && TimingReplay.HasTrainingInput(await ReadTimingAsync(listId, ct)))
                 { throw new DomainValidationException("This run has training times (simulator, replay or test import). Set them aside to use real timing."); }
                 if (options[0].Simulation && TimingReplay.HasRealInput(await ReadTimingAsync(listId, ct), inputDecoders))
-                { throw new DomainValidationException("This run has real times. Simulator and replay are off for this run."); }
+                { throw new DomainValidationException("This run has real times or decisions. Simulator and replay are off for this run."); }
                 // Validate a list until it holds timing input. From then on it can no longer be redrawn, so refusing to
                 // continue (for example after a later Run 1 correction) would strand the run; the start list view still
                 // reports a changed source.
