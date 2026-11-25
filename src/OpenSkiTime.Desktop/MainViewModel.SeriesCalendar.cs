@@ -113,6 +113,7 @@ public sealed partial class MainViewModel
             await GuardAsync(async () =>
             {
                 EnsureDeskClean();
+                await TimingListeningTask; // timing of the view just left has ended before this saves
                 if (IsDrawBusy || workspace.Timing?.IsActive == true)
                 { throw new DomainValidationException("Finish drawing and leave the Timing view before importing the calendar."); }
                 if (!await FlushRaceInformationAsync()) { return; }

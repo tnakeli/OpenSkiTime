@@ -992,10 +992,10 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         TimingEngine.ValidateDecision(decision, _snapshot);
         var before = TimingEngine.CurrentDecision(decision, _audit);
         if (before == decision) { return; }
+        var startsRun = decision.Kind == DecisionKind.Assignment && decision.Bib is not null
+            && _snapshot.Observations.Any(x => x.Observation.Key == decision.ObservationKey && x.Observation.Channel == 0);
         var change = await store.AppendTimingAuditAsync(_snapshot.ListId, _snapshot.AuditVersion, before, decision,
-            operatorName, reason, DateTimeOffset.UtcNow, reversesId,
-            startsRun: decision.Kind == DecisionKind.Assignment && decision.Bib is not null
-                && _snapshot.Observations.Any(x => x.Observation.Key == decision.ObservationKey && x.Observation.Channel == 0));
+            operatorName, reason, DateTimeOffset.UtcNow, reversesId, startsRun: startsRun);
         _audit.Add(change); Rebuild();
     }
 

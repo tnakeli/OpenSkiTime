@@ -29,6 +29,7 @@ public sealed partial class MainViewModel
             {
                 throw new DomainValidationException("Clipboard has no tab-separated competitor table.");
             }
+            await TimingListeningTask; // timing of the view just left has ended before this saves
             var series = _current ?? throw new SeriesFileException("Open an event series first.");
             var desk = _desk ?? await workspace.ReadCompetitorDeskAsync();
             var preview = TsvExchange.Preview(text, series, desk);

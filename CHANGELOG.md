@@ -6,9 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-## [0.5.1] - 2026-11-25
+## [0.5.2] - 2026-11-26
 
-This version uses live protocol 2 and keeps the `.ost` series format of 0.5.0. Results of a run timed across several visits to the Timing view can show Review in 0.5.0, which does not verify the device clock between them.
+Version 0.5.1 was not published. This version uses live protocol 2 and keeps the `.ost` series format of 0.5.0. Results of a run timed across several visits to the Timing view can show Review in 0.5.0, which does not verify the device clock between them.
 
 ### Changed
 
@@ -177,8 +177,8 @@ First public preview of the Windows application, for rehearsals and evaluation. 
 - Local category draws, special Cup, youth, snow-seed and three-run formats are not supported. Automatic backup-time substitution and production FIS submission are pending.
 - ALGE native USB needs the vendor driver and SDK, installed separately.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.5.1...HEAD
-[0.5.1]: https://github.com/tnakeli/OpenSkiTime/compare/v0.5.0...v0.5.1
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/tnakeli/OpenSkiTime/compare/v0.5.0...v0.5.2
 [0.5.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tnakeli/OpenSkiTime/compare/v0.2.0-preview.2...v0.3.0

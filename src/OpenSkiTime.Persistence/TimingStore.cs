@@ -375,8 +375,8 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
             {
                 list.StartedAt = at;
                 list.StartedBy = operatorName.Trim();
-                var series = await db.Series.SingleAsync(ct);
-                series.Revision++;
+                // Like every other timing decision this leaves the series revision alone: the views that edit the series
+                // stay current, and the started run is protected by its own lock (HasTimingInputAsync).
             }
             return results;
         }, ct);

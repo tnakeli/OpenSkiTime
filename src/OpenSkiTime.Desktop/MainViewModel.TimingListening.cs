@@ -150,7 +150,6 @@ public sealed partial class MainViewModel
                 throw;
             }
             ConfigureTimingCheckpoints();
-            if (_current is not null) { _current = await workspace.ReadAsync(); }
             SetTimingProblem("");
             RefreshTiming();
             SetStatus("Timing is on HOLD. Check the race, then resume each timing position before assigning impulses.");
@@ -216,8 +215,10 @@ public sealed partial class MainViewModel
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
-            await workspace.SetTrainingAsideAsync(list.Id, (await workspace.ReadAsync()).Revision, TimingOperator, DateTimeOffset.UtcNow);
-            if (_current is not null) { _current = await workspace.ReadAsync(); }
+            await TimingListeningTask;
+            if (_current is not { } current) { return; }
+            await workspace.SetTrainingAsideAsync(list.Id, current.Revision, TimingOperator, DateTimeOffset.UtcNow);
+            _current = current with { Revision = current.Revision + 1 };
             saved = true;
         });
         if (saved) { await OpenTimingRunAsync(new(competition, run)); }

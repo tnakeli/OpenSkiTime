@@ -55,6 +55,7 @@ public sealed partial class MainViewModel
         IsFissiBusy = true;
         try
         {
+            await TimingListeningTask; // timing of the view just left has ended before this saves
             var series = _current ?? throw new SeriesFileException("Open an event series first.");
             var path = workspace.FilePath;
             EnsureDeskClean();
