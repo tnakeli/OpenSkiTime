@@ -45,7 +45,7 @@ public partial class DesktopWorkflowTests
             vm.TimingIntermediateRoles[0].SelectedAlgeDevice = vm.TimingIntermediateRoles[0].AlgeDevices.Single();
             Assert.Equal("231203037", vm.TimingIntermediateRoles[0].AlgeDeviceId);
 
-            await vm.SaveTimingPreferencesCommand.ExecuteAsync(null);
+            Assert.True(vm.SaveTimingSettings(), vm.TimingSettingsStatus);
             Assert.False(vm.IsError, vm.StatusMessage);
             var saved = preferences.Load()!;
             Assert.Equal(("club-a@example.test", "231203037"), (saved.Intermediates[0].Connection.AlgeUsername, saved.Intermediates[0].Connection.AlgeDeviceId));

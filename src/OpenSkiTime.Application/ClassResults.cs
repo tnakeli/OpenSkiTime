@@ -40,7 +40,7 @@ public static class ClassResultsBuilder
             var timed = runs.GetValueOrDefault(run)?.SelectMany(x => x.Timing.Results).FirstOrDefault(x => x.CompetitorId == competitorId && !x.IsForerunner);
             if (timed is not null && timed.Status is not (TimingStatus.Ready or TimingStatus.OnCourse or TimingStatus.Review)) { return (timed.Status, timed.Hundredths, timed.Disqualification); }
             // Results typed in without capture are saved with the start list of the next run.
-            if (runs.GetValueOrDefault(run)?.All(x => x.Source.Sessions.Count == 0) == true
+            if (runs.GetValueOrDefault(run)?.All(x => !TimingReplay.HasInput(x.Source, x.Timing)) == true
                 && runs.GetValueOrDefault(run + 1)?.SelectMany(x => x.List.Plan.SourceResults).FirstOrDefault(x => x.CompetitorId == competitorId) is { } saved)
             { return (Enum.Parse<TimingStatus>(saved.Status.ToString()), saved.Hundredths, null); }
             return timed is null ? null : (timed.Status, timed.Hundredths, timed.Disqualification);
@@ -98,7 +98,7 @@ public static class ClassResultsBuilder
         var runCount = source.Competition?.Values.RunCount ?? 1;
         // Every list of the first run (a field: all genders, Men or Women) needs all runs, each finished or classified.
         bool RunComplete(RunReportData data)
-            => data.Timing.Complete || (data.Source.Sessions.Count == 0 && source.Runs.Where(x => x.List.Plan.RunNumber == data.List.Plan.RunNumber + 1 && x.List.Plan.Gender == data.List.Plan.Gender)
+            => data.Timing.Complete || (!TimingReplay.HasInput(data.Source, data.Timing) && source.Runs.Where(x => x.List.Plan.RunNumber == data.List.Plan.RunNumber + 1 && x.List.Plan.Gender == data.List.Plan.Gender)
                 .Any(x => x.List.Plan.SourceResults.Count == data.List.Plan.Entries.Count));
         var fields = source.Runs.Where(x => x.List.Plan.RunNumber == 1).Select(x => x.List.Plan.Gender).Distinct().ToArray();
         return fields.Length > 0 && fields.All(field => Enumerable.Range(1, runCount).All(run =>

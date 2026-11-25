@@ -366,7 +366,7 @@ public sealed partial class MainViewModel
             if (DrawRun > 1 && _sourceRun is not null)
             {
                 var captured = await workspace.ReadTimingAsync(_sourceRun.Id);
-                if (captured.Sessions.Count > 0)
+                if (captured.Sessions.Count > 0 && TimingReplay.HasInput(captured, new Devices.AlgeDecoderFactory()))
                 {
                     _sourceTiming = TimingReplay.Restore(captured, new Devices.AlgeDecoderFactory());
                     _sourceTimingVersion = TimingReplay.InputVersion(captured);
@@ -379,7 +379,7 @@ public sealed partial class MainViewModel
             DrawFirstBib = bibChange?.FirstBib ?? first?.Plan.Options.FirstBib ?? 1;
             var skipped = bibChange is not null ? bibChange.SkippedBibs : first?.Plan.Options.SkippedBibs;
             DrawSkippedBibsText = string.Join(", ", skipped ?? []);
-            DrawRunStarted = lists.Any(x => x.StartedAt is not null)
+            DrawRunStarted = lists.FirstOrDefault()?.StartedAt is not null
                 || fieldRevisions.Any(x => x.Plan.RunNumber > DrawRun);
             DrawBlocks.Clear();
             if (flex) { BuildDrawSetup(starters, competitors, lists.FirstOrDefault()); }

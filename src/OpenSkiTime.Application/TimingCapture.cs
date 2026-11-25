@@ -19,6 +19,10 @@ public sealed record CaptureOptions(string Device, string Endpoint, DateOnly Dev
     // Device sessions started together for one capture share this group: their clocks are set to the same time, so
     // elapsed times may span devices. Null keeps the original per-session clock context.
     public string? ClockGroup { get; init; }
+    // This session may continue the clock of the run's previous session on the same device, once the device clock is
+    // verified to have run on (ClockContinuity). False keeps every session in its own clock context, as in earlier files.
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ContinuesClock { get; init; }
 
     // Physical channel that this session maps to a timing position (0 start, 1 finish, 2.. intermediates), if any.
     public int? Channel(int position) => Routes is not null ? Routes.FirstOrDefault(x => x.Position == position)?.Channel
@@ -91,6 +95,10 @@ public interface ITimingStore
         => options?.Count == 1 && previousSessionIds?.Count == 1
             ? [await SwitchCaptureAsync(previousSessionIds[0], listId, options[0], operatorName, at, ct)]
             : throw new NotSupportedException("This timing store cannot switch several devices.");
+    // Continues a training run with real timing on a new revision of the same starting order. The training sessions,
+    // impulses and decisions stay unchanged with the earlier revision.
+    Task SetTrainingAsideAsync(Guid listId, long expectedRevision, string operatorName, DateTimeOffset at, CancellationToken ct = default)
+        => throw new NotSupportedException("This timing store cannot set training times aside.");
     Task AppendRawAsync(RawTimingPacket packet, CancellationToken ct = default);
     Task EndCaptureAsync(Guid sessionId, DateTimeOffset at, CancellationToken ct = default);
     Task<TimingAudit> AppendTimingAuditAsync(Guid listId, long expectedVersion, TimingDecision before,
@@ -165,6 +173,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private readonly List<TimingObservation> _observations = [];
     private readonly List<TimingAudit> _audit = [];
     private readonly StreamDecoders _decoders = new();
+    private ClockContinuity _continuity = new();
     private readonly List<CaptureSession> _sessions = [];
     private StartListRevision? _list;
     private TimingSnapshot? _snapshot;
@@ -172,6 +181,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private string[] _labels = [];
     private string[] _connections = [];
     private CaptureOptions[] _activeOptions = [];
+    private bool _hasTrainingInput;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), TimingSignal> _signals = new();
     private CancellationTokenSource? _readCancellation;
     private Channel<CaptureInput>? _queue;
@@ -193,7 +203,10 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private readonly object _stopGate = new();
     private Task? _stopping;
     private bool _followOrder;
+    private bool _stopRequested;
     public bool IsActive => _producer is not null;
+    // Stop was requested and could not finish yet (for example while storage needs attention). Nothing more is received.
+    public bool IsStopping => IsActive && Volatile.Read(ref _stopRequested);
     public string Connection
     {
         get
@@ -208,7 +221,9 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     public int Pending => Volatile.Read(ref _pending);
     public long SavedPackets => Interlocked.Read(ref _saved);
     public TimingSnapshot? Snapshot => Volatile.Read(ref _snapshot);
-    public bool IsSimulation => _sessions.Any(x => x.Options.Simulation);
+    public bool IsSimulation => HasTrainingInput || (IsActive && ActiveCaptureOptions.Any(x => x.Simulation));
+    // The selected run holds training input (TimingReplay.UsesTraining); an opened session alone does not count.
+    public bool HasTrainingInput => Volatile.Read(ref _hasTrainingInput);
     public bool HasCaptureHistory => _sessions.Count != 0;
     public CaptureOptions? LastCaptureOptions => _sessions.LastOrDefault()?.Options;
     // Options of every device session in the running capture (one per physical connection).
@@ -262,7 +277,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         try
         {
             _list = data.List; _forerunners = data.Forerunners ?? [];
-            _observations.Clear(); _audit.Clear(); _decoders.Clear(); _sessions.Clear();
+            _observations.Clear(); _audit.Clear(); _decoders.Clear(); _continuity.Clear(); _sessions.Clear();
             _audit.AddRange(data.Audit); _sessions.AddRange(data.Sessions);
             foreach (var unit in TimingReplay.Units(data.Sessions, data.Packets))
             {
@@ -363,7 +378,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             ArgumentNullException.ThrowIfNull(input.Options);
             input.Options.Validate();
         }
-        if (IsActive || _list is null) { throw new DomainValidationException("Choose a saved start list and disconnect any previous source first."); }
+        if (IsActive || _list is null) { throw new DomainValidationException("Choose a saved start list. Timing must have stopped before it starts again."); }
         var sessions = (await store.BeginCaptureGroupAsync(_list.Id, inputs.Select(x => x.Options).ToArray(), operatorName, DateTimeOffset.UtcNow, ct)).ToArray();
         if (sessions.Length != inputs.Count) { throw new SeriesFileException("The timing store did not open a session for every device."); }
         _sessions.AddRange(sessions);
@@ -406,7 +421,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     // Once delivered, this packet must drain even if the operator stops capture.
                     await queue.Writer.WriteAsync(new(Packet: packet with { Bytes = packet.Bytes.ToArray(), ReceivedAt = packet.ReceivedAt ?? DateTimeOffset.UtcNow }, Source: index));
                 }, text => Volatile.Write(ref connections[index], text), token);
-                if (!token.IsCancellationRequested) { Volatile.Write(ref connections[index], "Source completed · disconnect to finish capture"); }
+                if (!token.IsCancellationRequested) { Volatile.Write(ref connections[index], "Source completed"); }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -464,7 +479,8 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     if (RaceFlow.OnCourse(_snapshot!).Count > 0)
                     { throw new DomainValidationException("Competitors are still on course. Finish or classify them before switching the active timing run."); }
                     var data = await store.ReadTimingAsync(change.ListId);
-                    var restored = TimingReplay.Restore(data, decoders);
+                    var continuity = new ClockContinuity();
+                    var restored = TimingReplay.Restore(data, decoders, continuity);
                     // A storage failure is retried like any durable write; the store returns a boundary that already committed.
                     var previousIds = sessions.Select(x => x.Id).ToArray();
                     var previousOptions = sessions.Select(x => x.Options).ToArray();
@@ -476,6 +492,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
                     foreach (var o in _observations.Where(x => x.DeviceTicks is not null && x.ClockId.Length > 0))
                     { _previousRunInput[o.ClockId] = Math.Max(_previousRunInput.GetValueOrDefault(o.ClockId, long.MinValue), o.DeviceTicks!.Value); }
                     _list = data.List; _forerunners = data.Forerunners ?? []; _observations.Clear(); _audit.Clear(); _sessions.Clear(); _decoders.Clear();
+                    _continuity = continuity;
                     _observations.AddRange(restored.Observations.Select(x => x.Observation)); _audit.AddRange(data.Audit);
                     _sessions.AddRange(data.Sessions); _sessions.AddRange(next);
                     // A run change puts every position back on HOLD, before any further input is processed.
@@ -524,7 +541,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
         var superseded = new List<TimingObservation>();
         var decoder = _decoders.For(decoders, session, packet, superseded);
         _observations.AddRange(superseded);
-        var decoded = TimingReplay.Decode(decoder, packet, includeInformation: live);
+        var decoded = _continuity.Apply(session, packet, TimingReplay.Decode(decoder, packet, includeInformation: live || session.Options.ContinuesClock));
         if (live)
         {
             // The running display clock follows timing impulses and device heartbeats only; informational device input
@@ -544,6 +561,9 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void Rebuild()
     {
+        // Everything delivered becomes an observation; connection notices and the interruption notice are not input.
+        Volatile.Write(ref _hasTrainingInput, TimingReplay.UsesTraining(_sessions, _audit, s => _observations.Any(x => x.SessionId == s.Id
+            && x.PacketSequence > 0 && !x.Key.EndsWith(":notice", StringComparison.Ordinal))));
         if (_list is not null) { Volatile.Write(ref _snapshot, TimingEngine.Replay(_list, _observations, _audit, 0, 1, _forerunners)); }
     }
 
@@ -1129,11 +1149,12 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private async Task StopCoreAsync()
     {
         if (_producer is null) { return; }
+        Volatile.Write(ref _stopRequested, true);
         _readCancellation!.Cancel();
         if (Fault is not null) { throw new SeriesFileException(Fault); }
         var drain = Task.WhenAll(_producer, _writer!);
         var completed = await Task.WhenAny(drain, _failed.Task, Task.Delay(TimeSpan.FromSeconds(15)));
-        if (completed != drain) { throw new SeriesFileException(Fault ?? "Capture is still draining. Keep the file open and retry disconnect."); }
+        if (completed != drain) { throw new SeriesFileException(Fault ?? "Received times are still being saved. Keep the file open."); }
         await drain;
         var closeErrors = new List<string>();
         foreach (var source in _sources)
@@ -1143,6 +1164,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             catch (Exception ex) when (ex is not OutOfMemoryException) { closeErrors.Add(ex.Message); }
         }
         _sources = []; _producer = _writer = null;
+        Volatile.Write(ref _stopRequested, false);
         _readCancellation.Dispose(); _readCancellation = null;
         _connection = "Disconnected · received data saved"
             + (closeErrors.Count == 0 ? "" : " · a device did not close cleanly: " + string.Join("; ", closeErrors));

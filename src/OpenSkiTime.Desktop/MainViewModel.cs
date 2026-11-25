@@ -215,7 +215,6 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     [RelayCommand]
     private void NewSeries()
     {
-        if (workspace.Timing?.IsActive == true) { SetStatus("Disconnect timing before starting a new event file.", true); return; }
         if (!CanLeaveDrawInput()) { return; }
         if (HasDeskDrafts)
         {

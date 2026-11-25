@@ -1,56 +1,49 @@
 using System.Diagnostics;
-using System.IO.Compression;
 using System.Text;
 using OpenSkiTime.Application;
 
 namespace OpenSkiTime.Devices;
 
-// The vendor's mixed-mode .NET Framework DLL cannot load in .NET 10. A small isolated Windows host
-// forwards both original SDK byte/text fields, not parsed timing lines. No vendor binary is redistributed with this repository.
-public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory = null) : ITimingSource
+// The vendor library runs in a small isolated Windows host (.NET Framework) that forwards both original SDK byte/text
+// fields, not parsed timing lines. No vendor binary is redistributed with this repository or downloaded by the
+// application: the operator installs ALGE's driver and copies ALGE's library to SdkDirectory (docs/timing.md).
+// With retry (live capture), a missing library or a stopped host is reported and tried again until capture stops, so
+// timing starts by itself once the problem is fixed. A device read does not retry.
+public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory = null, bool retry = false, TimeSpan? retryDelay = null) : ITimingSource
 {
+    // ALGE's current library (2026.10.1) and the mixed-mode x64 library it replaced.
+    private static readonly string[] s_libraries = ["AlgeTimyUsb.dll", "AlgeTimyUsb.x64.dll"];
+    private int _stream;
     public static string SdkDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime", "timy-usb");
-    public static bool IsSdkInstalled => File.Exists(Path.Combine(SdkDirectory, "AlgeTimyUsb.x64.dll"));
-
-    public static async Task InstallSdkAsync(HttpClient client, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(client);
-        if (!OperatingSystem.IsWindows()) { throw new PlatformNotSupportedException("Timy native USB currently requires Windows. MT1 serial capture remains portable."); }
-        using var response = await client.GetAsync("https://alge-timing.com/alge/download/software/AlgeTimyUsbDLLExample.zip", HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
-        await using var input = await response.Content.ReadAsStreamAsync(ct);
-        using var output = new MemoryStream();
-        var buffer = new byte[8192];
-        int read;
-        while ((read = await input.ReadAsync(buffer, ct)) > 0)
-        {
-            if (output.Length + read > 40_000_000) { throw new IOException("The Timy SDK download exceeds the size limit."); }
-            output.Write(buffer, 0, read);
-        }
-        output.Position = 0;
-        using var zip = new ZipArchive(output);
-        Directory.CreateDirectory(SdkDirectory);
-        foreach (var name in new[] { "AlgeTimyUsb.x64.dll", "vcruntime140.dll", "vcruntime140_1.dll" })
-        {
-            var expected = name.StartsWith("Alge", StringComparison.Ordinal) ? "Dependencies/" + name : "Dependencies/x64/" + name;
-            var entry = zip.Entries.SingleOrDefault(e => e.FullName.Replace('\\', '/') == expected)
-                ?? throw new IOException("The vendor USB package has changed. Check the ALGE download before installing.");
-            if (entry.Length > 20_000_000) { throw new IOException("Unexpected USB component size."); }
-            var destination = Path.Combine(SdkDirectory, name);
-            var temporary = destination + ".tmp";
-            await using (var stream = entry.Open())
-            await using (var target = File.Create(temporary)) { await stream.CopyToAsync(target, ct); }
-            File.Move(temporary, destination, true);
-        }
-    }
 
     public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(receive); ArgumentNullException.ThrowIfNull(status);
+        var reported = "";
+        while (true)
+        {
+            // Receiving again ends the reported problem, so the next interruption is journalled even if it is the same one.
+            try { await ReceiveOnceAsync(packet => { reported = ""; return receive(packet); }, status, ct); return; }
+            catch (Exception ex) when (retry && !ct.IsCancellationRequested && ex is IOException or System.ComponentModel.Win32Exception)
+            {
+                status("Not receiving · " + ex.Message + " Retrying…");
+                // One notice per problem: the journal must not fill up while the operator fixes it.
+                if (reported != ex.Message)
+                {
+                    reported = ex.Message;
+                    await receive(new("transport-status", "Timy USB", "failure", Encoding.UTF8.GetBytes("Timy USB is not receiving. " + ex.Message)));
+                }
+                await Task.Delay(retryDelay ?? TimeSpan.FromSeconds(3), ct);
+            }
+        }
+    }
+
+    private async Task ReceiveOnceAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
+    {
         if (!OperatingSystem.IsWindows() || !Environment.Is64BitProcess) { throw new IOException("Timy USB requires 64-bit Windows. Use the MT1 serial adapter on other platforms."); }
         var folder = sdkDirectory ?? SdkDirectory;
-        if (!File.Exists(Path.Combine(folder, "AlgeTimyUsb.x64.dll")))
-        { throw new IOException("Set up the Timy USB library in device settings first, and install the ALGE USB driver."); }
+        if (!s_libraries.Any(x => File.Exists(Path.Combine(folder, x))))
+        { throw new IOException($"ALGE's USB library is missing. Copy AlgeTimyUsb.dll to {folder} (see the installation guide)."); }
         var host = Path.Combine(AppContext.BaseDirectory, "TimyUsbHost.exe");
         var start = new ProcessStartInfo(host)
         {
@@ -80,7 +73,6 @@ public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory 
             try { if (!process.HasExited) { process.StandardInput.WriteLine("STOP"); process.StandardInput.Flush(); } }
             catch (Exception ex) when (ex is IOException or InvalidOperationException) { }
         });
-        var stream = 0;
         try
         {
             // STOP asks the helper to finish; keep reading already delivered byte events until EOF.
@@ -89,9 +81,9 @@ public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory 
                 var parts = line.Split('\t', 3);
                 if (parts.Length != 3) { continue; }
                 if (parts[0] == "T")
-                { await receive(new("alge-timy-sdk/v1", "Timy:" + parts[1], stream.ToString(System.Globalization.CultureInfo.InvariantCulture), Convert.FromBase64String(parts[2]))); }
+                { await receive(new("alge-timy-sdk/v1", "Timy:" + parts[1], _stream.ToString(System.Globalization.CultureInfo.InvariantCulture), Convert.FromBase64String(parts[2]))); }
                 else if (parts[0] == "S") { status(parts[2]); }
-                else if (parts[0] == "C") { stream++; status("Connected · Timy " + parts[1]); }
+                else if (parts[0] == "C") { _stream++; status("Connected · Timy " + parts[1]); }
                 else if (parts[0] == "D")
                 {
                     status("Timy disconnected · reconnect USB to resume");

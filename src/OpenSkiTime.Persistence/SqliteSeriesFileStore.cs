@@ -6,7 +6,9 @@ using OpenSkiTime.Domain;
 
 namespace OpenSkiTime.Persistence;
 
-public sealed class SqliteSeriesFileStore : ISeriesFileStore
+// The decoders tell device heartbeats from impulses when deciding whether a run has timing input. Without them every
+// device message counts as input.
+public sealed class SqliteSeriesFileStore(ITimingDecoderFactory? decoders = null) : ISeriesFileStore
 {
     public async Task<ISeriesFileSession> CreateAsync(string filePath, SeriesValues values,
         IReadOnlyList<CompetitionValues>? competitions = null, CancellationToken ct = default)
@@ -148,7 +150,7 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
                 await MigrateAsync(fullPath, version, SeriesMigrations.All, SeriesMigrations.Current, await s_expectedSchemas.Value, ct);
                 await VerifyFormatAsync(fullPath, ct);
             }
-            var session = new SqliteSeriesFileSession(fullPath);
+            var session = new SqliteSeriesFileSession(fullPath, decoders);
             await session.ReadAsync(ct);
             return session;
         }
@@ -422,7 +424,7 @@ public sealed class SqliteSeriesFileStore : ISeriesFileStore
         row.Name, row.Location, row.Organizer, row.StartDate, row.EndDate, row.Nation, row.Season);
 }
 
-internal sealed partial class SqliteSeriesFileSession(string filePath) : ISeriesFileSession
+internal sealed partial class SqliteSeriesFileSession(string filePath, ITimingDecoderFactory? inputDecoders = null) : ISeriesFileSession
 {
     private readonly SemaphoreSlim _write = new(1, 1);
     private bool _disposed;

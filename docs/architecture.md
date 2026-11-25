@@ -98,7 +98,7 @@ Authoritative timestamp arithmetic uses signed integer ticks on one **100 ns sca
 
 Primary A capture and auxiliary B/hand capture use separate sessions and raw tables. Auxiliary evidence does not silently overwrite A timing; replacements require reviewed, audited decisions. Receipt images, OCR text and proposals remain in dialog memory. Acceptance saves report values/history; closing discards images and unaccepted proposals.
 
-The series workspace serializes coordinated use cases; persistence uses short-lived contexts and explicit transactions. A capture ownership lease prevents conflicting registration/competition changes and closing a file before capture drains. Interrupted capture is resolved through recovery/replay, not database reset. Live processes use private, current-user named pipes. The control panel owns a worker per started channel; the local worker owns its server process. Closing the panel stops its publishing process tree while authoritative capture continues.
+The series workspace serializes coordinated use cases; persistence uses short-lived contexts and explicit transactions. The open view decides what is received: the Timing view runs the authoritative capture, Settings → Timing devices runs a signal monitor that stores nothing, and any other view releases the devices. A capture ownership lease prevents conflicting registration/competition changes and closing a file before capture drains. Interrupted capture is resolved through recovery/replay, not database reset. Live processes use private, current-user named pipes. The control panel owns a worker per started channel; the local worker owns its server process. Closing the panel stops its publishing process tree while authoritative capture continues.
 
 ### Report boundaries
 

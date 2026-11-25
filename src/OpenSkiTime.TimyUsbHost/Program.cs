@@ -14,6 +14,8 @@ internal static class Program
 {
     private static volatile bool s_stopped;
     private static readonly object s_output = new object();
+    // ALGE's current library replaces the former mixed-mode x64 library; both have the same API.
+    private static readonly string[] s_libraries = { "AlgeTimyUsb.dll", "AlgeTimyUsb.x64.dll" };
 
     [STAThread]
     private static int Main(string[] args)
@@ -24,7 +26,9 @@ internal static class Program
             var folder = Path.GetFullPath(args[0]);
             Environment.SetEnvironmentVariable("PATH", folder + ";" + Environment.GetEnvironmentVariable("PATH"));
             var selection = new TimyUsbSelection(args.Length > 1 ? args[1] : "");
-            var assembly = Assembly.LoadFrom(Path.Combine(folder, "AlgeTimyUsb.x64.dll"));
+            var library = s_libraries.Select(x => Path.Combine(folder, x)).FirstOrDefault(File.Exists)
+                ?? throw new FileNotFoundException("ALGE USB library not found.");
+            var assembly = Assembly.LoadFrom(library);
             var type = assembly.GetType("Alge.TimyUsb", throwOnError: true)!;
             var reader = new Thread(() => { Console.ReadLine(); s_stopped = true; }) { IsBackground = true };
             reader.Start();

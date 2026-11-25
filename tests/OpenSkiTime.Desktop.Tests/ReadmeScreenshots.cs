@@ -123,7 +123,7 @@ public partial class DesktopWorkflowTests
                 ranking.Columns[2].Width = new DataGridLength(80);
                 ranking.Columns[4].Width = new DataGridLength(85);
                 UseSimulatorTiming(vm, 2);
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 Assert.False(vm.IsError, vm.StatusMessage);
                 await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
                 await vm.ToggleTimingChannelCommand.ExecuteAsync("finish");
@@ -152,7 +152,7 @@ public partial class DesktopWorkflowTests
                 // The view refreshes after the snapshot: wait until it shows the last impulse assigned.
                 await WaitTimingAsync(vm, () => vm.TimestampRows.Count > 0 && vm.TimestampRows.All(x => x.Bib is not null));
                 CaptureDraw(window, output, "overview.png");
-                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                await vm.StopTimingAsync();
 
                 window.Height = 1240;
                 vm.SelectTimingBibs([1], 1);

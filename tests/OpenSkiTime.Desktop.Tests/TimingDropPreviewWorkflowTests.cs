@@ -68,8 +68,8 @@ public partial class DesktopWorkflowTests
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);
             UseSimulatorTiming(vm, 2, 3);
-            Click(window, "Save timing settings"); await vm.SaveTimingPreferencesCommand.ExecutionTask!;
-            Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
+            Assert.True(vm.SaveTimingSettings(), vm.TimingSettingsStatus);
+            await vm.TimingListeningTask;
             Click(window, "Back to timing"); await vm.ReturnToTimingCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             foreach (var channel in new[] { "start", "finish", "intermediate:1", "intermediate:2" })

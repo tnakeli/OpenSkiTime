@@ -46,6 +46,9 @@
      <Border Name="BackupClockStatusBadge" Classes.backupClockProblem="{Binding HasBackupClockProblem}" CornerRadius="{DynamicResource ChipRadius}" Padding="8,1" VerticalAlignment="Center" ToolTip.Tip="{Binding BackupClockStatusText, StringFormat='{}{0} · B never changes A timing.'}">
       <TextBlock Name="BackupClockStatusText" Classes="raceConnectionText" Text="{Binding BackupClockStatusText}" MaxWidth="300" TextTrimming="CharacterEllipsis" />
      </Border>
+     <Button Name="RetryBackupClockButton" Content="Retry B" Command="{Binding RetryBackupClockCommand}" MinHeight="24" Padding="8,1" FontSize="{DynamicResource LabelSize}" Focusable="False" ToolTip.Tip="Reconnect B Clock (or retry its storage). A timing is not interrupted.">
+      <Button.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="CanRetryBackupClock" /><Binding Path="HasBackupClockProblem" /></MultiBinding></Button.IsVisible>
+     </Button>
      <Button Name="ShowBackupButton" Content="{Binding BackupButtonText}" Command="{Binding ShowBackupCommand}" IsEnabled="{Binding CanShowBackup}" Classes.backupWarning="{Binding HasBackupWarning}" MinHeight="24" Padding="8,1" FontSize="{DynamicResource LabelSize}" Focusable="False" ToolTip.Tip="Show independent B timestamps for 30 seconds. A timing remains unchanged." />
     </StackPanel>
    </WrapPanel>
@@ -57,6 +60,13 @@
    <Border Classes="errorNote" IsVisible="{Binding HasLiveTimingError}"><TextBlock Text="{Binding LiveTimingError}" /></Border>
    <Border Classes="errorNote" IsVisible="{Binding HasBackupWarning}">
     <TextBlock Name="BackupWarningText" Text="{Binding BackupWarning}" IsVisible="{Binding HasBackupWarning}" FontWeight="SemiBold" /></Border>
+   <Border Name="TimingProblemNote" Classes="errorNote" IsVisible="{Binding HasTimingProblem}">
+    <Grid ColumnDefinitions="*,8,Auto,8,Auto">
+     <TextBlock Text="{Binding TimingProblem}" VerticalAlignment="Center" TextWrapping="Wrap" />
+     <Button Grid.Column="2" Content="Set training times aside" Command="{Binding SetTrainingAsideCommand}" IsVisible="{Binding CanSetTrainingAside}" Classes="secondaryAction" ToolTip.Tip="Keeps the training times with the earlier start list revision and starts real timing on a new revision with the same starting order." />
+     <Button Grid.Column="4" Content="Timing devices" Command="{Binding ShowTimingDevicesCommand}" Classes="secondaryAction" />
+    </Grid>
+   </Border>
    <Border Classes="errorNote" IsVisible="{Binding HasTimingAlarm}">
     <Grid ColumnDefinitions="*,8,Auto"><TextBlock Text="{Binding TimingAlarm}" VerticalAlignment="Center" /><Button Grid.Column="2" Content="Retry storage" Command="{Binding RetryTimingStorageCommand}" Classes="dangerAction" /></Grid>
    </Border>

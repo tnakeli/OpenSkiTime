@@ -208,8 +208,6 @@ public sealed partial class MainViewModel
     [ObservableProperty] private TimingObservationRow? _selectedTimingObservation;
     [ObservableProperty] private TimingHistoryRow? _selectedTimingHistory;
     public bool HasTimingAlarm => TimingAlarm.Length > 0;
-    public bool CanConnectTiming => _timingList is not null && !IsTimingConnected && !IsTimingBusy;
-    public bool CanChangeTimingDevice => !IsTimingConnected && !IsTimingBusy;
     public bool HasTimingRun => _timingList is not null;
     public bool ShowTimingTotal => TimingRun > 1 && TimingCompetition?.Values.RunCount == 2;
     // Totals add the two runs of a two-run race; in a race with more runs each run is ranked on its own.
@@ -250,7 +248,7 @@ public sealed partial class MainViewModel
 
     private void NotifyTiming()
     {
-        foreach (var name in new[] { nameof(IsTimingSimulator), nameof(CanRetryBackupClock), nameof(CanConnectTiming), nameof(CanChangeTimingDevice), nameof(HasTimingRun), nameof(TimingContext),
+        foreach (var name in new[] { nameof(IsTimingSimulator), nameof(CanRetryBackupClock), nameof(HasTimingRun), nameof(TimingContext),
             nameof(TimingCaptureLabel), nameof(TimingDeviceHelp), nameof(WindowTitle), nameof(CanPrepareNextTimedRun), nameof(ShowTimingTotal), nameof(PrepareNextRunLabel) }) { OnPropertyChanged(name); }
     }
 
@@ -272,85 +270,104 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task OpenTimingRunAsync(DrawDestination destination)
     {
-        await GuardAsync(async () =>
+        _openingTimingRun = true;
+        try { await GuardAsync(() => ShowTimingRunAsync(destination)); }
+        finally { _openingTimingRun = false; }
+        UpdateTimingListening();
+        await TimingListeningTask;
+    }
+
+    // Changing runs while timing is received keeps the device open. A run the running capture cannot continue into (for
+    // example one with training times) is still opened; the view then says why nothing is received.
+    private async Task SelectTimingRunAsync(TimingWorkspace timing, Guid listId)
+    {
+        try { await timing.SelectRunAsync(listId); }
+        catch (Exception ex) when (ex is DomainValidationException or SeriesFileException
+            && timing is { IsActive: true, Fault: null, Snapshot: { } snapshot } && RaceFlow.OnCourse(snapshot).Count == 0)
         {
-            EnsureDeskClean();
-            var timing = workspace.Timing ?? throw new SeriesFileException("Timing is unavailable in this workspace.");
-            var entering = !IsTimingSection;
-            SwitchSection(WorkspaceSection.Timing);
-            if (!IsTimingSection) { return; }
-            if (entering && timing.IsActive && timing.ListId is not null && _timingList is not null)
-            { await HoldTimingChannelsAsync(timing); }
-            var lists = await workspace.ReadStartListsAsync(destination.Competition.Id);
-            var list = lists.Revisions.Where(x => x.Plan.RunNumber == destination.Run).MaxBy(x => x.Revision)
-                ?? throw new DomainValidationException("Draw and save this run's start list first.");
-            var changingRun = timing.ListId != list.Id;
-            var currentCompetition = Competitions.Single(x => x.Id == destination.Competition.Id);
-            if (changingRun || !timing.IsActive) { await timing.SelectRunAsync(list.Id); }
-            else if (_timingList?.Plan.Competition.IntermediateCount != currentCompetition.Values.IntermediateCount)
-            { await timing.RefreshIntermediateCountAsync(); }
-            if (changingRun && workspace.Auxiliary is { } auxiliary
-                && auxiliary.State(AuxiliaryTimingRole.B) is { IsActive: true, Live: true })
-            { QueueLiveBackupRunSwitch(auxiliary, list.Id); }
-            if (changingRun)
+            await StopTimingAsync();
+            await timing.SelectRunAsync(listId);
+        }
+    }
+
+    private async Task ShowTimingRunAsync(DrawDestination destination)
+    {
+        EnsureDeskClean();
+        // Timing that was left a moment ago has stopped before the run is read again.
+        await TimingListeningTask;
+        var timing = workspace.Timing ?? throw new SeriesFileException("Timing is unavailable in this workspace.");
+        var entering = !IsTimingSection;
+        SwitchSection(WorkspaceSection.Timing);
+        if (!IsTimingSection) { return; }
+        if (entering && timing.IsActive && timing.ListId is not null && _timingList is not null)
+        { await HoldTimingChannelsAsync(timing); }
+        var lists = await workspace.ReadStartListsAsync(destination.Competition.Id);
+        var list = lists.Revisions.Where(x => x.Plan.RunNumber == destination.Run).MaxBy(x => x.Revision)
+            ?? throw new DomainValidationException("Draw and save this run's start list first.");
+        var changingRun = timing.ListId != list.Id;
+        var currentCompetition = Competitions.Single(x => x.Id == destination.Competition.Id);
+        if (changingRun || !timing.IsActive) { await SelectTimingRunAsync(timing, list.Id); }
+        else if (_timingList?.Plan.Competition.IntermediateCount != currentCompetition.Values.IntermediateCount)
+        { await timing.RefreshIntermediateCountAsync(); }
+        if (changingRun && workspace.Auxiliary is { } auxiliary
+            && auxiliary.State(AuxiliaryTimingRole.B) is { IsActive: true, Live: true })
+        { QueueLiveBackupRunSwitch(auxiliary, list.Id); }
+        if (changingRun)
+        {
+            ShowTimingClassificationEditor = false;
+            LoadTimingClassificationEditor(null);
+            TimingReason = "";
+        }
+        TimingCompetition = currentCompetition;
+        TimingRun = destination.Run;
+        SetActiveRace(TimingCompetition, destination.Run, WorkspaceSection.Timing);
+        _timingList = list with { Plan = list.Plan with { Competition = list.Plan.Competition with
+            { IntermediateCount = TimingCompetition.Values.IntermediateCount } } };
+        if (!timing.IsActive)
+        {
+            SelectedTimingRow = null; StartBibText = FinishBibText = "";
+            if (!_timingConfigured && timing.LastCaptureGroup is { Count: > 0 } last)
             {
-                ShowTimingClassificationEditor = false;
-                LoadTimingClassificationEditor(null);
-                TimingReason = "";
+                // No saved preferences: rebuild the primary roles from this run's last capture session.
+                // The replay path is not part of the saved session; keep the one already entered.
+                var replayPath = TimingStartRole.ReplayPath;
+                try { ApplyTimingConfiguration(TimingRoleConfiguration.FromCaptureOptions([.. last]), primary: true, backup: false); _timingConfigured = true; }
+                catch (DomainValidationException) { /* Unknown saved source: keep the current editors. */ }
+                if (TimingStartRole.ReplayPath.Length == 0) { TimingStartRole.ReplayPath = replayPath; }
             }
-            TimingCompetition = currentCompetition;
-            TimingRun = destination.Run;
-            SetActiveRace(TimingCompetition, destination.Run, WorkspaceSection.Timing);
-            _timingList = list with { Plan = list.Plan with { Competition = list.Plan.Competition with
-                { IntermediateCount = TimingCompetition.Values.IntermediateCount } } };
-            if (!timing.IsActive)
+        }
+        _previousTiming = null;
+        if (list.Plan.SourceListId is { } previousId)
+        {
+            var previous = await workspace.ReadTimingAsync(previousId);
+            _previousTiming = TimingReplay.Restore(previous, new AlgeDecoderFactory());
+            // A start list made without results (later runs ordered by start order) has no external results to show.
+            if (!TimingReplay.HasInput(previous, _previousTiming) && list.Plan.SourceResults.Count > 0)
             {
-                SelectedTimingRow = null; StartBibText = FinishBibText = "";
-                if (timing.LastCaptureGroup is { Count: > 0 } last && timingPreferencesStore?.Load() is null)
+                // M4/external Run 1 inputs remain the authoritative snapshot behind this start list.
+                _previousTiming = _previousTiming with { Results = _previousTiming.Results.Select(row =>
                 {
-                    // No saved preferences: rebuild the primary roles from this run's last capture session.
-                    // The replay path is not part of the saved session; keep the one already entered.
-                    var replayPath = TimingStartRole.ReplayPath;
-                    try { ApplyTimingConfiguration(TimingRoleConfiguration.FromCaptureOptions([.. last]), primary: true, backup: false); }
-                    catch (DomainValidationException) { /* Unknown saved source: keep the current editors. */ }
-                    if (TimingStartRole.ReplayPath.Length == 0) { TimingStartRole.ReplayPath = replayPath; }
-                }
+                    var input = list.Plan.SourceResults.Single(x => x.CompetitorId == row.CompetitorId);
+                    return row with { Status = Enum.Parse<TimingStatus>(input.Status.ToString()), Hundredths = input.Hundredths,
+                        Detail = "External Run 1 result saved with starting order" };
+                }).ToArray() };
             }
-            _previousTiming = null;
-            if (list.Plan.SourceListId is { } previousId)
-            {
-                var previous = await workspace.ReadTimingAsync(previousId);
-                _previousTiming = TimingReplay.Restore(previous, new AlgeDecoderFactory());
-                // A start list made without results (later runs ordered by start order) has no external results to show.
-                if (previous.Sessions.Count == 0 && list.Plan.SourceResults.Count > 0)
-                {
-                    // M4/external Run 1 inputs remain the authoritative snapshot behind this start list.
-                    _previousTiming = _previousTiming with { Results = _previousTiming.Results.Select(row =>
-                    {
-                        var input = list.Plan.SourceResults.Single(x => x.CompetitorId == row.CompetitorId);
-                        return row with { Status = Enum.Parse<TimingStatus>(input.Status.ToString()), Hundredths = input.Hundredths,
-                            Detail = "External Run 1 result saved with starting order" };
-                    }).ToArray() };
-                }
-            }
-            TimingDeviceDate = (timing.LastCaptureOptions?.DeviceDate ?? TimingCompetition.Values.Date).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            await timing.FollowStartOrderAsync(FollowTimingOrder);
-            // Reopening the same run keeps an open forerunner draft; another run starts from its saved forerunners.
-            if (changingRun || !ShowForerunnerEditor) { ShowForerunnerEditor = false; await LoadTimingForerunnersAsync(); }
-            else { await LoadTimingForerunnersAsync(keepEditorDraft: true); }
-            _shownTiming = null;
-            ConfigureTimingCheckpoints();
-            if (entering || changingRun)
-            { await HoldTimingChannelsAsync(timing); }
-            RefreshTiming();
-            RefreshTimingPorts();
-            _timingTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) => RefreshTiming());
-            _timingTimer.Start();
-            NotifyTiming();
-            SetStatus("Timing changes save automatically. Original device data and correction history are retained.");
-            if (!timing.IsActive && timingPreferencesStore?.Load() is not null)
-            { await ConnectTimingAsync(); }
-        });
+        }
+        TimingDeviceDate = (timing.LastCaptureOptions?.DeviceDate ?? TimingCompetition.Values.Date).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        await timing.FollowStartOrderAsync(FollowTimingOrder);
+        // Reopening the same run keeps an open forerunner draft; another run starts from its saved forerunners.
+        if (changingRun || !ShowForerunnerEditor) { ShowForerunnerEditor = false; await LoadTimingForerunnersAsync(); }
+        else { await LoadTimingForerunnersAsync(keepEditorDraft: true); }
+        _shownTiming = null;
+        ConfigureTimingCheckpoints();
+        if (entering || changingRun)
+        { await HoldTimingChannelsAsync(timing); }
+        RefreshTiming();
+        RefreshTimingPorts();
+        _timingTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) => { RefreshTiming(); RetryTimingStart(); });
+        _timingTimer.Start();
+        NotifyTiming();
+        SetStatus("Timing changes save automatically. Original device data and correction history are retained.");
     }
 
     [RelayCommand]
@@ -360,78 +377,15 @@ public sealed partial class MainViewModel
         foreach (var port in SerialTimingSource.PortNames()) { TimingPorts.Add(port); }
     }
 
-    [RelayCommand]
-    private async Task SetupTimyUsbAsync()
-    {
-        IsTimingBusy = true;
-        try
-        {
-            await TimyUsbSource.InstallSdkAsync(_timingHttp);
-            SetStatus("Timy USB library installed locally. Install the ALGE USB driver as described in docs/timing.md, then connect.");
-        }
-        catch (Exception ex) when (ex is IOException or HttpRequestException or UnauthorizedAccessException or PlatformNotSupportedException)
-        { SetStatus("Timy setup failed: " + ex.Message, true); }
-        finally { IsTimingBusy = false; }
-    }
-
-    [RelayCommand]
-    private async Task ConnectTimingAsync()
-    {
-        if (!CanConnectTiming || workspace.Timing is not { } timing) { return; }
-        IsTimingBusy = true;
-        await GuardAsync(async () =>
-        {
-            EnsureDeskClean();
-            if (!DateOnly.TryParseExact(TimingDeviceDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            { throw new DomainValidationException("Device date must use YYYY-MM-DD."); }
-            // Primary timing is validated on its own: an incomplete or invalid B Clock never prevents A from connecting.
-            var primary = new TimingRoleConfiguration(PrimaryTimingRoles.Select(x => x.ToAssignment()).ToArray());
-            primary.Validate();
-            var since = AlgeReceiveFrom(timing);
-            var capture = primary.PrimaryCapture(date, since);
-            foreach (var device in capture) { ValidateAuthoritativeTimingEndpoint(device.Options); }
-            var inputs = new List<TimingSourceInput>();
-            try
-            {
-                foreach (var device in capture)
-                { inputs.Add(new(TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, () => _simulator = new(), followReplay: true), device.Options)); }
-                await timing.FollowStartOrderAsync(FollowTimingOrder);
-                await HoldTimingChannelsAsync(timing);
-                await timing.StartAsync(inputs, TimingOperator);
-            }
-            catch
-            {
-                // Sources created before a failure are not owned by capture; close them so no device stays open.
-                if (!timing.IsActive) { foreach (var input in inputs) { await input.Source.DisposeAsync(); } }
-                throw;
-            }
-            ConfigureTimingCheckpoints();
-            if (_current is not null) { _current = await workspace.ReadAsync(); }
-            RefreshTiming();
-            SetStatus("Timing connected in HOLD. Check the race, then resume each timing position before assigning impulses.");
-            // B Clock follows only after A is capturing. It runs detached and reports through B Clock status only.
-            StartBackupClock(date, since);
-        });
-        IsTimingBusy = false;
-    }
-
     // ALGE Results history is read from when this run's capture first started (so triggers during an interruption are
     // recovered; duplicates are recognized), otherwise from now. This is an absolute instant, not a clock setting.
     private static DateTimeOffset AlgeReceiveFrom(TimingWorkspace timing) =>
         timing.LastCaptureGroup.Select(x => x.FromUtc).OfType<DateTimeOffset>().DefaultIfEmpty(DateTimeOffset.UtcNow).Min();
 
-    [RelayCommand]
-    private async Task DisconnectTimingAsync()
-    {
-        IsTimingBusy = true;
-        await GuardAsync(async () => { if (workspace.Timing is { } timing) { await timing.StopAsync(); } RefreshTiming(); });
-        if (workspace.Timing?.IsActive != true) { StopBackupClock(); ForgetAlgeSessionPasswords(); }
-        IsTimingBusy = false;
-    }
-
     public async Task<bool> StopTimingForCloseAsync()
     {
         if (!await FlushTimingReportAsync()) { return false; }
+        await EndTimingListeningAsync();
         await EndBackupClockForCloseAsync();
         if (workspace.Auxiliary is { IsActive: true } auxiliary)
         {
@@ -440,7 +394,7 @@ public sealed partial class MainViewModel
             if (!stopped) { return false; }
         }
         if (workspace.Timing?.IsActive != true) { return true; }
-        await DisconnectTimingAsync();
+        await StopTimingAsync();
         return workspace.Timing?.IsActive != true;
     }
 
@@ -616,8 +570,8 @@ public sealed partial class MainViewModel
     private void RefreshTimingCore()
     {
         var timing = workspace.Timing;
-        IsTimingConnected = timing?.IsActive == true;
-        TimingConnection = timing?.Connection ?? "Disconnected";
+        IsTimingConnected = timing is { IsActive: true, IsStopping: false };
+        if (!IsTimingDevicesOpen || timing?.IsActive == true) { TimingConnection = timing?.Connection ?? "Not receiving"; }
         TimingDeviceClock = timing?.IsActive == true && timing.LiveDeviceTicks is { } ticks
             ? TimingTime.FormatTimeOfDay(ticks)[..8] : "--:--:--";
         StartInputOn = timing?.IsHeld(0) != true;
@@ -722,8 +676,8 @@ public sealed partial class MainViewModel
         SelectedTimingBibs = [];
         ShowTimingClassificationEditor = false; LoadTimingClassificationEditor(null);
         StartBibText = FinishBibText = TimingReason = CorrectedTimeText = "";
-        IsTimingConnected = false; RefreshRaceQueues(); NotifyTiming();
+        IsTimingConnected = false; SetTimingProblem(""); ForgetAlgeSessionPasswords(); RefreshRaceQueues(); NotifyTiming();
     }
 
-    private void DisposeTimingUi() { ResetBackupMonitor(); DisposeLiveTiming(); _timingTimer?.Stop(); _simulationClockTimer?.Stop(); _timingHttp.Dispose(); }
+    private void DisposeTimingUi() { ResetBackupMonitor(); DisposeLiveTiming(); DisposeTimingListening(); _timingTimer?.Stop(); _simulationClockTimer?.Stop(); _timingHttp.Dispose(); }
 }

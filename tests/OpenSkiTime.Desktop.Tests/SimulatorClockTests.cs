@@ -52,7 +52,7 @@ public partial class DesktopWorkflowTests
                 clock.Now = clock.Now.AddSeconds(2);
                 await WaitTimingAsync(vm, () => box.Text == "10:15:32.1");
 
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 Assert.True(vm.IsTimingConnected, vm.StatusMessage);
                 await vm.ToggleTimingChannelCommand.ExecuteAsync("start");
                 if (workspace.Timing!.IsHeld(0)) { await vm.ToggleTimingChannelCommand.ExecuteAsync("start"); }
@@ -99,7 +99,7 @@ public partial class DesktopWorkflowTests
                 Assert.True(vm.IsError);
                 Assert.Contains("HH:mm:ss", vm.StatusMessage, StringComparison.Ordinal);
                 Assert.Equal(3, workspace.Timing.Snapshot!.Observations.Count);
-                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                await vm.StopTimingAsync();
             }
             finally { window.Close(); }
         }
@@ -134,7 +134,7 @@ public partial class DesktopWorkflowTests
                 Assert.True(bButtons.IsEffectivelyVisible);
                 Assert.False(VisibleButton(window, "Test B start").IsEffectivelyEnabled); // B connects with timing
 
-                await vm.ConnectTimingCommand.ExecuteAsync(null);
+                await vm.StartTimingAsync();
                 Assert.True(vm.IsTimingConnected, vm.StatusMessage);
                 await vm.BackupClockTask;
                 var state = workspace.Auxiliary!.State(AuxiliaryTimingRole.B);
@@ -158,7 +158,7 @@ public partial class DesktopWorkflowTests
                     impulses.Select(x => (x.Channel ?? -1, x.PhysicalChannel ?? -1, x.DeviceTicks!.Value % TimeSpan.TicksPerDay)));
                 Assert.Empty(workspace.Timing!.Snapshot!.Observations); // B input never enters A timing
 
-                await vm.DisconnectTimingCommand.ExecuteAsync(null);
+                await vm.StopTimingAsync();
                 await vm.BackupClockTask;
                 // The raw B packets are durable in the auxiliary tables of this run.
                 var stored = await workspace.ReadAuxiliaryTimingAsync(workspace.Timing.ListId!.Value);

@@ -195,7 +195,7 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(1000);
     }
 
-    // Settings → Timing devices: the simulator is the start device (finish and intermediate follow it), then connect.
+    // Settings → Timing devices: the simulator is the start device (finish and intermediate follow it); returning to Timing uses it.
     public void ConnectSimulator()
     {
         Navigate("Settings");
@@ -208,16 +208,13 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         if (OperatorName is { Length: > 0 } name) { app.SetText(FieldAfter("DEVICE DATE", "OPERATOR"), name); Pause(300); }
         for (var i = 1; i <= race.Competition.IntermediateCount && app.TryByName($"Intermediate {i}") is null; i++)
         { app.Click("Add intermediate"); Pause(400); }
-        app.Click("Connect");
-        app.WaitUntil(() => app.TryByName("Disconnect") is not null || app.TryByName("SIMULATION · no physical device") is not null,
-            "simulator connected", TimeSpan.FromSeconds(20));
-        Pause(500);
         app.Click("Back to timing");
+        app.WaitUntil(() => app.TryByName("SIMULATION · no physical device") is not null, "simulator received in Timing", TimeSpan.FromSeconds(20));
         Pause(500);
         SwitchInputsOn();
     }
 
-    // A new connection or a newly selected run holds every timing position; the operator switches the inputs on
+    // Opening Timing or a newly selected run holds every timing position; the operator switches the inputs on
     // before the first start.
     public void SwitchInputsOn()
     {
@@ -462,17 +459,11 @@ internal sealed class RaceOffice(DesktopApp app, SyntheticRace race, Action<stri
         Pause(1500);
     }
 
-    // After the race the operator disconnects timing; registration and approvals are locked while capture runs.
-    public void DisconnectTiming()
+    // After the race the operator leaves Timing, which ends capture; registration and approvals are locked while it runs.
+    public void LeaveTiming()
     {
         Navigate("Settings");
-        SelectTab("Timing devices");
-        if (app.TryByName("Disconnect", ControlType.Button) is { IsEnabled: true } disconnect)
-        {
-            DesktopApp.Invoke(disconnect);
-            app.WaitUntil(() => app.TryByName("Connect", ControlType.Button) is { IsEnabled: true }, "timing disconnected", TimeSpan.FromSeconds(30));
-        }
-        Pause(500);
+        Pause(1500);
     }
 
     public void ScrollPage(int notches)

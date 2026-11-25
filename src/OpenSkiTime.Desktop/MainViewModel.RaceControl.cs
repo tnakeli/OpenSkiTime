@@ -74,13 +74,14 @@ public sealed partial class MainViewModel
     [RelayCommand] private async Task ReturnToTimingAsync()
     {
         if (!HasTimingRun) { return; }
+        await TimingListeningTask;
         var entering = !IsTimingSection;
         SwitchSection(WorkspaceSection.Timing);
         if (!IsTimingSection) { return; }
         ConfigureTimingCheckpoints();
         if (entering && workspace.Timing is { IsActive: true } timing)
             { await HoldTimingChannelsAsync(timing); }
-        if (workspace.Timing?.IsActive != true && timingPreferencesStore?.Load() is not null) { await ConnectTimingAsync(); }
+        await TimingListeningTask;
     }
 
     private async Task HoldTimingChannelsAsync(TimingWorkspace timing)

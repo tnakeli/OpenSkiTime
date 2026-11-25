@@ -10,6 +10,10 @@ public static class TimingReplay
     // an interrupted capture. Without that context, preserve recovery diagnostics.
     public static TimingSnapshot Restore(TimingReplayData data, ITimingDecoderFactory factory, IReadOnlySet<Guid>? activeSessionIds = null,
         IReadOnlyList<TimingForerunner>? forerunners = null)
+        => Restore(data, factory, new ClockContinuity(), activeSessionIds, forerunners);
+
+    internal static TimingSnapshot Restore(TimingReplayData data, ITimingDecoderFactory factory, ClockContinuity continuity,
+        IReadOnlySet<Guid>? activeSessionIds = null, IReadOnlyList<TimingForerunner>? forerunners = null)
     {
         ArgumentNullException.ThrowIfNull(data); ArgumentNullException.ThrowIfNull(factory);
         var observations = new List<TimingObservation>();
@@ -20,7 +24,9 @@ public static class TimingReplay
             foreach (var (session, packet) in unit.Packets)
             {
                 var decoder = decoders.For(factory, session, packet, observations);
-                observations.AddRange(Decode(decoder, packet));
+                // Device heartbeats (information) are read for clock continuity only.
+                observations.AddRange(continuity.Apply(session, packet, Decode(decoder, packet, includeInformation: session.Options.ContinuesClock))
+                    .Where(x => x.Kind != ObservationKind.Information));
             }
             observations.AddRange(decoders.Complete());
             foreach (var session in unit.Sessions.Where(x => !x.CleanStop && activeSessionIds?.Contains(x.Id) != true))
@@ -76,6 +82,48 @@ public static class TimingReplay
                 "Device decoder failed; original bytes retained. Review this input before using results.")];
         }
     }
+
+    // Training input of a run: anything a simulator, replay file or test import delivered, and every decision saved while
+    // such a source was in use or with no other source in the run. A session that was only opened is not input.
+    public static bool UsesTraining(TimingReplayData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        return UsesTraining(data.Sessions, data.Audit, s => data.Packets.Any(p => p.SessionId == s.Id && p.Protocol != TransportStatus));
+    }
+
+    internal static bool UsesTraining(IReadOnlyList<CaptureSession> sessions, IReadOnlyList<TimingAudit> audit, Func<CaptureSession, bool> delivered)
+    {
+        var training = sessions.Where(x => x.Options.Simulation).ToArray();
+        return training.Any(delivered) || (audit.Count > 0 && training.Length > 0 && (training.Length == sessions.Count
+            || audit.Any(a => training.Any(s => a.At >= s.StartedAt && (s.StoppedAt is null || a.At <= s.StoppedAt)))));
+    }
+
+    // Timing input that a run's starting order depends on: a recorded decision, or an impulse from any channel.
+    // Opening the Timing view, device heartbeats and connection notices are not.
+    public static bool HasInput(TimingReplayData data, ITimingDecoderFactory? factory)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        return data.Audit.Count > 0 || data.Sessions.Any(s => HasImpulses(s, data.Packets.Where(p => p.SessionId == s.Id), factory));
+    }
+
+    public static bool HasInput(TimingReplayData data, TimingSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(data); ArgumentNullException.ThrowIfNull(snapshot);
+        return data.Audit.Count > 0 || UsesTraining(data) || snapshot.Observations.Any(x => x.Observation.PhysicalChannel is not null);
+    }
+
+    // Without a decoder every device message counts, which only ever protects more than necessary.
+    public static bool HasImpulses(CaptureSession session, IEnumerable<RawTimingPacket> packets, ITimingDecoderFactory? factory)
+    {
+        ArgumentNullException.ThrowIfNull(session); ArgumentNullException.ThrowIfNull(packets);
+        var device = packets.Where(x => x.Protocol != TransportStatus).OrderBy(x => x.Sequence);
+        if (session.Options.Simulation || factory is null) { return device.Any(); }
+        var decoders = new StreamDecoders();
+        var superseded = new List<TimingObservation>();
+        return device.Any(x => Decode(decoders.For(factory, session, x, superseded), x).Any(o => o.PhysicalChannel is not null));
+    }
+
+    private const string TransportStatus = "transport-status";
 
     public static string InputVersion(TimingReplayData data)
     {

@@ -253,11 +253,22 @@ public sealed class CaptureRecoveryTests : IDisposable
         await timing.StartAsync(new SimulatorTimingSource(), SimulatorOptions(), "Operator");
         Assert.True(timing.IsActive);
         await timing.StopAsync();
-        // The list on which capture began is still never redrawn.
-        var run1 = TimingReplay.Restore(await workspace.ReadTimingAsync(first.Id), new AlgeDecoderFactory());
-        await Assert.ThrowsAsync<DomainValidationException>(async () => await workspace.SaveStartListAsync(new(
-            FisStartOrder.SecondRun(started, run1.ToRunFinishes()), (await workspace.ReadAsync()).Revision, "Operator", "Redraw",
-            TimingRulesTests.At, TimingReplay.InputVersion(await workspace.ReadTimingAsync(first.Id)))));
+        // Nothing was received on Run 2, so it follows the changed Run 1; the first impulse locks it.
+        async Task<StartListRevision> RedrawAsync()
+        {
+            var run1 = TimingReplay.Restore(await workspace.ReadTimingAsync(first.Id), new AlgeDecoderFactory());
+            return (await workspace.SaveStartListAsync(new(FisStartOrder.SecondRun(started, run1.ToRunFinishes()), (await workspace.ReadAsync()).Revision, "Operator", "Redraw",
+                TimingRulesTests.At, TimingReplay.InputVersion(await workspace.ReadTimingAsync(first.Id))))).Revisions.Where(x => x.Plan.RunNumber == 2).MaxBy(x => x.Revision)!;
+        }
+        var redrawn = await RedrawAsync();
+        Assert.Equal(second.Revision + 1, redrawn.Revision);
+        await timing.SelectRunAsync(redrawn.Id);
+        var source = new SimulatorTimingSource();
+        await timing.StartAsync(source, SimulatorOptions(), "Operator");
+        await source.PulseAsync(0, TimeSpan.FromHours(12).Ticks);
+        await TimingStorageTests.UntilAsync(() => timing.SavedPackets == 1 && timing.Pending == 0);
+        await timing.StopAsync();
+        await Assert.ThrowsAsync<DomainValidationException>(RedrawAsync);
     }
 
     private static CaptureOptions SimulatorOptions() => new("Test", "Synthetic", TimingRulesTests.Date, Simulation: true);

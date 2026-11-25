@@ -142,11 +142,11 @@ public partial class DesktopWorkflowTests
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);
             UseSimulatorTiming(vm, 2, 3);
-            Click(window, "Save timing settings"); await vm.SaveTimingPreferencesCommand.ExecutionTask!;
+            Assert.True(vm.SaveTimingSettings(), vm.TimingSettingsStatus);
             Assert.Equal([2, 3], preferences.Load()!.Intermediates.Select(x => x.Channel));
             var output = Environment.GetEnvironmentVariable("OPENSKITIME_RACE_VISUAL_DIR");
             CaptureDraw(window, output, "race-settings.png");
-            Click(window, "Connect"); await vm.ConnectTimingCommand.ExecutionTask!;
+            await vm.TimingListeningTask;
             Click(window, "Back to timing"); await vm.ReturnToTimingCommand.ExecutionTask!;
             Assert.False(vm.IsError, vm.StatusMessage);
             Assert.Equal(4, vm.TimingChannelStates.Count);
@@ -224,7 +224,9 @@ public partial class DesktopWorkflowTests
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), x => Equals(x.Content, "Settings") || Equals(x.Content, "Connect") || Equals(x.Content, "Disconnect"));
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<DataGrid>(), x => x.Name == "TimingObservationsGrid");
             vm.ShowSettingsCommand.Execute(null);
-            Assert.True(vm.IsTimingConnected);
+            await vm.TimingListeningTask;
+            Assert.False(vm.IsTimingConnected); // timing is received in the Timing view only
+            Assert.Contains("1 competitor(s) on course", vm.StatusMessage, StringComparison.Ordinal);
             await vm.ReturnToTimingCommand.ExecuteAsync(null);
             Assert.False(vm.StartInputOn);
             Assert.False(vm.FinishInputOn);
@@ -388,9 +390,9 @@ public partial class DesktopWorkflowTests
             CaptureDraw(window, output, "race-grouped-ranking.png");
             vm.ShowSettingsCommand.Execute(null);
             SelectTimingSettingsTab(window);
-            Click(window, "Disconnect"); await vm.DisconnectTimingCommand.ExecutionTask!;
+            await vm.TimingListeningTask; Assert.False(vm.IsTimingConnected);
             UseSimulatorTiming(vm, 2);
-            await vm.SaveTimingPreferencesCommand.ExecuteAsync(null);
+            Assert.True(vm.SaveTimingSettings(), vm.TimingSettingsStatus);
             await vm.ReturnToTimingCommand.ExecuteAsync(null);
             Assert.True(vm.IsTimingConnected);
             Assert.Single(vm.TimingCheckpoints);
@@ -400,7 +402,7 @@ public partial class DesktopWorkflowTests
             Assert.Single(view.FindControl<DataGrid>("TimestampsGrid")!.Columns, x => x.Tag is "intermediate" && x.IsVisible);
             Assert.Equal(5, vm.FinishedTimingRows.Count); // changing active channels preserves earlier results
             CaptureDraw(window, output, "race-intermediate-removed.png");
-            await vm.DisconnectTimingCommand.ExecuteAsync(null);
+            await vm.StopTimingAsync();
             if (!string.IsNullOrEmpty(output))
             {
                 Directory.CreateDirectory(output);
@@ -417,7 +419,7 @@ public partial class DesktopWorkflowTests
             Assert.All(view.GetVisualDescendants().OfType<ComboBox>(), choice => Assert.Equal("TimingClassificationChoice", choice.Name));
             await DropTimingRacer(view, vm.CreateTimingDrag(a)!);
             Assert.Equal("Ready", vm.TimingRows.Single(x => x.Bib == a).Status);
-            await vm.DisconnectTimingCommand.ExecuteAsync(null);
+            await vm.StopTimingAsync();
             window.Close();
         }
         finally

@@ -23,6 +23,9 @@ public sealed partial class MainViewModel
     [ObservableProperty] private int _backupStartWarningMilliseconds = 1;
     [ObservableProperty] private int _backupFinishWarningMilliseconds = 10;
     [ObservableProperty] private int _backupMissingGraceSeconds = 5;
+    partial void OnBackupStartWarningMillisecondsChanged(int value) => OnTimingSettingChanged();
+    partial void OnBackupFinishWarningMillisecondsChanged(int value) => OnTimingSettingChanged();
+    partial void OnBackupMissingGraceSecondsChanged(int value) => OnTimingSettingChanged();
     public bool HasBackupWarning => BackupWarning.Length != 0;
     public string BackupButtonText => HasBackupWarning ? "⚠ Show B" : "Show B";
     partial void OnBackupWarningChanged(string value)

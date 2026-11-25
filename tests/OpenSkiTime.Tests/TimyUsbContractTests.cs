@@ -42,6 +42,24 @@ public sealed class TimyUsbContractTests
         Assert.True(selection.Accepts("2"));
     }
 
+    [Fact]
+    public async Task LiveCaptureReportsAMissingLibraryOnceAndKeepsTrying()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Timy USB requires Windows.");
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-no-timy-library", Guid.NewGuid().ToString("N"));
+        var packets = new List<TransportPacket>();
+        var statuses = 0;
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var source = new TimyUsbSource(sdkDirectory: folder, retry: true, retryDelay: TimeSpan.FromMilliseconds(5));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.ReceiveAsync(x => { packets.Add(x); return ValueTask.CompletedTask; },
+            x => { Assert.Contains("AlgeTimyUsb.dll", x, StringComparison.Ordinal); if (++statuses == 3) { stop.Cancel(); } }, stop.Token));
+        Assert.Equal(3, statuses);
+        var notice = Assert.Single(packets);
+        Assert.Equal("transport-status", notice.Protocol);
+        // An operator-triggered device read reports the problem instead of waiting for it to be fixed.
+        await Assert.ThrowsAsync<IOException>(() => new TimyUsbSource(sdkDirectory: folder).ReceiveAsync(_ => ValueTask.CompletedTask, _ => { }, CancellationToken.None));
+    }
+
     // Synthetic SDK contract, not vendor binaries or a personal timing trace.
     public sealed class Device
     {
