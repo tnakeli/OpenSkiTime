@@ -8,13 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-25
+
+Live protocol: 2
+
 ### Added
 
 - Reading published races is now a documented public API, version 1: [Live API](https://openskiti.me/live-api/) with OpenAPI, JSON Schema and JavaScript, .NET and Java example readers. The server itself did not change for this; live 0.10.0 already works. An incompatible change to the API will be announced here beforehand.
 
 ### Security
 
-- One publisher key holds at most 25 live sessions (`LiveTiming__MaxSessionsPerPublisher`), so one key cannot fill the server. Deleting a session frees its slot, and removing a key revokes the tokens it issued. Tokens issued by earlier versions stay valid until they expire.
+- One publisher key holds at most 25 live sessions (`LiveTiming__MaxSessionsPerPublisher`), so one key cannot fill the server. Deleting a session frees its slot, but a key with 100 deleted sessions (four times the limit) whose tokens have not yet expired cannot create new ones. Removing a key revokes the tokens it issued. Tokens issued by earlier versions stay valid until they expire.
 - The server-wide music limit counts received tracks, so a declared playlist no longer blocks other sessions.
 - Over the server-wide clip limit, clips are evicted from the session holding the most clip bytes, so one session cannot silence another.
 - Subscriptions on a viewer connection are paced like resync requests.
@@ -199,7 +203,8 @@ Live protocol: 1 (implicit)
 
 - First hosted deployment: public race list, responsive race view, publisher keys for session creation and `security.txt`.
 
-[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.10.0...HEAD
+[Unreleased]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.11.0...HEAD
+[0.11.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.10.0...live-v0.11.0
 [0.10.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.9.0...live-v0.10.0
 [0.9.0]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.1...live-v0.9.0
 [0.8.1]: https://github.com/tnakeli/OpenSkiTime/compare/live-v0.8.0...live-v0.8.1
