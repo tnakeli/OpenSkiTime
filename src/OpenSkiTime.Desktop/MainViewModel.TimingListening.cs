@@ -36,6 +36,7 @@ public sealed partial class MainViewModel
     private bool _timingSettingsChanged;
     private bool _openingTimingRun;
     private bool _timingListeningEnded;
+    private bool _timingWasShown;
     private long _timingRetryAt = long.MaxValue;
 
     // Why nothing is received in the open Timing view; empty while timing works.
@@ -70,6 +71,14 @@ public sealed partial class MainViewModel
                 await StopSignalMonitorAsync();
             }
             if (!IsTimingSection && workspace.Timing?.IsActive == true) { await StopTimingAsync(leaving: true); }
+            if (IsTimingSection) { _timingWasShown = true; }
+            else if (_timingWasShown)
+            {
+                // The first start of a run, in capture or by a decision, changes the series. What the other views save next
+                // is based on that.
+                _timingWasShown = false;
+                if (_current is not null) { _current = await workspace.ReadAsync(); }
+            }
             if (IsTimingSection && !_openingTimingRun) { await StartTimingAsync(); }
             if (IsTimingDevicesOpen)
             {
