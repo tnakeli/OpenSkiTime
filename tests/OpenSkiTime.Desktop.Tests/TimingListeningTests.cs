@@ -278,12 +278,16 @@ public partial class DesktopWorkflowTests
             var series = await other.OpenAsync(workspace.FilePath!);
             await other.SaveSeriesAsync(series.Values with { Organizer = "Another window" }, series.Revision);
         }
+        // Timing that starts after the change must not take it over unseen.
+        vm.TimingStartRole.UsbId = "1";
+        await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1));
+        Assert.True(vm.IsTimingConnected, vm.TimingProblem);
+        await BenchUntilAsync(vm, () => device.Open == 1);
         vm.ShowSeriesCommand.Execute(null);
         vm.Location = "Changed";
         await vm.SaveSeriesCommand.ExecuteAsync(null);
         Assert.True(vm.IsError);
         Assert.Contains("changed since", vm.StatusMessage, StringComparison.Ordinal);
-        Assert.Equal(0, device.Opened);
     });
 
     [AvaloniaFact]

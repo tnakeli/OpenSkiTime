@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-## [0.5.2] - 2026-11-25
+## [0.5.2] - 2026-11-26
 
 Version 0.5.1 was not published. This version uses live protocol 2 and keeps the `.ost` series format of 0.5.0. Results of a run timed across several visits to the Timing view can show Review in 0.5.0, which does not verify the device clock between them.
 
