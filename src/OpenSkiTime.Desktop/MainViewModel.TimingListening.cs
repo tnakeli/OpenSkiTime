@@ -36,7 +36,6 @@ public sealed partial class MainViewModel
     private bool _timingSettingsChanged;
     private bool _openingTimingRun;
     private bool _timingListeningEnded;
-    private int _knownRunStarts;
     private long _timingRetryAt = long.MaxValue;
 
     // Why nothing is received in the open Timing view; empty while timing works.
@@ -71,7 +70,6 @@ public sealed partial class MainViewModel
                 await StopSignalMonitorAsync();
             }
             if (!IsTimingSection && workspace.Timing?.IsActive == true) { await StopTimingAsync(leaving: true); }
-            await FollowRunStartsAsync();
             if (IsTimingSection && !_openingTimingRun) { await StartTimingAsync(); }
             if (IsTimingDevicesOpen)
             {
@@ -192,18 +190,6 @@ public sealed partial class MainViewModel
         _backupDevices.AddRange(devices);
     }
 
-    // The first start of a run, in capture or by a decision, changes the series. What the other views save next is based on
-    // it, but only when nothing else changed: a change by another window must still be found as a conflict.
-    private async Task FollowRunStartsAsync()
-    {
-        if (_current is not { } current || workspace.Timing is not { } timing || timing.RunStarts == _knownRunStarts) { return; }
-        var starts = timing.RunStarts;
-        var saved = await workspace.ReadAsync();
-        if (!ReferenceEquals(workspace.Timing, timing) || _current is null) { return; }
-        if (saved.Revision - _current.Revision <= starts - _knownRunStarts) { _current = saved; }
-        _knownRunStarts = starts;
-    }
-
     private void RetryTimingLater(TimeSpan? delay = null) => _timingRetryAt = Environment.TickCount64 + (long)(delay ?? s_retryDelay).TotalMilliseconds;
 
     internal void RetryTimingStart()
@@ -230,7 +216,6 @@ public sealed partial class MainViewModel
         {
             EnsureDeskClean();
             await TimingListeningTask;
-            await FollowRunStartsAsync();
             if (_current is not { } current) { return; }
             await workspace.SetTrainingAsideAsync(list.Id, current.Revision, TimingOperator, DateTimeOffset.UtcNow);
             _current = current with { Revision = current.Revision + 1 };

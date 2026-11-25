@@ -378,7 +378,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             EnsureDeskClean();
             if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
-            await TimingListeningTask; // what timing changed is known before this saves
+            await TimingListeningTask; // timing of the view just left has ended before this saves
             var revision = _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
             var details = await workspace.SaveSeriesAsync(DraftSeries(), revision);
             Apply(details);
@@ -432,7 +432,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         {
             EnsureDeskClean();
             if (!await FlushRaceInformationAsync() || !await FlushTimingReportAsync()) { return; }
-            await TimingListeningTask; // what timing changed is known before this saves
+            await TimingListeningTask; // timing of the view just left has ended before this saves
             var revision = workspace.Timing?.IsActive == true
                 ? (await workspace.ReadAsync()).Revision
                 : _current?.Revision ?? throw new SeriesFileException("Open an event series first.");
@@ -464,7 +464,7 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
         await GuardAsync(async () =>
         {
             EnsureDeskClean();
-            await TimingListeningTask; // what timing changed is known before this saves
+            await TimingListeningTask; // timing of the view just left has ended before this saves
             if (_current is null || _editingCompetitionId is not { } id)
             {
                 throw new SeriesFileException("Select a saved competition first.");

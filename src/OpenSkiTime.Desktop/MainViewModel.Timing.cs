@@ -684,7 +684,6 @@ public sealed partial class MainViewModel
         SelectedTimingBibs = [];
         ShowTimingClassificationEditor = false; LoadTimingClassificationEditor(null);
         StartBibText = FinishBibText = TimingReason = CorrectedTimeText = "";
-        _knownRunStarts = 0;
         IsTimingConnected = false; SetTimingProblem(""); ForgetAlgeSessionPasswords(); RefreshRaceQueues(); NotifyTiming();
     }
 

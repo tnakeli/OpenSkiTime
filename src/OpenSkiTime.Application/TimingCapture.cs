@@ -182,7 +182,6 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     private string[] _connections = [];
     private CaptureOptions[] _activeOptions = [];
     private bool _hasTrainingInput;
-    private int _runStarts;
     // Sessions that delivered device input, whatever it decodes to.
     private readonly HashSet<Guid> _delivered = [];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), TimingSignal> _signals = new();
@@ -227,14 +226,6 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     public bool IsSimulation => HasTrainingInput || (IsActive && ActiveCaptureOptions.Any(x => x.Simulation));
     // The selected run holds training input (TimingReplay.HasTrainingInput); an opened session alone does not count.
     public bool HasTrainingInput => Volatile.Read(ref _hasTrainingInput);
-    // How many runs were started by timing decisions of this workspace. Each start changes the series once.
-    public int RunStarts => Volatile.Read(ref _runStarts);
-    private void NoteRunStart(bool startsRun)
-    {
-        if (!startsRun || _list is not { StartedAt: null } list) { return; }
-        _list = list with { StartedAt = DateTimeOffset.UtcNow };
-        Interlocked.Increment(ref _runStarts);
-    }
     public bool HasCaptureHistory => _sessions.Count != 0;
     public CaptureOptions? LastCaptureOptions => _sessions.LastOrDefault()?.Options;
     // Options of every device session in the running capture (one per physical connection).
@@ -835,7 +826,6 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName,
                 $"Drag timestamp to Bib {bib}; displaced timestamps remain unassigned", DateTimeOffset.UtcNow,
                 startsRun: target.Observation.Channel == 0, ct: ct);
-            NoteRunStart(target.Observation.Channel == 0);
             _audit.AddRange(saved); Rebuild();
             foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
         }
@@ -988,7 +978,6 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             }
             var saved = await store.AppendTimingAuditBatchAsync(listId, _snapshot.AuditVersion, changes, operatorName.Trim(),
                 reason.Trim(), DateTimeOffset.UtcNow, startsRun: entry.Channel == 0, ct: ct);
-            NoteRunStart(entry.Channel == 0);
             _audit.AddRange(saved); Rebuild();
             foreach (var change in changes) { ReconcileCorrectedQueue(change.Before, change.After); }
             return key;
@@ -1007,7 +996,6 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
             && _snapshot.Observations.Any(x => x.Observation.Key == decision.ObservationKey && x.Observation.Channel == 0);
         var change = await store.AppendTimingAuditAsync(_snapshot.ListId, _snapshot.AuditVersion, before, decision,
             operatorName, reason, DateTimeOffset.UtcNow, reversesId, startsRun: startsRun);
-        NoteRunStart(startsRun);
         _audit.Add(change); Rebuild();
     }
 
