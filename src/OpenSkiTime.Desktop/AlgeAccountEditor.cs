@@ -25,12 +25,19 @@ public sealed partial class AlgeAccountEditor : ObservableObject
     public string PeekPassword() => Password.Length != 0 ? Password
         : OperatingSystem.IsWindows() ? Credential.Read() ?? "" : "";
 
+    // Applies the Remember choice to a password in use.
+    public void Remember(string password)
+    {
+        ArgumentNullException.ThrowIfNull(password);
+        if (OperatingSystem.IsWindows()) { if (RememberPassword && password.Length != 0) { Credential.Save(password); } else if (!RememberPassword) { Credential.Remove(); } }
+    }
+
     // The password for connecting: the typed one, otherwise the remembered one. Applies the Remember choice.
     public string TakePassword()
     {
         var password = Password;
         if (password.Length == 0 && OperatingSystem.IsWindows()) { password = Credential.Read() ?? ""; }
-        if (OperatingSystem.IsWindows()) { if (RememberPassword && password.Length != 0) { Credential.Save(password); } else if (!RememberPassword) { Credential.Remove(); } }
+        Remember(password);
         Password = "";
         OnPropertyChanged(nameof(HasSavedPassword)); OnPropertyChanged(nameof(PasswordWatermark));
         return password;

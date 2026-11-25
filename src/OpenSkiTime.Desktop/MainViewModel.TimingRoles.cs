@@ -134,7 +134,11 @@ public sealed partial class MainViewModel
     {
         var account = AlgeAccounts.FirstOrDefault(x => x.Username == username) ?? new AlgeAccountEditor(username);
         // A newly typed password replaces the one in use.
-        if (account.Password.Length == 0 && _algeSessionPasswords.TryGetValue(username, out var known) && known.Length != 0) { return known; }
+        if (account.Password.Length == 0 && _algeSessionPasswords.TryGetValue(username, out var known) && known.Length != 0)
+        {
+            account.Remember(known);
+            return known;
+        }
         var password = account.TakePassword();
         _algeSessionPasswords[username] = password;
         return password;

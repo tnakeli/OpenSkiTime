@@ -45,12 +45,12 @@ public sealed class ClockContinuityTests : IDisposable
         return (live, replay);
     }
 
-    private static readonly Part s_start = new([new(0, "12:00:00.0  \r"), new(1.02, " 0001* C0 12:00:01.0000\r")]);
+    private static readonly Part s_start = new([new(0, "12:00:00.0  \r"), new(0.5, " 0041 C2 12:00:00.5000\r"), new(1.02, " 0001* C0 12:00:01.0000\r")]);
 
     [Fact]
     public async Task AFinishAfterReturningToTimingIsTimedWhenTheDeviceClockRanOn()
     {
-        var (live, _) = await RunAsync(s_start, new([new(30.05, "12:00:30.0  \r"), new(46.5, " 0001* C1 12:00:46.4567\r")]));
+        var (live, _) = await RunAsync(s_start, new([new(30.05, "12:00:30.0  \r"), new(35.02, " 0044 C2 12:00:35.0000\r"), new(46.5, " 0001* C1 12:00:46.4567\r")]));
         var result = live.Results.Single(x => x.Bib == 1);
         Assert.Equal((TimingStatus.Finished, 4545L), (result.Status, result.Hundredths));
         Assert.Single(live.Observations.Select(x => x.Observation.ClockId).Distinct());
@@ -68,7 +68,7 @@ public sealed class ClockContinuityTests : IDisposable
     [Fact]
     public async Task SessionsOfEarlierFilesKeepTheirOwnClocks()
     {
-        var (live, _) = await RunAsync(s_start with { Continues = false }, new([new(30.05, "12:00:30.0  \r"), new(46.5, " 0001* C1 12:00:46.4567\r")], Continues: false));
+        var (live, _) = await RunAsync(s_start with { Continues = false }, new([new(30.05, "12:00:30.0  \r"), new(35.02, " 0044 C2 12:00:35.0000\r"), new(46.5, " 0001* C1 12:00:46.4567\r")], Continues: false));
         Assert.Equal(TimingStatus.Review, live.Results.Single(x => x.Bib == 1).Status);
         Assert.Equal(2, live.Observations.Select(x => x.Observation.ClockId).Distinct().Count());
     }
@@ -76,7 +76,7 @@ public sealed class ClockContinuityTests : IDisposable
     [Fact]
     public async Task AnotherDeviceNeverContinuesTheClock()
     {
-        var (live, _) = await RunAsync(s_start, new([new(30.05, "12:00:30.0  \r"), new(46.5, " 0001* C1 12:00:46.4567\r")], Endpoint: "Timy USB 2"));
+        var (live, _) = await RunAsync(s_start, new([new(30.05, "12:00:30.0  \r"), new(35.02, " 0044 C2 12:00:35.0000\r"), new(46.5, " 0001* C1 12:00:46.4567\r")], Endpoint: "Timy USB 2"));
         Assert.Equal(TimingStatus.Review, live.Results.Single(x => x.Bib == 1).Status);
     }
 
@@ -84,9 +84,9 @@ public sealed class ClockContinuityTests : IDisposable
     public async Task ALateImpulseBeforeTheFirstHeartbeatDoesNotSplitTheRestOfTheSession()
     {
         // The device delivers an impulse it stored while timing was off, then its heartbeat and the real finish.
-        var (live, _) = await RunAsync(s_start, new([new(30.0, " 0009 C1 12:00:20.0000\r"), new(30.1, "12:00:30.0  \r"), new(46.5, " 0001* C1 12:00:46.4567\r")]));
+        var (live, _) = await RunAsync(s_start, new([new(30.0, " 0009 C1 12:00:20.0000\r"), new(30.1, "12:00:30.0  \r"), new(35.02, " 0044 C2 12:00:35.0000\r"), new(46.5, " 0001* C1 12:00:46.4567\r")]));
         Assert.Equal((TimingStatus.Finished, 4545L), (live.Results.Single(x => x.Bib == 1).Status, live.Results.Single(x => x.Bib == 1).Hundredths));
-        Assert.Equal("Unassigned", live.Observations.Single(x => x.Bib is null).State);
+        Assert.Equal("Unassigned", live.Observations.Single(x => x.Bib is null && x.Observation.Channel == 1).State);
     }
 
     [Theory]
@@ -101,9 +101,16 @@ public sealed class ClockContinuityTests : IDisposable
     }
 
     [Fact]
+    public async Task AnImpulseWithoutARecordNumberIsNoEvidenceOfTheSameDevice()
+    {
+        var (live, _) = await RunAsync(s_start, new([new(30.05, "12:00:30.0  \r"), new(46.5, " 0001* C1 12:00:46.4567\r"), new(50.0, " 0003 C2 12:00:50.0000\r")]));
+        Assert.Equal(TimingStatus.Review, live.Results.Single(x => x.Bib == 1).Status);
+    }
+
+    [Fact]
     public async Task ACaptureOfSeveralDevicesNeverContinuesTheClock()
     {
-        var (live, _) = await RunAsync(s_start with { Group = "g1" }, new([new(30.05, "12:00:30.0  \r"), new(46.5, " 0001* C1 12:00:46.4567\r")], Group: "g2"));
+        var (live, _) = await RunAsync(s_start with { Group = "g1" }, new([new(30.05, "12:00:30.0  \r"), new(35.02, " 0044 C2 12:00:35.0000\r"), new(46.5, " 0001* C1 12:00:46.4567\r")], Group: "g2"));
         Assert.Equal(TimingStatus.Review, live.Results.Single(x => x.Bib == 1).Status);
     }
 
