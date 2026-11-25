@@ -165,6 +165,35 @@ public sealed class TimingInputLockTests : IDisposable
     }
 
     [Fact]
+    public async Task AnInterruptedSimulatorSessionDoesNotClaimLaterRealDecisions()
+    {
+        var path = PathFor("interrupted-simulator");
+        StartListRevision list;
+        await using (var workspace = Workspace())
+        {
+            list = await TimingStorageTests.SeedAsync(workspace, path, 2);
+            await workspace.Timing!.SelectRunAsync(list.Id);
+            await ReceiveAsync(workspace.Timing, simulation: true);
+        }
+        await using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE TimingCaptures SET CleanStop=0, StoppedAt=NULL"; // the application ended abruptly
+            await command.ExecuteNonQueryAsync();
+        }
+        await using var reopened = Workspace();
+        await reopened.OpenAsync(path);
+        var timing = reopened.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        await ReceiveAsync(timing, simulation: false, " 0001* C0 12:00:00.0000\r");
+        Assert.NotEmpty(timing.Snapshot!.Audit);
+        Assert.False(timing.HasTrainingInput);
+        await ReceiveAsync(timing, simulation: false, " 0001* C1 12:01:00.0000\r");
+        Assert.False(TimingReplay.UsesTraining(await reopened.ReadTimingAsync(list.Id)));
+    }
+
+    [Fact]
     public async Task TrainingInputWithoutAnyImpulseIsReportedLikeItIsRefused()
     {
         await using var workspace = Workspace();

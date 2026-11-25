@@ -182,6 +182,19 @@ public partial class DesktopWorkflowTests
     });
 
     [AvaloniaFact]
+    public async Task TheStartListIsOpenAgainWhenAnUnusedTimingViewWasLeftForIt() => await InTimingListeningRunAsync(async (_, vm, device) =>
+    {
+        vm.TimingStartRole.UsbId = "1";
+        await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1));
+        await BenchUntilAsync(vm, () => device.Open == 1);
+        await device.SendAsync("12:00:00.0  \r");
+        await BenchUntilAsync(vm, () => vm.TimingDeviceClock == "12:00:00");
+        await vm.OpenDrawRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1));
+        Assert.Equal(0, device.Open);
+        Assert.True(vm.CanEditStartList, vm.DrawBlockReason);
+    });
+
+    [AvaloniaFact]
     public async Task ARunWithTrainingTimesOffersToSetThemAsideForRealTiming() => await InTimingListeningRunAsync(async (workspace, vm, device) =>
     {
         UseSimulatorTiming(vm);

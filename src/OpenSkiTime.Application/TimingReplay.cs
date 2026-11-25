@@ -36,7 +36,6 @@ public static class TimingReplay
                     "Capture ended unexpectedly. Recover missing impulses from device memory/backup and review before continuing."));
             }
         }
-        continuity.Resolve(observations);
         return TimingEngine.Replay(data.List, observations, data.Audit, 0, 1, forerunners ?? data.Forerunners);
     }
 
@@ -96,7 +95,7 @@ public static class TimingReplay
     {
         var training = sessions.Where(x => x.Options.Simulation).ToArray();
         return training.Any(delivered) || (audit.Count > 0 && training.Length > 0 && (training.Length == sessions.Count
-            || audit.Any(a => InUse(training, a))));
+            || audit.Any(a => InTraining(sessions, a))));
     }
 
     // Real timing of a run: an impulse from a real device, or a decision that does not belong to training use.
@@ -105,12 +104,14 @@ public static class TimingReplay
         ArgumentNullException.ThrowIfNull(data);
         var training = data.Sessions.Where(x => x.Options.Simulation).ToArray();
         return data.Sessions.Any(s => !s.Options.Simulation && HasImpulses(s, data.Packets.Where(p => p.SessionId == s.Id), factory))
-            || data.Audit.Any(a => !InUse(training, a) && !(training.Length > 0 && training.Length == data.Sessions.Count
+            || data.Audit.Any(a => !InTraining(data.Sessions, a) && !(training.Length > 0 && training.Length == data.Sessions.Count
                 && a.At >= training.Min(s => s.StartedAt)));
     }
 
-    private static bool InUse(CaptureSession[] sessions, TimingAudit audit)
-        => sessions.Any(s => audit.At >= s.StartedAt && (s.StoppedAt is null || audit.At <= s.StoppedAt));
+    // A session that was interrupted has no recorded end; it ended at the latest when the next session began.
+    private static bool InTraining(IReadOnlyList<CaptureSession> sessions, TimingAudit audit)
+        => sessions.Any(s => s.Options.Simulation && audit.At >= s.StartedAt && (s.StoppedAt is { } stopped ? audit.At <= stopped
+            : !sessions.Any(next => next.Id != s.Id && next.StartedAt > s.StartedAt && next.StartedAt <= audit.At)));
 
     // Timing input that a run's starting order depends on: a recorded decision, or an impulse from any channel.
     // Opening the Timing view, device heartbeats and connection notices are not.

@@ -272,6 +272,7 @@ public sealed partial class MainViewModel
         if (!available) { SetStatus("The previous run has not started yet.", error: true); return; }
         SwitchSection(WorkspaceSection.Draw);
         if (!IsDrawSection) { return; }
+        await TimingListeningTask; // capture of the view just left has ended
         _settingDraw = true;
         DrawCompetition = competition;
         DrawRun = destination.Run;

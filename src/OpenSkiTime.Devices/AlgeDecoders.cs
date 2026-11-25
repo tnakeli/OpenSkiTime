@@ -259,7 +259,7 @@ public sealed class AlgeResultsDecoder(CaptureSession session) : ITimingDecoder
             "mt1:" + fingerprint, kind, position ?? channel + 10,
             local, 5, bib, false, clockId, $"{device} {channelText} · {TimingTime.FormatTimeOfDay(local)} · {type}"
                 + (deleted ? " · deleted on ALGE Results; review the assignment of the original trigger" : ""))
-            { PhysicalChannel = channel, ClockOffsetMinutes = timeOffset, CalendarDate = DateOnly.FromDateTime(clockTime) };
+            { PhysicalChannel = channel, CalendarDate = DateOnly.FromDateTime(clockTime) };
     }
 
     private static TimingObservation Invalid(RawTimingPacket packet, string message, int index = 0) => new(

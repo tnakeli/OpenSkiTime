@@ -19,7 +19,7 @@ This version uses live protocol 2 and keeps the `.ost` series format of 0.5.0. R
 ### Fixed
 
 - Opening Timing with the wrong device no longer locks the run. Only received impulses and saved timing decisions decide whether a run is real or training and whether its start list can be redrawn.
-- A competitor who starts before and finishes after a visit to another view is timed normally when the device clock ran on unchanged.
+- A competitor who starts before and finishes after a visit to another view is timed normally when a single timing device is used and its clock ran on unchanged. With several devices such a result needs review.
 - An impulse on a channel without a timing role is listed in **Timestamps** with its channel.
 - A Timy USB connection that cannot be opened is retried until it works.
 
