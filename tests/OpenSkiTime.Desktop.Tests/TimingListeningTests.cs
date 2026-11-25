@@ -133,8 +133,10 @@ public partial class DesktopWorkflowTests
         await BenchUntilAsync(vm, () => device.Open == 1);
     });
 
-    [AvaloniaFact]
-    public async Task TimingStartsAgainAfterStorageTroubleWhileLeavingTheView() => await InTimingListeningRunAsync(async (workspace, vm, device) =>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TimingStartsAgainAfterStorageTroubleWhileLeavingTheView(bool closing) => await InTimingListeningRunAsync(async (workspace, vm, device) =>
     {
         vm.TimingStartRole.Source = TimingSourceTypes.Mt1SerialLabel; vm.TimingStartRole.Source = TimingSourceTypes.TimyUsbLabel; // chosen by the operator
         await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1));
@@ -148,13 +150,14 @@ public partial class DesktopWorkflowTests
             await device.SendAsync(" 0001 C0 12:00:10.0000\r");
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             while (workspace.Timing.Fault is null) { await Task.Delay(50, timeout.Token); }
-            vm.ShowCompetitionsCommand.Execute(null);
+            if (closing) { Assert.False(await vm.StopTimingForCloseAsync()); } // the window stays open on Timing
+            else { vm.ShowCompetitionsCommand.Execute(null); }
             await vm.TimingListeningTask;
             Assert.True(workspace.Timing.IsStopping); // the impulse is still waiting for storage
             await using var release = blocker.CreateCommand(); release.CommandText = "ROLLBACK"; await release.ExecuteNonQueryAsync();
         }
         vm.RetryTimingStorageCommand.Execute(null);
-        await vm.ReturnToTimingCommand.ExecuteAsync(null);
+        if (!closing) { await vm.ReturnToTimingCommand.ExecuteAsync(null); }
         using var restart = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         while (!vm.IsTimingConnected) { await Task.Delay(50, restart.Token); Dispatcher.UIThread.RunJobs(); vm.RefreshTiming(); vm.RetryTimingStart(); await vm.TimingListeningTask; }
         Assert.Equal("", vm.TimingProblem);

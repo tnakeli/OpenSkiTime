@@ -107,6 +107,18 @@ public sealed class ClockContinuityTests : IDisposable
         Assert.Equal(TimingStatus.Review, live.Results.Single(x => x.Bib == 1).Status);
     }
 
+    [Theory]
+    [InlineData("12:00:46.4567", TimingStatus.Finished)]
+    [InlineData("12:00:41.4567", TimingStatus.Review)] // the clock was set back by the delay of the late impulse
+    public async Task AnImpulseDeliveredLateIsNotTheReadingTheNextVisitIsComparedWith(string finish, TimingStatus expected)
+    {
+        ArgumentNullException.ThrowIfNull(finish);
+        var late = new Part([.. s_start.Lines, new(6.0, " 0042 C2 12:00:01.0000\r")]);
+        var record = finish.Replace("46.4567", "35.0000", StringComparison.Ordinal).Replace("41.4567", "30.0000", StringComparison.Ordinal);
+        var (live, _) = await RunAsync(late, new([new(35.02, $" 0044 C2 {record}\r"), new(46.5, $" 0001* C1 {finish}\r")]));
+        Assert.Equal(expected, live.Results.Single(x => x.Bib == 1).Status);
+    }
+
     [Fact]
     public async Task ACaptureOfSeveralDevicesNeverContinuesTheClock()
     {

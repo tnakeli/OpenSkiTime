@@ -137,6 +137,22 @@ public sealed class TimingInputLockTests : IDisposable
     }
 
     [Fact]
+    public async Task ADecisionAfterTrainingDoesNotKeepTheTrainingFromBeingSetAside()
+    {
+        await using var workspace = Workspace();
+        var list = await TimingStorageTests.SeedAsync(workspace, PathFor("decision-after-training"), 2);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        await ReceiveAsync(timing, simulation: false); // a real device, opened only
+        await ReceiveAsync(timing, simulation: true, " 0001* C0 12:00:00.0000\r");
+        await timing.CorrectStatusesAsync([2], TimingStatus.DNS, "Operator", "Rehearsal, after the simulator was closed");
+        Assert.True(timing.HasTrainingInput);
+        await workspace.SetTrainingAsideAsync(list.Id, (await workspace.ReadAsync()).Revision, "Operator", TimingRulesTests.At);
+        await timing.SelectRunAsync((await LatestAsync(workspace, list)).Id);
+        await ReceiveAsync(timing, simulation: false, " 0001* C0 13:00:00.0000\r");
+    }
+
+    [Fact]
     public async Task DecisionsOfRealTimingCountAsRealTimes()
     {
         await using var workspace = Workspace();

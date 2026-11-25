@@ -165,6 +165,7 @@ public sealed partial class MainViewModel
         });
         RefreshTiming();
         if (!timing.IsActive) { StopBackupClock(); }
+        else { RetryTimingLater(); } // the stop waits for storage; an open Timing view starts again afterwards
         IsTimingBusy = false;
     }
 

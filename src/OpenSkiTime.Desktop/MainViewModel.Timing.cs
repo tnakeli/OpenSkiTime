@@ -309,7 +309,7 @@ public sealed partial class MainViewModel
         if (changingRun || !timing.IsActive) { await SelectTimingRunAsync(timing, list.Id); }
         else if (_timingList?.Plan.Competition.IntermediateCount != currentCompetition.Values.IntermediateCount)
         { await timing.RefreshIntermediateCountAsync(); }
-        if (changingRun && workspace.Auxiliary is { } auxiliary
+        if (changingRun && timing.IsActive && workspace.Auxiliary is { } auxiliary
             && auxiliary.State(AuxiliaryTimingRole.B) is { IsActive: true, Live: true })
         { QueueLiveBackupRunSwitch(auxiliary, list.Id); }
         if (changingRun)
@@ -383,6 +383,14 @@ public sealed partial class MainViewModel
         timing.LastCaptureGroup.Select(x => x.FromUtc).OfType<DateTimeOffset>().DefaultIfEmpty(DateTimeOffset.UtcNow).Min();
 
     public async Task<bool> StopTimingForCloseAsync()
+    {
+        var closed = await StopAllForCloseAsync();
+        // The window stays open: what its view receives starts again.
+        if (!closed) { UpdateTimingListening(); }
+        return closed;
+    }
+
+    private async Task<bool> StopAllForCloseAsync()
     {
         if (!await FlushTimingReportAsync()) { return false; }
         await EndTimingListeningAsync();

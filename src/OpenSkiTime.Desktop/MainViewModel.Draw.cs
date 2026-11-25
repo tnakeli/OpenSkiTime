@@ -259,7 +259,7 @@ public sealed partial class MainViewModel
 
     private static bool IsRunAvailable(StartListDesk desk, int run) => run == 1
         || desk.Revisions.Any(x => x.Plan.RunNumber == run)
-        || desk.Revisions.Any(x => x.Plan.RunNumber == run - 1 && x.StartedAt is not null);
+        || desk.Revisions.Where(x => x.Plan.RunNumber == run - 1).GroupBy(x => x.Plan.Gender).Any(x => x.MaxBy(y => y.Revision)!.StartedAt is not null);
 
     [RelayCommand]
     private async Task OpenDrawRunAsync(DrawDestination destination)

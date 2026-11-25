@@ -39,8 +39,14 @@ internal sealed class ClockContinuity
             // A heartbeat that fits only suggests the same clock (for the running display) until an impulse confirms it.
             else { return clock == observation.ClockId ? observation : observation with { ClockId = clock }; }
         }
+        _last.TryGetValue(device, out var last);
+        var same = last is not null && last.ClockId == clock;
+        // An impulse delivered late is timed, but it is no reading of the clock: the next visit is never compared with it.
+        if (same && observation.Kind == ObservationKind.Impulse && !session.Options.Simulation
+            && (ticks - last!.DeviceTicks) - (packet.ReceivedAt - last.ReceivedAt).Ticks < -Tolerance.Ticks)
+        { return clock == observation.ClockId ? observation : observation with { ClockId = clock }; }
         // Heartbeats and explicit bibs carry no record number; the last known one stays.
-        var number = observation.RecordNumber ?? (_last.TryGetValue(device, out var last) && last.ClockId == clock ? last.RecordNumber : null);
+        var number = observation.RecordNumber ?? (same ? last!.RecordNumber : null);
         _last[device] = new(session.Id, clock, ticks, packet.ReceivedAt, number);
         return clock == observation.ClockId ? observation : observation with { ClockId = clock };
     }

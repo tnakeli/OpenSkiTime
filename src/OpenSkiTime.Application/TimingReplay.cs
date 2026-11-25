@@ -102,16 +102,14 @@ public static class TimingReplay
     public static bool HasRealInput(TimingReplayData data, ITimingDecoderFactory? factory)
     {
         ArgumentNullException.ThrowIfNull(data);
-        var training = data.Sessions.Where(x => x.Options.Simulation).ToArray();
         return data.Sessions.Any(s => !s.Options.Simulation && HasImpulses(s, data.Packets.Where(p => p.SessionId == s.Id), factory))
-            || data.Audit.Any(a => !InTraining(data.Sessions, a) && !(training.Length > 0 && training.Length == data.Sessions.Count
-                && a.At >= training.Min(s => s.StartedAt)));
+            || data.Audit.Any(a => !InTraining(data.Sessions, a));
     }
 
-    // A session that was interrupted has no recorded end; it ended at the latest when the next session began.
+    // A decision belongs to the source that was last in use when it was saved, also after that source was closed or
+    // interrupted. Every decision is therefore either training or real, never both.
     private static bool InTraining(IReadOnlyList<CaptureSession> sessions, TimingAudit audit)
-        => sessions.Any(s => s.Options.Simulation && audit.At >= s.StartedAt && (s.StoppedAt is { } stopped ? audit.At <= stopped
-            : !sessions.Any(next => next.Id != s.Id && next.StartedAt > s.StartedAt && next.StartedAt <= audit.At)));
+        => sessions.Where(s => s.StartedAt <= audit.At).MaxBy(s => s.StartedAt)?.Options.Simulation == true;
 
     // Timing input that a run's starting order depends on: a recorded decision, or an impulse from any channel.
     // Opening the Timing view, device heartbeats and connection notices are not.
