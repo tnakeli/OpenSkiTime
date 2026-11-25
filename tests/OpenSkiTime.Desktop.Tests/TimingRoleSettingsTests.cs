@@ -321,7 +321,7 @@ public partial class DesktopWorkflowTests
         var file = Path.Combine(root, "Synthetic-BClock.ost");
         var cache = new FisLocalStore(root);
         await cache.SaveListAsync(SyntheticFisArchive());
-        var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(), new AlgeDecoderFactory());
+        var workspace = new SeriesWorkspace(new SqliteSeriesFileStore(new AlgeDecoderFactory()), new AlgeDecoderFactory());
         var date = new DateOnly(2026, 9, 27);
         var series = await workspace.CreateAsync(file, new("Synthetic B race", "Test slope", "Test club", date, date, "FIN", "2026/27"));
         series = await workspace.SaveCompetitionAsync(null, new("Slalom", "SL", date, Discipline.Slalom, RaceType.Fis, 2, 0, "1234"), series.Revision);
