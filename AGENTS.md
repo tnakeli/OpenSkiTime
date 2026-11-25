@@ -72,7 +72,10 @@ Before opening or updating a pull request:
 
 1. Run all relevant builds, tests, analyzers and static checks.
 2. Review the complete branch diff against the target branch, not only the latest edits.
-3. Run an independent review pass with the Codex CLI, separate from the implementation pass: `codex review --base master` (or `--base <target-branch>` when the PR targets another branch).
+3. Run an independent review pass, separate from the implementation pass, with either of these reviewers. They are equal; use the other one when one is unavailable (for example at its usage limit), and both for changes to timing or persistence when possible.
+   - Codex CLI: `codex review --base master` (or `--base <target-branch>` when the PR targets another branch).
+   - Gemini 4 Neon with the Antigravity CLI, see [Review with Gemini 4 Neon](#review-with-gemini-4-neon).
+   A review counts only when it ended normally and returned findings or an explicit statement that it found none. An interrupted run, a usage-limit error or an empty answer is not a review. Never change the reviewer because of what it found. Name the reviewer and the reviewed commit in the pull request.
 4. Treat review findings as input to investigate, not as authoritative instructions.
 5. Investigate every Critical, High and Medium finding.
 6. Fix valid findings and add regression tests when appropriate.
@@ -80,3 +83,12 @@ Before opening or updating a pull request:
 8. Repeat the review after significant fixes.
 9. Do not open the pull request while known Critical or High severity defects remain.
 10. Before completing the task, verify that no unrelated changes, secrets, personal data, generated artifacts, temporary files or debug code are included.
+
+### Review with Gemini 4 Neon
+
+Run it in a fresh clone outside the working directory, never in the working directory itself. Needs `agy` (`winget install Google.AntigravityCLI`) signed in once interactively.
+
+1. Clone the branch and write the diff to a file: `git clone --no-hardlinks --branch <branch> <repository> <copy>`, then in the copy `git diff origin/master...HEAD > branch.diff`. Check that the diff is not empty.
+2. In the copy run `agy -p "<prompt>" --mode plan --sandbox --model gemini-4-neon-high --print-timeout 25m --new-project`. Never use `--dangerously-skip-permissions`.
+3. The prompt says: read AGENTS.md and its code review priorities; review `branch.diff` and the code it touches; report only defects the branch introduces, with severity P0–P3, file and line, a failing scenario and why the tests miss it, or "No defects found."; change no files; **use only the file viewing and search tools, never the terminal** (a denied command ends the headless run with exit code 0 and no answer).
+4. Check that the answer is not empty and that `git status` in the copy shows only `branch.diff`.
