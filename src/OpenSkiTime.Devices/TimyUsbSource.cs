@@ -14,6 +14,7 @@ public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory 
     // ALGE's current library (2026.10.1) and the mixed-mode x64 library it replaced.
     private static readonly string[] s_libraries = ["AlgeTimyUsb.dll", "AlgeTimyUsb.x64.dll"];
     private int _stream;
+    private string _source = "Timy USB";
     public static string SdkDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSkiTime", "timy-usb");
 
     public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
@@ -27,11 +28,12 @@ public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory 
             catch (Exception ex) when (retry && !ct.IsCancellationRequested && ex is IOException or System.ComponentModel.Win32Exception)
             {
                 status("Not receiving · " + ex.Message + " Retrying…");
-                // One notice per problem: the journal must not fill up while the operator fixes it.
+                // One notice per problem: the journal must not fill up while the operator fixes it. It names the device that
+                // was receiving, so a line it left unfinished ends here and cannot hold up a run change.
                 if (reported != ex.Message)
                 {
                     reported = ex.Message;
-                    await receive(new("transport-status", "Timy USB", "failure", Encoding.UTF8.GetBytes("Timy USB is not receiving. " + ex.Message)));
+                    await receive(new("transport-status", _source, "failure", Encoding.UTF8.GetBytes("Timy USB is not receiving. " + ex.Message)));
                 }
                 await Task.Delay(retryDelay ?? TimeSpan.FromSeconds(3), ct);
             }
@@ -83,7 +85,7 @@ public sealed class TimyUsbSource(string? deviceId = null, string? sdkDirectory 
                 if (parts[0] == "T")
                 { await receive(new("alge-timy-sdk/v1", "Timy:" + parts[1], _stream.ToString(System.Globalization.CultureInfo.InvariantCulture), Convert.FromBase64String(parts[2]))); }
                 else if (parts[0] == "S") { status(parts[2]); }
-                else if (parts[0] == "C") { _stream++; status("Connected · Timy " + parts[1]); }
+                else if (parts[0] == "C") { _stream++; _source = "Timy:" + parts[1]; status("Connected · Timy " + parts[1]); }
                 else if (parts[0] == "D")
                 {
                     status("Timy disconnected · reconnect USB to resume");

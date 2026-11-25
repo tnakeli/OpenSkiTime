@@ -22,6 +22,8 @@ public sealed partial class MainViewModel
     private static readonly TimeSpan s_settingsDelay = TimeSpan.FromMilliseconds(700);
     private static readonly TimeSpan s_retryDelay = TimeSpan.FromSeconds(5);
     private TimingSignalMonitor? _signalMonitor;
+    // B Clock devices are monitored and released on their own, so a slow B never delays A.
+    private TimingSignalMonitor? _backupSignalMonitor;
     private string _signalMonitorKey = "";
     private string _signalMonitorProblem = "";
     private DispatcherTimer? _signalMonitorTimer;
@@ -266,11 +268,12 @@ public sealed partial class MainViewModel
 
     private async Task RefreshSignalMonitorAsync()
     {
-        // The B Clock releases its devices on its own; a capture that is still saving its last input keeps them.
-        await _backupClockTask;
-        if (workspace.Timing?.IsActive == true || workspace.Auxiliary?.IsActive == true) { await StopSignalMonitorAsync(); StartTimingSettingsTimer(); return; }
+        // The B Clock releases its devices on its own, and a capture that is still saving its last input keeps them. Waiting
+        // here would also hold up the return to Timing, so look again shortly.
+        if (!_backupClockTask.IsCompleted || workspace.Timing?.IsActive == true || workspace.Auxiliary?.IsActive == true) { await StopSignalMonitorAsync(); StartTimingSettingsTimer(); return; }
         var problem = "";
         var sources = new List<TimingCaptureSource>();
+        var backup = new List<TimingCaptureSource>();
         try
         {
             var configuration = CurrentTimingConfiguration();
@@ -281,23 +284,30 @@ public sealed partial class MainViewModel
             if (configuration.HasBackupClock)
             {
                 configuration.Validate();
-                sources.AddRange(configuration.BackupCapture(date, DateTimeOffset.UtcNow, "monitor"));
+                backup.AddRange(configuration.BackupCapture(date, DateTimeOffset.UtcNow, "monitor"));
             }
         }
         catch (DomainValidationException ex) { problem = ex.Message; }
         // Simulator and replay sources have no device to check.
         sources.RemoveAll(x => x.Options.Simulation);
-        var key = string.Join("\n", sources.Select(x => $"{x.Connection.ConnectionKey}|{x.Options.Endpoint}"));
-        if (_signalMonitor is null || key != _signalMonitorKey)
+        backup.RemoveAll(x => x.Options.Simulation);
+        var key = string.Join("\n", sources.Concat(backup).Select(x => $"{x.Connection.ConnectionKey}|{x.Options.Endpoint}"));
+        if ((_signalMonitor is null && _backupSignalMonitor is null) || key != _signalMonitorKey)
         {
             await StopSignalMonitorAsync();
-            var inputs = new List<TimingSourceInput>();
-            foreach (var device in sources)
+            if (!_backupClockTask.IsCompleted) { StartTimingSettingsTimer(); return; }
+            TimingSignalMonitor? Monitor(List<TimingCaptureSource> devices)
             {
-                try { inputs.Add(new(TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, live: true), device.Options)); }
-                catch (DomainValidationException ex) { problem = ex.Message; }
+                var inputs = new List<TimingSourceInput>();
+                foreach (var device in devices)
+                {
+                    try { inputs.Add(new(TimingSourceFactory.Create(device.Connection, device.Options, _timingHttp, AlgePassword, live: true), device.Options)); }
+                    catch (DomainValidationException ex) { problem = ex.Message; }
+                }
+                return inputs.Count > 0 ? new(inputs, new AlgeDecoderFactory()) : null;
             }
-            if (inputs.Count > 0) { _signalMonitor = new(inputs, new AlgeDecoderFactory()); }
+            _signalMonitor = Monitor(sources);
+            _backupSignalMonitor = Monitor(backup);
             _signalMonitorKey = problem.Length == 0 ? key : "";
         }
         _signalMonitorProblem = problem;
@@ -310,19 +320,33 @@ public sealed partial class MainViewModel
     {
         if (!IsTimingDevicesOpen || workspace.Timing?.IsActive == true) { return; }
         TimingConnection = _signalMonitorProblem.Length > 0 ? "Not receiving · " + _signalMonitorProblem
-            : _signalMonitor is null ? "No device to check. Simulator and replay input is received in Timing."
-            : _signalMonitor.Status + " · signals are shown here, not recorded";
+            : _signalMonitor is null && _backupSignalMonitor is null ? "No device to check. Simulator and replay input is received in Timing."
+            : string.Join(" · ", new[] { _signalMonitor?.Status, _backupSignalMonitor is { } b ? "B: " + b.Status : null }.Where(x => x is not null)) + " · signals are shown here, not recorded";
         RefreshTimingRoleSignals();
     }
 
     private async Task StopSignalMonitorAsync()
     {
         _signalMonitorTimer?.Stop();
-        if (_signalMonitor is not { } monitor) { return; }
-        _signalMonitor = null;
         _signalMonitorKey = "";
-        await monitor.DisposeAsync();
+        if (_backupSignalMonitor is { } backup)
+        {
+            _backupSignalMonitor = null;
+            // The B Clock opens its devices only after this task.
+            _backupClockTask = ReleaseAsync(_backupClockTask, backup);
+        }
+        if (_signalMonitor is { } monitor)
+        {
+            _signalMonitor = null;
+            await monitor.DisposeAsync();
+        }
         RefreshTimingRoleSignals();
+
+        static async Task ReleaseAsync(Task previous, TimingSignalMonitor monitor)
+        {
+            try { await previous; } catch (Exception ex) when (ex is not OutOfMemoryException) { /* already reported */ }
+            await monitor.DisposeAsync();
+        }
     }
 
     // Closing the window releases every device.
@@ -338,10 +362,7 @@ public sealed partial class MainViewModel
         _timingListeningEnded = true;
         CommitTimingSettings();
         _signalMonitorTimer?.Stop();
-        if (_signalMonitor is { } monitor)
-        {
-            _signalMonitor = null;
-            _ = monitor.DisposeAsync().AsTask();
-        }
+        foreach (var monitor in new[] { _signalMonitor, _backupSignalMonitor }) { _ = monitor?.DisposeAsync().AsTask(); }
+        _signalMonitor = _backupSignalMonitor = null;
     }
 }

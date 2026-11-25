@@ -164,6 +164,39 @@ public partial class DesktopWorkflowTests
     });
 
     [AvaloniaFact]
+    public async Task ASlowBClockNeverDelaysTheReturnToTiming() => await InTimingListeningRunAsync(async (_, vm, device) =>
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timy = TimingSourceFactory.TestSource!;
+        TimingSourceFactory.TestSource = x => x.Source == TimingSourceType.Mt1Serial ? new SlowSource(release.Task) : timy(x);
+        vm.TimingStartRole.UsbId = "1";
+        await vm.AddBackupClockCommand.ExecuteAsync(null);
+        vm.BackupTimingRoles[0].Source = TimingSourceTypes.Mt1SerialLabel;
+        vm.BackupTimingRoles[0].Port = "COM9";
+        await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1));
+        await vm.BackupClockTask;
+        vm.ShowTimingDevicesCommand.Execute(null); // B starts closing and does not finish
+        await vm.ReturnToTimingCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(vm.IsTimingConnected, vm.TimingProblem);
+        await BenchUntilAsync(vm, () => device.Open == 1);
+        Assert.False(vm.BackupClockTask.IsCompleted);
+        release.SetResult();
+        await vm.BackupClockTask.WaitAsync(TimeSpan.FromSeconds(20));
+    });
+
+    // A device that takes its time to close.
+    private sealed class SlowSource(Task release) : ITimingSource
+    {
+        public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
+        {
+            status("Connected · slow device");
+            try { await Task.Delay(Timeout.Infinite, ct); }
+            finally { await release; }
+        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [AvaloniaFact]
     public async Task TimingDevicesShowsSignalsAfterTheBClockHasReleasedItsDevice() => await InTimingListeningRunAsync(async (workspace, vm, device) =>
     {
         vm.TimingStartRole.UsbId = "1";
@@ -176,8 +209,8 @@ public partial class DesktopWorkflowTests
         Assert.True(workspace.Auxiliary!.State(AuxiliaryTimingRole.B).IsActive);
         vm.ShowTimingDevicesCommand.Execute(null);
         await vm.TimingListeningTask;
+        await BenchUntilAsync(vm, () => vm.BackupClockTask.IsCompleted && device.Open == 1);
         Assert.False(workspace.Auxiliary.State(AuxiliaryTimingRole.B).IsActive);
-        await BenchUntilAsync(vm, () => device.Open == 1);
         Assert.Contains("not recorded", vm.TimingConnection, StringComparison.Ordinal);
     });
 

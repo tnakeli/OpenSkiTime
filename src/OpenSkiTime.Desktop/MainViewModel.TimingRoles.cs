@@ -155,9 +155,9 @@ public sealed partial class MainViewModel
         var now = Environment.TickCount64;
         if (now - _lastSignalRefresh < 200) { return; }
         _lastSignalRefresh = now;
-        var monitor = IsTimingDevicesOpen && !IsTimingConnected ? _signalMonitor : null;
-        var connected = IsTimingConnected || monitor is not null;
-        var signals = monitor is not null ? monitor.Signals.ToArray() : connected ? (workspace.Timing?.RecentSignals ?? []).Concat(workspace.Auxiliary?.State(AuxiliaryTimingRole.B).Signals ?? []).ToArray() : [];
+        var monitoring = IsTimingDevicesOpen && !IsTimingConnected && (_signalMonitor is not null || _backupSignalMonitor is not null);
+        var connected = IsTimingConnected || monitoring;
+        var signals = monitoring ? (_signalMonitor?.Signals ?? []).Concat(_backupSignalMonitor?.Signals ?? []).ToArray() : connected ? (workspace.Timing?.RecentSignals ?? []).Concat(workspace.Auxiliary?.State(AuxiliaryTimingRole.B).Signals ?? []).ToArray() : [];
         foreach (var editor in PrimaryTimingRoles.Concat(BackupTimingRoles))
         {
             if (!connected) { editor.SignalText = ""; continue; }
