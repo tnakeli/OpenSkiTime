@@ -21,9 +21,12 @@ public sealed partial class MainViewModel
     internal const int TimingDevicesTab = 1;
     private static readonly TimeSpan s_settingsDelay = TimeSpan.FromMilliseconds(700);
     private static readonly TimeSpan s_retryDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan s_releaseDelay = TimeSpan.FromMilliseconds(500);
     private TimingSignalMonitor? _signalMonitor;
     // B Clock devices are monitored and released on their own, so a slow B never delays A.
     private TimingSignalMonitor? _backupSignalMonitor;
+    // The devices _backupClockTask is releasing. A waits for its own device only.
+    private CaptureOptions[] _backupReleasing = [];
     private string _signalMonitorKey = "";
     private string _signalMonitorProblem = "";
     private DispatcherTimer? _signalMonitorTimer;
@@ -115,6 +118,12 @@ public sealed partial class MainViewModel
                 SetTimingProblem("This run has training times. Real timing is not received until they are set aside.", canSetAside: true);
                 return;
             }
+            if (!_backupClockTask.IsCompleted && capture.Any(a => _backupReleasing.Any(b => SameLocalTimingEndpoint(a.Options, b))))
+            {
+                SetTimingProblem("The device was used by the B Clock and is being released. Timing starts in a moment.");
+                RetryTimingLater(s_releaseDelay);
+                return;
+            }
             foreach (var device in capture) { ValidateAuthoritativeTimingEndpoint(device.Options); }
             var inputs = new List<TimingSourceInput>();
             try
@@ -169,7 +178,7 @@ public sealed partial class MainViewModel
         IsTimingBusy = false;
     }
 
-    private void RetryTimingLater() => _timingRetryAt = Environment.TickCount64 + (long)s_retryDelay.TotalMilliseconds;
+    private void RetryTimingLater(TimeSpan? delay = null) => _timingRetryAt = Environment.TickCount64 + (long)(delay ?? s_retryDelay).TotalMilliseconds;
 
     internal void RetryTimingStart()
     {
@@ -333,6 +342,7 @@ public sealed partial class MainViewModel
         if (_backupSignalMonitor is { } backup)
         {
             _backupSignalMonitor = null;
+            _backupReleasing = backup.Options.ToArray();
             // The B Clock opens its devices only after this task.
             _backupClockTask = ReleaseAsync(_backupClockTask, backup);
         }

@@ -224,7 +224,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
     public long SavedPackets => Interlocked.Read(ref _saved);
     public TimingSnapshot? Snapshot => Volatile.Read(ref _snapshot);
     public bool IsSimulation => HasTrainingInput || (IsActive && ActiveCaptureOptions.Any(x => x.Simulation));
-    // The selected run holds training input (TimingReplay.UsesTraining); an opened session alone does not count.
+    // The selected run holds training input (TimingReplay.HasTrainingInput); an opened session alone does not count.
     public bool HasTrainingInput => Volatile.Read(ref _hasTrainingInput);
     public bool HasCaptureHistory => _sessions.Count != 0;
     public CaptureOptions? LastCaptureOptions => _sessions.LastOrDefault()?.Options;
@@ -579,7 +579,7 @@ public sealed class TimingWorkspace(ITimingStore store, ITimingDecoderFactory de
 
     private void Rebuild()
     {
-        Volatile.Write(ref _hasTrainingInput, TimingReplay.UsesTraining(_sessions, _audit, s => _delivered.Contains(s.Id)));
+        Volatile.Write(ref _hasTrainingInput, TimingReplay.HasTrainingInput(_sessions, _audit, s => _delivered.Contains(s.Id)));
         if (_list is not null) { Volatile.Write(ref _snapshot, TimingEngine.Replay(_list, _observations, _audit, 0, 1, _forerunners)); }
     }
 

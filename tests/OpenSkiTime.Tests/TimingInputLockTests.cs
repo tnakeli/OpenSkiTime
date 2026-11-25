@@ -153,6 +153,25 @@ public sealed class TimingInputLockTests : IDisposable
     }
 
     [Fact]
+    public async Task ADecisionAfterAnUnusedSimulatorIsReal()
+    {
+        await using var workspace = Workspace();
+        var list = await TimingStorageTests.SeedAsync(workspace, PathFor("decision-after-unused"), 2);
+        var timing = workspace.Timing!;
+        await timing.SelectRunAsync(list.Id);
+        await ReceiveAsync(timing, simulation: true); // opened by mistake and closed
+        await timing.CorrectStatusesAsync([2], TimingStatus.DNS, "Operator", "Does not start");
+        Assert.False(timing.HasTrainingInput);
+        // Until a real device is used, nothing distinguishes this from a rehearsal: no certification.
+        Assert.True(TimingReplay.UsesTraining(await workspace.ReadTimingAsync(list.Id)));
+        var revision = (await workspace.ReadAsync()).Revision;
+        await Assert.ThrowsAsync<DomainValidationException>(() => workspace.SetTrainingAsideAsync(list.Id, revision, "Operator", TimingRulesTests.At));
+        await ReceiveAsync(timing, simulation: false, " 0001* C0 12:00:00.0000\r");
+        Assert.Equal(TimingStatus.DNS, timing.Snapshot!.Results.Single(x => x.Bib == 2).Status);
+        Assert.False(TimingReplay.UsesTraining(await workspace.ReadTimingAsync(list.Id)));
+    }
+
+    [Fact]
     public async Task DecisionsOfRealTimingCountAsRealTimes()
     {
         await using var workspace = Workspace();

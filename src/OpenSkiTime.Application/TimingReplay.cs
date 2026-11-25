@@ -83,33 +83,41 @@ public static class TimingReplay
         }
     }
 
-    // Training input of a run: anything a simulator, replay file or test import delivered, and every decision saved while
-    // such a source was in use or with no other source in the run. A session that was only opened is not input.
+    // Whether results of a run may be certified or sent to FIS: no training input, and not only decisions in a run that no
+    // real device was ever used for.
     public static bool UsesTraining(TimingReplayData data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        return UsesTraining(data.Sessions, data.Audit, s => data.Packets.Any(p => p.SessionId == s.Id && p.Protocol != TransportStatus));
+        return HasTrainingInput(data) || (data.Audit.Count > 0 && data.Sessions.Count > 0 && data.Sessions.All(x => x.Options.Simulation));
     }
 
-    internal static bool UsesTraining(IReadOnlyList<CaptureSession> sessions, IReadOnlyList<TimingAudit> audit, Func<CaptureSession, bool> delivered)
+    // Training input of a run: anything a simulator, replay file or test import delivered, and the decisions of that use.
+    // A session that was only opened is not input.
+    public static bool HasTrainingInput(TimingReplayData data)
     {
-        var training = sessions.Where(x => x.Options.Simulation).ToArray();
-        return training.Any(delivered) || (audit.Count > 0 && training.Length > 0 && (training.Length == sessions.Count
-            || audit.Any(a => InTraining(sessions, a))));
+        ArgumentNullException.ThrowIfNull(data);
+        return HasTrainingInput(data.Sessions, data.Audit, Delivered(data));
     }
+
+    internal static bool HasTrainingInput(IReadOnlyList<CaptureSession> sessions, IReadOnlyList<TimingAudit> audit, Func<CaptureSession, bool> delivered)
+        => sessions.Any(x => x.Options.Simulation && delivered(x)) || audit.Any(a => InTraining(sessions, a, delivered));
 
     // Real timing of a run: an impulse from a real device, or a decision that does not belong to training use.
     public static bool HasRealInput(TimingReplayData data, ITimingDecoderFactory? factory)
     {
         ArgumentNullException.ThrowIfNull(data);
         return data.Sessions.Any(s => !s.Options.Simulation && HasImpulses(s, data.Packets.Where(p => p.SessionId == s.Id), factory))
-            || data.Audit.Any(a => !InTraining(data.Sessions, a));
+            || data.Audit.Any(a => !InTraining(data.Sessions, a, Delivered(data)));
     }
 
-    // A decision belongs to the source that was last in use when it was saved, also after that source was closed or
-    // interrupted. Every decision is therefore either training or real, never both.
-    private static bool InTraining(IReadOnlyList<CaptureSession> sessions, TimingAudit audit)
-        => sessions.Where(s => s.StartedAt <= audit.At).MaxBy(s => s.StartedAt)?.Options.Simulation == true;
+    private static Func<CaptureSession, bool> Delivered(TimingReplayData data)
+        => s => data.Packets.Any(p => p.SessionId == s.Id && p.Protocol != TransportStatus);
+
+    // A decision belongs to the source that was last in use when it was saved, also after that source was closed. A
+    // simulator that was closed without delivering anything was never in use. Every decision is either training or real.
+    private static bool InTraining(IReadOnlyList<CaptureSession> sessions, TimingAudit audit, Func<CaptureSession, bool> delivered)
+        => sessions.Where(s => s.StartedAt <= audit.At && !(s.Options.Simulation && s.StoppedAt < audit.At && !delivered(s)))
+            .MaxBy(s => s.StartedAt)?.Options.Simulation == true;
 
     // Timing input that a run's starting order depends on: a recorded decision, or an impulse from any channel.
     // Opening the Timing view, device heartbeats and connection notices are not.
@@ -122,7 +130,7 @@ public static class TimingReplay
     public static bool HasInput(TimingReplayData data, TimingSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(data); ArgumentNullException.ThrowIfNull(snapshot);
-        return data.Audit.Count > 0 || UsesTraining(data) || snapshot.Observations.Any(x => x.Observation.PhysicalChannel is not null);
+        return data.Audit.Count > 0 || HasTrainingInput(data) || snapshot.Observations.Any(x => x.Observation.PhysicalChannel is not null);
     }
 
     // Without a decoder every device message counts, which only ever protects more than necessary.

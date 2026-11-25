@@ -109,6 +109,7 @@ public sealed partial class MainViewModel
         _backupClockGeneration++;
         _backupClockExpected = false; _backupClockConnecting = false; _backupClockError = "";
         _backupRunSwitchMessage = ""; _backupRunSwitchFailed = false;
+        _backupReleasing = [.. workspace.Auxiliary?.State(AuxiliaryTimingRole.B).AllOptions ?? []];
         var previous = _backupClockTask;
         _backupClockTask = StopBackupClockAsync(previous, _backupClockGeneration);
         RefreshBackupClockStatus();

@@ -159,7 +159,7 @@ internal sealed partial class SqliteSeriesFileSession : ITimingStore
                 }
                 var old = await db.Captures.Where(x => x.ListId == listId).ToArrayAsync(ct);
                 // Only received input decides the kind of a run; a session opened with the wrong source leaves no trace in it.
-                if (!options[0].Simulation && old.Any(x => ToCapture(x).Options.Simulation) && TimingReplay.UsesTraining(await ReadTimingAsync(listId, ct)))
+                if (!options[0].Simulation && old.Any(x => ToCapture(x).Options.Simulation) && TimingReplay.HasTrainingInput(await ReadTimingAsync(listId, ct)))
                 { throw new DomainValidationException("This run has training times (simulator, replay or test import). Set them aside to use real timing."); }
                 if (options[0].Simulation && TimingReplay.HasRealInput(await ReadTimingAsync(listId, ct), inputDecoders))
                 { throw new DomainValidationException("This run has real times. Simulator and replay are off for this run."); }

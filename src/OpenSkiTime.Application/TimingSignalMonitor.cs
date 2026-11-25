@@ -23,6 +23,7 @@ public sealed class TimingSignalMonitor : IAsyncDisposable
         _completion = Task.WhenAll(Enumerable.Range(0, _inputs.Length).Select(index => Task.Run(() => ReceiveAsync(index))));
     }
 
+    public IReadOnlyList<CaptureOptions> Options => _inputs.Select(x => x.Options).ToArray();
     public IReadOnlyList<TimingSignal> Signals => _signals.Values.ToArray();
     public string Status => string.Join(" · ", _inputs.Select((x, i) => _inputs.Length == 1 ? Volatile.Read(ref _statuses[i])
         : $"{x.Options.Device}: {Volatile.Read(ref _statuses[i])}"));

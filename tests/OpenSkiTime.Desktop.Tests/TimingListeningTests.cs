@@ -187,14 +187,45 @@ public partial class DesktopWorkflowTests
         await vm.BackupClockTask.WaitAsync(TimeSpan.FromSeconds(20));
     });
 
+    [AvaloniaTheory]
+    [InlineData(true)] // B was timing and is still closing
+    [InlineData(false)] // B was only shown in Timing devices and is still closing
+    public async Task ADeviceMovedFromBToAIsOpenedOnceItIsReleased(bool timed) => await InTimingListeningRunAsync(async (workspace, vm, device) =>
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timy = TimingSourceFactory.TestSource!;
+        var open = 0;
+        TimingSourceFactory.TestSource = x => x.Source == TimingSourceType.Mt1Serial
+            ? new SlowSource(release.Task, () => Assert.Equal(1, Interlocked.Increment(ref open)), () => Interlocked.Decrement(ref open)) : timy(x);
+        vm.TimingStartRole.UsbId = "1";
+        await vm.AddBackupClockCommand.ExecuteAsync(null);
+        vm.BackupTimingRoles[0].Source = TimingSourceTypes.Mt1SerialLabel;
+        vm.BackupTimingRoles[0].Port = "COM9";
+        if (timed) { await vm.OpenTimingRunCommand.ExecuteAsync(new DrawDestination(vm.TimingCompetition!, 1)); await vm.BackupClockTask; }
+        vm.ShowTimingDevicesCommand.Execute(null);
+        if (!timed) { await BenchUntilAsync(vm, () => Volatile.Read(ref open) == 1); }
+        await vm.ClearBackupClockCommand.ExecuteAsync(null);
+        vm.TimingStartRole.Source = TimingSourceTypes.Mt1SerialLabel;
+        vm.TimingStartRole.Port = "COM9";
+        await vm.ReturnToTimingCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(vm.IsTimingConnected);
+        Assert.Contains("being released", vm.TimingProblem, StringComparison.Ordinal);
+        Assert.Equal(1, Volatile.Read(ref open));
+        release.SetResult();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        while (!vm.IsTimingConnected) { await Task.Delay(50, timeout.Token); Dispatcher.UIThread.RunJobs(); vm.RetryTimingStart(); await vm.TimingListeningTask; vm.RefreshTiming(); }
+        Assert.Equal("", vm.TimingProblem);
+    });
+
     // A device that takes its time to close.
-    private sealed class SlowSource(Task release) : ITimingSource
+    private sealed class SlowSource(Task release, Action? opened = null, Action? closed = null) : ITimingSource
     {
         public async Task ReceiveAsync(Func<TransportPacket, ValueTask> receive, Action<string> status, CancellationToken ct)
         {
+            opened?.Invoke();
             status("Connected · slow device");
             try { await Task.Delay(Timeout.Infinite, ct); }
-            finally { await release; }
+            finally { await release; closed?.Invoke(); }
         }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
