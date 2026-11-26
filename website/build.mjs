@@ -19,46 +19,40 @@ const video = { id: '5m10JrVdtv0', url: 'https://www.youtube.com/watch?v=5m10JrV
 const editingVideo = { id: 'IBvZwUvbqHo', url: 'https://www.youtube.com/watch?v=IBvZwUvbqHo', poster: 'editing-video.jpg', uploadDate: '2026-10-25', duration: 'PT2M47S', length: '2:47', name: 'Editing competitors: copy & paste from a spreadsheet, undo, multi-edit and PDF | OpenSkiTime', description: 'Entry lists copied from LibreOffice Calc and pasted into the competitor grid with every new or changed value highlighted, a one-column club update, race entries, editing in the grid, undo, multi-row edits and entry-list PDFs. Synthetic athletes and clubs.' };
 const liveVideo = { id: 'W4O_gWhQhyM', url: 'https://www.youtube.com/watch?v=W4O_gWhQhyM', poster: 'live-radio-video.jpg', uploadDate: '2026-10-25', duration: 'PT1M', length: '1:00', name: 'OpenSkiTime live timing with AI race radio', description: 'The live timing control panel and radio settings, then the live race page with the course banner, a DNF and the first finish while two AI hosts comment in Finnish. Four synthetic racers and simulated timing.' };
 const radioCredit = 'https://wapice.com/insights/ai-radio-hosts-live-event-commentary/';
-// The narrated tutorials, one YouTube video per language (scripts/tutorial-video, docs/tutorial-videos.md). Each card shows a
-// local poster and links out like the videos above. seconds: the length of that language's video.
-const tutorials = [
-  { key: 'fis-event', poster: 'tutorial-fis-event.jpg',
-    en: { id: '-c5oGkU6y0I', seconds: 229, title: 'Setting up a FIS event', intro: 'A real example: the FIS races in Levi, eight slaloms and giant slaloms in one event file.', learn: ['Save your FIS API key and get the races from the FIS calendar', 'Get the course from the FIS homologations for all slaloms at once', 'Download the right FIS points list', 'Import entries from regs.fissi.fi or paste them from Excel', 'Review the yellow changes, undo one and save', 'Update the athletes from FIS'] },
-    fi: { id: 'qDWB8bJhQio', seconds: 241, title: 'FIS-kilpailutapahtuman perustaminen', intro: 'Oikea esimerkki: Levin FIS-kilpailut, kahdeksan pujottelua ja suurpujottelua yhdessä tapahtumatiedostossa.', learn: ['Tallenna FIS API -avain ja hae kilpailut FISin kalenterista', 'Hae kilpailurinne FISin homologoinneista kaikkiin pujotteluihin kerralla', 'Lataa oikea FIS-pistelista', 'Tuo ilmoittautumiset regs.fissi.fi-palvelusta tai liitä Excelistä', 'Tarkista keltaiset muutokset, peru yksi ja tallenna', 'Päivitä urheilijat FISin rajapinnasta'] } },
-  { key: 'timing-basics', poster: 'tutorial-timing-basics.jpg',
-    en: { id: 'PoKrfJmzLtM', seconds: 144, title: 'Timing: the basics', intro: 'The Timing view with the simulator: the panes, forerunners and how impulses are assigned.', learn: ['Open a run and switch the start, intermediate and finish on from hold', 'Read At start, On course, Timestamps and Ranking', 'Add forerunners: timed, never ranked or shown in live timing', 'Change the start order by dragging', 'Mark DNS by dragging and DNF with its button', 'Find the same actions in the right-click menu'] },
-    fi: { id: 'mAiaMtMMocI', seconds: 154, title: 'Timing-näkymän peruskäyttö', intro: 'Timing-näkymä simulaattorilla: näkymän osat, esilaskijat ja impulssien kohdistuminen.', learn: ['Avaa kierros ja kytke lähtö, väliaika ja maali päälle pidosta', 'Lue At start, On course, Timestamps ja Ranking', 'Lisää esilaskijat: ajastetaan, mutta ei sijoiteta eikä näytetä live timingissa', 'Muuta lähtöjärjestystä raahaamalla', 'Merkitse DNS raahaamalla ja DNF painikkeella', 'Löydä samat toiminnot hiiren oikealla'] } },
-  { key: 'timing-errors', poster: 'tutorial-timing-errors.jpg',
-    en: { id: 'pjG9M8n-u_g', seconds: 111, title: 'Timing: handling errors', intro: 'Fix timing errors with drag and drop and buttons. The original impulses are always kept.', learn: ['Fix an extra finish impulse by dragging the racer onto the right time', 'Enter a missing finish time from the backup clock', 'Fix a racer passing another one on course', 'Put the finish on hold', 'Give a rerun by dragging the racer back to At start'] },
-    fi: { id: 'Gw3gWwtgZMo', seconds: 120, title: 'Timing: virhetilanteet', intro: 'Ajanoton virheet korjataan raahaamalla ja painikkeilla. Alkuperäiset impulssit säilyvät aina.', learn: ['Korjaa ylimääräinen maali-impulssi raahaamalla kilpailija oikean ajan päälle', 'Lisää puuttuva maaliaika varakellosta', 'Korjaa ohitus radalla', 'Laita maali pitoon', 'Anna uusintalähtö raahaamalla kilpailija At start -listalle'] } },
-  { key: 'timing-training', poster: 'tutorial-timing-training.jpg',
-    en: { id: 'hkn6SXbMAAQ', seconds: 111, title: 'Timing: training without a timing device', intro: 'Practice timing with the simulator in real time. Training never mixes with a real race.', learn: ['Choose the simulator as the timing source', 'Send test impulses to the start, intermediate and finish', 'Type a time of day, for example to practice a tie', 'Practice fixing an error by dragging', 'Set training times aside when you switch to a real device'] },
-    fi: { id: 'oTsydpIST7g', seconds: 119, title: 'Timing: harjoittelu ilman ajanottolaitetta', intro: 'Harjoittele ajanottoa simulaattorilla oikeassa ajassa. Harjoitus ei sekoitu oikeaan kilpailuun.', learn: ['Valitse simulaattori ajanoton lähteeksi', 'Lähetä testi-impulsseja lähtöön, väliaikaan ja maaliin', 'Kirjoita kellonaika, esimerkiksi tasatuloksen harjoitteluun', 'Harjoittele virheen korjaamista raahaamalla', 'Siirrä harjoitusajat sivuun, kun vaihdat oikeaan laitteeseen'] } }
+// The narrated tutorials (scripts/tutorial-video, docs/tutorial-videos.md), one YouTube video per language, grouped like
+// the chapters of a manual. The pages are a plain table of contents: a link and the length of each video. A tutorial whose
+// video in that language is not on YouTube yet (id null) is left out. seconds: the length of that language's video.
+const tutorialGroups = [
+  { key: 'prepare', en: 'Prepare the race', fi: 'Kilpailun valmistelu', items: [
+    { key: 'fis-event', en: { id: '-c5oGkU6y0I', seconds: 229, title: 'Setting up a FIS event' }, fi: { id: 'qDWB8bJhQio', seconds: 241, title: 'FIS-kilpailutapahtuman perustaminen' } },
+    { key: 'start-lists', en: { id: null, seconds: 82, title: 'Start list and draw' }, fi: { id: null, seconds: 87, title: 'Lähtölista ja arvonta' } },
+    { key: 'settings', en: { id: 'nCa06dRtr5I', seconds: 93, title: 'Settings' }, fi: { id: 'jTfEiwt4NlY', seconds: 100, title: 'Asetukset' } }
+  ] },
+  { key: 'timing', en: 'Timing', fi: 'Ajanotto', items: [
+    { key: 'timing-basics', en: { id: 'PoKrfJmzLtM', seconds: 144, title: 'Timing: the basics' }, fi: { id: 'mAiaMtMMocI', seconds: 154, title: 'Timing-näkymän peruskäyttö' } },
+    { key: 'timing-errors', en: { id: 'pjG9M8n-u_g', seconds: 111, title: 'Handling timing errors' }, fi: { id: 'Gw3gWwtgZMo', seconds: 120, title: 'Ajanoton virhetilanteet' } },
+    { key: 'timing-training', en: { id: 'hkn6SXbMAAQ', seconds: 111, title: 'Training without a timing device' }, fi: { id: 'oTsydpIST7g', seconds: 119, title: 'Harjoittelu ilman ajanottolaitetta' } }
+  ] },
+  { key: 'reports', en: 'Reports', fi: 'Raportit', items: [
+    { key: 'timing-report', en: { id: null, seconds: 89, title: 'FIS timing report' }, fi: { id: null, seconds: 99, title: 'FISin ajanottoraportti' } },
+    { key: 'race-reports', en: { id: null, seconds: 82, title: 'Race reports and PDF Factory' }, fi: { id: null, seconds: 88, title: 'Kilpailuraportit ja PDF Factory' } }
+  ] }
 ];
 const tutorialsUploaded = '2026-11-26';
-const tutorialText = {
-  en: { watch: 'Watch on YouTube', learn: 'You will learn to', other: 'Suomeksi', otherLang: 'fi', alt: 'Play the tutorial on YouTube:', caption: 'Opens YouTube. Narrated in English with subtitles; synthetic or covered race data.' },
-  fi: { watch: 'Katso YouTubessa', learn: 'Opit', other: 'In English', otherLang: 'en', alt: 'Toista opetusvideo YouTubessa:', caption: 'Avautuu YouTubeen. Suomenkielinen selostus ja tekstitys; kuvitteellinen tai peitetty kilpailudata.' }
-};
 const watchUrl = id => `https://www.youtube.com/watch?v=${id}`;
 const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-const tutorialsHtml = lang => {
-  const t = tutorialText[lang];
-  const cards = tutorials.map(item => {
-    const v = item[lang], other = item[t.otherLang];
-    return `<figure id="${item.key}"><a class="video-link" href="${watchUrl(v.id)}"><img src="/assets/${item.poster}" width="1440" height="810" alt="${escape(`${t.alt} ${v.title}`)}" loading="lazy"><span class="play-button">${t.watch} <span aria-hidden="true">▶</span></span></a><figcaption><b>${escape(v.title)} · ${clock(v.seconds)}</b><span>${escape(v.intro)}</span></figcaption><div class="tutorial-learn"><p>${t.learn}:</p><ul>${v.learn.map(x => `<li>${escape(x)}</li>`).join('')}</ul><p class="small"><a href="${watchUrl(other.id)}" hreflang="${t.otherLang}" lang="${t.otherLang}">${t.other}: ${escape(other.title)} ↗</a></p></div></figure>`;
-  }).join('');
-  return `<div class="screenshot-grid tutorial-grid">${cards}</div><p class="small">${t.caption}</p>`;
-};
-const tutorialVideos = (lang, route) => tutorials.map(item => ({ '@type': 'VideoObject', '@id': `${site}${route}#${item.key}`, name: item[lang].title, description: `${item[lang].intro} ${item[lang].learn.join('. ')}.`, inLanguage: lang, thumbnailUrl: `${site}/assets/${item.poster}`, uploadDate: tutorialsUploaded, duration: `PT${Math.floor(item[lang].seconds / 60)}M${item[lang].seconds % 60}S`, url: watchUrl(item[lang].id), embedUrl: `https://www.youtube-nocookie.com/embed/${item[lang].id}`, about: { '@id': `${site}/#software` } }));
+const published = lang => tutorialGroups.map(group => ({ ...group, items: group.items.filter(item => item[lang].id) })).filter(group => group.items.length > 0);
+const tutorialsHtml = lang => `<div class="tutorial-index">${published(lang).map((group, i) => `<section id="${group.key}"><h2><span class="feature-number">${String(i + 1).padStart(2, '0')}</span>${escape(group[lang])}</h2><ol class="tutorial-list">${group.items.map(item => `<li><a href="${watchUrl(item[lang].id)}">${escape(item[lang].title)}</a><span>${clock(item[lang].seconds)}</span></li>`).join('')}</ol></section>`).join('')}</div>`;
+// Structured data names YouTube's own thumbnail: a JSON-LD value, never loaded by the page.
+const tutorialVideos = (lang, route) => published(lang).flatMap(group => group.items).map(item => ({ '@type': 'VideoObject', '@id': `${site}${route}#${item.key}`, name: item[lang].title, description: `${item[lang].title}. OpenSkiTime tutorial, narrated in ${lang === 'fi' ? 'Finnish' : 'English'}.`, inLanguage: lang, thumbnailUrl: `https://i.ytimg.com/vi/${item[lang].id}/hqdefault.jpg`, uploadDate: tutorialsUploaded, duration: `PT${Math.floor(item[lang].seconds / 60)}M${item[lang].seconds % 60}S`, url: watchUrl(item[lang].id), embedUrl: `https://www.youtube-nocookie.com/embed/${item[lang].id}`, about: { '@id': `${site}/#software` } }));
 // [source, route, language, full title, description]. Descriptions stay under 160 characters so search results show them whole.
 const pages = [
   ['index', '/', 'en', 'OpenSkiTime – Free alpine ski race timing software', 'Free, open-source alpine ski race timing software for Windows: start lists, ALGE timing, FIS XML results, PDF reports and live results. Works offline.'],
   ['fi', '/fi/', 'fi', 'OpenSkiTime – Ilmainen alppihiihdon ajanotto-ohjelma', 'Ilmainen avoimen lähdekoodin ajanotto-ohjelma alppihiihtokilpailuihin: lähtölistat, ALGE-ajanotto, FIS-pisteet ja XML-tulokset, PDF-raportit ja live-tulokset.'],
   ['download', '/download/', 'en', 'Download OpenSkiTime ski race timing software for Windows', 'Windows downloads, release notes and installation requirements for OpenSkiTime, the free open-source alpine ski race timing software.'],
   ['guide', '/guide/', 'en', 'Your first ski race with OpenSkiTime · Getting started', 'Get started with alpine ski race timing: event series, competitors, start lists, timing, results and optional live publishing.'],
-  ['tutorials', '/tutorials/', 'en', 'Tutorial videos: alpine ski race timing step by step · OpenSkiTime', 'Narrated OpenSkiTime tutorials: set up a FIS event, time a race, fix timing errors and practice with the simulator. In English and Finnish.'],
-  ['fi-tutorials', '/fi/opetusvideot/', 'fi', 'Opetusvideot: alppihiihdon ajanotto vaihe vaiheelta · OpenSkiTime', 'OpenSkiTimen opetusvideot suomeksi: FIS-kilpailun perustaminen, ajanoton peruskäyttö, virhetilanteet ja harjoittelu simulaattorilla.'],
+  ['tutorials', '/tutorials/', 'en', 'Tutorial videos: OpenSkiTime video manual', 'OpenSkiTime video manual: short narrated tutorials on preparing a race, timing and reports, grouped by task. In English and Finnish.'],
+  ['fi-tutorials', '/fi/opetusvideot/', 'fi', 'Opetusvideot: OpenSkiTimen videokäyttöohje', 'OpenSkiTimen videokäyttöohje: lyhyet opetusvideot kilpailun valmistelusta, ajanotosta ja raporteista aiheittain ryhmiteltynä.'],
   ['live-api', '/live-api/', 'en', 'Live API: ski race results in real time · OpenSkiTime', 'Read live ski race results in real time: HTTP and SignalR API with OpenAPI, JSON Schema and JavaScript, .NET and Java examples. No key needed.'],
   ['privacy', '/privacy/', 'en', 'Privacy & your race data · OpenSkiTime', 'How local race data and optional online integrations work in OpenSkiTime.'],
   ['code-signing', '/code-signing/', 'en', 'Code signing policy · OpenSkiTime', 'How OpenSkiTime Windows releases are built, approved and signed.'],
@@ -193,7 +187,7 @@ await mkdir(path.join(output, 'assets'), { recursive: true });
 for (const name of ['site.css', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'robots.txt', 'staticwebapp.config.json', 'indexnow-key.txt']) {
   await copyFile(path.join(root, name), path.join(output, name));
 }
-for (const name of [video.poster, liveVideo.poster, editingVideo.poster, ...tutorials.map(x => x.poster), 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png', '13-club-start-order.png']) {
+for (const name of [video.poster, liveVideo.poster, editingVideo.poster, 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png', '13-club-start-order.png']) {
   await copyFile(path.join(root, '..', 'docs', 'screenshots', name), path.join(output, 'assets', name));
 }
 // The Live API: the schema is one source for the published JSON Schema and for the components of the OpenAPI document, and
