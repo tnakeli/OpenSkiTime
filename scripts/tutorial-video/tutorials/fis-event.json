@@ -1,0 +1,158 @@
+{
+  "name": "fis-event",
+  "driver": "FisEventTutorialTests",
+  "voice": "W9YsrfUjc4DOYR4fhg8M",
+  "title": {
+    "fi": "FIS-kilpailutapahtuman perustaminen",
+    "en": "Setting up a FIS event"
+  },
+  "say": {
+    "fi": {
+      "FISin": "Fissin",
+      "FIS": "Fis",
+      "API -avain": "apiavain",
+      "API-avain": "apiavain",
+      "API-avaimensa": "apiavaimensa",
+      "API keys": "apikiis",
+      "regs.fissi.fi": "reks fissi fi",
+      "OpenSkiTimeen": "Open Ski Taimiin",
+      "OpenSkiTimessa": "Open Ski Taimissa",
+      "OpenSkiTimen": "Open Ski Taimin",
+      "OpenSkiTime": "Open Ski Taim",
+      "Ctrl+V": "kontrol vee",
+      "Ctrl+Backspace": "kontrol bäkspeis",
+      "F6": "äf kuusi",
+      "I1": "ii yksi",
+      "DNS": "dee än äs",
+      "DNF": "dee än äf",
+      "Prepare Run 2": "Prepare Run two"
+    },
+    "en": {
+      "regs.fissi.fi": "regs dot fissi dot F I",
+      "OpenSkiTime": "Open Ski Time",
+      "Ctrl+V": "Control V",
+      "Ctrl+Backspace": "Control Backspace",
+      "F6": "F six",
+      "I1": "I one",
+      "DNS": "D N S",
+      "DNF": "D N F",
+      "Levi": "Levy",
+      "a FIS": "an F I S",
+      "Live": "Lyve",
+      "Timy": "Timmy"
+    }
+  },
+  "steps": [
+    {
+      "id": "intro",
+      "fi": "Tässä videossa perustetaan FIS-kilpailutapahtuma OpenSkiTimeen. Esimerkkinä on oikea kisa: Levin FIS-kilpailut.",
+      "en": "In this video we set up a FIS event in OpenSkiTime. The example is a real one: the FIS races in Levi, Finland."
+    },
+    {
+      "id": "concept",
+      "fi": "OpenSkiTimessa tehdään aina ensin {event}kilpailutapahtuma. Yksi tapahtuma on yksi tiedosto, ja samassa tiedostossa on {races}monta kilpailua. Levillä niitä on kahdeksan: neljä päivää, naiset ja miehet.",
+      "en": "In OpenSkiTime you always start with an {event}event. One event is one file, and the same file holds {races}many races. Levi has eight of them: four days, women and men."
+    },
+    {
+      "id": "key",
+      "fi": "Kilpailut haetaan suoraan FISin kalenterista. Sitä varten tarvitaan FIS API -avain. Avaa {settings}Settings ja {tab}API keys. Avaimen saa FISin Member Sectionista, kohdasta API keys. {card}Liitä se tähän ja paina {save}Save key. Tämä tehdään vain kerran, ja avain pysyy turvallisesti tallessa omalla Windows-tunnuksellasi. {second}Jos ilmoittautumiset tehdään regs.fissi.fi-palvelussa, sille on oma API-avain samassa näkymässä. Sen saa palvelun ylläpitäjältä.",
+      "en": "The races come straight from the FIS calendar. For that you need a FIS API key. Open {settings}Settings, and {tab}API keys. You get the key in the FIS Member Section, under API keys. {card}Paste it here and press {save}Save key. You do this only once, and the key stays safe in your own Windows account. {second}If your entries are made in the Finnish service regs.fissi.fi, its own API key goes in the same view. You get it from the operator of that service."
+    },
+    {
+      "id": "calendar",
+      "fi": "Palaa {series}Event series -välilehdelle ja avaa {browse}Browse FIS calendar. Lista näyttää ensin oman maan FIS-tapahtumat. {filter}Suodatetaan paikan mukaan: {type}Levi. Valitaan marraskuun lopun {event}FIS race Levi. {races}Alla näkyvät sen kilpailut: pujottelut ja suurpujottelut codex-numeroineen. Paina {use}Use selected event.",
+      "en": "Go back to {series}Event series and open {browse}Browse FIS calendar. The list first shows the FIS events of your own nation. {filter}Let's filter by location: {type}Levi. Select the {event}FIS race Levi at the end of November. {races}Below you see its races: slaloms and giant slaloms with their codex numbers. Press {use}Use selected event."
+    },
+    {
+      "id": "create",
+      "fi": "Tapahtuman tiedot {fields}täyttyvät kalenterista. Tarkista ne ja paina {create}Create series file. Anna tiedostolle nimi ja tallenna se.",
+      "en": "The event details {fields}are filled in from the calendar. Check them and press {create}Create series file. Give the file a name and save it."
+    },
+    {
+      "id": "competitions",
+      "fi": "{competitions}Competitions-välilehdellä ovat nyt {list}kaikki kahdeksan kilpailua, samassa tapahtumassa.",
+      "en": "The {competitions}Competitions tab now has {list}all eight races, in the same event."
+    },
+    {
+      "id": "course",
+      "fi": "Valitse {row}ensimmäinen pujottelu. Kilpailurinne haetaan FISin homologoinneista: paina {browse}Browse FIS homologations. Ohjelma ehdottaa {picker}Leville Wolverinea. Paina {apply}Apply homologation, ja rinteen korkeudet ja pituus {fields}täyttyvät. Tämä {check}rasti tallentaa saman rinteen kaikkiin tapahtuman pujotteluihin. Paina {save}Save competition. {done}Nyt Wolverine on jokaisessa pujottelussa. Suurpujotteluille tehdään samoin.",
+      "en": "Select the {row}first slalom. The race course comes from the FIS homologations: press {browse}Browse FIS homologations. The program suggests {picker}Wolverine for Levi. Press {apply}Apply homologation, and the altitudes and the length are {fields}filled in. This {check}checkbox saves the same course to all slaloms of the event. Press {save}Save competition. {done}Now every slalom has Wolverine. Do the same for the giant slaloms."
+    },
+    {
+      "id": "list",
+      "fi": "Sitten kilpailijat. Avaa {competitors}Competitors. Ensin ladataan FISin pistelista. Avaa {fis}Update from FIS. Listan pitää olla {date}voimassa kilpailupäivänä, ja ohjelma ehdottaa ensimmäisen kilpailun päivää. Paina {download}Download FIS point list.",
+      "en": "Then the competitors. Open {competitors}Competitors. First we load the FIS points list. Open {fis}Update from FIS. The list must be {date}valid on the race day, and the program suggests the day of the first race. Press {download}Download FIS point list."
+    },
+    {
+      "id": "listinfo",
+      "fi": "Tarkista vielä {info}listan numero ja voimassaolo. Arvonta käyttää näitä pisteitä, joten oikea lista on tärkeä.",
+      "en": "Check {info}the number and the validity of the list. The draw uses these points, so the right list matters."
+    },
+    {
+      "id": "fissi",
+      "fi": "Suomessa joidenkin FIS-kilpailujen ilmoittautumiset tehdään regs.fissi.fi-palvelussa, niin myös nämä. Haetaan kilpailijat sieltä. Avaa {expand}Update from regs.fissi.fi ja paina {fetch}samannimistä painiketta.",
+      "en": "In Finland, the entries of some FIS races are made in the service regs.fissi.fi, and so were these. Let's read the competitors from there. Open {expand}Update from regs.fissi.fi and press {fetch}the button."
+    },
+    {
+      "id": "fetched",
+      "fi": "Urheilijoiden nimet on tässä videossa peitetty. Ilmoittautuneet haettiin {races}jokaiseen kilpailuun codexin perusteella.",
+      "en": "The names of the athletes are covered in this video. The entries were read for {races}every race by its codex."
+    },
+    {
+      "id": "paste",
+      "fi": "Tämä on vain yksi tapa. Kilpailijat voi tuoda myös Excelistä: kopioi rivit ja {menu}liitä ne suoraan taulukkoon, näppäimillä Ctrl+V.",
+      "en": "This is only one way. You can also bring competitors from Excel: copy the rows and {menu}paste them straight into the grid, with Ctrl+V."
+    },
+    {
+      "id": "changes",
+      "fi": "Huomaa {yellow}keltaiset kentät. Ne ovat muutoksia, joita ei ole vielä tallennettu. Näet siis etukäteen, mikä muuttuu. {undo}Undo näyttää kaikki muutokset listana, ja {one}jokaisen voi perua erikseen. Vasta {save}Save tallentaa kaiken kerralla tapahtumatiedostoon.",
+      "en": "Notice the {yellow}yellow cells. They are changes that are not saved yet, so you see beforehand what is going to change. {undo}Undo lists all the changes, and {one}each one can be undone separately. Only {save}Save writes everything to the event file, at once."
+    },
+    {
+      "id": "update",
+      "fi": "Urheilijat voidaan myös päivittää eli synkronoida FISin rajapinnasta. Avaa {open}Update from FIS ja paina {update}Update from FIS list. {clubs}Esimerkiksi seurat ja pisteet päivittyvät. Muutokset näkyvät jälleen keltaisina, tulivatpa ne käyttäjän kirjoittamina, Excelistä tai jostain rajapinnasta. Jos jokin on väärin, avaa {undo}Undo ja {one}peru se muutos. Lopuksi paina {save}Save.",
+      "en": "You can also update the athletes, that is, synchronize them from FIS. Open {open}Update from FIS and press {update}Update from FIS list. {clubs}Clubs and points, for example, are updated. The changes are yellow again, whether they were typed by the user, pasted from Excel or read from a service. If something is wrong, open {undo}Undo and {one}undo that change. Finally, press {save}Save."
+    },
+    {
+      "id": "end",
+      "fi": "Nyt tapahtuma, kilpailut ja kilpailijat ovat yhdessä tiedostossa. Seuraavaksi voidaan arpoa lähtöjärjestys ensimmäiselle kierrokselle.",
+      "en": "Now the event, the races and the competitors are in one file. Next, you can draw the start order of the first run."
+    }
+  ],
+  "youtube": {
+    "fi": {
+      "title": "FIS-kilpailutapahtuman perustaminen | OpenSkiTime",
+      "description": "Tässä videossa perustetaan FIS-kilpailutapahtuma OpenSkiTimeen. Esimerkkinä ovat oikeat kilpailut: Levin FIS-kilpailut 28.11.-1.12.2026, kahdeksan pujottelua ja suurpujottelua naisille ja miehille.\n\nTämän videon jälkeen osaat:\n- perustaa kilpailutapahtuman, jossa yksi tiedosto sisältää kaikki tapahtuman kilpailut\n- tallentaa FIS API -avaimen ja hakea kilpailut suoraan FISin kalenterista\n- hakea kilpailurinteen FISin homologoinneista ja tallentaa sen kerralla kaikkiin pujotteluihin\n- valita ja ladata oikean FIS-pistelistan\n- tuoda ilmoittautumiset regs.fissi.fi-palvelusta tai liittää kilpailijat Excelistä\n- tarkistaa keltaisina näkyvät muutokset, perua yksittäisen muutoksen ja tallentaa\n- päivittää urheilijoiden tiedot FISin rajapinnasta\n\nSeuraavaksi arvotaan lähtöjärjestys ensimmäiselle kierrokselle. Urheilijoiden nimet on peitetty videolla.\n\nOpenSkiTime on ilmainen, avoimen lähdekoodin alppihiihdon ajanotto- ja tulospalveluohjelma.\n\nVerkkosivu: https://openskiti.me\nLähdekoodi: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alppihiihto",
+        "ajanotto",
+        "tulospalvelu",
+        "pujottelu",
+        "suurpujottelu",
+        "FIS",
+        "opetusvideo",
+        "FIS-kilpailu",
+        "regs.fissi.fi",
+        "FIS-pistelista"
+      ]
+    },
+    "en": {
+      "title": "Setting up a FIS event | OpenSkiTime",
+      "description": "This video sets up a FIS event in OpenSkiTime. The example is a real one: the FIS races in Levi, Finland, 28 November to 1 December 2026, eight slaloms and giant slaloms for women and men.\n\nAfter this video you can:\n- set up an event where one file holds all the races of the event\n- save your FIS API key and get the races straight from the FIS calendar\n- get the course from the FIS homologations and save it to all slaloms at once\n- choose and download the right FIS points list\n- import the entries from regs.fissi.fi or paste the racers from Excel\n- review the changes shown in yellow, undo a single change and save\n- update the athletes from FIS\n\nNext comes the draw of the start order for the first run. The names of the athletes are covered in the video.\n\nOpenSkiTime is free, open source timing and results software for alpine skiing.\n\nWebsite: https://openskiti.me\nSource code: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alpine skiing",
+        "ski race timing",
+        "race timing software",
+        "slalom",
+        "giant slalom",
+        "FIS",
+        "tutorial",
+        "FIS race",
+        "FIS points list",
+        "race office"
+      ]
+    }
+  }
+}

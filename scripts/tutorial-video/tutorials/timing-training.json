@@ -1,0 +1,129 @@
+{
+  "name": "timing-training",
+  "driver": "TimingTutorialTests",
+  "voice": "W9YsrfUjc4DOYR4fhg8M",
+  "fictional": true,
+  "title": {
+    "fi": "Timing: harjoittelu ilman ajanottolaitetta",
+    "en": "Timing: training without a timing device"
+  },
+  "say": {
+    "fi": {
+      "FISin": "Fissin",
+      "FIS": "Fis",
+      "API -avain": "apiavain",
+      "API-avain": "apiavain",
+      "API-avaimensa": "apiavaimensa",
+      "API keys": "apikiis",
+      "regs.fissi.fi": "reks fissi fi",
+      "OpenSkiTimeen": "Open Ski Taimiin",
+      "OpenSkiTimessa": "Open Ski Taimissa",
+      "OpenSkiTimen": "Open Ski Taimin",
+      "OpenSkiTime": "Open Ski Taim",
+      "Ctrl+V": "kontrol vee",
+      "Ctrl+Backspace": "kontrol bäkspeis",
+      "F6": "äf kuusi",
+      "I1": "ii yksi",
+      "DNS": "dee än äs",
+      "DNF": "dee än äf",
+      "Prepare Run 2": "Prepare Run two"
+    },
+    "en": {
+      "regs.fissi.fi": "regs dot fissi dot F I",
+      "OpenSkiTime": "Open Ski Time",
+      "Ctrl+V": "Control V",
+      "Ctrl+Backspace": "Control Backspace",
+      "F6": "F six",
+      "I1": "I one",
+      "DNS": "D N S",
+      "DNF": "D N F",
+      "Levi": "Levy",
+      "a FIS": "an F I S",
+      "Live": "Lyve",
+      "Timy": "Timmy"
+    }
+  },
+  "steps": [
+    {
+      "id": "intro",
+      "fi": "Ajanottoa voi harjoitella ilman ajanottolaitetta. OpenSkiTimessa on sitä varten simulaattori.",
+      "en": "You can practice timing without a timing device. OpenSkiTime has a simulator for that."
+    },
+    {
+      "id": "settings",
+      "fi": "Avaa {settings}Settings ja {devices}Timing devices. Valitse lähdön {source}lähteeksi {simulator}Simulator. Maali ja väliajat {same}käyttävät samaa yhteyttä. Palaa sitten {back}ajanottoon.",
+      "en": "Open {settings}Settings and {devices}Timing devices. As the {source}source of the start, choose {simulator}Simulator. The finish and the intermediates {same}use the same connection. Then go {back}back to timing."
+    },
+    {
+      "id": "bar",
+      "fi": "Ylhäällä lukee nyt {label}SIMULATION, ja alareunassa on {bar}TRAINING-palkki. Kytke lähtö, väliaika ja maali {start}päälle {i1}kuten {finish}kilpailussa.",
+      "en": "At the top it now says {label}SIMULATION, and at the bottom is the {bar}TRAINING bar. Switch on the start, {start}the intermediate {i1}and the finish, {finish}as in a race."
+    },
+    {
+      "id": "pulses",
+      "fi": "Harjoitus alkaa. {p1}Test start lähettää lähtöimpulssin ja {p2}Test I1 väliajan. Kello on tietokoneen kello, joten harjoittelu etenee oikeassa ajassa. {p3}Toinen kilpailija lähtee, ja {p4}Test finish tuo ensimmäisen maaliin.",
+      "en": "The training begins. {p1}Test start sends a start impulse and {p2}Test I1 an intermediate. The clock is the clock of the computer, so you practice in real time. {p3}A second racer starts, and {p4}Test finish brings the first one to the finish."
+    },
+    {
+      "id": "typed",
+      "fi": "Halutun ajan voi myös kirjoittaa. {box}Kirjoita kellonaika kenttään, jolloin kello pysähtyy. Tässä toinen kilpailija saa täsmälleen saman ajan kuin ensimmäinen. {finish}Test finish käyttää juuri tätä aikaa, ja tuloksena on {tie}tasatulos. {live}Live palauttaa kellon käyntiin.",
+      "en": "You can also type the time you want. {box}Type a time of day in the field, and the clock stops. Here the second racer gets exactly the time of the first one. {finish}Test finish uses exactly this time, and the result is a {tie}tie. {live}Live starts the clock again."
+    },
+    {
+      "id": "ideas",
+      "fi": "Harjoittele samalla virhetilanteet. {next}Kolmas kilpailija lähtee. {extra}Ylimääräinen maali-impulssi menee hänelle. {real}Oikea maaliaika jää ilman kilpailijaa, joten raahaa {grab}hänet oikean {drop}ajan päälle.",
+      "en": "Practice the errors as well. {next}A third racer starts. {extra}An extra finish impulse goes to this racer. {real}The real finish time is left without a racer, so drag {grab}the racer onto the right {drop}time."
+    },
+    {
+      "id": "safe",
+      "fi": "Harjoitusajat pysyvät erillään oikeista ajoista. Vaihdetaan lähteeksi {settings}oikea laite {devices}asetuksista. {source}Valitaan {real}Timy ja palataan {back}ajanottoon.",
+      "en": "Training times stay apart from real times. Let us choose a {settings}real device in {devices}the settings. {source}Choose {real}Timy and go {back}back to timing."
+    },
+    {
+      "id": "aside",
+      "fi": "Ohjelma huomaa, että kierroksella on harjoitusaikoja, ja tarjoaa painiketta {aside}Set training times aside. Sama lähtöjärjestys jatkuu {done}puhtaalta pöydältä, ja harjoitusajat jäävät talteen omaan versioonsa.",
+      "en": "The program notices that the run has training times, and offers the button {aside}Set training times aside. The same start order continues {done}from a clean slate, and the training times are kept in their own version."
+    },
+    {
+      "id": "end",
+      "fi": "Kun kierroksella on oikeita aikoja, simulaattori ei enää käynnisty. Harjoitus ei siis voi sekoittua kilpailuun.",
+      "en": "Once a run has real times, the simulator does not start any more. So training can never mix with a race."
+    }
+  ],
+  "youtube": {
+    "fi": {
+      "title": "Timing: harjoittelu ilman ajanottolaitetta | OpenSkiTime",
+      "description": "Ajanoton harjoittelu ilman ajanottolaitetta OpenSkiTimen simulaattorilla. Harjoitus etenee tietokoneen kellolla oikeassa ajassa, eikä se voi sekoittua oikeaan kilpailuun.\n\nTämän videon jälkeen osaat:\n- valita simulaattorin ajanoton lähteeksi asetuksista\n- lähettää testi-impulsseja lähtöön, väliaikaan ja maaliin\n- kirjoittaa halutun kellonajan, esimerkiksi tasatuloksen harjoitteluun\n- harjoitella virhetilanteen korjaamista raahaamalla\n- siirtää harjoitusajat sivuun, kun vaihdat oikeaan ajanottolaitteeseen\n\nOpenSkiTime on ilmainen, avoimen lähdekoodin alppihiihdon ajanotto- ja tulospalveluohjelma.\n\nVerkkosivu: https://openskiti.me\nLähdekoodi: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alppihiihto",
+        "ajanotto",
+        "tulospalvelu",
+        "pujottelu",
+        "suurpujottelu",
+        "FIS",
+        "opetusvideo",
+        "Timing",
+        "simulaattori",
+        "harjoittelu"
+      ]
+    },
+    "en": {
+      "title": "Timing: training without a timing device | OpenSkiTime",
+      "description": "Practicing timing without a timing device, with the simulator of OpenSkiTime. Training runs in real time on the clock of the computer, and it can never mix with a real race.\n\nAfter this video you can:\n- choose the simulator as the timing source in the settings\n- send test impulses to the start, intermediate and finish\n- type the time of day you want, for example to practice a tie\n- practice fixing an error by dragging\n- set training times aside when you switch to a real timing device\n\nOpenSkiTime is free, open source timing and results software for alpine skiing.\n\nWebsite: https://openskiti.me\nSource code: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alpine skiing",
+        "ski race timing",
+        "race timing software",
+        "slalom",
+        "giant slalom",
+        "FIS",
+        "tutorial",
+        "timing view",
+        "simulator",
+        "training"
+      ]
+    }
+  }
+}

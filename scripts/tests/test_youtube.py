@@ -97,6 +97,20 @@ class VideoMetadataTests(unittest.TestCase):
         self.assertEqual(metadata['status'], {'privacyStatus': 'private', 'selfDeclaredMadeForKids': False})
         self.assertEqual(metadata['snippet']['categoryId'], '17')
 
+    def test_language_sets_text_and_speech_language(self):
+        snippet = youtube.video_metadata(self.args(title='Ajanotto', language='fi'))['snippet']
+        self.assertEqual((snippet['defaultLanguage'], snippet['defaultAudioLanguage']), ('fi', 'fi'))
+        self.assertEqual(youtube.video_metadata(self.args(title='Timing'))['snippet']['defaultLanguage'], 'en')
+
+    def test_captions_request_has_the_resource_then_the_file(self):
+        body = youtube.captions_body('VID', 'fi', '', b'1\n00:00:01,000 --> 00:00:02,000\nHei\n', 'XYZ')
+        parts = body.split(b'--XYZ')
+        self.assertEqual(len(parts), 4)
+        self.assertIn(b'"videoId": "VID"', parts[1])
+        self.assertIn(b'"language": "fi"', parts[1])
+        self.assertIn(b'Hei', parts[2])
+        self.assertEqual(parts[3], b'--\r\n')
+
 
 class UploadTests(unittest.TestCase):
     def test_resumes_from_the_range_youtube_confirms(self):

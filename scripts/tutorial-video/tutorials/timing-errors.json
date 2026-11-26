@@ -1,0 +1,115 @@
+{
+  "name": "timing-errors",
+  "driver": "TimingTutorialTests",
+  "voice": "W9YsrfUjc4DOYR4fhg8M",
+  "fictional": true,
+  "title": {
+    "fi": "Timing: virhetilanteet",
+    "en": "Timing: handling errors"
+  },
+  "say": {
+    "fi": {
+      "FISin": "Fissin",
+      "FIS": "Fis",
+      "API": "api",
+      "OpenSkiTimen": "Open Ski Taimin",
+      "OpenSkiTime": "Open Ski Taim",
+      "Ctrl+Backspace": "kontrol bäkspeis",
+      "F6": "äf kuusi",
+      "I1": "ii yksi",
+      "DNS": "dee än äs",
+      "DNF": "dee än äf"
+    },
+    "en": {
+      "OpenSkiTime": "Open Ski Time",
+      "Ctrl+Backspace": "Control Backspace",
+      "F6": "F six",
+      "I1": "I one",
+      "DNS": "D N S",
+      "DNF": "D N F"
+    }
+  },
+  "steps": [
+    {
+      "id": "intro",
+      "fi": "Tässä videossa korjataan ajanoton virhetilanteita. Tärkein sääntö on tämä: mikään ei katoa. Alkuperäiset {stamps}impulssit säilyvät, ja jokainen korjaus jää historiaan.",
+      "en": "This video shows how to handle timing errors. The most important rule: nothing is lost. The original {stamps}impulses are kept, and every correction stays in the history."
+    },
+    {
+      "id": "false",
+      "fi": "Radalla on kilpailijoita, ja joku kävelee maalilinjan läpi. {pulse}Ylimääräinen impulssi kohdistui ensimmäiselle, ja hän sai liian hyvän ajan. Kun hän sitten tulee {real}oikeasti maaliin, aika menee väärälle, seuraavalle kilpailijalle.",
+      "en": "Racers are on course, and somebody walks through the finish line. {pulse}The extra impulse went to the first racer, whose time is now too good. When the racer then {real}really finishes, that time goes to the wrong racer, the next one."
+    },
+    {
+      "id": "drag",
+      "fi": "Korjaus on yksinkertainen: tartu Ranking-listalla {grab}ensimmäiseen kilpailijaan ja raahaa hänet oikean maaliajan päälle. Esikatselu näyttää ajan, jonka hän saa. {drop}Päästä irti. Toinen kilpailija palasi {course}radalle, ja ylimääräinen impulssi jäi {left}listalle ilman kilpailijaa.",
+      "en": "The fix is simple: in Ranking, take the {grab}first racer and drag the name onto the right finish time. The preview shows the time the racer would get. {drop}Let go. The other racer is back {course}on course, and the extra impulse stays {left}on the list without a racer."
+    },
+    {
+      "id": "second",
+      "fi": "Kun toinen kilpailija tulee {pulse}maaliin, hänen aikansa kohdistuu taas normaalisti.",
+      "en": "When the other racer {pulse}finishes, the time is assigned normally again."
+    },
+    {
+      "id": "missing",
+      "fi": "Joskus maali-impulssi puuttuu kokonaan. Kaksoisnapsauta {open}FINISH-sarakkeen tyhjää kohtaa, kirjoita {type}kellonaika varakellosta ja paina {add}Add timestamp. Raahaa sitten {grab}kilpailija uuden {drop}ajan päälle. Merkki {mark}m kertoo, että aika on annettu käsin.",
+      "en": "Sometimes the finish impulse is missing. Double-click an empty place in the {open}FINISH column, type the {type}time of day from the backup clock and press {add}Add timestamp. Then drag the {grab}racer onto the new {drop}time. The mark {mark}m shows that the time was entered by hand."
+    },
+    {
+      "id": "pass",
+      "fi": "Jos kilpailija ohittaa toisen radalla, {pulse}maaliaika menee ohitetulle. Korjaus on sama: raahaa {grab}maaliin tullut kilpailija {drop}ajan päälle. Ohitettu palaa {course}radalle.",
+      "en": "If a racer passes another one on course, the {pulse}finish time goes to the one who was passed. The fix is the same: drag the {grab}racer who finished onto the {drop}time. The other racer goes back {course}on course."
+    },
+    {
+      "id": "hold",
+      "fi": "Kun maalialueella liikutaan, laita {hold}maali pitoon. {pulse}Impulssit tallentuvat edelleen, mutta niitä ei kohdisteta kenellekään. Kytke maali lopuksi {on}takaisin päälle.",
+      "en": "When people move in the finish area, put the {hold}finish on hold. {pulse}Impulses are still saved, but given to nobody. Finally, switch the finish {on}on again."
+    },
+    {
+      "id": "rerun",
+      "fi": "Uusintalähtö: raahaa {grab}kilpailija At start -listan {drop}tyhjään kohtaan, niin hän lähtee seuraavaksi. Seuraava {pulse}lähtöimpulssi aloittaa uuden yrityksen, ja vanhat ajat jäävät historiaan.",
+      "en": "A rerun: drag the {grab}racer to an {drop}empty place in At start, and the racer starts next. The next {pulse}start impulse begins a new attempt, and the old times stay in the history."
+    },
+    {
+      "id": "end",
+      "fi": "Harjoittele näitä etukäteen simulaattorilla. Siitä kertoo seuraava video.",
+      "en": "Practice these with the simulator before the race. The next video shows how."
+    }
+  ],
+  "youtube": {
+    "fi": {
+      "title": "Timing: virhetilanteet | OpenSkiTime",
+      "description": "Ajanoton virhetilanteiden korjaaminen OpenSkiTimen Timing-näkymässä, hiirellä raahaamalla ja painikkeilla. Alkuperäiset impulssit säilyvät aina, ja jokainen korjaus jää historiaan.\n\nTämän videon jälkeen osaat:\n- korjata ylimääräisen maali-impulssin raahaamalla kilpailijan oikean maaliajan päälle\n- lisätä puuttuvan maaliajan käsin varakellon ajasta\n- korjata tilanteen, jossa kilpailija ohittaa toisen radalla\n- laittaa maalin pitoon, kun maalialueella liikutaan\n- antaa uusintalähdön raahaamalla kilpailijan takaisin At start -listalle\n\nVideossa on keksitty harjoituskilpailu ja simulaattori.\n\nOpenSkiTime on ilmainen, avoimen lähdekoodin alppihiihdon ajanotto- ja tulospalveluohjelma.\n\nVerkkosivu: https://openskiti.me\nLähdekoodi: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alppihiihto",
+        "ajanotto",
+        "tulospalvelu",
+        "pujottelu",
+        "suurpujottelu",
+        "FIS",
+        "opetusvideo",
+        "Timing",
+        "virhetilanteet",
+        "uusintalähtö"
+      ]
+    },
+    "en": {
+      "title": "Timing: handling errors | OpenSkiTime",
+      "description": "Fixing timing errors in the Timing view of OpenSkiTime, with drag and drop and buttons. The original impulses are always kept, and every correction stays in the history.\n\nAfter this video you can:\n- fix an extra finish impulse by dragging the racer onto the right finish time\n- enter a missing finish time by hand from the backup clock\n- fix a racer passing another one on course\n- put the finish on hold while people move in the finish area\n- give a rerun by dragging the racer back to At start\n\nThe video uses an invented training race and the simulator.\n\nOpenSkiTime is free, open source timing and results software for alpine skiing.\n\nWebsite: https://openskiti.me\nSource code: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alpine skiing",
+        "ski race timing",
+        "race timing software",
+        "slalom",
+        "giant slalom",
+        "FIS",
+        "tutorial",
+        "timing view",
+        "timing errors",
+        "rerun"
+      ]
+    }
+  }
+}

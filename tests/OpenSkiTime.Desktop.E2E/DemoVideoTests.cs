@@ -177,11 +177,12 @@ public sealed class DemoVideoTests
 
         // wallClock stamps every frame with the Unix time of its capture (Matroska output), so a recording can be aligned
         // with audio and browser frames captured by other processes.
-        public static ScreenRecorder Start(string path, bool wallClock = false)
+        // drawMouse: false leaves the pointer out; tutorials draw a larger one from its recorded track.
+        public static ScreenRecorder Start(string path, bool wallClock = false, bool drawMouse = true)
         {
             var start = new ProcessStartInfo("ffmpeg",
                 $"-y -loglevel error {(wallClock ? "-use_wallclock_as_timestamps 1 " : "")}-f gdigrab -framerate 30 -offset_x 0 -offset_y 0 " +
-                $"-video_size 1920x1032 -draw_mouse 1 -i desktop {(wallClock ? "-copyts " : "")}-c:v libx264 -preset ultrafast -crf 16 -pix_fmt yuv420p \"{path}\"")
+                $"-video_size 1920x1032 -draw_mouse {(drawMouse ? 1 : 0)} -i desktop {(wallClock ? "-copyts " : "")}-c:v libx264 -preset ultrafast -crf 16 -pix_fmt yuv420p \"{path}\"")
             { UseShellExecute = false, RedirectStandardInput = true, CreateNoWindow = true };
             var process = Process.Start(start) ?? throw new InvalidOperationException("ffmpeg did not start.");
             Thread.Sleep(1500);
