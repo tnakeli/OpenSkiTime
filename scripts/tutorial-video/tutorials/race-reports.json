@@ -1,0 +1,148 @@
+{
+  "name": "race-reports",
+  "driver": "OfficeTutorialTests",
+  "voice": "W9YsrfUjc4DOYR4fhg8M",
+  "fictional": true,
+  "title": {
+    "fi": "Kilpailuraportit ja PDF Factory",
+    "en": "Race reports and PDF Factory"
+  },
+  "say": {
+    "fi": {
+      "FISin": "Fissin",
+      "FIS": "Fis",
+      "API -avain": "apiavain",
+      "API-avain": "apiavain",
+      "API-avaimensa": "apiavaimensa",
+      "API keys": "apikiis",
+      "regs.fissi.fi": "reks fissi fi",
+      "OpenSkiTimeen": "Open Ski Taimiin",
+      "OpenSkiTimessa": "Open Ski Taimissa",
+      "OpenSkiTimen": "Open Ski Taimin",
+      "OpenSkiTime": "Open Ski Taim",
+      "Ctrl+V": "kontrol vee",
+      "Ctrl+Backspace": "kontrol bäkspeis",
+      "F6": "äf kuusi",
+      "I1": "ii yksi",
+      "DNS": "dee än äs",
+      "DNF": "dee än äf",
+      "Prepare Run 2": "Prepare Run two",
+      "live timingissa": "laiv taimingissa",
+      "PDF:t": "pee dee äffät",
+      "PDF-lähtölistat": "pee dee äf lähtölistat",
+      "PDF Factoryssa": "pee dee äf Factoryssa",
+      "PDF Factory": "pee dee äf Factory",
+      "PDF": "pee dee äf",
+      "XML-tiedostoksi": "äks äm äl tiedostoksi",
+      "XML": "äks äm äl",
+      "TSV": "tee äs vee",
+      "FIS XML": "Fis äks äm äl",
+      "Member Section": "Member Section",
+      "B-kello": "bee kello",
+      "A-järjestelmästä": "aa järjestelmästä",
+      "B-järjestelmän": "bee järjestelmän",
+      "B-järjestelmästä": "bee järjestelmästä",
+      "Live timing": "Laiv taiming"
+    },
+    "en": {
+      "regs.fissi.fi": "regs dot fissi dot F I",
+      "OpenSkiTime": "Open Ski Time",
+      "Ctrl+V": "Control V",
+      "Ctrl+Backspace": "Control Backspace",
+      "F6": "F six",
+      "I1": "I one",
+      "DNS": "D N S",
+      "DNF": "D N F",
+      "Levi": "Levy",
+      "a FIS": "an F I S",
+      "Live": "Lyve",
+      "Timy": "Timmy",
+      "TSV": "T S V",
+      "XML": "X M L",
+      "PDF": "P D F",
+      "PDFs": "P D Fs",
+      "FIS XML": "F I S X M L"
+    }
+  },
+  "steps": [
+    {
+      "id": "intro",
+      "fi": "Tässä videossa viimeistellään kilpailun raportit: tulokset, kilpailutiedot ja PDF:t. Kilpailu on jo ajettu.",
+      "en": "This video finishes the reports of the race: results, race information and PDFs. The race has been timed."
+    },
+    {
+      "id": "open",
+      "fi": "Avaa {results}Results ja valitse {race}kilpailu. {list}Lopputuloksessa ovat kierrosajat, yhteisaika ja kilpailupisteet.",
+      "en": "Open {results}Results and choose the {race}race. The {list}final results show the run times, the total and the race points."
+    },
+    {
+      "id": "penalty",
+      "fi": "Välilehti {penalty}Penalty laskee FIS-penaltyn parhaiden kymmenen maaliintulijan ja parhaiden viiden lähtijän pisteistä.",
+      "en": "The tab {penalty}Penalty calculates the FIS penalty from the points of the best ten finishers and the best five starters."
+    },
+    {
+      "id": "info",
+      "fi": "Välilehti {info}Race information on kilpailuraportin pohja: {jury}tuomaristo, kierrosten rinne, {gates}porttimäärät, {start}lähtöaika ja ratamestarit sekä keli. Tiedot tallentuvat automaattisesti.",
+      "en": "The tab {info}Race information is the base of the race report: the {jury}jury, the course of each run, the {gates}number of gates, the {start}start time, the course setters and the weather. Everything is saved automatically."
+    },
+    {
+      "id": "xml",
+      "fi": "Välilehdellä {xml}FIS XML tulokset {save}tallennetaan FISin XML-muotoon tai {send}lähetetään suoraan FISille.",
+      "en": "On the {xml}FIS XML tab the results are {save}saved in the FIS XML format or {send}sent straight to FIS."
+    },
+    {
+      "id": "pdf",
+      "fi": "Sitten {factory}PDF Factory. Listalla ovat kaikki raportit: {entries}osallistujalistat, {starts}lähtölistat, {referee}tuomariraportit, {official}viralliset tulokset ja {timing}ajanottoraportti.",
+      "en": "Then {factory}PDF Factory. The list has every report: {entries}entry lists, {starts}start lists, {referee}referee reports, {official}official results and the {timing}timing report."
+    },
+    {
+      "id": "settings",
+      "fi": "Kohdasta {settings}PDF settings voi valita {background}järjestäjän oman taustapohjan ja marginaalit.",
+      "en": "In {settings}PDF settings you can choose the {background}organizer's own background and the margins."
+    },
+    {
+      "id": "generate",
+      "fi": "Paina {all}Generate All. PDF:t tallentuvat tapahtumatiedoston viereen, ja {open}Open avaa valmiin tiedoston.",
+      "en": "Press {all}Generate All. The PDFs are saved next to the event file, and {open}Open opens a finished file."
+    },
+    {
+      "id": "end",
+      "fi": "Nyt kilpailun raportit ovat valmiit jaettavaksi.",
+      "en": "Now the reports of the race are ready to share."
+    }
+  ],
+  "youtube": {
+    "fi": {
+      "title": "Kilpailuraportit ja PDF Factory | OpenSkiTime",
+      "description": "Kilpailun raporttien viimeistely OpenSkiTimessa: tulokset, penalty, kilpailutiedot, FIS XML ja PDF-raportit.\n\nTämän videon jälkeen osaat:\n- lukea lopputuloksen ja FIS-penaltyn\n- täydentää kilpailuraportin tiedot: tuomaristo, portit, lähtöaika ja keli\n- tallentaa tulokset FISin XML-muotoon tai lähettää ne FISille\n- valita PDF-raporteille oman taustapohjan\n- tehdä kaikki PDF-raportit yhdellä painalluksella\n\nVideossa on keksitty harjoituskilpailu.\n\nOpenSkiTime on ilmainen, avoimen lähdekoodin alppihiihdon ajanotto- ja tulospalveluohjelma.\n\nVerkkosivu: https://openskiti.me\nOpetusvideot: https://openskiti.me/fi/opetusvideot/\nLähdekoodi: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alppihiihto",
+        "ajanotto",
+        "tulospalvelu",
+        "pujottelu",
+        "FIS",
+        "opetusvideo",
+        "tulokset",
+        "PDF",
+        "kilpailuraportti"
+      ]
+    },
+    "en": {
+      "title": "Race reports and PDF Factory | OpenSkiTime",
+      "description": "Finishing the reports of a race in OpenSkiTime: results, penalty, race information, FIS XML and PDF reports.\n\nAfter this video you can:\n- read the final results and the FIS penalty\n- complete the race report: jury, gates, start time and weather\n- save the results as FIS XML or send them to FIS\n- choose your own background for the PDF reports\n- make every PDF report with one click\n\nThe video uses an invented training race.\n\nOpenSkiTime is free, open source timing and results software for alpine skiing.\n\nWebsite: https://openskiti.me\nTutorials: https://openskiti.me/tutorials/\nSource code: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alpine skiing",
+        "ski race timing",
+        "race timing software",
+        "slalom",
+        "FIS",
+        "tutorial",
+        "results",
+        "PDF",
+        "race report"
+      ]
+    }
+  }
+}

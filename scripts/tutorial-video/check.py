@@ -9,6 +9,7 @@ Usage: python scripts/tutorial-video/check.py --video <mp4> --recording <dir> [-
 import argparse
 import collections
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -86,10 +87,18 @@ def main():
     recording = Path(args.recording)
     data = json.loads((recording / 'recording.json').read_text(encoding='utf-8'))
     failed = False
+    # The Windows account name can appear where the application defaults to it (the operator of timing corrections).
+    account = {w for w in re.findall(r'\w+', plain(os.environ.get('USERNAME', ''))) if len(w) >= 4}
     if data['facts'].get('fictional') == 'true':
-        print('Privacy: the event is fictional, there are no names to cover.')
+        with tempfile.TemporaryDirectory(dir=recording) as a:
+            seen = read(args.video, args.every, Path(a)) if account else {}
+        hits = sorted({round((int(Path(n).stem) - 1) * args.every) for n, t in seen.items() if set(re.findall(r'\w+', t)) & account})
+        print(f'Privacy: the event is fictional; the Windows account name is readable in {len(hits)} of {len(seen)} frames.')
+        if hits:
+            print(f'  REVIEW the account name at {hits[:6]} s')
+            failed = True
     else:
-        words = private_words(data['facts']['seriesFile'])
+        words = private_words(data['facts']['seriesFile']) | account
         # Words of the application and the narration are not names even if an athlete is called the same.
         allowed = {'levi', 'race', 'alpine', 'club', 'final', 'mark', 'page', 'event', 'start', 'list', 'team'}
         words -= allowed

@@ -25,8 +25,12 @@ internal sealed class TimingTutorial
         App = app; Office = office; _race = race; Bibs = bibs;
     }
 
+    // How far the race is prepared before the recording: entered racers; a drawn first run open in Timing with the
+    // simulator (on today's date, for real-time impulses); or both runs timed (on the race date, when its FIS list is valid).
+    public enum Stage { Entries, Timing, Timed }
+
     // Records one tutorial when OPENSKITIME_TUTORIAL names its language folder.
-    public static void Record(string tutorial, Action<TimingTutorial> prepare, Action<TimingTutorial, TutorialRecorder> record)
+    public static void Record(string tutorial, Action<TimingTutorial> prepare, Action<TimingTutorial, TutorialRecorder> record, Stage stage = Stage.Timing)
     {
         var language = Environment.GetEnvironmentVariable("OPENSKITIME_TUTORIAL");
         if (string.IsNullOrWhiteSpace(language)) { return; }
@@ -35,18 +39,30 @@ internal sealed class TimingTutorial
         var output = Path.Combine(language, "recording-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
         var root = DemoVideoTests.DemoRoot();
         var file = Path.Combine(Directory.CreateDirectory(Path.Combine(root, "Events")).FullName, "Synthetic Alpine Cup 2026.ost");
-        var race = new SyntheticRace(raceDate: DateOnly.FromDateTime(DateTime.Now));
+        var race = stage == Stage.Timing ? new SyntheticRace(raceDate: DateOnly.FromDateTime(DateTime.Now)) : new SyntheticRace();
         using var app = DesktopApp.Launch(root, local => File.WriteAllBytes(Path.Combine(local, "fis-points-list.zip"), race.PointsListArchive()));
         app.Maximize();
         var office = new RaceOffice(app, race) { OperatorName = "Race office" };
         office.CreateSeries(file);
         office.CreateCompetition();
         Import(app, office, race);
-        office.DrawFirstRun();
-        var bibs = SeriesFileEvidence.StartOrder(file, 1).OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
+        int[] bibs = [];
+        if (stage != Stage.Entries)
+        {
+            office.DrawFirstRun();
+            bibs = SeriesFileEvidence.StartOrder(file, 1).OrderBy(x => x.Position).Select(x => x.Bib).ToArray();
+            office.OpenRun("Timing", 1);
+            office.ConnectSimulator();
+        }
+        if (stage == Stage.Timed)
+        {
+            Simulate(app, Racers);
+            office.PrepareSecondRun();
+            office.OpenRun("Timing", 2);
+            office.EnsureConnected();
+            Simulate(app, SeriesFileEvidence.StartOrder(file, 2).Count);
+        }
         var tutorialRun = new TimingTutorial(app, office, race, bibs);
-        office.OpenRun("Timing", 1);
-        office.ConnectSimulator();
         prepare(tutorialRun);
         var facts = new Dictionary<string, string> { ["seriesFile"] = file, ["fictional"] = "true" };
         using var video = new TutorialRecorder(app, Path.Combine(language, "timing.json"), output);
@@ -56,7 +72,7 @@ internal sealed class TimingTutorial
         finally { video.Finish(facts); }
     }
 
-    private static void Import(DesktopApp app, RaceOffice office, SyntheticRace race)
+    internal static void Import(DesktopApp app, RaceOffice office, SyntheticRace race)
     {
         office.Navigate("Competitors");
         Clipboard.SetText(string.Join("\r\n", race.CompetitorTsv().Split('\n').Select(x => x.TrimEnd('\r')).Where(x => x.Length > 0).Take(Racers + 1)));
@@ -66,6 +82,23 @@ internal sealed class TimingTutorial
         app.WaitUntil(() => app.TryByName($"Pasted {Racers} rows. Review the highlighted cells, then choose Save.") is not null, "pasted rows", TimeSpan.FromSeconds(30));
         app.Click("Save");
         app.WaitUntil(() => app.TryByName("All changes saved") is not null, "competitors saved", TimeSpan.FromSeconds(30));
+    }
+
+    // Times a whole run in a few seconds of real time with the simulator: every racer starts, passes the intermediate and
+    // finishes, in start order. Used to prepare a race for the tutorials that begin after timing.
+    private static readonly string[] s_testButtons = ["Test start", "Test I1", "Test finish"];
+    // Pauses between intermediate and finish impulses (ms), so the racers' times differ.
+    private static readonly int[] s_gaps = [380, 900, 520, 1240, 450, 760, 610, 1050, 330, 840];
+
+    internal static void Simulate(DesktopApp app, int racers)
+    {
+        var buttons = s_testButtons.Select(x => app.Button(x)).ToArray();
+        for (var b = 0; b < buttons.Length; b++)
+        {
+            for (var i = 0; i < racers; i++) { buttons[b].Patterns.Invoke.Pattern.Invoke(); Thread.Sleep(b == 0 ? 450 : s_gaps[(i * (b + 2)) % s_gaps.Length]); }
+            Thread.Sleep(600);
+        }
+        Thread.Sleep(1500);
     }
 
     // Buttons are looked up before they are needed, so an impulse comes at its word.

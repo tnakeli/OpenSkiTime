@@ -68,7 +68,8 @@ $work = 'C:\OpenSkiTimeVideos'
 python scripts/tutorial-video/narrate.py fis-event --language fi --work $work
 
 # 2. Recording: takes the mouse, keyboard and screen for about five minutes. Close other windows, turn on Do not disturb.
-#    The test method is the script's "driver"; for the timing tutorials RecordBasics, RecordErrors or RecordTraining.
+#    The test method is the script's "driver": RecordBasics, RecordErrors or RecordTraining (TimingTutorialTests), and
+#    RecordStartLists, RecordSettings, RecordTimingReport or RecordRaceReports (OfficeTutorialTests).
 dotnet build src/OpenSkiTime.Desktop -c Release
 dotnet build tests/OpenSkiTime.Desktop.E2E -c Release
 $env:OPENSKITIME_DESKTOP_E2E = '1'
@@ -137,12 +138,20 @@ python -X utf8 scripts/tutorial-video/publish.py fis-event --language fi --outpu
 | `timing-basics` | Opening a run, HOLD and the inputs, the panes, a forerunner, automatic assignment of start, intermediate and finish, start order by dragging, DNS by dragging onto its button, DNF with its button and the right-click menu, result and intermediate rank |
 | `timing-errors` | A false finish fixed by dragging the racer onto the right timestamp, a missing finish entered by hand, a racer passing another (the same drag), HOLD of the finish, a rerun |
 | `timing-training` | The simulator as source, test impulses on the PC clock, a typed time for a tie, practising an error with a drag, and setting training times aside when a real device is chosen |
+| `start-lists` | The FIS standard draw, draw settings (first group, first bib), the draw, moving a racer with a reason, Print view and Export TSV |
+| `settings` | API keys, timing devices (operator, source, channel, intermediates, B Clock), timing report defaults and live timing keys |
+| `timing-report` | The FIS timing report of a timed race: equipment and officials, runs, replacement times, synchronization, system B and hand times, certification, XML, sending to FIS and test mode |
+| `race-reports` | Results, penalty, race information (jury, gates, start time), FIS XML, and PDF Factory with its background and Generate All |
 
 The tutorials are for every operator, so they show the mouse: drag and drop and buttons. Keyboard shortcuts are for
 experienced operators: a tutorial may mention them (the right-click menu lists them), but never demonstrates them.
 
-The timing tutorials use the synthetic race (`SyntheticRace`, ten racers) and the simulator; impulses come in real time on the
-computer's clock, so the running times on screen are real. A run with training times can only be timed again after
+The timing and race office tutorials use the synthetic race (`SyntheticRace`, ten racers). `TimingTutorial.Record` prepares
+it to one of three stages before the recording: `Entries` (racers entered, nothing drawn), `Timing` (the first run drawn and
+open in Timing with the simulator, on today's date) or `Timed` (both runs timed with the simulator, on the race date, when
+its FIS points list is valid and the penalty can be calculated). In Timing, impulses come in real time on the computer's
+clock, so the running times on screen are real. `OfficeTutorialProbe` (opt-in with `OPENSKITIME_TUTORIAL_PROBE=<folder>`)
+saves a screenshot and the UI Automation tree of each race office view of a timed race, to write a new driver against. A run with training times can only be timed again after
 **Set training times aside**, which `timing-training` shows.
 
 `fis-event` names its event in constants at the top of `FisEventTutorialTests`. The entries and points lists change, so after
