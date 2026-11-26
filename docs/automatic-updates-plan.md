@@ -55,6 +55,7 @@ Agreed 2026-11-26; not implemented yet. OpenSkiTime checks openskiti.me for a ne
   1. Size and SHA-256 equal the manifest.
   2. `WinVerifyTrust` accepts the file's Authenticode signature: intact, and chained to a trusted root. Revocation is not checked, so updating never depends on reaching a CA's revocation servers.
   3. The signer certificate's SHA-1 thumbprint, or its common name (the *Name* Windows shows in Digital Signature Details), is listed in `update-signers.txt`.
+  4. The installer's file version equals the offered version's `MAJOR.MINOR.PATCH` (`X.Y.Z.0`, set by `Package-Windows.ps1`). The signature covers the version resource, so an older signed installer published under a newer version's name is rejected. Inno Setup itself would overwrite newer files (`ignoreversion`).
 
   A failure deletes the file and shows `The update could not be verified`, with the reason and a link to the download page.
 - A file under its final name has passed these checks. Later steps (the next start, **Restart to update**) only re-check its SHA-256 against the manifest. `Updates/` keeps at most the installer of the offered version. Other installers and partial files written by the updater are deleted at startup.
@@ -105,10 +106,12 @@ The **Restart to update** button in About is the operator's consent; there is no
    - Start the installer as a plain child process, never through `OwnedProcessJob`. Its kill-on-close job would end the installer together with the application.
    - Do not pass `/SUPPRESSMSGBOXES`. The operator is present and must see an installer error instead of a program that silently disappears.
    - Do not pass `/DIR`. Inno Setup reuses the existing installation directory.
-5. The installer waits for the application process to exit, installs with a progress window and starts `OpenSkiTime.Desktop.exe` again.
-6. At every start, the application reads `pending-update.json`, if it exists, and deletes it.
+5. The installer waits for the application process to exit, installs with a progress window and starts `OpenSkiTime.Desktop.exe --after-update`.
+6. Only a start with `--after-update` reads `pending-update.json`, and it deletes the file. A normal start leaves the file alone, for example another window opened while the installer runs.
    - If the running version is the new version, the status line says `Updated to X.Y.Z.` For the rest of the session, About shows `Updated from A.B.C` with **What's new**. The series is reopened through the File → Open recent path, and the installer is deleted.
-   - Otherwise the status line shows the error `The update to X.Y.Z did not finish. Installer log: <path>`. The installer is kept so that **Restart to update** can be tried again.
+   - Otherwise the status line shows the error `The update to X.Y.Z did not finish. Installer log: <path>`.
+
+If installation fails, Inno Setup shows its own error and does not start the application. The verified installer stays in `Updates/`, so About offers **Restart to update** again at the next start. The next attempt overwrites the pending file.
 
 Live publishing, device listening and capture stop as on any close, and the operator starts them again. The installer's Restart Manager closes any other running OpenSkiTime window, as in a manual reinstall today. If such a window cannot close, Inno Setup asks the operator.
 
@@ -117,7 +120,7 @@ Live publishing, device listening and capture stop as on any close, and the oper
 All changes are in `deploy/windows/installer.iss`:
 
 - `[Code]`: `InitializeSetup` waits up to 60 s for the `WAITPID` process, using `OpenProcess`/`WaitForSingleObject` from kernel32. If the process is still running, setup stops with "OpenSkiTime is still running. The update was not installed." `IsUpdate` returns whether `{param:UPDATE|0}` is `1`.
-- `[Run]`: add `Filename: "{app}\OpenSkiTime.Desktop.exe"; Flags: nowait; Check: IsUpdate`. It runs only after a successful installation. The existing `postinstall skipifsilent` entry stays for interactive installations.
+- `[Run]`: add `Filename: "{app}\OpenSkiTime.Desktop.exe"; Parameters: "--after-update"; Flags: nowait; Check: IsUpdate`. It runs only after a successful installation. The existing `postinstall skipifsilent` entry stays for interactive installations.
 - `CloseApplications=yes` stays as the backstop for a process that did not exit.
 
 Interactive installations and the existing CI arguments behave as before.
@@ -150,7 +153,7 @@ An installed copy has `unins000.exe` next to `OpenSkiTime.Desktop.exe`; the port
   - `AuthenticodeVerifier`: `WinVerifyTrust`, the signer's thumbprint and common name, and the embedded `update-signers.txt`. Windows only, behind an interface.
   - The installer launcher.
   - `MainViewModel.Updates.cs`: state and commands.
-  - `App.axaml.cs`: reading the pending file at startup and launching the installer after `Dispose`.
+  - `App.axaml.cs`: reading the pending file on a start with `--after-update`, and launching the installer after `Dispose`.
   - The title-bar chip in `MainWindow` and the About card in `SettingsView.axaml`.
 - **Installer, website and release scripts:** `deploy/windows/installer.iss`, `deploy/windows/update-signers.txt`, `scripts/Test-WindowsSignatures.ps1`, `website/build.mjs`, `website/check.mjs` and `website/staticwebapp.config.json`.
 - **Dependencies and Linux:** no new NuGet or npm dependencies. A future Linux build reuses the Application part and offers only the download-page link.
@@ -166,11 +169,11 @@ An installed copy has `unins000.exe` next to `OpenSkiTime.Desktop.exe`; the port
   - No offer for an equal or older version.
 - **Desktop**, with a fake HTTP handler, verifier and launcher:
   - An offline startup check shows only in About.
-  - Available → download, then each verification failure deletes the file.
+  - Available → download, then each verification failure deletes the file. This includes an older signed installer offered as a newer version, which the file-version check rejects.
   - Cancelling deletes the partial file.
   - A refused close keeps the ready state and launches nothing.
   - An accepted close launches the installer with the expected arguments after `Dispose`.
-  - The pending file produces the success messages (with reopen and cleanup) and the failure messages.
+  - A start with `--after-update` reports success (with reopen and cleanup) or the version mismatch. A normal start leaves the pending file untouched, as when another window opens during installation.
   - Copies without `unins000.exe` get only the link.
   - `off` makes no request.
 - **Download**, against a loopback HTTP server: a redirect is followed, a redirect to HTTP is refused, the size limit and a hash mismatch stop the download.
@@ -182,7 +185,7 @@ An installed copy has `unins000.exe` next to `OpenSkiTime.Desktop.exe`; the port
 - **Installer** (`Test-WindowsInstaller.ps1`, in the unsigned and signed workflows): run update mode while a placeholder process is alive, with `OPENSKITIME_UPDATE_MANIFEST=off` and a temporary `OPENSKITIME_LOCAL_DATA`. Check that:
   - installation waits for the placeholder to exit;
   - the log is written to a path that contains a space;
-  - `OpenSkiTime.Desktop.exe` is started again from the installation directory.
+  - `OpenSkiTime.Desktop.exe --after-update` is started again from the installation directory.
 
   The existing reinstall and uninstall-preservation checks are unchanged.
 - **Website** (`scripts/tests`): a manifest is written for a stable release but not for a preview, and the build fails without a valid digest.
