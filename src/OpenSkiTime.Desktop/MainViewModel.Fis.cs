@@ -301,6 +301,8 @@ public sealed partial class MainViewModel
         }
     }
 
+    // Unsaved rows are updated too (for example competitors just read from regs.fissi.fi), so they can be completed
+    // before the first Save. Every change stays staged: Undo restores the saved values.
     [RelayCommand]
     private void StageFisUpdates()
     {
@@ -309,7 +311,6 @@ public sealed partial class MainViewModel
             && !string.IsNullOrWhiteSpace(x.FederationCode))
             .GroupBy(x => x.FederationCode.Trim(), StringComparer.OrdinalIgnoreCase).ToArray();
         var staged = 0;
-        var skipped = 0;
         var ambiguous = 0;
         var notOnList = 0;
         _suspendDeskChangeLog = true;
@@ -319,17 +320,17 @@ public sealed partial class MainViewModel
             {
                 if (group.Count() != 1) { ambiguous++; continue; }
                 var row = group.Single();
-                if (row.HasPendingChanges && !string.IsNullOrWhiteSpace(row.Surname)) { skipped++; continue; }
+                var points = row.FisPoints;
                 // Points come from this list; a Code that is not on it has no points on this list.
                 if (!_fisList.Athletes.TryGetValue(group.Key, out var athlete))
                 {
                     row.FisPoints = StagePoints(_fisList, null, row.FisPoints?.All);
-                    if (row.IsFisPointsChanged) { notOnList++; }
+                    if (row.IsFisPointsChanged && !Equals(points, row.FisPoints)) { notOnList++; }
                     continue;
                 }
                 var identity = ApplyFisValues(row, athlete);
                 row.FisPoints = StagePoints(_fisList, athlete, row.FisPoints?.All);
-                if (identity || row.IsFisPointsChanged) { staged++; }
+                if (identity || !Equals(points, row.FisPoints)) { staged++; }
             }
         }
         finally { _suspendDeskChangeLog = false; }
@@ -337,7 +338,7 @@ public sealed partial class MainViewModel
         RebuildChangeLog();
         SetStatus($"FIS list {_fisList.ListCode}: {staged} competitors updated"
             + (notOnList > 0 ? $", {notOnList} not on the list (points cleared)" : "")
-            + $"; {skipped} unsaved edits and {ambiguous} duplicate Codes skipped. Review the highlighted cells, then Save.");
+            + (ambiguous > 0 ? $"; {ambiguous} duplicate Codes skipped" : "") + ". Review the highlighted cells, then Save.");
     }
 
     [RelayCommand]
@@ -375,11 +376,11 @@ public sealed partial class MainViewModel
         SetStatus($"FIS: {added} competitor(s) ready to save; {skipped} existing Codes skipped.");
     }
 
+    // Returns true when a value of the row changed.
     private bool ApplyFisValues(CompetitorGridRow row, FisAthlete athlete)
     {
         if (string.IsNullOrWhiteSpace(athlete.Surname)) { return false; }
-        var wasChanged = row.HasPendingChanges;
-        var wasCodeOnly = string.IsNullOrWhiteSpace(row.Surname);
+        var before = Snapshot(row);
         row.FederationCode = athlete.Code;
         row.Surname = athlete.Surname;
         if (athlete.FirstName.Length > 0) { row.FirstName = athlete.FirstName; }
@@ -387,7 +388,13 @@ public sealed partial class MainViewModel
         if (athlete.Gender is { } gender) { row.GenderText = GenderLabels.Format(gender); }
         if (athlete.Nation is { Length: 3 } nation) { row.Nation = nation; }
         if (!string.IsNullOrWhiteSpace(athlete.Club)) { row.Club = athlete.Club; }
+        // The name now comes from the FIS list: a note about a name split or a missing identifier no longer applies.
+        row.NoteText = string.Empty;
         UpdateCategory(row);
-        return row.HasPendingChanges && (!wasChanged || wasCodeOnly);
+        return Snapshot(row) != before;
     }
+
+    // The typed text: an unsaved row may hold a value that is not valid yet.
+    private static (string, string, string, string, string, string, string) Snapshot(CompetitorGridRow row)
+        => (row.FederationCode, row.Surname, row.FirstName, row.BirthYearText, row.GenderText, row.Nation, row.Club);
 }

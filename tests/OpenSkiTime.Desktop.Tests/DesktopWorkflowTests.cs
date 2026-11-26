@@ -451,6 +451,62 @@ public partial class DesktopWorkflowTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public async Task UnsavedRowsAreFilledFromTheFisListAndANameNoteDoesNotBlockSave()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-fis-unsaved", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "series.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(SyntheticFisArchive());
+            await using (var seed = new SeriesWorkspace(new SqliteSeriesFileStore()))
+            {
+                var series = await seed.CreateAsync(file, new SeriesValues("Race", "Levi", "Club",
+                    new DateOnly(2026, 9, 25), new DateOnly(2026, 9, 25), "FIN", "2026/27"));
+                await seed.SaveDeskRowAsync(null, new CompetitorValues("NORD", "Ada", 2002,
+                    "123456", "FIN", "Old Club", Gender.Female), null, false, null, series.Revision);
+            }
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var exchange = new EntryExchangeStub();
+            var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = file, OpenPath = file, BackupPath = file + ".bak" },
+                entryExchange: exchange, fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
+            vm.OpenSeriesCommand.Execute(null);
+            await vm.OpenSeriesCommand.ExecutionTask!;
+            // A saved competitor with an unsaved edit, and new competitors whose names in capitals cannot be split.
+            var nord = Assert.Single(vm.VisibleCompetitors, x => !x.IsPlaceholder);
+            nord.BirthYearText = "20";
+            exchange.ClipboardText = "Name\tCode\nWEST ELI\t654321\nKOLMAS TESTI\t\n";
+            vm.PasteFromExcelCommand.Execute(null);
+            await vm.PasteFromExcelCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            var west = vm.VisibleCompetitors.Single(x => x.FederationCode == "654321");
+            var other = vm.VisibleCompetitors.Single(x => x.Surname == "TESTI");
+            Assert.Equal(("ELI", "WEST"), (west.Surname, west.FirstName));
+            Assert.All(new[] { west, other }, x => { Assert.True(x.HasReviewText); Assert.False(x.NeedsApproval); });
+
+            vm.StageFisUpdatesCommand.Execute(null);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            // The unsaved rows take the list's values; the note about the name split no longer applies.
+            Assert.Equal(("WEST", "Eli", "West Club", 24.68m), (west.Surname, west.FirstName, west.Club, west.FisGs));
+            Assert.False(west.HasReviewText);
+            Assert.Equal(("2002", "North Club", 12.34m), (nord.BirthYearText, nord.Club, nord.FisSl));
+            Assert.True(other.HasReviewText);
+
+            vm.CommitDeskChangesCommand.Execute(null);
+            await vm.CommitDeskChangesCommand.ExecutionTask!;
+            Assert.False(vm.IsError, vm.StatusMessage);
+            var desk = await workspace.ReadCompetitorDeskAsync();
+            Assert.Equal(3, desk.Competitors.Count);
+            var savedWest = desk.Competitors.Single(x => x.Values.FederationCode == "654321");
+            Assert.Equal(("WEST", "Eli"), (savedWest.Values.Surname, savedWest.Values.FirstName));
+            Assert.Equal(24.68m, desk.FisPointsOf(savedWest.Id)?.Gs);
+            Assert.Contains(desk.Competitors, x => x.Values.Surname == "TESTI" && x.Values.FirstName == "KOLMAS");
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [AvaloniaFact]
     public async Task CachedFisListStagesUpdatesAndNewAthletesOnlyUntilCommit()
     {
@@ -866,17 +922,35 @@ public partial class DesktopWorkflowTests
             Assert.False(pastedRemoval.Participations.Single(x => x.CompetitorId == removedEntryCompetitor.Id
                 && x.CompetitionId == vm.Competitions.Single(y => y.Values.ShortLabel == "3.1 SL").Id).Participates);
 
-            exchange.ClipboardText = "Surname\nUnknown";
+            // A Code change on a name match is a match to confirm; a new competitor without an identifier only gets a note.
+            exchange.ClipboardText = "Code\tSurname\tFirst name\tYear\nFIN999\tMakela\tAino\t2010\n\tUnknown\t\t\n";
             vm.PasteFromExcelCommand.Execute(null);
             await vm.PasteFromExcelCommand.ExecutionTask!;
+            var recoded = vm.VisibleCompetitors.Single(x => x.FederationCode == "FIN999");
             var uncertain = vm.VisibleCompetitors.Single(x => x.Surname == "UNKNOWN");
-            Assert.True(uncertain.NeedsApproval);
+            Assert.True(recoded.NeedsApproval);
+            Assert.False(uncertain.NeedsApproval);
+            Assert.True(uncertain.HasReviewText);
+            // A filter hides the row to confirm: Save shows it, selects it and says who, why and what to do.
+            vm.SetCompetitorColumnFilter(nameof(CompetitorGridRow.Surname), "UNKNOWN");
+            Assert.DoesNotContain(recoded, vm.VisibleCompetitors);
             Click(window, "Save");
             await vm.CommitDeskChangesCommand.ExecutionTask!;
             Assert.True(vm.IsError);
+            Assert.Contains("confirm the match of MAKELA Aino (FIN999)", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Contains("Code changes from FIN123 to FIN999", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Contains("Match checked", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Contains("filters were cleared", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Equal("", vm.CompetitorColumnFilter(nameof(CompetitorGridRow.Surname)));
+            Assert.Same(recoded, vm.SelectedCompetitorRow);
+            Assert.Same(recoded, grid.SelectedItem);
+            window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            var matchChecked = window.FindControl<CheckBox>("MatchCheckedBox")!;
+            Assert.True(matchChecked.IsEffectivelyVisible);
+            var matchRight = matchChecked.TranslatePoint(new Point(matchChecked.Bounds.Width, matchChecked.Bounds.Height), window)!.Value;
+            Assert.True(matchRight.X <= window.Bounds.Width && matchRight.Y <= window.Bounds.Height, $"Match checked is at {matchRight}.");
             Assert.Equal(2, (await workspace.ReadCompetitorDeskAsync()).Competitors.Count);
-            vm.RestoreDeskChangeCommand.Execute(vm.DeskChangeLog.Single(x => x.LocalRowId == uncertain.LocalId));
-            Assert.Empty(vm.DeskChangeLog);
+            while (vm.DeskChangeLog.Count > 0) { vm.RestoreDeskChangeCommand.Execute(vm.DeskChangeLog[0]); }
             Assert.Empty(vm.ImportWarnings);
 
             vm.SelectedCompetitorRow = vm.VisibleCompetitors.Single(x => x.Surname == "LAINE");

@@ -60,7 +60,8 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
         foreach (var person in people)
         {
             var before = person.Match?.Values;
-            var notes = new List<string>();
+            var notes = new List<string>(); // values to check; they never block Save
+            var confirm = new List<string>(); // an uncertain match, confirmed with Match checked before Save
             var values = person.Match is { } known && lockedCompetitors.Contains(known.Id) ? known.Values : Values(person, before, fisAthletes, notes);
             // A gender taken from the race must fit the entries the competitor already has, or Save would refuse everything.
             if (person.Match is { } ungendered && before!.Gender is null && values.Gender is { } inferred
@@ -80,7 +81,7 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
             // Compared with the site's Code: a competitor whose details are locked keeps the saved one.
             if (before?.FederationCode is { } oldCode && person.Athlete.Code is { } newCode
                 && !oldCode.Equals(newCode, StringComparison.OrdinalIgnoreCase))
-            { notes.Add($"Code is {oldCode} here and {newCode} on regs.fissi.fi; confirm this match."); }
+            { confirm.Add($"Code is {oldCode} here and {newCode} on regs.fissi.fi; confirm this match."); }
             var entries = new List<ImportEntryPatch>();
             foreach (var id in person.Competitions)
             {
@@ -101,8 +102,8 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
                 counts[id].Added++;
                 if (person.Match is null) { counts[id].New++; }
             }
-            if (person.Match is { } existing) { updates.Add(existing.Id, new Update(values, Changes(existing.Values, values), entries, notes)); }
-            else { rows.Add(new ImportReviewItem(rows.Count + 1, null, values, entries, ["NEW"], notes, true)); }
+            if (person.Match is { } existing) { updates.Add(existing.Id, new Update(values, Changes(existing.Values, values), entries, confirm, notes)); }
+            else { rows.Add(new ImportReviewItem(rows.Count + 1, null, values, entries, ["NEW"], confirm, true, Notes: notes)); }
         }
         // Entered in the series but no longer registered: the entry is proposed for removal, but never when the code or
         // the name is on the registration list.
@@ -118,7 +119,7 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
                         + $": an athlete with the same name or code is registered in {competitions[id].Values.ShortLabel}. The entry was kept; check it.");
                     continue;
                 }
-                if (!updates.TryGetValue(competitor.Id, out var update)) { updates.Add(competitor.Id, update = new Update(competitor.Values, [], [], [])); }
+                if (!updates.TryGetValue(competitor.Id, out var update)) { updates.Add(competitor.Id, update = new Update(competitor.Values, [], [], [], [])); }
                 update.Entries.Add(new ImportEntryPatch(id, false, false, null));
                 counts[id].Removed++;
             }
@@ -127,7 +128,7 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
         {
             if (!updates.TryGetValue(competitor.Id, out var update) || update.Changed.Count + update.Entries.Count == 0) { continue; }
             rows.Add(new ImportReviewItem(rows.Count + 1, competitor.Id, update.Values, update.Entries,
-                update.Entries.Count > 0 ? [.. update.Changed, "Entry"] : update.Changed, update.Notes, false));
+                update.Entries.Count > 0 ? [.. update.Changed, "Entry"] : update.Changed, update.Confirm, false, Notes: update.Notes));
         }
         return new FissiRegistrationPlan(rows, current.Select(x => new FissiRaceOutcome(x.CompetitionId, competitions[x.CompetitionId].Values.ShortLabel,
             x.Codex, x.Registrations?.Race.Date, x.Registrations?.Athletes.Count, counts[x.CompetitionId].New, counts[x.CompetitionId].Added,
@@ -137,7 +138,8 @@ public sealed record FissiRegistrationPlan(IReadOnlyList<ImportReviewItem> Rows,
     // Repeated: the registrations have this code, or this name and birth year without a code, for different athletes.
     private sealed record Person(FissiAthlete Athlete, List<Guid> Competitions, HashSet<Gender> Genders, CompetitorDetails? Match = null)
     { public bool Repeated { get; set; } }
-    private sealed record Update(CompetitorValues Values, List<string> Changed, List<ImportEntryPatch> Entries, List<string> Notes);
+    private sealed record Update(CompetitorValues Values, List<string> Changed, List<ImportEntryPatch> Entries, List<string> Confirm,
+        List<string> Notes);
     private sealed class Counts { public int New { get; set; } public int Added { get; set; } public int Removed { get; set; } }
 
     // One person per FIS code, or per name and birth year without a code.

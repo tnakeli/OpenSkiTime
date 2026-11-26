@@ -437,156 +437,176 @@
           </Border>
           </StackPanel>
         </StackPanel>
-        <StackPanel Spacing="12" IsVisible="{Binding IsCompetitorsSection}">
-          <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-          <!-- Desk status and save: edits in the grid stay pending until Save. -->
-          <Border Classes="card" Padding="12,8">
-            <Grid ColumnDefinitions="Auto,8,*,Auto,8,Auto" VerticalAlignment="Center">
-              <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center" IsVisible="{Binding HasDeskChangeLog}" />
-              <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding !HasDeskChangeLog}" />
-              <TextBlock Grid.Column="2" Text="{Binding UnsavedChangesText}" FontWeight="SemiBold" VerticalAlignment="Center" />
-              <Button Grid.Column="3" Content="{Binding ChangeReviewButtonText}" Command="{Binding ToggleChangeReviewCommand}"
-                      IsEnabled="{Binding HasDeskChangeLog}" Classes="secondaryAction" />
-              <Button Grid.Column="5" Content="Save" Command="{Binding CommitDeskChangesCommand}"
-                      IsEnabled="{Binding HasDeskChangeLog}" Classes="primaryAction" />
-            </Grid>
-          </Border>
-          <Border Name="ChangeReviewPanel" Classes="card" IsVisible="{Binding IsChangeReviewOpen}">
-            <StackPanel Spacing="6">
-              <Grid Classes="cardHeader" ColumnDefinitions="Auto,*">
-                <TextBlock Text="UNSAVED CHANGES" Classes="fieldLabel" VerticalAlignment="Center" />
-              </Grid>
-              <ScrollViewer MaxHeight="135"><ItemsControl ItemsSource="{Binding DeskChangeLog}"><ItemsControl.ItemTemplate><DataTemplate>
-                <Grid ColumnDefinitions="*,Auto" Margin="0,2"><TextBlock Text="{Binding DisplayLabel}" ToolTip.Tip="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Undo" Click="RestoreDeskChange_Click" Classes="secondaryAction" /></Grid>
-              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
-              <Grid ColumnDefinitions="Auto,*">
-                <Button Content="Discard all changes" Command="{Binding DiscardDeskChangesCommand}" Classes="dangerAction" />
-              </Grid>
-            </StackPanel>
-          </Border>
-          <!-- A large, virtualized and editable grid keeps declared column widths (with a floor), so columns do not
-               jump while the operator scrolls; the grid scrolls horizontally when narrow. -->
-          <DataGrid Name="CompetitorGrid" Classes="raceGrid columnControls" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
-                    SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" CanUserResizeColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
-                    FrozenColumnCount="3" HorizontalScrollBarVisibility="Auto"
-                    MinHeight="300" RowHeight="30" ColumnHeaderHeight="34" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
-              <DataGrid.ContextMenu><ContextMenu>
-                <MenuItem Header="Select all" InputGesture="Ctrl+A" Click="SelectAllContext_Click" />
-                <MenuItem Header="Paste from Excel" InputGesture="Ctrl+V" Click="PasteContext_Click" />
-                <MenuItem Header="Copy selected" InputGesture="Ctrl+C" Click="CopyContext_Click" />
-                <Separator />
-                <MenuItem Header="Delete selected rows" InputGesture="Delete" Click="DeleteContext_Click" />
-              </ContextMenu></DataGrid.ContextMenu>
-              <DataGrid.Columns>
-                <DataGridTemplateColumn Header="" IsReadOnly="True" CanUserSort="False" Width="40" MinWidth="40"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding ChangeMarker}" Classes="markerCell" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="CODE" SortMemberPath="FederationCode" Width="100" MinWidth="70"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FederationCode}" Classes="gridCell" Classes.changed="{Binding IsCodeChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FederationCode}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="SURNAME" SortMemberPath="Surname" Width="145" MinWidth="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Surname}" Classes="gridCell surname" Classes.changed="{Binding IsSurnameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Surname}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="FIRST NAME" SortMemberPath="FirstName" Width="125" MinWidth="80"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FirstName}" Classes="gridCell" Classes.changed="{Binding IsFirstNameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FirstName}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="YEAR" SortMemberPath="BirthYearText" Width="75"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding BirthYearText}" Classes="gridCell" Classes.changed="{Binding IsYearChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding BirthYearText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="GENDER" SortMemberPath="GenderText" Width="95" MinWidth="60"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding GenderText}" Classes="gridCell" Classes.changed="{Binding IsGenderChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><ComboBox ItemsSource="{Binding AvailableGenders}" SelectedItem="{Binding GenderText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="NAT" SortMemberPath="Nation" Width="95" MinWidth="88"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0"><Image Classes="flag" Source="{Binding Nation, Converter={x:Static local:NationFlagConverter.Instance}}" /><TextBlock Text="{Binding Nation}" Classes="gridCell" Classes.changed="{Binding IsNationChanged}" /></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Nation}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="CLUB" SortMemberPath="Club" Width="145" MinWidth="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Club}" Classes="gridCell" Classes.changed="{Binding IsClubChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Club}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="POINTS" SortMemberPath="PointsText" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding PointsText}" Classes="gridCell" Classes.changed="{Binding IsPointsChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding PointsText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="DH PTS" SortMemberPath="FisDh" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisDhText}" Classes="gridCell" Classes.changed="{Binding IsDhChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="SG PTS" SortMemberPath="FisSg" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisSgText}" Classes="gridCell" Classes.changed="{Binding IsSgChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="SL PTS" SortMemberPath="FisSl" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisSlText}" Classes="gridCell" Classes.changed="{Binding IsSlChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="GS PTS" SortMemberPath="FisGs" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisGsText}" Classes="gridCell" Classes.changed="{Binding IsGsChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="AC PTS" SortMemberPath="FisAc" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisAcText}" Classes="gridCell" Classes.changed="{Binding IsAcChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                <DataGridTextColumn Header="CATEGORY" Binding="{Binding Category}" SortMemberPath="Category" IsReadOnly="True" Width="125" MinWidth="80" />
-              </DataGrid.Columns>
-            </DataGrid>
-          <Border Classes="infoNote" IsVisible="{Binding SelectedCompetitorRow.NeedsApproval}"><StackPanel Orientation="Horizontal" Spacing="12">
-            <TextBlock Text="{Binding SelectedCompetitorRow.WarningText}" Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center" />
-            <CheckBox Content="Match checked" IsChecked="{Binding SelectedCompetitorRow.WarningApproved}" VerticalAlignment="Center" />
-          </StackPanel></Border>
-          <Expander Header="Update from FIS" IsExpanded="{Binding IsFisPanelOpen}" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="{DynamicResource FormGap}">
-            <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="2">
-              <TextBlock Text="{Binding FisListDisplay}" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding FisListValidityText}" Classes="supportingText" />
-            </StackPanel><Button Grid.Column="1" Content="Update from FIS list" Command="{Binding StageFisUpdatesCommand}" VerticalAlignment="Center" ToolTip.Tip="Update name, birth year, gender, nation and club of existing competitors from the loaded FIS list. Changes are highlighted; Save keeps them." Classes="secondaryAction" /></Grid>
-            <local:FormRow>
-              <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field">
-                <TextBlock Text="LIST EFFECTIVE ON" Classes="fieldLabel" />
-                <Grid ColumnDefinitions="*,6,Auto">
-                  <TextBox Name="FisEffectiveDateInput" Text="{Binding FisEffectiveDateText}" PlaceholderText="YYYY-MM-DD" ToolTip.Tip="Date the FIS point list must be effective on." />
-                  <Button Name="FisDatePickerButton" Grid.Column="2" Width="34" ToolTip.Tip="Choose effective date" Click="DatePickerButton_Click" Classes="dateAction">
-                    <Path Width="15" Height="15" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.5"
-                          Data="M2,4 L13,4 13,13 2,13 Z M2,7 L13,7 M5,2 L5,5 M10,2 L10,5" />
-                  </Button>
-                </Grid>
-              </StackPanel>
-              <Button Grid.Column="2" Grid.ColumnSpan="2" Content="Download FIS point list" Command="{Binding DownloadFisListCommand}" IsEnabled="{Binding !IsFisBusy}"
-                      VerticalAlignment="Bottom" HorizontalAlignment="Left" Classes="secondaryAction" />
-            </local:FormRow>
-            <local:FormRow>
-              <Grid Grid.Column="0" Grid.ColumnSpan="10" ColumnDefinitions="*,6,34">
-                <TextBox Name="FisSearchInput" Text="{Binding FisSearchText}" PlaceholderText="Search FIS by code, name, nation or club (2+ characters)" />
-                <Button Grid.Column="2" Width="34" Content="×" ToolTip.Tip="Clear search" Command="{Binding ClearFisSearchCommand}" Click="FocusFisSearch_Click" HorizontalContentAlignment="Center" Classes="secondaryAction" Padding="0" />
-              </Grid>
-              <Button Grid.Column="10" Grid.ColumnSpan="2" Content="Add selected competitors" Command="{Binding StageSelectedFisAthleteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="secondaryAction" />
-            </local:FormRow>
-            <ListBox Name="FisSearchResultsList" ItemsSource="{Binding FisSearchResults}" SelectionMode="Multiple" SelectionChanged="FisSearchResults_SelectionChanged" MaxHeight="150">
-              <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" FontSize="12" /></DataTemplate></ListBox.ItemTemplate>
-            </ListBox>
-            </StackPanel>
-          </Expander>
-          <Expander Name="FissiApiSection" Header="Update from regs.fissi.fi" IsExpanded="{Binding IsFissiApiPanelOpen}" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="{DynamicResource FormGap}">
-              <Button Name="UpdateFromFissiApiButton" Content="Update from regs.fissi.fi" Command="{Binding UpdateFromFissiApiCommand}" IsEnabled="{Binding !IsFissiBusy}" HorizontalAlignment="Right"
-                      ToolTip.Tip="Read the registered athletes of every competition by codex with the API key saved in Settings. New competitors, changed details and entries are highlighted; Save keeps them." Classes="secondaryAction" />
-              <DataGrid Name="FissiApiRacesGrid" Classes="raceGrid" ItemsSource="{Binding FissiApiRaces}" IsVisible="{Binding HasFissiApiRaces}"
-                        AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="300" RowHeight="28" ColumnHeaderHeight="28" HeadersVisibility="Column">
-                <DataGrid.Columns>
-                  <DataGridTextColumn Header="RACE" Binding="{Binding Race}" Width="Auto" />
-                  <DataGridTextColumn Header="CODEX" Binding="{Binding Codex}" Width="Auto" />
-                  <DataGridTextColumn Header="DATE" Binding="{Binding Date}" Width="Auto" />
-                  <DataGridTextColumn Header="REGISTERED" Binding="{Binding Registered}" Width="Auto" />
-                  <DataGridTextColumn Header="NEW" Binding="{Binding New}" Width="Auto" />
-                  <DataGridTextColumn Header="ADDED" Binding="{Binding Added}" Width="Auto" />
-                  <DataGridTextColumn Header="REMOVED" Binding="{Binding Removed}" Width="Auto" />
-                  <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="Auto" />
-                </DataGrid.Columns>
-              </DataGrid>
-            </StackPanel>
-          </Expander>
-          <Expander Header="Category rules · birth-year range and gender" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="{DynamicResource FormGap}">
-            <DataGrid Classes="raceGrid" ItemsSource="{Binding CategoryRules}" SelectedItem="{Binding SelectedCategoryRule}"
-                      AutoGenerateColumns="False" IsReadOnly="True" MinHeight="70" MaxHeight="150"
-                      RowHeight="28" ColumnHeaderHeight="28" HeadersVisibility="Column">
-              <DataGrid.Columns>
-                <DataGridTextColumn Header="CATEGORY" Binding="{Binding Values.Label}" Width="Auto" MinWidth="160" />
-                <DataGridTextColumn Header="FROM YEAR" Binding="{Binding Values.BirthYearMin}" Width="Auto" />
-                <DataGridTextColumn Header="TO YEAR" Binding="{Binding Values.BirthYearMax}" Width="Auto" />
-                <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Gender, Converter={StaticResource GenderLabelConverter}}" Width="Auto" />
-                <DataGridTextColumn Header="ORDER" Binding="{Binding Values.DisplayOrder}" Width="Auto" />
-              </DataGrid.Columns>
-            </DataGrid>
-            <local:FormRow>
-              <StackPanel Grid.Column="0" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="LABEL" Classes="fieldLabel" /><TextBox Text="{Binding CategoryLabel}" /></StackPanel>
-              <StackPanel Grid.Column="4" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="FROM YEAR" Classes="fieldLabel" /><TextBox Text="{Binding CategoryMinYearText}" /></StackPanel>
-              <StackPanel Grid.Column="6" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="TO YEAR" Classes="fieldLabel" /><TextBox Text="{Binding CategoryMaxYearText}" /></StackPanel>
-              <StackPanel Grid.Column="8" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="GENDER" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding CategoryGenderOptions}" SelectedItem="{Binding CategoryGenderText}" /></StackPanel>
-              <StackPanel Grid.Column="10" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="ORDER" Classes="fieldLabel" /><TextBox Text="{Binding CategoryOrderText}" /></StackPanel>
-            </local:FormRow>
-            <Grid ColumnDefinitions="Auto,*,Auto,8,Auto">
-              <Button Content="Remove rule" Command="{Binding RemoveCategoryRuleCommand}" IsEnabled="{Binding SelectedCategoryRule}" Classes="dangerAction" />
-              <Button Grid.Column="2" Content="New rule" Command="{Binding NewCategoryRuleCommand}" Classes="secondaryAction" />
-              <Button Grid.Column="4" Content="Save rule" Command="{Binding SaveCategoryRuleCommand}" Classes="primaryAction" />
-            </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Name="DefaultCategoriesButton" Content="Default classes (replace)" Command="{Binding LoadDefaultCategoriesCommand}" Classes="secondaryAction" ToolTip.Tip="Replace the rules with the age classes of this season: N and M 10, 12, 14, 16, 18, 21 and general." />
-              <Button Content="Save rules for reuse" Command="{Binding SaveCategoryRulesPresetCommand}" Classes="secondaryAction" />
-              <Button Content="Load saved rules (replace)" Command="{Binding LoadCategoryRulesPresetCommand}" Classes="secondaryAction" />
-              <Button Content="Update categories" Command="{Binding UpdateCategoriesCommand}" Classes="secondaryAction" />
-            </StackPanel>
-            </StackPanel>
-          </Expander>
-        </StackPanel>
         <local:SettingsView IsVisible="{Binding IsSettingsSection}" />
       </StackPanel>
     </ScrollViewer>
+    <!-- Competitors fill the window: the grid takes the free height, so its header and horizontal scroll bar stay in
+         view and the mouse wheel never scrolls a page under it. The tools below the grid scroll on their own. -->
+    <Grid Name="CompetitorsWorkspace" Grid.Row="2" Margin="{DynamicResource PageInset}" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto"
+          IsVisible="{Binding IsCompetitorsSection}" SizeChanged="CompetitorsWorkspace_SizeChanged">
+      <!-- Warnings of the last paste or update, folded to one line so they never push the grid down. -->
+      <Expander Name="ImportWarningsSection" Grid.Row="0" Margin="{DynamicResource StackGapBelow}" HorizontalAlignment="Stretch"
+                IsVisible="{Binding !!ImportWarnings.Count}">
+        <Expander.Header>
+          <TextBlock Text="{Binding ImportWarnings.Count, StringFormat='Warnings ({0})'}" Foreground="{DynamicResource WarningBrush}" FontWeight="SemiBold" />
+        </Expander.Header>
+        <ScrollViewer MaxHeight="{DynamicResource WarningListMaxHeight}">
+          <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        </ScrollViewer>
+      </Expander>
+      <!-- Desk status and save: edits in the grid stay pending until Save. -->
+      <Border Grid.Row="1" Classes="card" Padding="12,8" Margin="{DynamicResource StackGapBelow}">
+        <Grid ColumnDefinitions="Auto,8,*,Auto,8,Auto" VerticalAlignment="Center">
+          <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center" IsVisible="{Binding HasDeskChangeLog}" />
+          <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding !HasDeskChangeLog}" />
+          <TextBlock Grid.Column="2" Text="{Binding UnsavedChangesText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Grid.Column="3" Content="{Binding ChangeReviewButtonText}" Command="{Binding ToggleChangeReviewCommand}"
+                  IsEnabled="{Binding HasDeskChangeLog}" Classes="secondaryAction" />
+          <Button Grid.Column="5" Content="Save" Command="{Binding CommitDeskChangesCommand}"
+                  IsEnabled="{Binding HasDeskChangeLog}" Classes="primaryAction" />
+        </Grid>
+      </Border>
+      <Border Grid.Row="2" Name="ChangeReviewPanel" Classes="card" Margin="{DynamicResource StackGapBelow}" IsVisible="{Binding IsChangeReviewOpen}">
+        <StackPanel Spacing="6">
+          <Grid Classes="cardHeader" ColumnDefinitions="Auto,*">
+            <TextBlock Text="UNSAVED CHANGES" Classes="fieldLabel" VerticalAlignment="Center" />
+          </Grid>
+          <ScrollViewer MaxHeight="135"><ItemsControl ItemsSource="{Binding DeskChangeLog}"><ItemsControl.ItemTemplate><DataTemplate>
+            <Grid ColumnDefinitions="*,Auto" Margin="0,2"><TextBlock Text="{Binding DisplayLabel}" ToolTip.Tip="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Undo" Click="RestoreDeskChange_Click" Classes="secondaryAction" /></Grid>
+          </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+          <Grid ColumnDefinitions="Auto,*">
+            <Button Content="Discard all changes" Command="{Binding DiscardDeskChangesCommand}" Classes="dangerAction" />
+          </Grid>
+        </StackPanel>
+      </Border>
+      <!-- A large, virtualized and editable grid keeps declared column widths (with a floor), so columns do not
+           jump while the operator scrolls; the grid scrolls horizontally when narrow. It takes the free height. -->
+      <DataGrid Grid.Row="3" Name="CompetitorGrid" Classes="raceGrid columnControls" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
+                SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" CanUserResizeColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
+                FrozenColumnCount="3" HorizontalScrollBarVisibility="Auto" ScrollViewer.AllowAutoHide="False"
+                MinHeight="{DynamicResource CompetitorGridMinHeight}" RowHeight="30" ColumnHeaderHeight="34" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+          <DataGrid.ContextMenu><ContextMenu>
+            <MenuItem Header="Select all" InputGesture="Ctrl+A" Click="SelectAllContext_Click" />
+            <MenuItem Header="Paste from Excel" InputGesture="Ctrl+V" Click="PasteContext_Click" />
+            <MenuItem Header="Copy selected" InputGesture="Ctrl+C" Click="CopyContext_Click" />
+            <Separator />
+            <MenuItem Header="Delete selected rows" InputGesture="Delete" Click="DeleteContext_Click" />
+          </ContextMenu></DataGrid.ContextMenu>
+          <DataGrid.Columns>
+            <DataGridTemplateColumn Header="" IsReadOnly="True" CanUserSort="False" Width="56" MinWidth="56"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><TextBlock Text="{Binding ChangeMarker}" Classes="markerCell" /><TextBlock Text="⚠" Classes="markerCell" Foreground="{DynamicResource WarningBrush}" IsVisible="{Binding HasReviewText}" ToolTip.Tip="{Binding ReviewText}" /></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="CODE" SortMemberPath="FederationCode" Width="100" MinWidth="70"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FederationCode}" Classes="gridCell" Classes.changed="{Binding IsCodeChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FederationCode}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="SURNAME" SortMemberPath="Surname" Width="145" MinWidth="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Surname}" Classes="gridCell surname" Classes.changed="{Binding IsSurnameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Surname}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="FIRST NAME" SortMemberPath="FirstName" Width="125" MinWidth="80"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FirstName}" Classes="gridCell" Classes.changed="{Binding IsFirstNameChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding FirstName}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="YEAR" SortMemberPath="BirthYearText" Width="75"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding BirthYearText}" Classes="gridCell" Classes.changed="{Binding IsYearChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding BirthYearText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="GENDER" SortMemberPath="GenderText" Width="95" MinWidth="60"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding GenderText}" Classes="gridCell" Classes.changed="{Binding IsGenderChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><ComboBox ItemsSource="{Binding AvailableGenders}" SelectedItem="{Binding GenderText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="NAT" SortMemberPath="Nation" Width="95" MinWidth="88"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0"><Image Classes="flag" Source="{Binding Nation, Converter={x:Static local:NationFlagConverter.Instance}}" /><TextBlock Text="{Binding Nation}" Classes="gridCell" Classes.changed="{Binding IsNationChanged}" /></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Nation}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="CLUB" SortMemberPath="Club" Width="145" MinWidth="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Club}" Classes="gridCell" Classes.changed="{Binding IsClubChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding Club}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="POINTS" SortMemberPath="PointsText" Width="88" MinWidth="80"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding PointsText}" Classes="gridCell" Classes.changed="{Binding IsPointsChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate><DataGridTemplateColumn.CellEditingTemplate><DataTemplate><TextBox Text="{Binding PointsText}" /></DataTemplate></DataGridTemplateColumn.CellEditingTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="DH PTS" SortMemberPath="FisDh" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisDhText}" Classes="gridCell" Classes.changed="{Binding IsDhChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="SG PTS" SortMemberPath="FisSg" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisSgText}" Classes="gridCell" Classes.changed="{Binding IsSgChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="SL PTS" SortMemberPath="FisSl" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisSlText}" Classes="gridCell" Classes.changed="{Binding IsSlChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="GS PTS" SortMemberPath="FisGs" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisGsText}" Classes="gridCell" Classes.changed="{Binding IsGsChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="AC PTS" SortMemberPath="FisAc" IsReadOnly="True" Width="75" MinWidth="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding FisAcText}" Classes="gridCell" Classes.changed="{Binding IsAcChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+            <DataGridTextColumn Header="CATEGORY" Binding="{Binding Category}" SortMemberPath="Category" IsReadOnly="True" Width="125" MinWidth="80" />
+          </DataGrid.Columns>
+        </DataGrid>
+      <Border Grid.Row="4" Name="CompetitorReviewNote" Classes="infoNote" Margin="{DynamicResource StackGapAbove}" IsVisible="{Binding SelectedCompetitorRow.HasReviewText}">
+        <!-- The text wraps so a long note never pushes Match checked out of view. -->
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <TextBlock Text="{Binding SelectedCompetitorRow.ReviewText}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
+          <CheckBox Grid.Column="1" Name="MatchCheckedBox" Content="Match checked" IsChecked="{Binding SelectedCompetitorRow.WarningApproved}" IsVisible="{Binding SelectedCompetitorRow.NeedsApproval}" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+      <!-- One tool open at a time; together they take at most about half of the height (set in code). -->
+      <ScrollViewer Grid.Row="5" Name="CompetitorToolsScroll" Margin="{DynamicResource StackGapAbove}" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="8">
+        <Expander Header="Update from FIS" IsExpanded="{Binding IsFisPanelOpen}" Expanded="CompetitorTool_Expanded" HorizontalAlignment="Stretch">
+          <StackPanel Spacing="{DynamicResource FormGap}">
+          <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="2">
+            <TextBlock Text="{Binding FisListDisplay}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding FisListValidityText}" Classes="supportingText" />
+          </StackPanel><Button Grid.Column="1" Content="Update from FIS list" Command="{Binding StageFisUpdatesCommand}" VerticalAlignment="Center" ToolTip.Tip="Update name, birth year, gender, nation, club and points of the competitors, unsaved rows included, from the loaded FIS list by Code. Changes are highlighted; Save keeps them." Classes="secondaryAction" /></Grid>
+          <local:FormRow>
+            <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Classes="field">
+              <TextBlock Text="LIST EFFECTIVE ON" Classes="fieldLabel" />
+              <Grid ColumnDefinitions="*,6,Auto">
+                <TextBox Name="FisEffectiveDateInput" Text="{Binding FisEffectiveDateText}" PlaceholderText="YYYY-MM-DD" ToolTip.Tip="Date the FIS point list must be effective on." />
+                <Button Name="FisDatePickerButton" Grid.Column="2" Width="34" ToolTip.Tip="Choose effective date" Click="DatePickerButton_Click" Classes="dateAction">
+                  <Path Width="15" Height="15" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.5"
+                        Data="M2,4 L13,4 13,13 2,13 Z M2,7 L13,7 M5,2 L5,5 M10,2 L10,5" />
+                </Button>
+              </Grid>
+            </StackPanel>
+            <Button Grid.Column="2" Grid.ColumnSpan="2" Content="Download FIS point list" Command="{Binding DownloadFisListCommand}" IsEnabled="{Binding !IsFisBusy}"
+                    VerticalAlignment="Bottom" HorizontalAlignment="Left" Classes="secondaryAction" />
+          </local:FormRow>
+          <local:FormRow>
+            <Grid Grid.Column="0" Grid.ColumnSpan="10" ColumnDefinitions="*,6,34">
+              <TextBox Name="FisSearchInput" Text="{Binding FisSearchText}" PlaceholderText="Search FIS by code, name, nation or club (2+ characters)" />
+              <Button Grid.Column="2" Width="34" Content="×" ToolTip.Tip="Clear search" Command="{Binding ClearFisSearchCommand}" Click="FocusFisSearch_Click" HorizontalContentAlignment="Center" Classes="secondaryAction" Padding="0" />
+            </Grid>
+            <Button Grid.Column="10" Grid.ColumnSpan="2" Content="Add selected competitors" Command="{Binding StageSelectedFisAthleteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="secondaryAction" />
+          </local:FormRow>
+          <ListBox Name="FisSearchResultsList" ItemsSource="{Binding FisSearchResults}" SelectionMode="Multiple" SelectionChanged="FisSearchResults_SelectionChanged" MaxHeight="150">
+            <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" FontSize="12" /></DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+          </StackPanel>
+        </Expander>
+        <Expander Name="FissiApiSection" Header="Update from regs.fissi.fi" IsExpanded="{Binding IsFissiApiPanelOpen}" Expanded="CompetitorTool_Expanded" HorizontalAlignment="Stretch">
+          <StackPanel Spacing="{DynamicResource FormGap}">
+            <Button Name="UpdateFromFissiApiButton" Content="Update from regs.fissi.fi" Command="{Binding UpdateFromFissiApiCommand}" IsEnabled="{Binding !IsFissiBusy}" HorizontalAlignment="Right"
+                    ToolTip.Tip="Read the registered athletes of every competition by codex with the API key saved in Settings. New competitors, changed details and entries are highlighted; Save keeps them." Classes="secondaryAction" />
+            <DataGrid Name="FissiApiRacesGrid" Classes="raceGrid" ItemsSource="{Binding FissiApiRaces}" IsVisible="{Binding HasFissiApiRaces}"
+                      AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="300" RowHeight="28" ColumnHeaderHeight="28" HeadersVisibility="Column">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="RACE" Binding="{Binding Race}" Width="Auto" />
+                <DataGridTextColumn Header="CODEX" Binding="{Binding Codex}" Width="Auto" />
+                <DataGridTextColumn Header="DATE" Binding="{Binding Date}" Width="Auto" />
+                <DataGridTextColumn Header="REGISTERED" Binding="{Binding Registered}" Width="Auto" />
+                <DataGridTextColumn Header="NEW" Binding="{Binding New}" Width="Auto" />
+                <DataGridTextColumn Header="ADDED" Binding="{Binding Added}" Width="Auto" />
+                <DataGridTextColumn Header="REMOVED" Binding="{Binding Removed}" Width="Auto" />
+                <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="Auto" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </StackPanel>
+        </Expander>
+        <Expander Header="Category rules · birth-year range and gender" Expanded="CompetitorTool_Expanded" HorizontalAlignment="Stretch">
+          <StackPanel Spacing="{DynamicResource FormGap}">
+          <DataGrid Classes="raceGrid" ItemsSource="{Binding CategoryRules}" SelectedItem="{Binding SelectedCategoryRule}"
+                    AutoGenerateColumns="False" IsReadOnly="True" MinHeight="70" MaxHeight="150"
+                    RowHeight="28" ColumnHeaderHeight="28" HeadersVisibility="Column">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="CATEGORY" Binding="{Binding Values.Label}" Width="Auto" MinWidth="160" />
+              <DataGridTextColumn Header="FROM YEAR" Binding="{Binding Values.BirthYearMin}" Width="Auto" />
+              <DataGridTextColumn Header="TO YEAR" Binding="{Binding Values.BirthYearMax}" Width="Auto" />
+              <DataGridTextColumn Header="GENDER" Binding="{Binding Values.Gender, Converter={StaticResource GenderLabelConverter}}" Width="Auto" />
+              <DataGridTextColumn Header="ORDER" Binding="{Binding Values.DisplayOrder}" Width="Auto" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <local:FormRow>
+            <StackPanel Grid.Column="0" Grid.ColumnSpan="4" Classes="field"><TextBlock Text="LABEL" Classes="fieldLabel" /><TextBox Text="{Binding CategoryLabel}" /></StackPanel>
+            <StackPanel Grid.Column="4" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="FROM YEAR" Classes="fieldLabel" /><TextBox Text="{Binding CategoryMinYearText}" /></StackPanel>
+            <StackPanel Grid.Column="6" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="TO YEAR" Classes="fieldLabel" /><TextBox Text="{Binding CategoryMaxYearText}" /></StackPanel>
+            <StackPanel Grid.Column="8" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="GENDER" Classes="fieldLabel" /><ComboBox ItemsSource="{Binding CategoryGenderOptions}" SelectedItem="{Binding CategoryGenderText}" /></StackPanel>
+            <StackPanel Grid.Column="10" Grid.ColumnSpan="2" Classes="field"><TextBlock Text="ORDER" Classes="fieldLabel" /><TextBox Text="{Binding CategoryOrderText}" /></StackPanel>
+          </local:FormRow>
+          <Grid ColumnDefinitions="Auto,*,Auto,8,Auto">
+            <Button Content="Remove rule" Command="{Binding RemoveCategoryRuleCommand}" IsEnabled="{Binding SelectedCategoryRule}" Classes="dangerAction" />
+            <Button Grid.Column="2" Content="New rule" Command="{Binding NewCategoryRuleCommand}" Classes="secondaryAction" />
+            <Button Grid.Column="4" Content="Save rule" Command="{Binding SaveCategoryRuleCommand}" Classes="primaryAction" />
+          </Grid>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Name="DefaultCategoriesButton" Content="Default classes (replace)" Command="{Binding LoadDefaultCategoriesCommand}" Classes="secondaryAction" ToolTip.Tip="Replace the rules with the age classes of this season: N and M 10, 12, 14, 16, 18, 21 and general." />
+            <Button Content="Save rules for reuse" Command="{Binding SaveCategoryRulesPresetCommand}" Classes="secondaryAction" />
+            <Button Content="Load saved rules (replace)" Command="{Binding LoadCategoryRulesPresetCommand}" Classes="secondaryAction" />
+            <Button Content="Update categories" Command="{Binding UpdateCategoriesCommand}" Classes="secondaryAction" />
+          </StackPanel>
+          </StackPanel>
+        </Expander>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
     <local:DrawView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsDrawSection}" />
     <local:PdfFactoryView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsPdfFactorySection}" />
     <local:AuditTrailView Grid.Row="2" Margin="{DynamicResource PageInset}" IsVisible="{Binding IsAuditTrailSection}" />

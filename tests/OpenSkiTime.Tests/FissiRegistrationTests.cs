@@ -209,6 +209,7 @@ public sealed class FissiRegistrationTests
         var row = Assert.Single(plan.Rows);
         Assert.Equal(starter.Values, row.Values);
         Assert.Contains("confirm this match", Assert.Single(row.Warnings), StringComparison.Ordinal);
+        Assert.Empty(row.ReviewNotes);
     }
 
     [Fact]
@@ -236,18 +237,20 @@ public sealed class FissiRegistrationTests
     }
 
     [Fact]
-    public void NamesInCapitalsUseTheFisListOrNeedACheck()
+    public void NamesInCapitalsUseTheFisListOrGetANoteThatDoesNotBlockSave()
     {
         var race = Competition("SL1", "0507"); var series = Series(race); var desk = Desk(series, []);
         var registered = Registered(race, Person("TESTI KAKSI ESIMERKKI", "100001"), Person("J. Matti ESIMERKKI", "100002"));
         var unknown = Plan(series, desk, registered);
         Assert.Equal(("ESIMERKKI", "TESTI KAKSI"), (unknown.Rows[0].Values.Surname, unknown.Rows[0].Values.FirstName));
-        Assert.Contains("Check the first name", Assert.Single(unknown.Rows[0].Warnings), StringComparison.Ordinal);
+        // A name split that may be wrong is a note, not a match to confirm: the competitor can be saved unfinished.
+        Assert.Contains("Check the first name", Assert.Single(unknown.Rows[0].ReviewNotes), StringComparison.Ordinal);
+        Assert.Empty(unknown.Rows[0].Warnings);
         Assert.Equal(("ESIMERKKI", "J. Matti"), (unknown.Rows[1].Values.Surname, unknown.Rows[1].Values.FirstName));
-        Assert.Empty(unknown.Rows[1].Warnings);
+        Assert.Empty(unknown.Rows[1].Warnings); Assert.Empty(unknown.Rows[1].ReviewNotes);
         var list = new Dictionary<string, FisAthlete> { ["100001"] = new("100001", "KAKSI ESIMERKKI", "Testi", 2008, Gender.Male, "FIN", null, null) };
         var known = FissiRegistrationPlan.Build(series, desk, [registered], s_none, s_none, list);
         Assert.Equal(("KAKSI ESIMERKKI", "Testi"), (known.Rows[0].Values.Surname, known.Rows[0].Values.FirstName));
-        Assert.Empty(known.Rows[0].Warnings);
+        Assert.Empty(known.Rows[0].Warnings); Assert.Empty(known.Rows[0].ReviewNotes);
     }
 }

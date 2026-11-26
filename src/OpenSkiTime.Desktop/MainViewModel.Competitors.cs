@@ -457,11 +457,8 @@ public sealed partial class MainViewModel
             {
                 await TimingListeningTask; // timing of the view just left has ended before this saves
                 var series = _current ?? throw new SeriesFileException("Open an event series first.");
-                var unapproved = _allCompetitorRows.FirstOrDefault(x => x.NeedsApproval && !x.WarningApproved);
-                if (unapproved is not null)
-                {
-                    throw new DomainValidationException($"Confirm the matching warning for {unapproved.Surname} before saving.");
-                }
+                var unapproved = _allCompetitorRows.Where(x => x.NeedsApproval && !x.WarningApproved).ToArray();
+                if (unapproved.Length > 0) { throw new DomainValidationException(RevealUnconfirmedMatch(unapproved)); }
                 var changedRows = _allCompetitorRows.Where(x => x.HasPendingChanges && !x.IsPendingDelete).ToArray();
                 // With a changed Code the points are always sent: the new athlete's points (even when equal to the
                 // saved ones) or none, never the previous athlete's points (for example after undoing only the points).
@@ -485,6 +482,30 @@ public sealed partial class MainViewModel
             });
         }
         finally { _deskCommitGate.Release(); }
+    }
+
+    /// <summary>Asks the view to bring a competitor row into view, for example the row that stopped Save.</summary>
+    public event EventHandler<CompetitorGridRow>? CompetitorRowRevealRequested;
+
+    // Save stops at a match the operator has not confirmed: the first such row is selected and shown, so its note and
+    // Match checked appear below the grid, and the message names the competitor, the reason and what to do.
+    private string RevealUnconfirmedMatch(CompetitorGridRow[] rows)
+    {
+        var row = rows[0];
+        var filtered = !VisibleCompetitors.Contains(row);
+        if (filtered)
+        {
+            _competitorColumnFilters.Clear();
+            RefreshVisibleCompetitors();
+        }
+        SelectedCompetitorRow = row;
+        CompetitorRowRevealRequested?.Invoke(this, row);
+        var name = $"{row.Surname} {row.FirstName}".Trim();
+        var code = row.FederationCode.Trim();
+        return $"Not saved: confirm the match of {name}{(code.Length > 0 ? $" ({code})" : "")}. {row.WarningText} "
+            + "The row is selected: tick Match checked below the grid, or undo the row's changes."
+            + (rows.Length == 2 ? " 1 more row needs the same check." : rows.Length > 2 ? $" {rows.Length - 1} more rows need the same check." : "")
+            + (filtered ? " The column filters were cleared to show the row." : "");
     }
 
     [RelayCommand]

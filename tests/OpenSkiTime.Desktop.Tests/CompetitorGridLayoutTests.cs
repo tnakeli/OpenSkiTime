@@ -104,7 +104,9 @@ public partial class DesktopWorkflowTests
             Assert.Equal("Unsaved club", selected.Club);
             Assert.DoesNotContain((await workspace.ReadCompetitorDeskAsync()).Competitors, x => x.Values.Club == "Unsaved club");
             SetFilter(nameof(CompetitorGridRow.Surname), "");
-            Assert.All(grid.Columns.Where(x => x.SortMemberPath?.StartsWith("Fis", StringComparison.Ordinal) == true), x => Assert.True(x.IsVisible));
+            // Only slalom races: the other disciplines' points columns are hidden, the points stay with the competitors.
+            Assert.Equal(["FisSl"], grid.Columns.Where(x => x.SortMemberPath?.StartsWith("Fis", StringComparison.Ordinal) == true && x.IsVisible)
+                .Select(x => x.SortMemberPath));
             Assert.Equal(24, grid.Columns.Count(x => x.Tag is "competition-entry" && x.IsVisible));
             var entryKey = grid.Columns.First(x => x.Tag is "competition-entry").SortMemberPath;
             SetFilter(entryKey, "Yes"); Assert.DoesNotContain(vm.VisibleCompetitors, x => !x.IsPlaceholder);
@@ -143,6 +145,79 @@ public partial class DesktopWorkflowTests
 
             }
             await vm.DiscardDeskChangesCommand.ExecuteAsync(null);
+            window.Close();
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(980, 680)]
+    [InlineData(1280, 800)]
+    public async Task CompetitorGridFillsTheWindowWithItsHeaderAndScrollBarsInView(int width, int height)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "openskitime-grid-fill-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var path = Path.Combine(folder, "test.ost"); var date = new DateOnly(2026, 11, 28);
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var races = Enumerable.Range(1, 8).Select(n => new CompetitionValues($"Synthetic race {n}", $"{(n % 2 == 0 ? "GS" : "SL")}{n} W 28.11",
+                date, n % 2 == 0 ? Discipline.GiantSlalom : Discipline.Slalom, RaceType.Fis, 2, 0,
+                n.ToString("0000", System.Globalization.CultureInfo.InvariantCulture))).ToArray();
+            var series = await workspace.CreateAsync(path, new("Test", "Test place", "Club", date, date, "FIN", "2026/27"), races);
+            var revision = series.Revision;
+            for (var i = 0; i < 60; i++)
+            {
+                revision = (await workspace.SaveDeskRowAsync(null, new($"TEST{i:00}", "Aino", 2007, $"1{i:00000}", "FIN", "Test club", Gender.Female),
+                    series.Competitions[0].Id, false, null, revision)).Revision;
+            }
+            using var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = path, OpenPath = path, BackupPath = path + ".bak" },
+                fisStore: new FisLocalStore(folder), recentSeriesStore: new RecentSeriesStore(folder));
+            await vm.OpenSeriesCommand.ExecuteAsync(null); vm.ShowCompetitorsCommand.Execute(null);
+            var window = new MainWindow { DataContext = vm, Width = width, Height = height, WindowState = WindowState.Normal };
+            window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            var grid = window.FindControl<DataGrid>("CompetitorGrid")!;
+            var tools = window.FindControl<ScrollViewer>("CompetitorToolsScroll")!;
+            // The view is not inside the scrolling page: the wheel at the end of the grid cannot scroll anything under it.
+            Assert.False(window.FindControl<ScrollViewer>("WorkspaceScroll")!.IsVisible);
+            Assert.DoesNotContain(grid.GetVisualAncestors(), x => x is ScrollViewer);
+            // The grid takes the free height: it ends right above the tools, and the tools end inside the window.
+            var gridBottom = grid.TranslatePoint(new Point(0, grid.Bounds.Height), window)!.Value.Y;
+            var toolsTop = tools.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            var toolsBottom = tools.TranslatePoint(new Point(0, tools.Bounds.Height), window)!.Value.Y;
+            Assert.InRange(toolsTop - gridBottom, 0, 20);
+            Assert.True(toolsBottom <= window.Bounds.Height - 20, $"Tools end at {toolsBottom} of {window.Bounds.Height}.");
+            Assert.True(grid.Bounds.Height >= 300, $"Grid is {grid.Bounds.Height} high.");
+            // Scroll bars stay visible, and the horizontal one is inside the window.
+            var bars = grid.GetVisualDescendants().OfType<ScrollBar>().Where(x => !x.GetVisualAncestors().OfType<TextBox>().Any()).ToArray();
+            Assert.NotEmpty(bars);
+            Assert.All(bars, x => Assert.False(x.AllowAutoHide));
+            var horizontal = bars.Single(x => x.Orientation == Avalonia.Layout.Orientation.Horizontal);
+            Assert.True(horizontal.IsVisible && horizontal.Maximum > 0);
+            Assert.True(horizontal.TranslatePoint(new Point(0, horizontal.Bounds.Height), window)!.Value.Y <= gridBottom);
+            // Points columns of the series' disciplines only.
+            Assert.Equal(["FisSl", "FisGs"], grid.Columns.Where(x => x.SortMemberPath?.StartsWith("Fis", StringComparison.Ordinal) == true && x.IsVisible)
+                .Select(x => x.SortMemberPath));
+            // The header stays in place when the wheel reaches the end of the rows.
+            var header = grid.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(x => Equals(x.Content, "CODE"));
+            var headerTop = header.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            var inside = grid.TranslatePoint(new Point(grid.Bounds.Width / 2, grid.Bounds.Height / 2), window)!.Value;
+            for (var i = 0; i < 40; i++) { window.MouseWheel(inside, new Vector(0, -3)); }
+            window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(headerTop, header.TranslatePoint(new Point(0, 0), window)!.Value.Y);
+            // Shift and the wheel scroll the wide grid sideways.
+            Assert.Equal(0, horizontal.Value);
+            window.MouseWheel(inside, new Vector(0, -1), RawInputModifiers.Shift);
+            window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Assert.True(horizontal.Value > 0, "Shift and the wheel did not scroll sideways.");
+            // One tool is open at a time and the tools take at most about half of the view.
+            var expanders = tools.GetVisualDescendants().OfType<Expander>().Where(x => x.Parent?.Parent == tools).ToArray();
+            Assert.Equal(3, expanders.Length);
+            expanders[0].IsExpanded = true; Dispatcher.UIThread.RunJobs();
+            expanders[2].IsExpanded = true; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            Assert.False(expanders[0].IsExpanded); Assert.False(vm.IsFisPanelOpen);
+            Assert.True(tools.Bounds.Height <= window.FindControl<Grid>("CompetitorsWorkspace")!.Bounds.Height * 0.5);
+            Assert.True(grid.Bounds.Height >= 180);
             window.Close();
         }
         finally { Directory.Delete(folder, true); }

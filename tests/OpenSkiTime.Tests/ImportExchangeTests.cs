@@ -160,9 +160,11 @@ public sealed class ImportExchangeTests
             Assert.Equal("VAN DER POEL", names.Rows[0].Values.Surname);
             Assert.Equal("Jeroen", names.Rows[0].Values.FirstName);
             Assert.Equal("LAINE", names.Rows[1].Values.Surname);
-            Assert.NotEmpty(names.Rows[1].Warnings);
+            Assert.NotEmpty(names.Rows[1].ReviewNotes);
+            Assert.Empty(names.Rows[1].Warnings);
             Assert.Equal("SMITH", names.Rows[2].Values.Surname);
             Assert.Empty(names.Rows[2].Warnings);
+            Assert.Empty(names.Rows[2].ReviewNotes);
             Assert.Empty((await workspace.ReadCompetitorDeskAsync()).Competitors);
         }
         finally { Directory.Delete(root, recursive: true); }
