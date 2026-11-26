@@ -442,20 +442,10 @@
     </ScrollViewer>
     <!-- Competitors fill the window: the grid takes the free height, so its header and horizontal scroll bar stay in
          view and the mouse wheel never scrolls a page under it. The tools below the grid scroll on their own. -->
-    <Grid Name="CompetitorsWorkspace" Grid.Row="2" Margin="{DynamicResource PageInset}" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto"
+    <Grid Name="CompetitorsWorkspace" Grid.Row="2" Margin="{DynamicResource PageInset}" RowDefinitions="Auto,Auto,*,Auto,Auto"
           IsVisible="{Binding IsCompetitorsSection}" SizeChanged="CompetitorsWorkspace_SizeChanged">
-      <!-- Warnings of the last paste or update, folded to one line so they never push the grid down. -->
-      <Expander Name="ImportWarningsSection" Grid.Row="0" Margin="{DynamicResource StackGapBelow}" HorizontalAlignment="Stretch"
-                IsVisible="{Binding !!ImportWarnings.Count}">
-        <Expander.Header>
-          <TextBlock Text="{Binding ImportWarnings.Count, StringFormat='Warnings ({0})'}" Foreground="{DynamicResource WarningBrush}" FontWeight="SemiBold" />
-        </Expander.Header>
-        <ScrollViewer MaxHeight="{DynamicResource WarningListMaxHeight}">
-          <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-        </ScrollViewer>
-      </Expander>
       <!-- Desk status and save: edits in the grid stay pending until Save. -->
-      <Border Grid.Row="1" Classes="card" Padding="12,8" Margin="{DynamicResource StackGapBelow}">
+      <Border Grid.Row="0" Classes="card" Padding="12,8" Margin="{DynamicResource StackGapBelow}">
         <Grid ColumnDefinitions="Auto,8,*,Auto,8,Auto" VerticalAlignment="Center">
           <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center" IsVisible="{Binding HasDeskChangeLog}" />
           <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding !HasDeskChangeLog}" />
@@ -466,22 +456,37 @@
                   IsEnabled="{Binding HasDeskChangeLog}" Classes="primaryAction" />
         </Grid>
       </Border>
-      <Border Grid.Row="2" Name="ChangeReviewPanel" Classes="card" Margin="{DynamicResource StackGapBelow}" IsVisible="{Binding IsChangeReviewOpen}">
-        <StackPanel Spacing="6">
-          <Grid Classes="cardHeader" ColumnDefinitions="Auto,*">
-            <TextBlock Text="UNSAVED CHANGES" Classes="fieldLabel" VerticalAlignment="Center" />
-          </Grid>
-          <ScrollViewer MaxHeight="135"><ItemsControl ItemsSource="{Binding DeskChangeLog}"><ItemsControl.ItemTemplate><DataTemplate>
-            <Grid ColumnDefinitions="*,Auto" Margin="0,2"><TextBlock Text="{Binding DisplayLabel}" ToolTip.Tip="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Undo" Click="RestoreDeskChange_Click" Classes="secondaryAction" /></Grid>
-          </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
-          <Grid ColumnDefinitions="Auto,*">
-            <Button Content="Discard all changes" Command="{Binding DiscardDeskChangesCommand}" Classes="dangerAction" />
-          </Grid>
+      <!-- Undo and the warnings of the last paste or update share a height budget (set in code) and scroll on their own. -->
+      <ScrollViewer Grid.Row="1" Name="CompetitorPanelsScroll" HorizontalScrollBarVisibility="Disabled" SizeChanged="CompetitorPanels_SizeChanged">
+        <StackPanel>
+          <Border Name="ChangeReviewPanel" Classes="card" Margin="{DynamicResource StackGapBelow}" IsVisible="{Binding IsChangeReviewOpen}">
+            <StackPanel Spacing="6">
+              <Grid Classes="cardHeader" ColumnDefinitions="Auto,*">
+                <TextBlock Text="UNSAVED CHANGES" Classes="fieldLabel" VerticalAlignment="Center" />
+              </Grid>
+              <ScrollViewer MaxHeight="135"><ItemsControl ItemsSource="{Binding DeskChangeLog}"><ItemsControl.ItemTemplate><DataTemplate>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,2"><TextBlock Text="{Binding DisplayLabel}" ToolTip.Tip="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Undo" Click="RestoreDeskChange_Click" Classes="secondaryAction" /></Grid>
+              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+              <Grid ColumnDefinitions="Auto,*">
+                <Button Content="Discard all changes" Command="{Binding DiscardDeskChangesCommand}" Classes="dangerAction" />
+              </Grid>
+            </StackPanel>
+          </Border>
+          <!-- Folded to one line so they never push the grid down. -->
+          <Expander Name="ImportWarningsSection" Margin="{DynamicResource StackGapBelow}" HorizontalAlignment="Stretch"
+                    IsVisible="{Binding !!ImportWarnings.Count}">
+            <Expander.Header>
+              <TextBlock Text="{Binding ImportWarnings.Count, StringFormat='Warnings ({0})'}" Foreground="{DynamicResource WarningBrush}" FontWeight="SemiBold" />
+            </Expander.Header>
+            <ScrollViewer MaxHeight="{DynamicResource WarningListMaxHeight}">
+              <ItemsControl ItemsSource="{Binding ImportWarnings}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+            </ScrollViewer>
+          </Expander>
         </StackPanel>
-      </Border>
+      </ScrollViewer>
       <!-- A large, virtualized and editable grid keeps declared column widths (with a floor), so columns do not
            jump while the operator scrolls; the grid scrolls horizontally when narrow. It takes the free height. -->
-      <DataGrid Grid.Row="3" Name="CompetitorGrid" Classes="raceGrid columnControls" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
+      <DataGrid Grid.Row="2" Name="CompetitorGrid" Classes="raceGrid columnControls" ItemsSource="{Binding VisibleCompetitors}" SelectedItem="{Binding SelectedCompetitorRow}"
                 SelectionMode="Extended" SelectionChanged="CompetitorGrid_SelectionChanged" Sorting="CompetitorGrid_Sorting" CanUserSortColumns="True" CanUserResizeColumns="True" AutoGenerateColumns="False" IsReadOnly="False"
                 FrozenColumnCount="3" HorizontalScrollBarVisibility="Auto" ScrollViewer.AllowAutoHide="False"
                 MinHeight="{DynamicResource CompetitorGridMinHeight}" RowHeight="30" ColumnHeaderHeight="34" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
@@ -510,15 +515,15 @@
             <DataGridTextColumn Header="CATEGORY" Binding="{Binding Category}" SortMemberPath="Category" IsReadOnly="True" Width="125" MinWidth="80" />
           </DataGrid.Columns>
         </DataGrid>
-      <Border Grid.Row="4" Name="CompetitorReviewNote" Classes="infoNote" Margin="{DynamicResource StackGapAbove}" IsVisible="{Binding SelectedCompetitorRow.HasReviewText}">
-        <!-- The text wraps so a long note never pushes Match checked out of view. -->
+      <Border Grid.Row="3" Name="CompetitorReviewNote" Classes="infoNote" Margin="{DynamicResource StackGapAbove}" IsVisible="{Binding SelectedCompetitorRow.HasReviewText}">
+        <!-- The text wraps (three lines at most, all of it in the tooltip) so Match checked always stays in view. -->
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-          <TextBlock Text="{Binding SelectedCompetitorRow.ReviewText}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding SelectedCompetitorRow.ReviewText}" ToolTip.Tip="{Binding SelectedCompetitorRow.ReviewText}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
           <CheckBox Grid.Column="1" Name="MatchCheckedBox" Content="Match checked" IsChecked="{Binding SelectedCompetitorRow.WarningApproved}" IsVisible="{Binding SelectedCompetitorRow.NeedsApproval}" VerticalAlignment="Center" />
         </Grid>
       </Border>
-      <!-- One tool open at a time; together they take at most about half of the height (set in code). -->
-      <ScrollViewer Grid.Row="5" Name="CompetitorToolsScroll" Margin="{DynamicResource StackGapAbove}" HorizontalScrollBarVisibility="Disabled">
+      <!-- One tool open at a time; they take the height left over (set in code) and scroll on their own. -->
+      <ScrollViewer Grid.Row="4" Name="CompetitorToolsScroll" Margin="{DynamicResource StackGapAbove}" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="8">
         <Expander Header="Update from FIS" IsExpanded="{Binding IsFisPanelOpen}" Expanded="CompetitorTool_Expanded" HorizontalAlignment="Stretch">
           <StackPanel Spacing="{DynamicResource FormGap}">

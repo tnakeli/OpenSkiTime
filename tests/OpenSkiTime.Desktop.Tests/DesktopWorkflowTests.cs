@@ -485,9 +485,13 @@ public partial class DesktopWorkflowTests
             var other = vm.VisibleCompetitors.Single(x => x.Surname == "TESTI");
             Assert.Equal(("ELI", "WEST"), (west.Surname, west.FirstName));
             Assert.All(new[] { west, other }, x => { Assert.True(x.HasReviewText); Assert.False(x.NeedsApproval); });
+            // A typed Points value stays, also when the update normalizes the Code (here a trailing space).
+            west.FederationCode = "654321 ";
+            west.PointsText = "5.00";
 
             vm.StageFisUpdatesCommand.Execute(null);
             Assert.False(vm.IsError, vm.StatusMessage);
+            Assert.Equal(("654321", "5.00"), (west.FederationCode, west.PointsText));
             // The unsaved rows take the list's values; the note about the name split no longer applies.
             Assert.Equal(("WEST", "Eli", "West Club", 24.68m), (west.Surname, west.FirstName, west.Club, west.FisGs));
             Assert.False(west.HasReviewText);
@@ -502,6 +506,7 @@ public partial class DesktopWorkflowTests
             var savedWest = desk.Competitors.Single(x => x.Values.FederationCode == "654321");
             Assert.Equal(("WEST", "Eli"), (savedWest.Values.Surname, savedWest.Values.FirstName));
             Assert.Equal(24.68m, desk.FisPointsOf(savedWest.Id)?.Gs);
+            Assert.Equal(5.00m, desk.FisPointsOf(savedWest.Id)?.All);
             Assert.Contains(desk.Competitors, x => x.Values.Surname == "TESTI" && x.Values.FirstName == "KOLMAS");
         }
         finally { Directory.Delete(root, recursive: true); }

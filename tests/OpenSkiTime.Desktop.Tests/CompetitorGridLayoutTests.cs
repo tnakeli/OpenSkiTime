@@ -210,14 +210,48 @@ public partial class DesktopWorkflowTests
             window.MouseWheel(inside, new Vector(0, -1), RawInputModifiers.Shift);
             window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             Assert.True(horizontal.Value > 0, "Shift and the wheel did not scroll sideways.");
-            // One tool is open at a time and the tools take at most about half of the view.
+            // One tool is open at a time.
             var expanders = tools.GetVisualDescendants().OfType<Expander>().Where(x => x.Parent?.Parent == tools).ToArray();
             Assert.Equal(3, expanders.Length);
             expanders[0].IsExpanded = true; Dispatcher.UIThread.RunJobs();
             expanders[2].IsExpanded = true; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
             Assert.False(expanders[0].IsExpanded); Assert.False(vm.IsFisPanelOpen);
-            Assert.True(tools.Bounds.Height <= window.FindControl<Grid>("CompetitorsWorkspace")!.Bounds.Height * 0.5);
-            Assert.True(grid.Bounds.Height >= 180);
+
+            // Everything optional open at once: Undo with many changes, the warnings, a tool and a row note with
+            // Match checked. The grid keeps its minimum and nothing ends below the view.
+            var rows = vm.VisibleCompetitors.Where(x => !x.IsPlaceholder).Take(12).ToArray();
+            foreach (var changed in rows) { changed.Club = "Changed club"; }
+            rows[0].WarningText = "Code is 100000 here and 199999 on regs.fissi.fi; confirm this match. " + new string('x', 400);
+            vm.SelectedCompetitorRow = rows[0];
+            for (var i = 0; i < 12; i++) { vm.ImportWarnings.Add($"Synthetic warning {i} about a registration that was not updated."); }
+            Dispatcher.UIThread.RunJobs();
+            vm.IsChangeReviewOpen = true;
+            window.FindControl<Expander>("ImportWarningsSection")!.IsExpanded = true;
+            for (var pass = 0; pass < 3; pass++) { window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
+            var view = window.FindControl<Grid>("CompetitorsWorkspace")!;
+            var workspaceBottom = view.TranslatePoint(new Point(0, view.Bounds.Height), window)!.Value.Y;
+            double Bottom(Control control) => control.TranslatePoint(new Point(0, control.Bounds.Height), window)!.Value.Y;
+            var match = window.FindControl<CheckBox>("MatchCheckedBox")!;
+            Assert.True(match.IsEffectivelyVisible);
+            Assert.True(Bottom(match) <= workspaceBottom + 0.5, $"Match checked ends at {Bottom(match)}, the view at {workspaceBottom}.");
+            Assert.True(Bottom(tools) <= workspaceBottom + 0.5, $"Tools end at {Bottom(tools)}, the view at {workspaceBottom}.");
+            Assert.True(Bottom(horizontal) <= Bottom(grid) + 0.5);
+            Assert.True(grid.Bounds.Height >= grid.MinHeight - 0.5, $"Grid is {grid.Bounds.Height} high.");
+
+            // A filter of a points column that gets hidden is cleared: its funnel is the only way to clear it.
+            await vm.DiscardDeskChangesCommand.ExecuteAsync(null);
+            vm.SetCompetitorColumnFilter("FisGs", "1");
+            Assert.DoesNotContain(vm.VisibleCompetitors, x => !x.IsPlaceholder);
+            for (var i = 0; i < vm.Competitions.Count; i++)
+            {
+                var competition = vm.Competitions[i];
+                if (competition.Values.Discipline == Discipline.GiantSlalom)
+                { vm.Competitions[i] = competition with { Values = competition.Values with { Discipline = Discipline.Slalom } }; }
+            }
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(grid.Columns.Single(x => x.SortMemberPath == "FisGs").IsVisible);
+            Assert.Equal("", vm.CompetitorColumnFilter("FisGs"));
+            Assert.Equal(60, vm.VisibleCompetitors.Count(x => !x.IsPlaceholder));
             window.Close();
         }
         finally { Directory.Delete(folder, true); }

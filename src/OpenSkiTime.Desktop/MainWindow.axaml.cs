@@ -349,8 +349,8 @@ public partial class MainWindow : Window
             });
         }
         grid.SetCurrentValue(DataGrid.ItemsSourceProperty, items);
+        UpdatePointsColumns(grid, _gridViewModel);
         InstallCompetitorHeaders(grid);
-        UpdatePointsColumns(grid, _gridViewModel.Competitions);
     }
 
     private static readonly Dictionary<string, Domain.Discipline> s_pointsColumns = new(StringComparer.Ordinal)
@@ -360,14 +360,16 @@ public partial class MainWindow : Window
     };
 
     // FIS points columns of disciplines the series has no competition in are hidden (all show without competitions):
-    // the grid stays narrow. The points stay with the competitors.
-    private static void UpdatePointsColumns(DataGrid grid, IReadOnlyCollection<Domain.CompetitionDetails> competitions)
+    // the grid stays narrow. The points stay with the competitors. A filter of a hidden column is cleared, because its
+    // funnel is the only way to clear it.
+    private static void UpdatePointsColumns(DataGrid grid, MainViewModel vm)
     {
-        var disciplines = competitions.Select(x => x.Values.Discipline).ToHashSet();
+        var disciplines = vm.Competitions.Select(x => x.Values.Discipline).ToHashSet();
         foreach (var column in grid.Columns)
         {
-            if (column.SortMemberPath is { } path && s_pointsColumns.TryGetValue(path, out var discipline))
-            { column.IsVisible = disciplines.Count == 0 || disciplines.Contains(discipline); }
+            if (column.SortMemberPath is not { } path || !s_pointsColumns.TryGetValue(path, out var discipline)) { continue; }
+            column.IsVisible = disciplines.Count == 0 || disciplines.Contains(discipline);
+            if (!column.IsVisible && vm.CompetitorColumnFilter(path).Length > 0) { vm.SetCompetitorColumnFilter(path, ""); }
         }
     }
 
@@ -384,13 +386,25 @@ public partial class MainWindow : Window
         else { check.Classes.Remove("changed"); }
     }
 
-    // The competitor grid takes the height the other parts leave; the tools below it take at most about half.
-    private void CompetitorsWorkspace_SizeChanged(object? sender, SizeChangedEventArgs e)
+    // Height kept for the save bar and the row note (at most three lines) with their gaps.
+    private const double CompetitorFixedPartsHeight = 140;
+
+    private void CompetitorsWorkspace_SizeChanged(object? sender, SizeChangedEventArgs e) => BudgetCompetitorPanels();
+
+    private void CompetitorPanels_SizeChanged(object? sender, SizeChangedEventArgs e) => BudgetCompetitorPanels();
+
+    // The optional parts share what the save bar, the row note and the grid's minimum height leave: Undo and the
+    // warnings above the grid take at most 40 %, the tools below it the rest. So the grid with its scroll bar, the note
+    // with Match checked and the tools always stay inside the window; a part that does not fit scrolls on its own.
+    private void BudgetCompetitorPanels()
     {
-        if (this.FindControl<ScrollViewer>("CompetitorToolsScroll") is { } tools)
-        {
-            tools.MaxHeight = Math.Max(150, e.NewSize.Height * 0.45);
-        }
+        if (this.FindControl<Grid>("CompetitorsWorkspace") is not { } workspace
+            || this.FindControl<ScrollViewer>("CompetitorPanelsScroll") is not { } panels
+            || this.FindControl<ScrollViewer>("CompetitorToolsScroll") is not { } tools
+            || this.FindControl<DataGrid>("CompetitorGrid") is not { } grid) { return; }
+        var free = Math.Max(0, workspace.Bounds.Height - CompetitorFixedPartsHeight - grid.MinHeight);
+        panels.MaxHeight = free * 0.4;
+        tools.MaxHeight = Math.Max(0, free - Math.Min(panels.Bounds.Height, panels.MaxHeight));
     }
 
     private void OnCompetitorRowRevealRequested(object? sender, CompetitorGridRow row)

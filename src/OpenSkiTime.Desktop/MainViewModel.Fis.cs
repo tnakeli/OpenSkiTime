@@ -320,16 +320,17 @@ public sealed partial class MainViewModel
             {
                 if (group.Count() != 1) { ambiguous++; continue; }
                 var row = group.Single();
+                // Captured first: a Code normalized below (spaces, capitals) restages the points without the typed Points.
                 var points = row.FisPoints;
                 // Points come from this list; a Code that is not on it has no points on this list.
                 if (!_fisList.Athletes.TryGetValue(group.Key, out var athlete))
                 {
-                    row.FisPoints = StagePoints(_fisList, null, row.FisPoints?.All);
+                    row.FisPoints = StagePoints(_fisList, null, points?.All);
                     if (row.IsFisPointsChanged && !Equals(points, row.FisPoints)) { notOnList++; }
                     continue;
                 }
                 var identity = ApplyFisValues(row, athlete);
-                row.FisPoints = StagePoints(_fisList, athlete, row.FisPoints?.All);
+                row.FisPoints = StagePoints(_fisList, athlete, points?.All);
                 if (identity || !Equals(points, row.FisPoints)) { staged++; }
             }
         }
