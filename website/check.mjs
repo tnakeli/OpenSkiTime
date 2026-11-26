@@ -3,7 +3,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
-for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide/index.html', 'live-api/index.html', 'privacy/index.html', 'code-signing/index.html', '404.html']) {
+for (const page of ['index.html', 'fi/index.html', 'tutorials/index.html', 'fi/opetusvideot/index.html', 'download/index.html', 'guide/index.html', 'live-api/index.html', 'privacy/index.html', 'code-signing/index.html', '404.html']) {
   const html = await readFile(path.join(root, page), 'utf8');
   assert.match(html, page.startsWith('fi/') ? /<html lang="fi">/ : /<html lang="en">/);
   assert.match(html, /<main id="main">/);
@@ -31,6 +31,15 @@ for (const page of ['index.html', 'fi/index.html', 'download/index.html', 'guide
     assert(!/<iframe\b/i.test(html), `Unexpected iframe in ${page}`);
     assert.equal(JSON.parse(scripts[0][2])['@graph'].filter(node => node['@type'] === 'VideoObject').length, 2, `Missing VideoObject in ${page}`);
     assert.match(html, /href="https:\/\/wapice\.com\/insights\/ai-radio-hosts-live-event-commentary\/"/, `Missing race radio credit in ${page}`);
+  }
+  if (page.endsWith('tutorials/index.html') || page.startsWith('fi/opetusvideot/')) {
+    // Every tutorial links out to YouTube in this language and the other; the page loads no third-party frame.
+    assert.equal([...html.matchAll(/<a class="video-link" href="https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}">/g)].length, 4, `Missing tutorial links in ${page}`);
+    assert(!/<iframe\b/i.test(html), `Unexpected iframe in ${page}`);
+    const graph = JSON.parse(scripts[0][2])['@graph'];
+    assert.equal(graph.find(node => node['@type'] === 'ItemList').itemListElement.length, 4, `Missing VideoObject list in ${page}`);
+    assert.match(html, /<link rel="alternate" hreflang="fi" href="https:\/\/openskiti\.me\/fi\/opetusvideot\/">/);
+    assert.match(html, /<link rel="alternate" hreflang="en" href="https:\/\/openskiti\.me\/tutorials\/">/);
   }
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
   for (const [, attr, value] of html.matchAll(/\b(href|src)="([^"]+)"/g)) {
@@ -76,6 +85,7 @@ for (const [, url] of llms.matchAll(/\]\((https:\/\/openskiti\.me\/[^)]*)\)/g)) 
 }
 const sitemap = await readFile(path.join(root, 'sitemap.xml'), 'utf8');
 assert(sitemap.includes('<loc>https://openskiti.me/fi/</loc>'));
+assert(sitemap.includes('<loc>https://openskiti.me/fi/opetusvideot/</loc>'));
 for (const [, date] of sitemap.matchAll(/<lastmod>([^<]*)<\/lastmod>/g)) assert.match(date, /^\d{4}-\d{2}-\d{2}$/);
 // The Live API: the OpenAPI document is complete, the page shows the published examples, and the text file has everything.
 const openApi = JSON.parse(await readFile(path.join(root, 'live-api', 'openapi.json'), 'utf8'));
