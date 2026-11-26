@@ -3,7 +3,7 @@
 The title, description and tags are the script's "youtube" entry for the language. The video is uploaded with
 scripts/social/youtube.py (sign-in, Credential Manager and resumable upload, docs/social-media.md), then the SRT
 written by compose.py is added as the subtitle track of the language. The video ID is saved next to the video
-(youtube.json), so a second run never uploads the same video again; it only adds subtitles that are missing.
+(<video>.youtube.json), so a second run never uploads the same video again; it only adds subtitles that are missing.
 
     python scripts/tutorial-video/publish.py fis-event --language fi --output C:/OpenSkiTimeVideos/fis-event/fi/output [--privacy private] [--yes]
 """
@@ -31,7 +31,7 @@ def main(argv=None):
     output = Path(args.output)
     video = output / f'OpenSkiTime-{args.name}-{args.language}.mp4'
     subtitles = video.with_suffix('.srt')
-    state_file = output / 'youtube.json'
+    state_file = video.with_name(video.stem + '.youtube.json')
     state = json.loads(state_file.read_text(encoding='utf-8')) if state_file.is_file() else {}
     metadata = youtube.video_metadata(argparse.Namespace(
         title=entry['title'], description_file=None, tags=','.join(entry['tags']), category='tech',

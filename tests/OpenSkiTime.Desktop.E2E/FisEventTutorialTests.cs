@@ -409,11 +409,15 @@ public sealed class FisEventTutorialTests
             var cells = Delegates(app.ById("CompetitionsGrid"), app, 32).ToList();
             if (app.TryByName("Technical delegate") is { } card && app.TryByName("Course and homologation") is { } courseCard)
             {
-                // Every field of the card: people, nation and number.
+                // Every field of the card: people, nation and number; and the full name of a delegate whose name could
+                // not be split, shown as text below the fields. Field labels are capitals and stay readable.
                 var left = card.BoundingRectangle.Left - 10;
                 var right = courseCard.BoundingRectangle.Left - 24;
                 var top = card.BoundingRectangle.Bottom;
-                cells.AddRange(app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Edit)).Select(x => x.BoundingRectangle)
+                var fields = app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Edit)).Select(x => x.BoundingRectangle);
+                var texts = app.Window.FindAllDescendants(app.By.ByControlType(ControlType.Text))
+                    .Where(x => x.Name.Any(char.IsLower)).Select(x => x.BoundingRectangle);
+                cells.AddRange(fields.Concat(texts)
                     .Where(x => x.Height > 0 && x.Left >= left && x.Right <= right + 8 && x.Top >= top - 4 && x.Top < top + 260)
                     .Select(x => System.Drawing.Rectangle.FromLTRB(x.Left, Math.Max(x.Top, ContentTop), x.Right, Math.Min(x.Bottom, ContentBottom))).Where(x => x.Height > 0));
             }
@@ -428,8 +432,12 @@ public sealed class FisEventTutorialTests
         }
 
         // undo: the list of unsaved changes is open. imported: entries were just read, which may have brought warnings.
+        // Warnings stay until the next save, so once entries were read every later measure covers them as well.
+        private bool _warnings;
+
         public List<System.Drawing.Rectangle> Competitors(bool undo = false, bool imported = false)
         {
+            _warnings |= imported;
             var cells = new List<System.Drawing.Rectangle>();
             _grid ??= app.ById("CompetitorGrid");
             var grid = _grid.BoundingRectangle;
@@ -445,7 +453,7 @@ public sealed class FisEventTutorialTests
                     if (end > 0) { cells.Add(System.Drawing.Rectangle.FromLTRB(change.Bounds.Left - 3, change.Bounds.Top - 4, change.Bounds.Left + TextWidth(change.Name[..end]) + 3, Math.Min(change.Bounds.Bottom + 4, bottom - 2))); }
                 }
             }
-            if (imported)
+            if (_warnings)
             {
                 var items = Read(app.Window);
                 // Import warnings, which can name athletes, appear above the save card; a match to check below the grid.

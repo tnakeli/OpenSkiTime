@@ -26,6 +26,28 @@ def plain(value):
     return ''.join(c for c in unicodedata.normalize('NFKD', value) if not unicodedata.combining(c)).casefold()
 
 
+def delegate_texts(value):
+    """The names and numbers of people stored in JSON, such as the technical delegate of a competition's calendar data."""
+    try:
+        data = json.loads(value)
+    except (TypeError, ValueError):
+        return []
+    found = []
+
+    def walk(item, person=False):
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if person and isinstance(child, str) and key.casefold() != 'nation':
+                    found.append(child)
+                else:
+                    walk(child, person or re.search(r'delegate', key, re.I) is not None)
+        elif isinstance(item, list):
+            for child in item:
+                walk(child, person)
+    walk(data)
+    return found
+
+
 def private_words(series):
     """Names and codes of the people in the series file, as single words of four letters or more."""
     db = sqlite3.connect(f'file:{Path(series).as_posix()}?mode=ro', uri=True)
@@ -37,6 +59,10 @@ def private_words(series):
             for column in wanted:
                 for (value,) in db.execute(f'select distinct "{column}" from "{table}" where "{column}" is not null'):
                     words |= {w for w in re.findall(r'\w+', plain(str(value))) if len(w) >= 4}
+            for column in [c for c in columns if re.search(r'json$', c, re.I)]:
+                for (value,) in db.execute(f'select distinct "{column}" from "{table}" where "{column}" is not null'):
+                    for text in delegate_texts(value):
+                        words |= {w for w in re.findall(r'\w+', plain(text)) if len(w) >= 4}
     finally:
         db.close()
     return words

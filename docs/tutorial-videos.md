@@ -96,7 +96,7 @@ pronunciation. It is **not** reliable for names, numbers and small text (tested 
 
 `publish.py` uploads a composed video as private with the script's `youtube` entry (title, description with what the viewer
 learns, tags), the language, the altered or synthetic content label (AI voice and music) and the SRT as subtitles. It saves
-the video ID in `youtube.json` next to the video, so running it again only adds what is missing. The sign-in of
+the video ID in `<video>.youtube.json` next to the video, so running it again only adds what is missing. The sign-in of
 `scripts/social/youtube.py` is used (docs/social-media.md). Descriptions use no emojis or dashes as punctuation. Make a
 video public only after the maintainer has watched it.
 
