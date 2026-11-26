@@ -242,6 +242,12 @@ public partial class DesktopWorkflowTests
             await vm.DiscardDeskChangesCommand.ExecuteAsync(null);
             vm.SetCompetitorColumnFilter("FisGs", "1");
             Assert.DoesNotContain(vm.VisibleCompetitors, x => !x.IsPlaceholder);
+            // A reload adds the competitions one at a time: the filter of a column hidden only halfway through stays.
+            var reloaded = vm.Competitions.ToArray();
+            vm.Competitions.Clear();
+            foreach (var competition in reloaded) { vm.Competitions.Add(competition); }
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("1", vm.CompetitorColumnFilter("FisGs"));
             for (var i = 0; i < vm.Competitions.Count; i++)
             {
                 var competition = vm.Competitions[i];

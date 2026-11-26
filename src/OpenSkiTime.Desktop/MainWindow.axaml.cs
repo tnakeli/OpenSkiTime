@@ -360,17 +360,26 @@ public partial class MainWindow : Window
     };
 
     // FIS points columns of disciplines the series has no competition in are hidden (all show without competitions):
-    // the grid stays narrow. The points stay with the competitors. A filter of a hidden column is cleared, because its
-    // funnel is the only way to clear it.
-    private static void UpdatePointsColumns(DataGrid grid, MainViewModel vm)
+    // the grid stays narrow. The points stay with the competitors.
+    private void UpdatePointsColumns(DataGrid grid, MainViewModel vm)
     {
         var disciplines = vm.Competitions.Select(x => x.Values.Discipline).ToHashSet();
         foreach (var column in grid.Columns)
         {
             if (column.SortMemberPath is not { } path || !s_pointsColumns.TryGetValue(path, out var discipline)) { continue; }
             column.IsVisible = disciplines.Count == 0 || disciplines.Contains(discipline);
-            if (!column.IsVisible && vm.CompetitorColumnFilter(path).Length > 0) { vm.SetCompetitorColumnFilter(path, ""); }
         }
+        // A filter of a hidden column is cleared, because its funnel is the only way to clear it. Deferred: competitions
+        // are reloaded one at a time, so a column hidden halfway through a reload shows again at its end.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_gridViewModel, vm)) { return; }
+            foreach (var column in grid.Columns.Where(x => !x.IsVisible))
+            {
+                if (column.SortMemberPath is { } path && s_pointsColumns.ContainsKey(path) && vm.CompetitorColumnFilter(path).Length > 0)
+                { vm.SetCompetitorColumnFilter(path, ""); }
+            }
+        }, DispatcherPriority.Background);
     }
 
     private static void RestoreCompetitorSelection(DataGrid grid, IReadOnlyList<CompetitorGridRow> selected)
