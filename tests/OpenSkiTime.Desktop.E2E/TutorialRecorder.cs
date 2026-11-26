@@ -171,6 +171,7 @@ internal sealed class TutorialRecorder : IDisposable
     // Presses at one point when the first word is spoken and releases at the other when the second one is.
     public void Drag(System.Drawing.Point from, System.Drawing.Point to, string grab, string drop, int hold)
     {
+        Frame(from, to);
         Press(from, grab);
         Glide(to, Math.Clamp(CueTime(drop) - Now - hold / 1000.0, 0.8, 2.2));
         Settle();
@@ -183,6 +184,7 @@ internal sealed class TutorialRecorder : IDisposable
     // A drag that begins at the cue word and ends as soon as it is done.
     public void DragTo(System.Drawing.Point from, System.Drawing.Point to, string grab)
     {
+        Frame(from, to);
         Press(from, grab);
         Glide(to, 1.4);
         Settle();
@@ -190,6 +192,11 @@ internal sealed class TutorialRecorder : IDisposable
         Mouse.Up(MouseButton.Left);
         Thread.Sleep(250);
     }
+
+    // A drag is shown whole: the camera frames where it starts and where it ends, with room around both, so the viewer
+    // sees what is taken and where it goes. A zoom on the target alone hides the source.
+    private void Frame(System.Drawing.Point from, System.Drawing.Point to)
+        => Camera(System.Drawing.Rectangle.FromLTRB(Math.Min(from.X, to.X), Math.Min(from.Y, to.Y), Math.Max(from.X, to.X), Math.Max(from.Y, to.Y)), 160);
 
     // The first small movements start the drag; from then on Windows reports every position to the target below.
     private void Press(System.Drawing.Point from, string cue)

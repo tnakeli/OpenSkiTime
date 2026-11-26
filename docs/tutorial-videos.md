@@ -124,7 +124,8 @@ python -X utf8 scripts/tutorial-video/publish.py fis-event --language fi --outpu
    should not see before `video.Start()`.
 3. The recorder offers `Click`, `ClickAt`, `Hover`, `Move`, `Drag` (press at one cue, drop at another), `DragTo`,
    `DoubleClickAt`, `Keys` (a shortcut at a cue), `Fire` (something without the pointer, such as a simulated impulse) and
-   `Camera`/`Overview`. Look controls up before waiting for a cue. Reading the whole control tree takes seconds when a large grid is filled;
+   `Camera`/`Overview`. Look controls up before waiting for a cue. `Drag` and `DragTo` set the camera themselves to frame
+   both the source and the target: a zoom on the target alone hides what is being dragged. Reading the whole control tree takes seconds when a large grid is filled;
    keep elements, query small scopes, and find the status text once.
 4. Wrap every action that shows or moves people's names in `Reveal` and return the cells to cover. A view that the
    application opens by itself counts too. Use fictional data when the tutorial does not need a real event.
