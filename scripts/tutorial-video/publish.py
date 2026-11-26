@@ -58,6 +58,13 @@ def main(argv=None):
         state_file.write_text(json.dumps(state, indent=2) + '\n', encoding='utf-8')
         print(f"Uploaded: https://www.youtube.com/watch?v={uploaded['id']} ({uploaded['status']['privacyStatus']})")
     if 'captions' not in state:
+        # A track that reached YouTube although the answer was lost is not inserted twice (409 captionExists).
+        tracks = youtube.call('GET', '/captions', youtube.access_token(), {'part': 'snippet', 'videoId': state['video']}).get('items', [])
+        if any(x['snippet'].get('language') == args.language and x['snippet'].get('trackKind') == 'standard' for x in tracks):
+            state['captions'] = args.language
+            state_file.write_text(json.dumps(state, indent=2) + '\n', encoding='utf-8')
+            print('Subtitles already on YouTube.')
+    if 'captions' not in state:
         boundary = secrets.token_hex(16)
         youtube.call('POST', '/captions', youtube.access_token(), {'part': 'snippet', 'uploadType': 'multipart'},
                      base=youtube.UPLOAD_API, content_type=f'multipart/related; boundary={boundary}',

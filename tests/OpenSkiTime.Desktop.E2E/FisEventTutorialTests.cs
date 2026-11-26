@@ -30,6 +30,8 @@ public sealed class FisEventTutorialTests
         var language = Environment.GetEnvironmentVariable("OPENSKITIME_TUTORIAL");
         if (string.IsNullOrWhiteSpace(language)) { return; }
         language = Path.GetFullPath(language);
+        // Only this tutorial's folder: the other tutorials' recorders share the variable.
+        if (Path.GetFileName(Path.GetDirectoryName(language)) != "fis-event") { return; }
         var output = Path.Combine(language, "recording-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
         var root = DemoVideoTests.DemoRoot();
         var events = Directory.CreateDirectory(Path.Combine(root, "Events")).FullName;
@@ -450,6 +452,10 @@ public sealed class FisEventTutorialTests
                 foreach (var change in Read(panel).Where(x => x.Type == ControlType.Text && x.Bounds.Height > 0 && x.Bounds.Top < bottom - 6))
                 {
                     var end = change.Name.IndexOf(" · ", StringComparison.Ordinal);
+                    // A change of a name or code shows the old and new value too: the whole line is covered.
+                    var detail = end > 0 ? change.Name[(end + 3)..] : "";
+                    if (detail.StartsWith("Surname:", StringComparison.Ordinal) || detail.StartsWith("First name:", StringComparison.Ordinal)
+                        || detail.Contains("code:", StringComparison.OrdinalIgnoreCase)) { end = change.Name.Length; }
                     if (end > 0) { cells.Add(System.Drawing.Rectangle.FromLTRB(change.Bounds.Left - 3, change.Bounds.Top - 4, change.Bounds.Left + TextWidth(change.Name[..end]) + 3, Math.Min(change.Bounds.Bottom + 4, bottom - 2))); }
                 }
             }
