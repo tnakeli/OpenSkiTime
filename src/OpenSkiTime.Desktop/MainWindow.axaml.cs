@@ -26,7 +26,6 @@ public partial class MainWindow : Window
         AvaloniaXamlLoader.Load(this);
         UpdateCaptionButtonSpace();
         DataContextChanged += (_, _) => BindCompetitionColumns();
-        SizeChanged += (_, _) => UpdateCompetitorGridHeight();
         Closing += async (_, e) =>
         {
             if (DataContext is not MainViewModel vm || _timingCloseReady) { return; }
@@ -47,6 +46,7 @@ public partial class MainWindow : Window
             _gridViewModel.Competitions.CollectionChanged -= OnCompetitionsChanged;
             _gridViewModel.RecentFiles.CollectionChanged -= OnRecentFilesChanged;
             _gridViewModel.PropertyChanged -= OnGridViewModelPropertyChanged;
+            _gridViewModel.CompetitorRowRevealRequested -= OnCompetitorRowRevealRequested;
         }
         _gridViewModel = DataContext as MainViewModel;
         if (_gridViewModel is not null)
@@ -54,11 +54,11 @@ public partial class MainWindow : Window
             _gridViewModel.Competitions.CollectionChanged += OnCompetitionsChanged;
             _gridViewModel.RecentFiles.CollectionChanged += OnRecentFilesChanged;
             _gridViewModel.PropertyChanged += OnGridViewModelPropertyChanged;
+            _gridViewModel.CompetitorRowRevealRequested += OnCompetitorRowRevealRequested;
         }
         RebuildCompetitionColumns();
         BuildTitleMenus();
         RebuildRecentMenu();
-        UpdateCompetitorGridHeight();
         InstallCompetitionColumnControls();
         InstallCalendarHeaders();
         UpdateCalendarHeaders();
@@ -275,7 +275,6 @@ public partial class MainWindow : Window
     private void OnGridViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.CalendarFiltersVersion)) { UpdateCalendarHeaders(); }
-        if (e.PropertyName == nameof(MainViewModel.IsChangeReviewOpen)) { UpdateCompetitorGridHeight(); }
     }
 
     private void ClearCompetitorSortHeader()
@@ -305,8 +304,8 @@ public partial class MainWindow : Window
             grid.Columns.Insert(8 + index, new DataGridTemplateColumn
             {
                 Header = competition.Values.ShortLabel,
-                Width = new DataGridLength(96),
-                MinWidth = 88,
+                Width = new DataGridLength(80),
+                MinWidth = 72,
                 Tag = "competition-entry",
                 SortMemberPath = $"entry:{competition.Id}",
                 IsReadOnly = true,
@@ -350,7 +349,37 @@ public partial class MainWindow : Window
             });
         }
         grid.SetCurrentValue(DataGrid.ItemsSourceProperty, items);
+        UpdatePointsColumns(grid, _gridViewModel);
         InstallCompetitorHeaders(grid);
+    }
+
+    private static readonly Dictionary<string, Domain.Discipline> s_pointsColumns = new(StringComparer.Ordinal)
+    {
+        ["FisDh"] = Domain.Discipline.Downhill, ["FisSg"] = Domain.Discipline.SuperG, ["FisSl"] = Domain.Discipline.Slalom,
+        ["FisGs"] = Domain.Discipline.GiantSlalom, ["FisAc"] = Domain.Discipline.AlpineCombined,
+    };
+
+    // FIS points columns of disciplines the series has no competition in are hidden (all show without competitions):
+    // the grid stays narrow. The points stay with the competitors.
+    private void UpdatePointsColumns(DataGrid grid, MainViewModel vm)
+    {
+        var disciplines = vm.Competitions.Select(x => x.Values.Discipline).ToHashSet();
+        foreach (var column in grid.Columns)
+        {
+            if (column.SortMemberPath is not { } path || !s_pointsColumns.TryGetValue(path, out var discipline)) { continue; }
+            column.IsVisible = disciplines.Count == 0 || disciplines.Contains(discipline);
+        }
+        // A filter of a hidden column is cleared, because its funnel is the only way to clear it. Deferred: competitions
+        // are reloaded one at a time, so a column hidden halfway through a reload shows again at its end.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_gridViewModel, vm)) { return; }
+            foreach (var column in grid.Columns.Where(x => !x.IsVisible))
+            {
+                if (column.SortMemberPath is { } path && s_pointsColumns.ContainsKey(path) && vm.CompetitorColumnFilter(path).Length > 0)
+                { vm.SetCompetitorColumnFilter(path, ""); }
+            }
+        }, DispatcherPriority.Background);
     }
 
     private static void RestoreCompetitorSelection(DataGrid grid, IReadOnlyList<CompetitorGridRow> selected)
@@ -366,13 +395,41 @@ public partial class MainWindow : Window
         else { check.Classes.Remove("changed"); }
     }
 
-    private void UpdateCompetitorGridHeight()
+    // Height kept for the save bar and the row note (at most three lines) with their gaps.
+    private const double CompetitorFixedPartsHeight = 140;
+
+    private void CompetitorsWorkspace_SizeChanged(object? sender, SizeChangedEventArgs e) => BudgetCompetitorPanels();
+
+    private void CompetitorPanels_SizeChanged(object? sender, SizeChangedEventArgs e) => BudgetCompetitorPanels();
+
+    // The optional parts share what the save bar, the row note and the grid's minimum height leave: Undo and the
+    // warnings above the grid take at most 40 %, the tools below it the rest. So the grid with its scroll bar, the note
+    // with Match checked and the tools always stay inside the window; a part that does not fit scrolls on its own.
+    private void BudgetCompetitorPanels()
     {
-        if (this.FindControl<DataGrid>("CompetitorGrid") is { } grid)
-        {
-            grid.Height = Math.Clamp(Bounds.Height - 465 - (_gridViewModel?.IsChangeReviewOpen == true ? 155 : 0),
-                260, 760);
-        }
+        if (this.FindControl<Grid>("CompetitorsWorkspace") is not { } workspace
+            || this.FindControl<ScrollViewer>("CompetitorPanelsScroll") is not { } panels
+            || this.FindControl<ScrollViewer>("CompetitorToolsScroll") is not { } tools
+            || this.FindControl<DataGrid>("CompetitorGrid") is not { } grid) { return; }
+        var free = Math.Max(0, workspace.Bounds.Height - CompetitorFixedPartsHeight - grid.MinHeight);
+        panels.MaxHeight = free * 0.4;
+        tools.MaxHeight = Math.Max(0, free - Math.Min(panels.Bounds.Height, panels.MaxHeight));
+    }
+
+    private void OnCompetitorRowRevealRequested(object? sender, CompetitorGridRow row)
+    {
+        if (this.FindControl<DataGrid>("CompetitorGrid") is not { } grid) { return; }
+        InstallCompetitorHeaders(grid); // the filter icons follow filters cleared to show the row
+        grid.SelectedItems.Clear();
+        grid.SelectedItem = row;
+        grid.ScrollIntoView(row, null);
+    }
+
+    // One tool below the competitor grid is open at a time, so the grid keeps its height.
+    private void CompetitorTool_Expanded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Expander opened || opened.Parent is not Panel tools) { return; }
+        foreach (var other in tools.Children.OfType<Expander>().Where(x => !ReferenceEquals(x, opened))) { other.IsExpanded = false; }
     }
 
     private void CompetitorGrid_Sorting(object? sender, DataGridColumnEventArgs e)

@@ -6,9 +6,16 @@ using OpenSkiTime.Domain;
 namespace OpenSkiTime.Application;
 
 public sealed record ImportEntryPatch(Guid CompetitionId, bool? Participates, bool BibSpecified, int? ImportedBib);
+// Warnings: an uncertain match the operator confirms (Match checked) before Save.
+// Notes: values to check, for example a name split that may be wrong. They never block Save: the row can be saved
+// unfinished and corrected later, for example with Update from FIS list.
 public sealed record ImportReviewItem(int SourceRow, Guid? CompetitorId, CompetitorValues Values,
     IReadOnlyList<ImportEntryPatch> Entries, IReadOnlyList<string> ChangedFields,
-    IReadOnlyList<string> Warnings, bool IsNew, decimal? Points = null, bool PointsSpecified = false);
+    IReadOnlyList<string> Warnings, bool IsNew, decimal? Points = null, bool PointsSpecified = false,
+    IReadOnlyList<string>? Notes = null)
+{
+    public IReadOnlyList<string> ReviewNotes => Notes ?? [];
+}
 public sealed record ImportPreview(Guid SeriesId, long Revision, string SourceHash,
     IReadOnlyList<ImportReviewItem> Rows, IReadOnlyList<string> Warnings);
 // PointsSpecified: set (or with a null Points, clear) the general Points value; otherwise the saved points stay as they are.
@@ -142,12 +149,13 @@ public static class TsvExchange
                 .ToDictionary(x => x.Key!, x => x.Index < cells.Length ? cells[x.Index].Trim() : string.Empty,
                     StringComparer.OrdinalIgnoreCase);
             var rowWarnings = new List<string>();
+            var rowNotes = new List<string>();
             if (Value(values, "Surname") is null && Value(values, "FullName") is { } fullName)
             {
                 var split = SplitFullName(fullName);
                 values["Surname"] = split.Surname;
                 if (Value(values, "FirstName") is null) { values["FirstName"] = split.FirstName ?? string.Empty; }
-                if (split.NeedsReview) { rowWarnings.Add("Check the split of the combined name before Commit."); }
+                if (split.NeedsReview) { rowNotes.Add("Check the split of the combined name."); }
             }
             var code = Value(values, "FederationCode");
             var surname = Value(values, "Surname");
@@ -225,10 +233,10 @@ public static class TsvExchange
             }
             if (before is null && code is null && (firstName is null || year is null))
             {
-                rowWarnings.Add("New competitor has no stable matching identifier; review for duplicates.");
+                rowNotes.Add("New competitor has no stable matching identifier; review for duplicates.");
             }
             preview.Add(new ImportReviewItem(rowIndex + 1, match?.Id, next, patches, changed,
-                rowWarnings, before is null, points, pointsPresent));
+                rowWarnings, before is null, points, pointsPresent, rowNotes));
         }
         return new ImportPreview(series.Id, series.Revision, Hash(source), preview, warnings);
     }

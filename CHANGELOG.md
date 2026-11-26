@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed
+
+- **Competitors can be saved unfinished.** A name in capitals that cannot be split into surname and first name (from regs.fissi.fi or a paste) is now a note on the row and no longer blocks **Save**. A Code change on a name match still needs **Match checked**.
+- **Update from FIS list** also updates unsaved rows, so competitors just read from regs.fissi.fi get their names, clubs and points from the FIS list before the first **Save**.
+- **Competitors fill the window.** The grid takes the free height, so its header and horizontal scroll bar stay in view and the mouse wheel no longer scrolls the page under it. Scroll bars are always visible and Shift with the mouse wheel scrolls sideways. The update and category tools below the grid open one at a time, warnings fold into one line, and a row to check shows ⚠. Points columns of disciplines without a competition in the series are hidden.
+- **A Save stopped by an unconfirmed match** selects the row and shows it, also when a column filter hid it, and the message names the competitor, the reason and where **Match checked** is. The note below the grid wraps, so **Match checked** never ends up out of view.
+
 ## [0.5.2] - 2026-11-26
 
 Version 0.5.1 was not published. This version uses live protocol 2 and keeps the `.ost` series format of 0.5.0. Results of a run timed across several visits to the Timing view can show Review in 0.5.0, which does not verify the device clock between them.

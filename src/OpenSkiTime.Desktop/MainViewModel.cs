@@ -75,7 +75,8 @@ public sealed partial class MainViewModel(SeriesWorkspace workspace, IFileDialog
     public bool IsTimingSection => ActiveSection == WorkspaceSection.Timing;
     public bool IsResultsSection => ActiveSection == WorkspaceSection.Results;
     public bool IsTimingReportSection => ActiveSection == WorkspaceSection.TimingReport;
-    public bool IsFormSection => !IsDrawSection && !IsTimingSection && !IsResultsSection && !IsTimingReportSection && !IsPdfFactorySection && !IsAuditTrailSection;
+    // Views in the scrolling page; competitors, like the timing and draw views, fill the window instead.
+    public bool IsFormSection => !IsCompetitorsSection && !IsDrawSection && !IsTimingSection && !IsResultsSection && !IsTimingReportSection && !IsPdfFactorySection && !IsAuditTrailSection;
     // Title bar heading of the active race: "SL Women / Run 1", only the competition in competition-wide views.
     public string ActiveRaceLabel => _activeRaceId is { } id && Competitions.FirstOrDefault(c => c.Id == id) is { } race
         ? IsResultsSection || IsTimingReportSection || IsPdfFactorySection ? race.Values.ShortLabel

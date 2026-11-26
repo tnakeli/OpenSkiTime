@@ -93,8 +93,11 @@ public sealed partial class CompetitorGridRow : ObservableObject
     [ObservableProperty] private string _category = "Unclassified";
     [ObservableProperty] private bool _isPlaceholder;
     [ObservableProperty] private bool _isPendingDelete;
+    // An uncertain match the operator confirms (Match checked) before Save.
     [ObservableProperty] private string _warningText = string.Empty;
     [ObservableProperty] private bool _warningApproved;
+    // Values to check (for example a name split from capitals); shown with the row but never blocking Save.
+    [ObservableProperty] private string _noteText = string.Empty;
 
     public bool HasTypedContent => Surname.Length > 0 || FirstName.Length > 0 || BirthYearText.Length > 0
         || GenderText.Length > 0 || FederationCode.Length > 0 || Nation.Length > 0 || Club.Length > 0
@@ -103,7 +106,10 @@ public sealed partial class CompetitorGridRow : ObservableObject
         ? HasTypedContent
         : IsSurnameChanged || IsFirstNameChanged || IsYearChanged || IsGenderChanged
           || IsNationChanged || IsClubChanged || IsCodeChanged || IsFisPointsChanged || GridEntries.Any(x => x.IsChanged)));
-    public bool NeedsApproval => WarningText.Length > 0 && HasPendingChanges;
+    // A row marked for deletion is not saved, so its match needs no confirmation.
+    public bool NeedsApproval => WarningText.Length > 0 && HasPendingChanges && !IsPendingDelete;
+    public bool HasReviewText => (WarningText.Length > 0 || NoteText.Length > 0) && HasPendingChanges;
+    public string ReviewText => string.Join(" ", new[] { WarningText, NoteText }.Where(x => x.Length > 0));
     public string ChangeMarker => IsPendingDelete ? "DEL" : IsPlaceholder ? "+" : SavedValues is null ? "NEW" : HasPendingChanges ? "●" : string.Empty;
     public bool IsSurnameChanged => IsFieldChanged(Surname, SavedValues?.Surname);
     public bool IsFirstNameChanged => IsFieldChanged(FirstName, SavedValues?.FirstName);
@@ -152,6 +158,7 @@ public sealed partial class CompetitorGridRow : ObservableObject
         IsPendingDelete = false;
         WarningText = string.Empty;
         WarningApproved = false;
+        NoteText = string.Empty;
         NotifyDraftChanged();
     }
 
@@ -191,6 +198,7 @@ public sealed partial class CompetitorGridRow : ObservableObject
         OnPropertyChanged(nameof(HasPendingChanges));
         OnPropertyChanged(nameof(ChangeMarker));
         OnPropertyChanged(nameof(NeedsApproval));
+        OnPropertyChanged(nameof(HasReviewText));
     }
 
     partial void OnSurnameChanged(string value) => NotifyDraftChanged();
@@ -202,7 +210,18 @@ public sealed partial class CompetitorGridRow : ObservableObject
     partial void OnFederationCodeChanged(string value) => NotifyDraftChanged();
     partial void OnIsPlaceholderChanged(bool value) => NotifyDraftChanged();
     partial void OnIsPendingDeleteChanged(bool value) => NotifyDraftChanged();
-    partial void OnWarningTextChanged(string value) => OnPropertyChanged(nameof(NeedsApproval));
+    partial void OnWarningTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(NeedsApproval));
+        OnPropertyChanged(nameof(HasReviewText));
+        OnPropertyChanged(nameof(ReviewText));
+    }
+
+    partial void OnNoteTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasReviewText));
+        OnPropertyChanged(nameof(ReviewText));
+    }
 
     private static int? OptionalNumber(string text)
     {

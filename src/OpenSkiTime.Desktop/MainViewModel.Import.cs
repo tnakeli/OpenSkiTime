@@ -93,6 +93,7 @@ public sealed partial class MainViewModel
         }
         row.WarningText = string.Join(" ", item.Warnings);
         row.WarningApproved = false;
+        row.NoteText = string.Join(" ", item.ReviewNotes);
         UpdateCategory(row);
         row.NotifyDraftChanged();
     }
