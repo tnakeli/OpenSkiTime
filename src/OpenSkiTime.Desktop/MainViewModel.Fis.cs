@@ -322,15 +322,18 @@ public sealed partial class MainViewModel
                 var row = group.Single();
                 // Captured first: a Code normalized below (spaces, capitals) restages the points without the typed Points.
                 var points = row.FisPoints;
+                // A typed Points value stays only with the athlete it was typed for: points restored for the previous Code
+                // of a changed row must not pass to the new athlete.
+                var general = string.Equals(row.FisPointsCode, group.Key, StringComparison.OrdinalIgnoreCase) ? points?.All : null;
                 // Points come from this list; a Code that is not on it has no points on this list.
                 if (!_fisList.Athletes.TryGetValue(group.Key, out var athlete))
                 {
-                    row.FisPoints = StagePoints(_fisList, null, points?.All);
+                    row.FisPoints = StagePoints(_fisList, null, general);
                     if (row.IsFisPointsChanged && !Equals(points, row.FisPoints)) { notOnList++; }
                     continue;
                 }
                 var identity = ApplyFisValues(row, athlete);
-                row.FisPoints = StagePoints(_fisList, athlete, points?.All);
+                row.FisPoints = StagePoints(_fisList, athlete, general);
                 if (identity || !Equals(points, row.FisPoints)) { staged++; }
             }
         }

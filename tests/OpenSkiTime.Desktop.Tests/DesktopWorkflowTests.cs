@@ -452,6 +452,51 @@ public partial class DesktopWorkflowTests
     }
 
     [Fact]
+    public async Task UpdateFromFisListNeverPassesTypedPointsToAnotherAthlete()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openskitime-fis-owner", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "series.ost");
+            var cache = new FisLocalStore(root);
+            await cache.SaveListAsync(SyntheticFisArchive());
+            await using (var seed = new SeriesWorkspace(new SqliteSeriesFileStore()))
+            {
+                var series = await seed.CreateAsync(file, new SeriesValues("Race", "Levi", "Club",
+                    new DateOnly(2026, 9, 25), new DateOnly(2026, 9, 25), "FIN", "2026/27"));
+                await seed.SaveDeskRowAsync(null, new CompetitorValues("NORD", "Ada", 2002,
+                    "123456", "FIN", "North Club", Gender.Female), null, false, null, series.Revision);
+            }
+            await using var workspace = new SeriesWorkspace(new SqliteSeriesFileStore());
+            var vm = new MainViewModel(workspace, new FileDialogsStub { NewPath = file, OpenPath = file, BackupPath = file + ".bak" },
+                fisStore: cache, recentSeriesStore: new RecentSeriesStore(root));
+            vm.OpenSeriesCommand.Execute(null);
+            await vm.OpenSeriesCommand.ExecutionTask!;
+            var row = Assert.Single(vm.VisibleCompetitors, x => !x.IsPlaceholder);
+            row.PointsText = "50.00";
+            await vm.CommitDeskChangesCommand.ExecuteAsync(null);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            row = Assert.Single(vm.VisibleCompetitors, x => !x.IsPlaceholder);
+            // Another athlete's Code, then only the points change undone: the saved points of 123456 are back on the row.
+            row.FederationCode = "654321";
+            vm.RestoreDeskChangeCommand.Execute(vm.DeskChangeLog.Single(x => x.Field == nameof(CompetitorGridRow.FisPoints)));
+            Assert.Equal("50.00", row.PointsText);
+
+            vm.StageFisUpdatesCommand.Execute(null);
+            Assert.Equal(("WEST", "", 24.68m), (row.Surname, row.PointsText, row.FisGs));
+            await vm.CommitDeskChangesCommand.ExecuteAsync(null);
+            Assert.False(vm.IsError, vm.StatusMessage);
+            var desk = await workspace.ReadCompetitorDeskAsync();
+            var saved = Assert.Single(desk.Competitors);
+            Assert.Equal("654321", saved.Values.FederationCode);
+            Assert.Null(desk.FisPointsOf(saved.Id)?.All);
+            Assert.Equal(24.68m, desk.FisPointsOf(saved.Id)?.Gs);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public async Task UnsavedRowsAreFilledFromTheFisListAndANameNoteDoesNotBlockSave()
     {
         var root = Path.Combine(Path.GetTempPath(), "openskitime-fis-unsaved", Guid.NewGuid().ToString("N"));
