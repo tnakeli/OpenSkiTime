@@ -55,7 +55,10 @@ Agreed 2026-11-26; not implemented yet. OpenSkiTime checks openskiti.me for a ne
   1. Size and SHA-256 equal the manifest.
   2. `WinVerifyTrust` accepts the file's Authenticode signature: intact, and chained to a trusted root. Revocation is not checked, so updating never depends on reaching a CA's revocation servers.
   3. The signer certificate's SHA-1 thumbprint, or its common name (the *Name* Windows shows in Digital Signature Details), is listed in `update-signers.txt`.
-  4. The installer's file version equals the offered version's `MAJOR.MINOR.PATCH` (`X.Y.Z.0`, set by `Package-Windows.ps1`). The signature covers the version resource, so an older signed installer published under a newer version's name is rejected. Inno Setup itself would overwrite newer files (`ignoreversion`).
+  4. The installer's product version equals the offered version exactly, including any pre-release label (`0.6.0`, `0.6.0-preview.1`).
+     - `installer.iss` sets it with `VersionInfoProductTextVersion={#AppVersion}`. The numeric file version `X.Y.Z.0` cannot tell a preview from its stable release.
+     - The signature covers the version resource, so an older or preview installer published under another version's name is rejected.
+     - Inno Setup itself would overwrite newer files (`ignoreversion`).
 
   A failure deletes the file and shows `The update could not be verified`, with the reason and a link to the download page.
 - A file under its final name has passed these checks. Later steps (the next start, **Restart to update**) only re-check its SHA-256 against the manifest. `Updates/` keeps at most the installer of the offered version. Other installers and partial files written by the updater are deleted at startup.
@@ -119,6 +122,7 @@ Live publishing, device listening and capture stop as on any close, and the oper
 
 All changes are in `deploy/windows/installer.iss`:
 
+- `[Setup]`: add `VersionInfoProductTextVersion={#AppVersion}`, so the signed version resource carries the full release version for check 4. Every installer the updater can be offered is built with it, because the updater installs only releases newer than itself.
 - `[Code]`: `InitializeSetup` waits up to 60 s for the `WAITPID` process, using `OpenProcess`/`WaitForSingleObject` from kernel32. If the process is still running, setup stops with "OpenSkiTime is still running. The update was not installed." `IsUpdate` returns whether `{param:UPDATE|0}` is `1`.
 - `[Run]`: add `Filename: "{app}\OpenSkiTime.Desktop.exe"; Parameters: "--after-update"; Flags: nowait; Check: IsUpdate`. It runs only after a successful installation. The existing `postinstall skipifsilent` entry stays for interactive installations.
 - `CloseApplications=yes` stays as the backstop for a process that did not exit.
@@ -169,7 +173,7 @@ An installed copy has `unins000.exe` next to `OpenSkiTime.Desktop.exe`; the port
   - No offer for an equal or older version.
 - **Desktop**, with a fake HTTP handler, verifier and launcher:
   - An offline startup check shows only in About.
-  - Available → download, then each verification failure deletes the file. This includes an older signed installer offered as a newer version, which the file-version check rejects.
+  - Available → download, then each verification failure deletes the file. This includes an older or preview installer offered as another version, for example a `0.6.0-preview.1` installer offered as `0.6.0`, which the product-version check rejects.
   - Cancelling deletes the partial file.
   - A refused close keeps the ready state and launches nothing.
   - An accepted close launches the installer with the expected arguments after `Dispose`.
@@ -185,7 +189,8 @@ An installed copy has `unins000.exe` next to `OpenSkiTime.Desktop.exe`; the port
 - **Installer** (`Test-WindowsInstaller.ps1`, in the unsigned and signed workflows): run update mode while a placeholder process is alive, with `OPENSKITIME_UPDATE_MANIFEST=off` and a temporary `OPENSKITIME_LOCAL_DATA`. Check that:
   - installation waits for the placeholder to exit;
   - the log is written to a path that contains a space;
-  - `OpenSkiTime.Desktop.exe --after-update` is started again from the installation directory.
+  - `OpenSkiTime.Desktop.exe --after-update` is started again from the installation directory;
+  - the installer's product version is the full release version.
 
   The existing reinstall and uninstall-preservation checks are unchanged.
 - **Website** (`scripts/tests`): a manifest is written for a stable release but not for a preview, and the build fails without a valid digest.
