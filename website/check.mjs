@@ -33,11 +33,12 @@ for (const page of ['index.html', 'fi/index.html', 'tutorials/index.html', 'fi/o
     assert.match(html, /href="https:\/\/wapice\.com\/insights\/ai-radio-hosts-live-event-commentary\/"/, `Missing race radio credit in ${page}`);
   }
   if (page.endsWith('tutorials/index.html') || page.startsWith('fi/opetusvideot/')) {
-    // Every tutorial links out to YouTube in this language and the other; the page loads no third-party frame.
-    assert.equal([...html.matchAll(/<a class="video-link" href="https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}">/g)].length, 4, `Missing tutorial links in ${page}`);
-    assert(!/<iframe\b/i.test(html), `Unexpected iframe in ${page}`);
+    // A table of contents: grouped links to YouTube, no images and no third-party frame.
+    const links = [...html.matchAll(/<li><a href="https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}">/g)].length;
+    assert(links >= 4, `Missing tutorial links in ${page}`);
+    assert(!/<iframe\b|<img\b/i.test(html.slice(html.indexOf('<main'))), `Unexpected media in ${page}`);
     const graph = JSON.parse(scripts[0][2])['@graph'];
-    assert.equal(graph.find(node => node['@type'] === 'ItemList').itemListElement.length, 4, `Missing VideoObject list in ${page}`);
+    assert.equal(graph.find(node => node['@type'] === 'ItemList').itemListElement.length, links, `Missing VideoObject list in ${page}`);
     assert.match(html, /<link rel="alternate" hreflang="fi" href="https:\/\/openskiti\.me\/fi\/opetusvideot\/">/);
     assert.match(html, /<link rel="alternate" hreflang="en" href="https:\/\/openskiti\.me\/tutorials\/">/);
   }
