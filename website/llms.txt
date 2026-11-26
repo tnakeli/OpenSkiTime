@@ -21,6 +21,7 @@ Key facts:
 - [Suomeksi](https://openskiti.me/fi/): Finnish overview and FAQ
 - [Download](https://openskiti.me/download/): Windows installer, requirements and release notes
 - [Getting started](https://openskiti.me/guide/): preparing, timing and publishing a first race
+- [Tutorial videos](https://openskiti.me/tutorials/): narrated videos of setting up a FIS event, timing, fixing timing errors and training with the simulator ([in Finnish](https://openskiti.me/fi/opetusvideot/))
 - [Live API](https://openskiti.me/live-api/): reading published races in real time (HTTP and SignalR), with OpenAPI, JSON Schema and JavaScript, .NET and Java example readers; [everything in one text file](https://openskiti.me/live-api/live-api.txt)
 - [Privacy](https://openskiti.me/privacy/): local race data and optional online integrations
 - [Code signing policy](https://openskiti.me/code-signing/): how releases are built, approved and signed

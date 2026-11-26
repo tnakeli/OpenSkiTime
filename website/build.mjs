@@ -19,26 +19,62 @@ const video = { id: '5m10JrVdtv0', url: 'https://www.youtube.com/watch?v=5m10JrV
 const editingVideo = { id: 'IBvZwUvbqHo', url: 'https://www.youtube.com/watch?v=IBvZwUvbqHo', poster: 'editing-video.jpg', uploadDate: '2026-10-25', duration: 'PT2M47S', length: '2:47', name: 'Editing competitors: copy & paste from a spreadsheet, undo, multi-edit and PDF | OpenSkiTime', description: 'Entry lists copied from LibreOffice Calc and pasted into the competitor grid with every new or changed value highlighted, a one-column club update, race entries, editing in the grid, undo, multi-row edits and entry-list PDFs. Synthetic athletes and clubs.' };
 const liveVideo = { id: 'W4O_gWhQhyM', url: 'https://www.youtube.com/watch?v=W4O_gWhQhyM', poster: 'live-radio-video.jpg', uploadDate: '2026-10-25', duration: 'PT1M', length: '1:00', name: 'OpenSkiTime live timing with AI race radio', description: 'The live timing control panel and radio settings, then the live race page with the course banner, a DNF and the first finish while two AI hosts comment in Finnish. Four synthetic racers and simulated timing.' };
 const radioCredit = 'https://wapice.com/insights/ai-radio-hosts-live-event-commentary/';
+// The narrated tutorials, one YouTube video per language (scripts/tutorial-video, docs/tutorial-videos.md). Each card shows a
+// local poster and links out like the videos above. seconds: the length of that language's video.
+const tutorials = [
+  { key: 'fis-event', poster: 'tutorial-fis-event.jpg',
+    en: { id: '-c5oGkU6y0I', seconds: 229, title: 'Setting up a FIS event', intro: 'A real example: the FIS races in Levi, eight slaloms and giant slaloms in one event file.', learn: ['Save your FIS API key and get the races from the FIS calendar', 'Get the course from the FIS homologations for all slaloms at once', 'Download the right FIS points list', 'Import entries from regs.fissi.fi or paste them from Excel', 'Review the yellow changes, undo one and save', 'Update the athletes from FIS'] },
+    fi: { id: 'qDWB8bJhQio', seconds: 241, title: 'FIS-kilpailutapahtuman perustaminen', intro: 'Oikea esimerkki: Levin FIS-kilpailut, kahdeksan pujottelua ja suurpujottelua yhdessä tapahtumatiedostossa.', learn: ['Tallenna FIS API -avain ja hae kilpailut FISin kalenterista', 'Hae kilpailurinne FISin homologoinneista kaikkiin pujotteluihin kerralla', 'Lataa oikea FIS-pistelista', 'Tuo ilmoittautumiset regs.fissi.fi-palvelusta tai liitä Excelistä', 'Tarkista keltaiset muutokset, peru yksi ja tallenna', 'Päivitä urheilijat FISin rajapinnasta'] } },
+  { key: 'timing-basics', poster: 'tutorial-timing-basics.jpg',
+    en: { id: 'PoKrfJmzLtM', seconds: 144, title: 'Timing: the basics', intro: 'The Timing view with the simulator: the panes, forerunners and how impulses are assigned.', learn: ['Open a run and switch the start, intermediate and finish on from hold', 'Read At start, On course, Timestamps and Ranking', 'Add forerunners: timed, never ranked or shown in live timing', 'Change the start order by dragging', 'Mark DNS by dragging and DNF with its button', 'Find the same actions in the right-click menu'] },
+    fi: { id: 'mAiaMtMMocI', seconds: 154, title: 'Timing-näkymän peruskäyttö', intro: 'Timing-näkymä simulaattorilla: näkymän osat, esilaskijat ja impulssien kohdistuminen.', learn: ['Avaa kierros ja kytke lähtö, väliaika ja maali päälle pidosta', 'Lue At start, On course, Timestamps ja Ranking', 'Lisää esilaskijat: ajastetaan, mutta ei sijoiteta eikä näytetä live timingissa', 'Muuta lähtöjärjestystä raahaamalla', 'Merkitse DNS raahaamalla ja DNF painikkeella', 'Löydä samat toiminnot hiiren oikealla'] } },
+  { key: 'timing-errors', poster: 'tutorial-timing-errors.jpg',
+    en: { id: 'pjG9M8n-u_g', seconds: 111, title: 'Timing: handling errors', intro: 'Fix timing errors with drag and drop and buttons. The original impulses are always kept.', learn: ['Fix an extra finish impulse by dragging the racer onto the right time', 'Enter a missing finish time from the backup clock', 'Fix a racer passing another one on course', 'Put the finish on hold', 'Give a rerun by dragging the racer back to At start'] },
+    fi: { id: 'Gw3gWwtgZMo', seconds: 120, title: 'Timing: virhetilanteet', intro: 'Ajanoton virheet korjataan raahaamalla ja painikkeilla. Alkuperäiset impulssit säilyvät aina.', learn: ['Korjaa ylimääräinen maali-impulssi raahaamalla kilpailija oikean ajan päälle', 'Lisää puuttuva maaliaika varakellosta', 'Korjaa ohitus radalla', 'Laita maali pitoon', 'Anna uusintalähtö raahaamalla kilpailija At start -listalle'] } },
+  { key: 'timing-training', poster: 'tutorial-timing-training.jpg',
+    en: { id: 'hkn6SXbMAAQ', seconds: 111, title: 'Timing: training without a timing device', intro: 'Practice timing with the simulator in real time. Training never mixes with a real race.', learn: ['Choose the simulator as the timing source', 'Send test impulses to the start, intermediate and finish', 'Type a time of day, for example to practice a tie', 'Practice fixing an error by dragging', 'Set training times aside when you switch to a real device'] },
+    fi: { id: 'oTsydpIST7g', seconds: 119, title: 'Timing: harjoittelu ilman ajanottolaitetta', intro: 'Harjoittele ajanottoa simulaattorilla oikeassa ajassa. Harjoitus ei sekoitu oikeaan kilpailuun.', learn: ['Valitse simulaattori ajanoton lähteeksi', 'Lähetä testi-impulsseja lähtöön, väliaikaan ja maaliin', 'Kirjoita kellonaika, esimerkiksi tasatuloksen harjoitteluun', 'Harjoittele virheen korjaamista raahaamalla', 'Siirrä harjoitusajat sivuun, kun vaihdat oikeaan laitteeseen'] } }
+];
+const tutorialsUploaded = '2026-11-26';
+const tutorialText = {
+  en: { watch: 'Watch on YouTube', learn: 'You will learn to', other: 'Suomeksi', otherLang: 'fi', alt: 'Play the tutorial on YouTube:', caption: 'Opens YouTube. Narrated in English with subtitles; synthetic or covered race data.' },
+  fi: { watch: 'Katso YouTubessa', learn: 'Opit', other: 'In English', otherLang: 'en', alt: 'Toista opetusvideo YouTubessa:', caption: 'Avautuu YouTubeen. Suomenkielinen selostus ja tekstitys; kuvitteellinen tai peitetty kilpailudata.' }
+};
+const watchUrl = id => `https://www.youtube.com/watch?v=${id}`;
+const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+const tutorialsHtml = lang => {
+  const t = tutorialText[lang];
+  const cards = tutorials.map(item => {
+    const v = item[lang], other = item[t.otherLang];
+    return `<figure id="${item.key}"><a class="video-link" href="${watchUrl(v.id)}"><img src="/assets/${item.poster}" width="1440" height="810" alt="${escape(`${t.alt} ${v.title}`)}" loading="lazy"><span class="play-button">${t.watch} <span aria-hidden="true">▶</span></span></a><figcaption><b>${escape(v.title)} · ${clock(v.seconds)}</b><span>${escape(v.intro)}</span></figcaption><div class="tutorial-learn"><p>${t.learn}:</p><ul>${v.learn.map(x => `<li>${escape(x)}</li>`).join('')}</ul><p class="small"><a href="${watchUrl(other.id)}" hreflang="${t.otherLang}" lang="${t.otherLang}">${t.other}: ${escape(other.title)} ↗</a></p></div></figure>`;
+  }).join('');
+  return `<div class="screenshot-grid tutorial-grid">${cards}</div><p class="small">${t.caption}</p>`;
+};
+const tutorialVideos = (lang, route) => tutorials.map(item => ({ '@type': 'VideoObject', '@id': `${site}${route}#${item.key}`, name: item[lang].title, description: `${item[lang].intro} ${item[lang].learn.join('. ')}.`, inLanguage: lang, thumbnailUrl: `${site}/assets/${item.poster}`, uploadDate: tutorialsUploaded, duration: `PT${Math.floor(item[lang].seconds / 60)}M${item[lang].seconds % 60}S`, url: watchUrl(item[lang].id), embedUrl: `https://www.youtube-nocookie.com/embed/${item[lang].id}`, about: { '@id': `${site}/#software` } }));
 // [source, route, language, full title, description]. Descriptions stay under 160 characters so search results show them whole.
 const pages = [
   ['index', '/', 'en', 'OpenSkiTime – Free alpine ski race timing software', 'Free, open-source alpine ski race timing software for Windows: start lists, ALGE timing, FIS XML results, PDF reports and live results. Works offline.'],
   ['fi', '/fi/', 'fi', 'OpenSkiTime – Ilmainen alppihiihdon ajanotto-ohjelma', 'Ilmainen avoimen lähdekoodin ajanotto-ohjelma alppihiihtokilpailuihin: lähtölistat, ALGE-ajanotto, FIS-pisteet ja XML-tulokset, PDF-raportit ja live-tulokset.'],
   ['download', '/download/', 'en', 'Download OpenSkiTime ski race timing software for Windows', 'Windows downloads, release notes and installation requirements for OpenSkiTime, the free open-source alpine ski race timing software.'],
   ['guide', '/guide/', 'en', 'Your first ski race with OpenSkiTime · Getting started', 'Get started with alpine ski race timing: event series, competitors, start lists, timing, results and optional live publishing.'],
+  ['tutorials', '/tutorials/', 'en', 'Tutorial videos: alpine ski race timing step by step · OpenSkiTime', 'Narrated OpenSkiTime tutorials: set up a FIS event, time a race, fix timing errors and practice with the simulator. In English and Finnish.'],
+  ['fi-tutorials', '/fi/opetusvideot/', 'fi', 'Opetusvideot: alppihiihdon ajanotto vaihe vaiheelta · OpenSkiTime', 'OpenSkiTimen opetusvideot suomeksi: FIS-kilpailun perustaminen, ajanoton peruskäyttö, virhetilanteet ja harjoittelu simulaattorilla.'],
   ['live-api', '/live-api/', 'en', 'Live API: ski race results in real time · OpenSkiTime', 'Read live ski race results in real time: HTTP and SignalR API with OpenAPI, JSON Schema and JavaScript, .NET and Java examples. No key needed.'],
   ['privacy', '/privacy/', 'en', 'Privacy & your race data · OpenSkiTime', 'How local race data and optional online integrations work in OpenSkiTime.'],
   ['code-signing', '/code-signing/', 'en', 'Code signing policy · OpenSkiTime', 'How OpenSkiTime Windows releases are built, approved and signed.'],
   ['404', '/404.html', 'en', 'Page not found · OpenSkiTime', 'Find your way back to OpenSkiTime.']
 ];
 const alternates = { en: '/', fi: '/fi/' };
+// Pages with a translation: each declares both languages. The landing pages also carry the software's structured data.
+const translations = [alternates, { en: '/tutorials/', fi: '/fi/opetusvideot/' }];
 // Breadcrumb names for the pages below the English home page.
-const crumbs = { download: 'Download', guide: 'Getting started', 'live-api': 'Live API', privacy: 'Privacy', 'code-signing': 'Code signing policy' };
+const crumbs = { tutorials: 'Tutorials', 'fi-tutorials': 'Opetusvideot', download: 'Download', guide: 'Getting started', 'live-api': 'Live API', privacy: 'Privacy', 'code-signing': 'Code signing policy' };
 const text = {
-  en: { skip: 'Skip to content', home: 'OpenSkiTime home', nav: 'Main navigation', features: ['/#workflow', 'Features'], guide: 'Get started', download: 'Download', other: ['/fi/', 'fi', 'FI', 'Suomeksi'], tagline: 'Made for the people behind the race.', license: 'Open source · MIT license', maintainedBy: 'Maintained by', liveApi: 'Live API', privacy: 'Privacy', signing: 'Code signing', licenseLink: 'License', issue: 'Report an issue', vulnerability: 'Report a vulnerability', source: 'Source code' },
-  fi: { skip: 'Siirry sisältöön', home: 'OpenSkiTime etusivu', nav: 'Päävalikko', features: ['/fi/#ominaisuudet', 'Ominaisuudet'], guide: 'Opas', download: 'Lataa', other: ['/', 'en', 'EN', 'In English'], tagline: 'Tehty kilpailujen tekijöille.', license: 'Avoin lähdekoodi · MIT-lisenssi', maintainedBy: 'Ylläpitäjä', liveApi: 'Live API (en)', privacy: 'Tietosuoja (en)', signing: 'Koodin allekirjoitus (en)', licenseLink: 'Lisenssi', issue: 'Ilmoita ongelmasta', vulnerability: 'Ilmoita haavoittuvuudesta', source: 'Lähdekoodi' }
+  en: { skip: 'Skip to content', home: 'OpenSkiTime home', nav: 'Main navigation', features: ['/#workflow', 'Features'], guide: 'Get started', tutorials: ['/tutorials/', 'Tutorials'], download: 'Download', other: ['/fi/', 'fi', 'FI', 'Suomeksi'], tagline: 'Made for the people behind the race.', license: 'Open source · MIT license', maintainedBy: 'Maintained by', liveApi: 'Live API', privacy: 'Privacy', signing: 'Code signing', licenseLink: 'License', issue: 'Report an issue', vulnerability: 'Report a vulnerability', source: 'Source code' },
+  fi: { skip: 'Siirry sisältöön', home: 'OpenSkiTime etusivu', nav: 'Päävalikko', features: ['/fi/#ominaisuudet', 'Ominaisuudet'], guide: 'Opas', tutorials: ['/fi/opetusvideot/', 'Opetusvideot'], download: 'Lataa', other: ['/', 'en', 'EN', 'In English'], tagline: 'Tehty kilpailujen tekijöille.', license: 'Avoin lähdekoodi · MIT-lisenssi', maintainedBy: 'Ylläpitäjä', liveApi: 'Live API (en)', privacy: 'Tietosuoja (en)', signing: 'Koodin allekirjoitus (en)', licenseLink: 'Lisenssi', issue: 'Ilmoita ongelmasta', vulnerability: 'Ilmoita haavoittuvuudesta', source: 'Lähdekoodi' }
 };
 const header = t => `<a class="skip" href="#main">${t.skip}</a>
-<header class="site-header"><div class="shell header-inner"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}" aria-label="${t.home}"><img src="/favicon.svg" width="34" height="34" alt="">OpenSkiTime<span class="brand-dot">.</span></a><nav aria-label="${t.nav}"><a href="${t.features[0]}">${t.features[1]}</a><a href="/guide/">${t.guide}</a><a href="${repo}">GitHub <span aria-hidden="true">↗</span></a><a href="${t.other[0]}" hreflang="${t.other[1]}" lang="${t.other[1]}" title="${t.other[3]}" aria-label="${t.other[3]}">${t.other[2]}</a><a class="nav-download" href="/download/">${t.download} <span aria-hidden="true">↓</span></a></nav></div></header>`;
+<header class="site-header"><div class="shell header-inner"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}" aria-label="${t.home}"><img src="/favicon.svg" width="34" height="34" alt="">OpenSkiTime<span class="brand-dot">.</span></a><nav aria-label="${t.nav}"><a href="${t.features[0]}">${t.features[1]}</a><a href="/guide/">${t.guide}</a><a href="${t.tutorials[0]}">${t.tutorials[1]}</a><a href="${repo}">GitHub <span aria-hidden="true">↗</span></a><a href="${t.other[0]}" hreflang="${t.other[1]}" lang="${t.other[1]}" title="${t.other[3]}" aria-label="${t.other[3]}">${t.other[2]}</a><a class="nav-download" href="/download/">${t.download} <span aria-hidden="true">↓</span></a></nav></div></header>`;
 const footer = t => `<footer class="site-footer"><div class="shell footer-top"><a class="brand" href="${t === text.fi ? '/fi/' : '/'}">OpenSkiTime<span class="brand-dot">.</span></a><p>${t.tagline}</p></div><div class="shell footer-bottom"><span>${t.license} · ${t.maintainedBy} ${maintainer.name}, <a href="mailto:${maintainer.email}">${maintainer.email}</a></span><nav aria-label="Footer"><a href="/live-api/">${t.liveApi}</a><a href="/privacy/">${t.privacy}</a><a href="/code-signing/">${t.signing}</a><a href="${repo}/blob/master/LICENSE">${t.licenseLink}</a><a href="${repo}/issues">${t.issue} ↗</a><a href="${repo}/security/advisories/new">${t.vulnerability} ↗</a><a href="${repo}">${t.source} ↗</a>${social.map(s => `<a href="${s.url}">${s.name} ↗</a>`).join('')}</nav></div></footer>`;
 
 // One source for the visible FAQ and its FAQPage structured data, so search and answer engines read the same text visitors do.
@@ -134,13 +170,14 @@ const software = lang => ({
     { '@type': 'FAQPage', mainEntity: faq[lang].map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
   ]
 });
-const subpage = (name, route, title, description) => ({
+const subpage = (name, route, title, description, lang) => ({
   '@context': 'https://schema.org',
   '@graph': [
     { '@type': 'BreadcrumbList', itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'OpenSkiTime', item: `${site}/` },
+      { '@type': 'ListItem', position: 1, name: 'OpenSkiTime', item: `${site}${alternates[lang]}` },
       { '@type': 'ListItem', position: 2, name: crumbs[name], item: `${site}${route}` }
     ] },
+    ...(name.endsWith('tutorials') ? [{ '@type': 'ItemList', '@id': `${site}${route}#videos`, name: title, itemListElement: tutorialVideos(lang, route).map((video, i) => ({ '@type': 'ListItem', position: i + 1, item: video })) }] : []),
     ...(name === 'guide' ? [{
       '@type': 'TechArticle', '@id': `${site}${route}#article`, headline: title, description, inLanguage: 'en', url: `${site}${route}`,
       image: `${site}/assets/05-timing.png`,
@@ -156,7 +193,7 @@ await mkdir(path.join(output, 'assets'), { recursive: true });
 for (const name of ['site.css', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'robots.txt', 'staticwebapp.config.json', 'indexnow-key.txt']) {
   await copyFile(path.join(root, name), path.join(output, name));
 }
-for (const name of [video.poster, liveVideo.poster, editingVideo.poster, 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png', '13-club-start-order.png']) {
+for (const name of [video.poster, liveVideo.poster, editingVideo.poster, ...tutorials.map(x => x.poster), 'og-image.png', 'overview.png', '02-competitions.png', '03-competitors.png', '04-start-lists.png', '05-timing.png', '06-classification.png', '07-race-information.png', '08-timing-report.png', '09-receipt-ocr.png', '10-live-timing.png', '11-pdf-factory.png', '12-referee-report.png', '13-club-start-order.png']) {
   await copyFile(path.join(root, '..', 'docs', 'screenshots', name), path.join(output, 'assets', name));
 }
 // The Live API: the schema is one source for the published JSON Schema and for the components of the OpenAPI document, and
@@ -174,15 +211,16 @@ await writeFile(path.join(apiOutput, 'openapi.json'), `${JSON.stringify(openApi,
 const example = file => `<details class="example"><summary>Show ${file}</summary><pre><code>${escape(apiSource[file].trimEnd())}</code></pre></details><p><a href="${repo}/blob/master/website/live-api/${file}">${file} on GitHub ↗</a></p>`;
 for (const [name, route, lang, title, description] of pages) {
   const t = text[lang];
-  const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang)).replace('{{liveVideo}}', liveVideoHtml(lang)).replace('{{editingVideo}}', editingVideoHtml)
+  const content = (await readFile(path.join(root, 'pages', `${name}.html`), 'utf8')).replace('{{download}}', download).replace('{{faq}}', faqHtml(lang)).replace('{{video}}', videoHtml(lang)).replace('{{liveVideo}}', liveVideoHtml(lang)).replace('{{editingVideo}}', editingVideoHtml).replace('{{tutorials}}', tutorialsHtml(lang))
     .replaceAll('{{version}}', version ? ' ' + escape(version) : '')
     .replace(/\{\{example:([\w.-]+)\}\}/g, (_, file) => example(file));
   const translated = Object.values(alternates).includes(route);
+  const translation = translations.find(x => Object.values(x).includes(route));
   const head = [
     `<title>${escape(title)}</title>`,
     `<meta name="description" content="${escape(description)}">`,
     name === '404' ? `<meta name="robots" content="noindex">` : `<link rel="canonical" href="${site}${route}">`,
-    ...(translated ? [...Object.entries(alternates).map(([l, r]) => `<link rel="alternate" hreflang="${l}" href="${site}${r}">`), `<link rel="alternate" hreflang="x-default" href="${site}/">`] : []),
+    ...(translation ? [...Object.entries(translation).map(([l, r]) => `<link rel="alternate" hreflang="${l}" href="${site}${r}">`), `<link rel="alternate" hreflang="x-default" href="${site}${translation.en}">`] : []),
     `<meta name="theme-color" content="#14234a">`,
     `<meta property="og:site_name" content="OpenSkiTime">`,
     `<meta property="og:title" content="${escape(title)}">`,
@@ -190,17 +228,17 @@ for (const [name, route, lang, title, description] of pages) {
     `<meta property="og:type" content="website">`,
     `<meta property="og:url" content="${site}${route}">`,
     `<meta property="og:locale" content="${lang === 'fi' ? 'fi_FI' : 'en_US'}">`,
-    ...(translated ? [`<meta property="og:locale:alternate" content="${lang === 'fi' ? 'en_US' : 'fi_FI'}">`] : []),
+    ...(translation ? [`<meta property="og:locale:alternate" content="${lang === 'fi' ? 'en_US' : 'fi_FI'}">`] : []),
     `<meta property="og:image" content="${shareImage}">`,
     `<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">`,
     `<meta property="og:image:alt" content="OpenSkiTime, free alpine ski race timing software, with its race control screen">`,
     `<meta name="twitter:card" content="summary_large_image">`,
     `<link rel="icon" href="/favicon.ico" sizes="32x32"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
     `<link rel="stylesheet" href="/site.css">`,
-    ...(translated ? [jsonLd(software(lang))] : crumbs[name] ? [jsonLd(subpage(name, route, title, description))] : [])
+    ...(translated ? [jsonLd(software(lang))] : crumbs[name] ? [jsonLd(subpage(name, route, title, description, lang))] : [])
   ].join('');
   const html = `<!doctype html>\n<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${head}</head><body>${header(t)}<main id="main">${content}</main>${footer(t)}</body></html>\n`;
-  const target = name === 'index' || name === '404' ? output : path.join(output, name);
+  const target = name === 'index' || name === '404' ? output : path.join(output, ...route.split('/').filter(Boolean));
   await mkdir(target, { recursive: true });
   await writeFile(path.join(target, name === '404' ? '404.html' : 'index.html'), html);
 }
