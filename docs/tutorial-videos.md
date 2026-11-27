@@ -26,7 +26,8 @@ and fits the time between two clicks, so every click is shown at its word and no
 
 **The pointer** is left out of the screen recording and drawn larger from its recorded track, with a halo and click rings.
 
-**Music** is one piece for the whole series: full in the title and closing cards, about 20 dB under the speech.
+**Music** is a piece of its own for every video (tutorial and language), generated as long as the video so it does not
+loop: full in the title and closing cards, about 20 dB under the speech.
 
 ## Privacy
 
@@ -49,9 +50,11 @@ filled with its own background colour and a bar of fixed shape, so not even the 
   ElevenLabs) and needs *Text to Speech*. The script's `voice` is a voice ID (any voice of the ElevenLabs library) or the
   name of a voice of the account, which also needs *Voices: read*.
 - Keys the tutorial itself uses, for `fis-event` the FIS API key and the regs.fissi.fi key (Settings → API keys).
-- A music file outside the repository. Eleven Music output is licensed for online use on the Creator plan, except film,
-  TV, radio and studio games ([terms](https://elevenlabs.io/music-terms), read 2026-11-25). Keep its prompt, date and plan
-  beside it, do not put it in Git, and do not use it in the race radio.
+- A music file per video outside the repository (`$work\assets\music\<tutorial>-<language>.mp3`), generated with Eleven
+  Music (`POST /v1/music`, instrumental, `music_length_ms` a few seconds longer than the video; a shorter piece loops with
+  crossfades). Eleven Music output is licensed for online use on the Creator plan, except film, TV, radio and studio games
+  ([terms](https://elevenlabs.io/music-terms), read 2026-11-25). Keep its prompt, date and plan beside it
+  (`prompts.json`), do not put it in Git, and do not use it in the race radio.
 
 ## Making a video
 
@@ -79,7 +82,7 @@ tests/OpenSkiTime.Desktop.E2E/bin/Release/net10.0-windows/OpenSkiTime.Desktop.E2
 
 # 3. Composition and checks (about four minutes)
 $recording = (Get-ChildItem "$work\fis-event\fi" -Directory -Filter 'recording-*' | Sort-Object Name | Select-Object -Last 1).FullName
-python -X utf8 scripts/tutorial-video/compose.py fis-event --language fi --recording $recording --music $work\assets\C-rytmikas.mp3 --output $work\fis-event\fi\output
+python -X utf8 scripts/tutorial-video/compose.py fis-event --language fi --recording $recording --music $work\assets\music\fis-event-fi.mp3 --output $work\fis-event\fi\output
 python -X utf8 scripts/tutorial-video/check.py --video $work\fis-event\fi\output\OpenSkiTime-fis-event-fi.mp4 --recording $recording --every 0.5
 ```
 
