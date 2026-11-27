@@ -21,20 +21,21 @@ const liveVideo = { id: 'W4O_gWhQhyM', url: 'https://www.youtube.com/watch?v=W4O
 const radioCredit = 'https://wapice.com/insights/ai-radio-hosts-live-event-commentary/';
 // The narrated tutorials (scripts/tutorial-video, docs/tutorial-videos.md), one YouTube video per language, grouped like
 // the chapters of a manual. The pages are a plain table of contents: a link and the length of each video. A tutorial whose
-// video in that language is not on YouTube yet (id null) is left out. seconds: the length of that language's video.
+// video in that language is not on YouTube yet (id null) is left out. seconds: the length of that language's video;
+// uploaded: the upload date when it is not tutorialsUploaded.
 const tutorialGroups = [
   { key: 'prepare', en: 'Prepare the race', fi: 'Kilpailun valmistelu', items: [
     { key: 'fis-event', en: { id: '-c5oGkU6y0I', seconds: 229, title: 'Setting up a FIS event' }, fi: { id: 'qDWB8bJhQio', seconds: 241, title: 'FIS-kilpailutapahtuman perustaminen' } },
-    { key: 'start-lists', en: { id: null, seconds: 82, title: 'Start list and draw' }, fi: { id: null, seconds: 87, title: 'Lähtölista ja arvonta' } },
+    { key: 'start-lists', uploaded: '2026-11-27', en: { id: 'cBE6D7gNb4k', seconds: 82, title: 'Start list and draw' }, fi: { id: 'rQhUGUpr3v0', seconds: 87, title: 'Lähtölista ja arvonta' } },
     { key: 'settings', en: { id: 'nCa06dRtr5I', seconds: 93, title: 'Settings' }, fi: { id: 'jTfEiwt4NlY', seconds: 100, title: 'Asetukset' } }
   ] },
   { key: 'timing', en: 'Timing', fi: 'Ajanotto', items: [
-    { key: 'timing-basics', en: { id: 'PoKrfJmzLtM', seconds: 144, title: 'Timing: the basics' }, fi: { id: 'mAiaMtMMocI', seconds: 154, title: 'Timing-näkymän peruskäyttö' } },
-    { key: 'timing-errors', en: { id: 'pjG9M8n-u_g', seconds: 111, title: 'Handling timing errors' }, fi: { id: 'Gw3gWwtgZMo', seconds: 120, title: 'Ajanoton virhetilanteet' } },
-    { key: 'timing-training', en: { id: 'hkn6SXbMAAQ', seconds: 111, title: 'Training without a timing device' }, fi: { id: 'oTsydpIST7g', seconds: 119, title: 'Harjoittelu ilman ajanottolaitetta' } }
+    { key: 'timing-basics', uploaded: '2026-11-27', en: { id: 'H1rEywN_pYQ', seconds: 144, title: 'Timing: the basics' }, fi: { id: 'Fmpl9L_Va7s', seconds: 154, title: 'Timing-näkymän peruskäyttö' } },
+    { key: 'timing-errors', uploaded: '2026-11-27', en: { id: 'CVRVT_a6BGg', seconds: 111, title: 'Handling timing errors' }, fi: { id: 'rZMhXyiiyj4', seconds: 120, title: 'Ajanoton virhetilanteet' } },
+    { key: 'timing-training', uploaded: '2026-11-27', en: { id: 'd4PFHg1gsI0', seconds: 111, title: 'Training without a timing device' }, fi: { id: 'ne-Huqso__s', seconds: 119, title: 'Harjoittelu ilman ajanottolaitetta' } }
   ] },
   { key: 'reports', en: 'Reports', fi: 'Raportit', items: [
-    { key: 'timing-report', en: { id: null, seconds: 89, title: 'FIS timing report' }, fi: { id: null, seconds: 99, title: 'FISin ajanottoraportti' } },
+    { key: 'timing-report', uploaded: '2026-11-27', en: { id: 'ddPNOl3G4R4', seconds: 89, title: 'FIS timing report' }, fi: { id: 'm9HXeFZaSKg', seconds: 99, title: 'FISin ajanottoraportti' } },
     { key: 'race-reports', en: { id: null, seconds: 82, title: 'Race reports and PDF Factory' }, fi: { id: null, seconds: 88, title: 'Kilpailuraportit ja PDF Factory' } }
   ] }
 ];
@@ -44,7 +45,7 @@ const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).pad
 const published = lang => tutorialGroups.map(group => ({ ...group, items: group.items.filter(item => item[lang].id) })).filter(group => group.items.length > 0);
 const tutorialsHtml = lang => `<div class="tutorial-index">${published(lang).map((group, i) => `<section id="${group.key}"><h2><span class="feature-number">${String(i + 1).padStart(2, '0')}</span>${escape(group[lang])}</h2><ol class="tutorial-list">${group.items.map(item => `<li><a href="${watchUrl(item[lang].id)}">${escape(item[lang].title)}</a><span>${clock(item[lang].seconds)}</span></li>`).join('')}</ol></section>`).join('')}</div>`;
 // Structured data names YouTube's own thumbnail: a JSON-LD value, never loaded by the page.
-const tutorialVideos = (lang, route) => published(lang).flatMap(group => group.items).map(item => ({ '@type': 'VideoObject', '@id': `${site}${route}#${item.key}`, name: item[lang].title, description: `${item[lang].title}. OpenSkiTime tutorial, narrated in ${lang === 'fi' ? 'Finnish' : 'English'}.`, inLanguage: lang, thumbnailUrl: `https://i.ytimg.com/vi/${item[lang].id}/hqdefault.jpg`, uploadDate: tutorialsUploaded, duration: `PT${Math.floor(item[lang].seconds / 60)}M${item[lang].seconds % 60}S`, url: watchUrl(item[lang].id), embedUrl: `https://www.youtube-nocookie.com/embed/${item[lang].id}`, about: { '@id': `${site}/#software` } }));
+const tutorialVideos = (lang, route) => published(lang).flatMap(group => group.items).map(item => ({ '@type': 'VideoObject', '@id': `${site}${route}#${item.key}`, name: item[lang].title, description: `${item[lang].title}. OpenSkiTime tutorial, narrated in ${lang === 'fi' ? 'Finnish' : 'English'}.`, inLanguage: lang, thumbnailUrl: `https://i.ytimg.com/vi/${item[lang].id}/hqdefault.jpg`, uploadDate: item.uploaded ?? tutorialsUploaded, duration: `PT${Math.floor(item[lang].seconds / 60)}M${item[lang].seconds % 60}S`, url: watchUrl(item[lang].id), embedUrl: `https://www.youtube-nocookie.com/embed/${item[lang].id}`, about: { '@id': `${site}/#software` } }));
 // [source, route, language, full title, description]. Descriptions stay under 160 characters so search results show them whole.
 const pages = [
   ['index', '/', 'en', 'OpenSkiTime – Free alpine ski race timing software', 'Free, open-source alpine ski race timing software for Windows: start lists, ALGE timing, FIS XML results, PDF reports and live results. Works offline.'],
