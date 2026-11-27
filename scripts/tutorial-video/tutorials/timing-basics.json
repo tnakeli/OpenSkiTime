@@ -1,0 +1,147 @@
+{
+  "name": "timing-basics",
+  "driver": "TimingTutorialTests",
+  "voice": "W9YsrfUjc4DOYR4fhg8M",
+  "fictional": true,
+  "title": {
+    "fi": "Timing-näkymän peruskäyttö",
+    "en": "Timing: the basics"
+  },
+  "say": {
+    "fi": {
+      "FISin": "Fissin",
+      "FIS": "Fis",
+      "API -avain": "apiavain",
+      "API-avain": "apiavain",
+      "API-avaimensa": "apiavaimensa",
+      "API keys": "apikiis",
+      "regs.fissi.fi": "reks fissi fi",
+      "OpenSkiTimeen": "Open Ski Taimiin",
+      "OpenSkiTimessa": "Open Ski Taimissa",
+      "OpenSkiTimen": "Open Ski Taimin",
+      "OpenSkiTime": "Open Ski Taim",
+      "Ctrl+V": "kontrol vee",
+      "Ctrl+Backspace": "kontrol bäkspeis",
+      "F6": "äf kuusi",
+      "I1": "ii yksi",
+      "DNS": "dee än äs",
+      "DNF": "dee än äf",
+      "Prepare Run 2": "Prepare Run two",
+      "live timingissa": "laiv taimingissa"
+    },
+    "en": {
+      "regs.fissi.fi": "regs dot fissi dot F I",
+      "OpenSkiTime": "Open Ski Time",
+      "Ctrl+V": "Control V",
+      "Ctrl+Backspace": "Control Backspace",
+      "F6": "F six",
+      "I1": "I one",
+      "DNS": "D N S",
+      "DNF": "D N F",
+      "Levi": "Levy",
+      "a FIS": "an F I S",
+      "Live": "Lyve",
+      "Timy": "Timmy"
+    }
+  },
+  "steps": [
+    {
+      "id": "intro",
+      "fi": "Tässä videossa käydään läpi ajanoton peruskäyttö OpenSkiTimen Timing-näkymässä. Impulssit tulevat nyt simulaattorista, kilpailussa ajanottolaitteesta.",
+      "en": "This video shows the basics of the Timing view in OpenSkiTime. The impulses come from the simulator here, and from the timing device in a race."
+    },
+    {
+      "id": "open",
+      "fi": "Avaa {timing}Timing, valitse {race}kilpailu ja {run}ensimmäinen kierros. Erillistä yhdistämistä ei tarvita: aikoja otetaan vastaan aina, kun tämä näkymä on auki. Pidä se siis auki, kun kilpailijoita on radalla.",
+      "en": "Open {timing}Timing, choose the {race}race and the {run}first run. There is no connect step: times are received whenever this view is open. So keep it open while racers are on course."
+    },
+    {
+      "id": "strip",
+      "fi": "Ylhäällä näkyy {a}laitteen yhteys. {hold}Aluksi kaikki on pidossa: impulssit tallentuvat, mutta niitä ei kohdisteta kilpailijoille. Kytke päälle {start}lähtö, {i1}väliaika ja {finish}maali, kun olet valmis.",
+      "en": "At the top you see the {a}connection of the device. {hold}At first everything is on hold: impulses are saved, but not given to racers. When you are ready, switch on the {start}start, the {i1}intermediate and the {finish}finish."
+    },
+    {
+      "id": "panes",
+      "fi": "Vasemmalla, {atstart}At start, ovat lähtevät, seuraava alimpana. Keskellä, {course}On course, ovat radalla olevat. Oikealla, {stamps}Timestamps, ovat impulssien kellonajat. Alhaalla, {ranking}Ranking, on tilanne.",
+      "en": "On the left, {atstart}At start, are the starters, the next one at the bottom. In the middle, {course}On course, are the racers on course. On the right, {stamps}Timestamps, are the impulses as time of day. Below, {ranking}Ranking, is the current ranking."
+    },
+    {
+      "id": "forerunners",
+      "fi": "Esilaskijat lähtevät ennen kilpailijoita. Paina {open}Forerunners ja kirjoita {name}nimi. Lisää esilaskijoita saa {add}Add-painikkeella. Kun painat {save}Save, esilaskija on {queue}lähtövuorossa ensimmäisenä.",
+      "en": "Forerunners start before the racers. Press {open}Forerunners and type the {name}name. More forerunners come with {add}Add. When you press {save}Save, the forerunner is the {queue}next to start."
+    },
+    {
+      "id": "start",
+      "fi": "Lähtöportti aukeaa. {pulse}Esilaskija siirtyy radalle, ja aika juoksee. Impulssit kohdistuvat automaattisesti lähtöjärjestyksen mukaan: {first}seuraavaksi lähtee ensimmäinen kilpailija. Kun esilaskija tulee {finish}maaliin, aika näkyy täällä, mutta esilaskijoita ei sijoiteta tuloksiin, eikä heidän aikaansa näytetä live timingissa.",
+      "en": "The start gate opens. {pulse}The forerunner moves on course, and the time is running. Impulses are assigned automatically in the start order: {first}the first racer starts next. When the forerunner {finish}finishes, the time is shown here, but forerunners are never ranked, and their time is not shown in live timing."
+    },
+    {
+      "id": "next",
+      "fi": "{pulse}Seuraava lähtee. {inter}Väliaikaimpulssi kirjautuu sille, joka on radalla ensimmäisenä.",
+      "en": "{pulse}The next one starts. {inter}The intermediate impulse goes to the racer who is first on course."
+    },
+    {
+      "id": "order",
+      "fi": "Jos lähtöjärjestys muuttuu, {drag}raahaa kilpailija listalla uuteen paikkaan, tässä seuraavaksi lähtijäksi. Arvottu lähtölista säilyy ennallaan.",
+      "en": "If the start order changes, {drag}drag the racer to a new place on the list, here to start next. The drawn start list stays as it was."
+    },
+    {
+      "id": "dns",
+      "fi": "Jos kilpailija ei tule lähtöön, raahaa {grab}hänet {drop}DNS-painikkeen päälle.",
+      "en": "If a racer does not come to the start, drag {grab}the racer onto the {drop}DNS button."
+    },
+    {
+      "id": "dnf",
+      "fi": "Keskeyttäneen voi myös valita {row}radalta ja painaa {status}DNF. Samat toiminnot löytyvät {menu}hiiren oikealla, ja valikossa näkyvät myös pikanäppäimet.",
+      "en": "Or select a racer {row}on course and press {status}DNF. The same actions are in the {menu}right-click menu, which also shows the keyboard shortcuts."
+    },
+    {
+      "id": "finish",
+      "fi": "Ja maali! {pulse}Aika ja sijoitus näkyvät heti. Tulos lasketaan {stamps}aikaleimoista laitteen täydellä tarkkuudella ja katkaistaan vasta lopuksi sadasosiin. Väliajan perässä on {split}väliaikasijoitus.",
+      "en": "And the finish! {pulse}The time and the rank appear at once. The result is calculated from the {stamps}timestamps with the full precision of the device, and truncated to hundredths only at the end. The {split}intermediate time is shown with its rank."
+    },
+    {
+      "id": "end",
+      "fi": "Kun kaikki ovat maalissa tai luokiteltu, tähän tulee {button}painike Prepare Run 2, jolla jatketaan toiselle kierrokselle.",
+      "en": "When everyone has finished or is classified, the button Prepare Run 2 {button}appears here, and you continue with the second run."
+    }
+  ],
+  "youtube": {
+    "fi": {
+      "title": "Timing-näkymän peruskäyttö | OpenSkiTime",
+      "description": "Timing-näkymän peruskäyttö OpenSkiTimessa. Videossa on keksitty harjoituskilpailu, ja impulssit tulevat simulaattorista oikeassa ajassa. Kilpailussa ne tulevat ajanottolaitteesta.\n\nTämän videon jälkeen osaat:\n- avata kierroksen ajanottoon ja kytkeä lähdön, väliajan ja maalin päälle pidosta\n- lukea näkymän osat: At start, On course, Timestamps ja Ranking\n- lisätä esilaskijat, jotka ajastetaan mutta joita ei sijoiteta tuloksiin eikä näytetä live timingissa\n- seurata, miten lähtö-, väliaika- ja maali-impulssit kohdistuvat automaattisesti\n- muuttaa lähtöjärjestystä raahaamalla\n- merkitä DNS:n raahaamalla ja DNF:n painikkeella\n- löytää samat toiminnot hiiren oikealla\n\nOpenSkiTime on ilmainen, avoimen lähdekoodin alppihiihdon ajanotto- ja tulospalveluohjelma.\n\nVerkkosivu: https://openskiti.me\nLähdekoodi: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alppihiihto",
+        "ajanotto",
+        "tulospalvelu",
+        "pujottelu",
+        "suurpujottelu",
+        "FIS",
+        "opetusvideo",
+        "Timing",
+        "esilaskija",
+        "DNS",
+        "DNF"
+      ]
+    },
+    "en": {
+      "title": "Timing: the basics | OpenSkiTime",
+      "description": "The basics of the Timing view in OpenSkiTime. The video uses an invented training race, and the impulses come from the simulator in real time. In a race they come from the timing device.\n\nAfter this video you can:\n- open a run for timing and switch the start, intermediate and finish on from hold\n- read the parts of the view: At start, On course, Timestamps and Ranking\n- add forerunners, who are timed but never ranked or shown in live timing\n- follow how start, intermediate and finish impulses are assigned automatically\n- change the start order by dragging\n- mark DNS by dragging and DNF with its button\n- find the same actions in the right-click menu\n\nOpenSkiTime is free, open source timing and results software for alpine skiing.\n\nWebsite: https://openskiti.me\nSource code: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alpine skiing",
+        "ski race timing",
+        "race timing software",
+        "slalom",
+        "giant slalom",
+        "FIS",
+        "tutorial",
+        "timing view",
+        "forerunners",
+        "DNS",
+        "DNF"
+      ]
+    }
+  }
+}

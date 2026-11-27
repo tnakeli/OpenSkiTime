@@ -11,6 +11,9 @@ that change the channel only print what they would do unless --yes is given.
     python scripts/social/youtube.py upload video.mp4 --title T --description-file F [--tags a,b] [--privacy private] [--thumbnail t.png] [--yes]
     python scripts/social/youtube.py update VIDEO_ID [--title T] [--description-file F] [--tags a,b] [--privacy P] [--yes]
     python scripts/social/youtube.py thumbnail VIDEO_ID image.png [--yes]
+    python scripts/social/youtube.py captions VIDEO_ID subtitles.srt --language fi [--name N] [--yes]
+
+upload and update take --language (fi, en, ...): the language of the title, description and speech.
 """
 import argparse
 import base64
@@ -38,8 +41,8 @@ API = 'https://www.googleapis.com/youtube/v3'
 UPLOAD_API = 'https://www.googleapis.com/upload/youtube/v3'
 AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 TOKEN_URL = 'https://oauth2.googleapis.com/token'
-# One scope covers uploads, video and channel metadata, thumbnails and banners.
-SCOPE = 'https://www.googleapis.com/auth/youtube'
+# youtube covers uploads, video and channel metadata, thumbnails and banners; captions need youtube.force-ssl.
+SCOPE = 'https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl'
 CLIENT_TARGET = 'OpenSkiTime.Social.YouTube.Client'
 TOKEN_TARGET = 'OpenSkiTime.Social.YouTube'
 # Sign-in is accepted only for this channel, so a personal channel on the same Google account is never changed.
@@ -453,6 +456,8 @@ def video_metadata(args, current=None):
         snippet['tags'] = tags
     if getattr(args, 'category', None):
         snippet['categoryId'] = CATEGORIES[args.category]
+    if getattr(args, 'language', None):
+        snippet['defaultLanguage'] = snippet['defaultAudioLanguage'] = args.language
     if args.privacy:
         status['privacyStatus'] = args.privacy
         if args.privacy != 'private':
@@ -519,6 +524,28 @@ def command_thumbnail(args):
     print('Thumbnail set.')
 
 
+def captions_body(video_id, language, name, subtitles, boundary):
+    """captions.insert as one multipart/related request: the caption resource, then the subtitle file."""
+    resource = json.dumps({'snippet': {'videoId': video_id, 'language': language, 'name': name, 'isDraft': False}})
+    head = (f'--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{resource}\r\n'
+            f'--{boundary}\r\nContent-Type: application/octet-stream\r\n\r\n')
+    return head.encode('utf-8') + subtitles + f'\r\n--{boundary}--\r\n'.encode('utf-8')
+
+
+def command_captions(args):
+    if not Path(args.file).is_file():
+        raise YouTubeError(f'{args.file}: file not found')
+    print(f'Add {args.language} captions "{args.name}" from {args.file} to https://www.youtube.com/watch?v={args.video_id}.')
+    if not args.yes:
+        print('Preview only; nothing was changed. Add --yes to apply.')
+        return
+    boundary = secrets.token_hex(16)
+    call('POST', '/captions', access_token(), {'part': 'snippet', 'uploadType': 'multipart'}, base=UPLOAD_API,
+         data=captions_body(args.video_id, args.language, args.name, Path(args.file).read_bytes(), boundary),
+         content_type=f'multipart/related; boundary={boundary}')
+    print('Captions added.')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Manage the OpenSkiTime YouTube channel.')
     commands = parser.add_subparsers(dest='command', required=True)
@@ -539,16 +566,24 @@ def main(argv=None):
         command.add_argument('--tags', help='comma-separated')
         command.add_argument('--privacy', choices=PRIVACY, default='private' if name == 'upload' else None)
         command.add_argument('--category', choices=sorted(CATEGORIES), default='sports' if name == 'upload' else None)
+        command.add_argument('--language', help='language code of the title, description and speech, such as fi or en')
         if name == 'upload':
             command.add_argument('--thumbnail')
         command.add_argument('--yes', action='store_true')
+    command = commands.add_parser('captions', help='add a subtitle file (SRT) to a video')
+    command.add_argument('video_id')
+    command.add_argument('file')
+    command.add_argument('--language', required=True)
+    command.add_argument('--name', default='', help='name of the track; empty for the main track of the language')
+    command.add_argument('--yes', action='store_true')
     command = commands.add_parser('thumbnail', help='set a video thumbnail')
     command.add_argument('video_id')
     command.add_argument('image')
     command.add_argument('--yes', action='store_true')
     args = parser.parse_args(argv)
     handlers = {'client-import': command_client_import, 'login': command_login, 'status': command_status,
-                'channel': command_channel, 'upload': command_upload, 'update': command_update, 'thumbnail': command_thumbnail}
+                'channel': command_channel, 'upload': command_upload, 'update': command_update, 'thumbnail': command_thumbnail,
+                'captions': command_captions}
     try:
         handlers[args.command](args)
     except YouTubeError as error:

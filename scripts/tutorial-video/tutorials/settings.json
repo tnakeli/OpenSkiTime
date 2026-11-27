@@ -1,0 +1,136 @@
+{
+  "name": "settings",
+  "driver": "OfficeTutorialTests",
+  "voice": "W9YsrfUjc4DOYR4fhg8M",
+  "fictional": true,
+  "title": {
+    "fi": "Asetukset",
+    "en": "Settings"
+  },
+  "say": {
+    "fi": {
+      "FISin": "Fissin",
+      "FIS": "Fis",
+      "API -avain": "apiavain",
+      "API-avain": "apiavain",
+      "API-avaimensa": "apiavaimensa",
+      "API keys": "apikiis",
+      "regs.fissi.fi": "reks fissi fi",
+      "OpenSkiTimeen": "Open Ski Taimiin",
+      "OpenSkiTimessa": "Open Ski Taimissa",
+      "OpenSkiTimen": "Open Ski Taimin",
+      "OpenSkiTime": "Open Ski Taim",
+      "Ctrl+V": "kontrol vee",
+      "Ctrl+Backspace": "kontrol bäkspeis",
+      "F6": "äf kuusi",
+      "I1": "ii yksi",
+      "DNS": "dee än äs",
+      "DNF": "dee än äf",
+      "Prepare Run 2": "Prepare Run two",
+      "live timingissa": "laiv taimingissa",
+      "PDF:t": "pee dee äffät",
+      "PDF-lähtölistat": "pee dee äf lähtölistat",
+      "PDF Factoryssa": "pee dee äf Factoryssa",
+      "PDF Factory": "pee dee äf Factory",
+      "PDF": "pee dee äf",
+      "XML-tiedostoksi": "äks äm äl tiedostoksi",
+      "XML": "äks äm äl",
+      "TSV": "tee äs vee",
+      "FIS XML": "Fis äks äm äl",
+      "Member Section": "Member Section",
+      "B-kello": "bee kello",
+      "A-järjestelmästä": "aa järjestelmästä",
+      "B-järjestelmän": "bee järjestelmän",
+      "B-järjestelmästä": "bee järjestelmästä",
+      "Live timing": "Laiv taiming"
+    },
+    "en": {
+      "regs.fissi.fi": "regs dot fissi dot F I",
+      "OpenSkiTime": "Open Ski Time",
+      "Ctrl+V": "Control V",
+      "Ctrl+Backspace": "Control Backspace",
+      "F6": "F six",
+      "I1": "I one",
+      "DNS": "D N S",
+      "DNF": "D N F",
+      "Levi": "Levy",
+      "a FIS": "an F I S",
+      "Live": "Lyve",
+      "Timy": "Timmy",
+      "TSV": "T S V",
+      "XML": "X M L",
+      "PDF": "P D F",
+      "PDFs": "P D Fs",
+      "FIS XML": "F I S X M L"
+    }
+  },
+  "steps": [
+    {
+      "id": "intro",
+      "fi": "Tässä videossa käydään läpi OpenSkiTimen asetukset. Ne tallentuvat tälle tietokoneelle ja Windows-tunnuksellesi, eivät tapahtumatiedostoon.",
+      "en": "This video goes through the settings of OpenSkiTime. They are saved on this computer and in your Windows account, not in the event file."
+    },
+    {
+      "id": "keys",
+      "fi": "Avaa {settings}Settings ja {tab}API keys. Täällä ovat {fis}FIS API -avain FISin kalentereihin ja pistelistoihin, {token}Member Section -tunnus tulosten lähettämiseen FISille ja {fissi}regs.fissi.fi-avain ilmoittautumisiin. Avaimet pysyvät Windowsin tunnistetietojen säilössä.",
+      "en": "Open {settings}Settings and {tab}API keys. Here are the {fis}FIS API key for the FIS calendars and points lists, the {token}Member Section token for sending results to FIS, and the {fissi}regs.fissi.fi key for entries. The keys stay in the Windows credential store."
+    },
+    {
+      "id": "devices",
+      "fi": "Sitten {devices}Timing devices: {operator}operaattorin nimi kirjataan jokaiseen käsin tehtyyn korjaukseen. Valitse {source}lähdön laite, esimerkiksi Timy, MT1, ALGE Results tai simulaattori, ja sen {channel}kanava. Maali ja väliajat käyttävät oletuksena {same}samaa yhteyttä.",
+      "en": "Next, {devices}Timing devices: the {operator}operator name is recorded with every manual correction. Choose the {source}device of the start, for example Timy, MT1, ALGE Results or the simulator, and its {channel}channel. The finish and the intermediates use the {same}same connection by default."
+    },
+    {
+      "id": "more",
+      "fi": "Painike {inter}Add intermediate lisää väliajan, ja {bclock}B-kello on valinnainen varajärjestelmä. Se ei koskaan muuta kilpailun aikoja, mutta varoittaa, jos A ja B eroavat.",
+      "en": "The button {inter}Add intermediate adds an intermediate, and the {bclock}B Clock is an optional backup system. It never changes race times, but it warns when A and B disagree."
+    },
+    {
+      "id": "report",
+      "fi": "Välilehdellä {report}Timing report ovat ajanottoraportin {equipment}laitteet, {chief}ajanoton päällikkö ja {keeper}ajanottaja sekä {conn}yhteydet. Kun tallennat ne kohdasta {save}Save report defaults, ne tulevat jokaiseen raporttiin.",
+      "en": "On the tab {report}Timing report you set the {equipment}equipment of the timing report, the {chief}chief of timing, the {keeper}timekeeper and the {conn}connections. Save them with {save}Save report defaults, and every report uses them."
+    },
+    {
+      "id": "live",
+      "fi": "Lopuksi {live}Live timing: pilvipalvelun {server}osoite ja {key}julkaisuavain sekä {radio}kilpailuradion palveluntarjoajan avaimet.",
+      "en": "Finally, {live}Live timing: the {server}address and the {key}publisher key of the cloud service, and the {radio}provider keys of the race radio."
+    },
+    {
+      "id": "end",
+      "fi": "Asetukset tehdään yleensä kerran. Sen jälkeen ne ovat valmiina jokaisessa kilpailussa.",
+      "en": "You usually make the settings once. After that they are ready for every race."
+    }
+  ],
+  "youtube": {
+    "fi": {
+      "title": "Asetukset | OpenSkiTime",
+      "description": "OpenSkiTimen asetukset: API-avaimet, ajanottolaitteet, ajanottoraportin oletukset ja live timing.\n\nTämän videon jälkeen osaat:\n- tallentaa FISin ja regs.fissi.fi-palvelun avaimet turvallisesti\n- valita ajanottolaitteen ja kanavat lähtöön, maaliin ja väliaikoihin\n- lisätä väliajan ja valinnaisen B-kellon\n- tallentaa ajanottoraportin laitteet ja toimitsijat oletuksiksi\n- asettaa live timingin julkaisuavaimen\n\nVideossa on keksitty harjoituskilpailu.\n\nOpenSkiTime on ilmainen, avoimen lähdekoodin alppihiihdon ajanotto- ja tulospalveluohjelma.\n\nVerkkosivu: https://openskiti.me\nOpetusvideot: https://openskiti.me/fi/opetusvideot/\nLähdekoodi: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alppihiihto",
+        "ajanotto",
+        "tulospalvelu",
+        "pujottelu",
+        "FIS",
+        "opetusvideo",
+        "asetukset",
+        "ALGE"
+      ]
+    },
+    "en": {
+      "title": "Settings | OpenSkiTime",
+      "description": "The settings of OpenSkiTime: API keys, timing devices, timing report defaults and live timing.\n\nAfter this video you can:\n- save the FIS and regs.fissi.fi keys safely\n- choose the timing device and channels for the start, finish and intermediates\n- add an intermediate and an optional B Clock\n- save the equipment and officials of the timing report as defaults\n- set the publisher key of live timing\n\nThe video uses an invented training race.\n\nOpenSkiTime is free, open source timing and results software for alpine skiing.\n\nWebsite: https://openskiti.me\nTutorials: https://openskiti.me/tutorials/\nSource code: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alpine skiing",
+        "ski race timing",
+        "race timing software",
+        "slalom",
+        "FIS",
+        "tutorial",
+        "settings",
+        "ALGE"
+      ]
+    }
+  }
+}

@@ -119,7 +119,7 @@ One-time setup, in the Google account that owns the OpenSkiTime Brand Account:
 5. Run `python scripts/social/youtube.py login` and choose the **OpenSkiTime** channel in
    the account chooser (Google lists it after the account as a brand account). The tool
    also prints the sign-in address in case no browser opens; open it on the same computer.
-   The browser returns to a one-shot `127.0.0.1` listener (PKCE, scope `youtube`); the
+   The browser returns to a one-shot `127.0.0.1` listener (PKCE, scopes `youtube` and `youtube.force-ssl`, the second for captions); the
    refresh token is saved as `OpenSkiTime.Social.YouTube`. Only `@OpenSkiTime` is accepted:
    a sign-in to another channel, such as a personal one on the same Google account, is
    revoked and not saved, and a saved sign-in for another channel is refused.
@@ -133,7 +133,12 @@ python scripts/social/youtube.py channel --description-file description.txt --ke
 python scripts/social/youtube.py upload demo.mp4 --title "..." --description-file description.txt --tags "slalom,FIS timing" --thumbnail thumb.png
 python scripts/social/youtube.py update VIDEO_ID --privacy public
 python scripts/social/youtube.py thumbnail VIDEO_ID thumb.png
+python scripts/social/youtube.py captions VIDEO_ID subtitles.srt --language fi
 ```
+
+`--language` on `upload` and `update` sets the language of the title, description and speech
+(English by default for a new upload). `captions` adds an SRT file as the main subtitle track
+of its language.
 
 Every command that changes the channel only prints a preview unless `--yes` is given.
 Uploads are private unless `--privacy` says otherwise, are not made for kids, and use the

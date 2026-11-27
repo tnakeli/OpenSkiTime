@@ -1,0 +1,141 @@
+{
+  "name": "timing-report",
+  "driver": "OfficeTutorialTests",
+  "voice": "W9YsrfUjc4DOYR4fhg8M",
+  "fictional": true,
+  "title": {
+    "fi": "FISin ajanottoraportti",
+    "en": "FIS timing report"
+  },
+  "say": {
+    "fi": {
+      "FISin": "Fissin",
+      "FIS": "Fis",
+      "API -avain": "apiavain",
+      "API-avain": "apiavain",
+      "API-avaimensa": "apiavaimensa",
+      "API keys": "apikiis",
+      "regs.fissi.fi": "reks fissi fi",
+      "OpenSkiTimeen": "Open Ski Taimiin",
+      "OpenSkiTimessa": "Open Ski Taimissa",
+      "OpenSkiTimen": "Open Ski Taimin",
+      "OpenSkiTime": "Open Ski Taim",
+      "Ctrl+V": "kontrol vee",
+      "Ctrl+Backspace": "kontrol bäkspeis",
+      "F6": "äf kuusi",
+      "I1": "ii yksi",
+      "DNS": "dee än äs",
+      "DNF": "dee än äf",
+      "Prepare Run 2": "Prepare Run two",
+      "live timingissa": "laiv taimingissa",
+      "PDF:t": "pee dee äffät",
+      "PDF-lähtölistat": "pee dee äf lähtölistat",
+      "PDF Factoryssa": "pee dee äf Factoryssa",
+      "PDF Factory": "pee dee äf Factory",
+      "PDF": "pee dee äf",
+      "XML-tiedostoksi": "äks äm äl tiedostoksi",
+      "XML": "äks äm äl",
+      "TSV": "tee äs vee",
+      "FIS XML": "Fis äks äm äl",
+      "Member Section": "Member Section",
+      "B-kello": "bee kello",
+      "A-järjestelmästä": "aa järjestelmästä",
+      "B-järjestelmän": "bee järjestelmän",
+      "B-järjestelmästä": "bee järjestelmästä",
+      "Live timing": "Laiv taiming"
+    },
+    "en": {
+      "regs.fissi.fi": "regs dot fissi dot F I",
+      "OpenSkiTime": "Open Ski Time",
+      "Ctrl+V": "Control V",
+      "Ctrl+Backspace": "Control Backspace",
+      "F6": "F six",
+      "I1": "I one",
+      "DNS": "D N S",
+      "DNF": "D N F",
+      "Levi": "Levy",
+      "a FIS": "an F I S",
+      "Live": "Lyve",
+      "Timy": "Timmy",
+      "TSV": "T S V",
+      "XML": "X M L",
+      "PDF": "P D F",
+      "PDFs": "P D Fs",
+      "FIS XML": "F I S X M L"
+    }
+  },
+  "steps": [
+    {
+      "id": "intro",
+      "fi": "Tässä videossa tehdään FISin ajanottoraportti. Molemmat kierrokset on jo ajettu, ja suurin osa raportista täyttyy ajanoton tiedoista.",
+      "en": "This video makes the FIS timing report. Both runs have been timed, and most of the report fills in from the timing data."
+    },
+    {
+      "id": "open",
+      "fi": "Avaa {report}Timing report. Otsikossa näkyvät {head}codex, laji, päivä ja tekninen delegaatti.",
+      "en": "Open {report}Timing report. The heading shows the {head}codex, discipline, date and technical delegate."
+    },
+    {
+      "id": "overview",
+      "fi": "{equipment}Laitteet ja toimitsijat tulevat asetuksista, ja {edit}Edit in Settings vie niihin. {runs}Kierroksittain merkitään, tulivatko kaikki ajat A-järjestelmästä. Viereen voi kirjoittaa huomiot.",
+      "en": "The {equipment}equipment and officials come from the settings, and {edit}Edit in Settings takes you there. For {runs}each run you mark whether all times came from system A. Comments go next to it."
+    },
+    {
+      "id": "replace",
+      "fi": "Jos jonkun aika otettiin B-järjestelmästä tai käsiajanotosta, se kirjataan kohtaan {replace}Replacement times.",
+      "en": "If a time was taken from system B or from hand timing, it is recorded under {replace}Replacement times."
+    },
+    {
+      "id": "times",
+      "fi": "Välilehdellä {times}Times ovat {sync}synkronoinnit sekä {first}ensimmäisen ja viimeisen maaliintulijan ajat. A-järjestelmän ajat tulevat suoraan ajanotosta.",
+      "en": "The {times}Times tab has the {sync}synchronization and the times of the {first}first and last finisher. The system A times come straight from timing."
+    },
+    {
+      "id": "btimes",
+      "fi": "B-järjestelmän ja käsiajanoton ajat {type}kirjoitetaan kenttiin, tai ne luetaan {scan}tulostenauhasta skannaamalla. Muutokset tallentuvat heti.",
+      "en": "The times of system B and hand timing are {type}typed in, or read by {scan}scanning the printer strip. Changes are saved at once."
+    },
+    {
+      "id": "xml",
+      "fi": "Lopuksi {overview}Overview: {check}vahvista, että raportti ja aikaleimat on tarkistettu ja että ajanotto noudatti FISin sääntöjä. {missing}Jos raportista puuttuu jotain, kuten laitteiden tiedot tai ajanottajan yhteystiedot, ohjelma listaa puutteet tähän. Valmis raportti {save}tallennetaan XML-tiedostoksi tai {send}lähetetään suoraan FISille. {test}Testitilassa FIS tarkistaa tiedoston tallentamatta sitä.",
+      "en": "Finally, {overview}Overview: {check}confirm that the report and the timestamps were checked and that timing followed the FIS rules. {missing}If something is missing, such as the equipment or the timekeeper's contact details, the list here tells you. The finished report is {save}saved as an XML file or {send}sent straight to FIS. In {test}test mode FIS checks the file without storing it."
+    },
+    {
+      "id": "end",
+      "fi": "Ajanottoraportin PDF tehdään PDF Factoryssa muiden raporttien kanssa.",
+      "en": "The PDF of the timing report comes from PDF Factory with the other reports."
+    }
+  ],
+  "youtube": {
+    "fi": {
+      "title": "FISin ajanottoraportti | OpenSkiTime",
+      "description": "FISin ajanottoraportin (Timing Report) tekeminen OpenSkiTimessa ajetun kilpailun tiedoista.\n\nTämän videon jälkeen osaat:\n- tarkistaa raportin laitteet, toimitsijat ja kierrosten tiedot\n- kirjata korvaavat ajat\n- täydentää B-järjestelmän ja käsiajanoton ajat\n- vahvistaa raportin ja tallentaa sen XML-tiedostoksi tai lähettää FISille\n- käyttää testitilaa ennen oikeaa lähetystä\n\nVideossa on keksitty harjoituskilpailu.\n\nOpenSkiTime on ilmainen, avoimen lähdekoodin alppihiihdon ajanotto- ja tulospalveluohjelma.\n\nVerkkosivu: https://openskiti.me\nOpetusvideot: https://openskiti.me/fi/opetusvideot/\nLähdekoodi: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alppihiihto",
+        "ajanotto",
+        "tulospalvelu",
+        "pujottelu",
+        "FIS",
+        "opetusvideo",
+        "ajanottoraportti",
+        "timing report"
+      ]
+    },
+    "en": {
+      "title": "FIS timing report | OpenSkiTime",
+      "description": "Making the FIS timing report in OpenSkiTime from the data of a timed race.\n\nAfter this video you can:\n- check the equipment, officials and runs of the report\n- record replacement times\n- add the times of system B and hand timing\n- confirm the report and save it as XML or send it to FIS\n- use test mode before the real submission\n\nThe video uses an invented training race.\n\nOpenSkiTime is free, open source timing and results software for alpine skiing.\n\nWebsite: https://openskiti.me\nTutorials: https://openskiti.me/tutorials/\nSource code: https://github.com/tnakeli/OpenSkiTime\nInstagram: https://www.instagram.com/openskitime\nYouTube: https://www.youtube.com/@OpenSkiTime",
+      "tags": [
+        "OpenSkiTime",
+        "alpine skiing",
+        "ski race timing",
+        "race timing software",
+        "slalom",
+        "FIS",
+        "tutorial",
+        "timing report",
+        "FIS timing"
+      ]
+    }
+  }
+}
